@@ -62,6 +62,7 @@ test('Home has exactly four metric headlines, and opens source detail in the sel
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(coverage.getByText('Reporting days use UTC.', { exact: false })).toBeVisible();
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
   const shortcuts = page.getByRole('navigation', { name: 'Home section shortcuts' });
   await expect(shortcuts).toBeVisible();
   await expect(shortcuts.getByRole('link', { name: 'Work queue' })).toHaveAttribute('href', '#home-action-queue');
@@ -76,7 +77,12 @@ test('Home has exactly four metric headlines, and opens source detail in the sel
   const geography = page.getByRole('region', { name: 'Geographic data readiness' });
   await expect(geography).toBeVisible();
   await expect(geography.getByText('Geographic coverage unavailable', { exact: true })).toBeVisible();
+  await expect(geography.getByTestId('home-world-map-disabled')).toHaveAttribute('data-map-state', 'locked');
+  await expect(geography.getByText('Map unavailable', { exact: true })).toBeVisible();
+  await geography.getByText('Why is the map locked?').click();
   await expect(geography.getByText('No world-map distribution or location-based demand claims', { exact: false })).toBeVisible();
+  const conversion = page.getByRole('region', { name: 'Conversion and collections' });
+  await expect(conversion.getByRole('heading', { name: 'Pipeline health' })).toBeVisible();
 
   const detail = page.getByRole('link', { name: 'Analyze sources', exact: true });
   await expect(detail).toHaveAttribute('href', /\/home\/sources\?period=30d/);
