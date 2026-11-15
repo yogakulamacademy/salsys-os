@@ -86,14 +86,14 @@ export function LeadActivityChart({
             <span className="text-[11px] text-copy-subtle">new leads</span>
           </div>
         </div>
-        <div className="flex flex-wrap gap-x-4 gap-y-1.5 text-[10px] font-medium text-copy-muted" aria-label="Chart series">
+        <div className="flex flex-wrap gap-x-3 gap-y-1.5 text-[10px] font-medium text-copy-muted" aria-label="Chart series">
           <span className="inline-flex items-center gap-1.5"><span className="h-0.5 w-4 rounded-full bg-brand-700" />This period</span>
           <span className="inline-flex items-center gap-1.5"><span className="h-0.5 w-4 rounded-full bg-slate-400" />Previous period</span>
         </div>
       </div>
       {hasActivity ? (
         <div
-          className="mt-3 h-[188px] min-w-0 text-brand-700"
+          className="mt-2 h-[146px] min-w-0 text-brand-700"
           role="img"
           aria-label={"New lead volume compared with the previous equal-length period. Current " + (currentTotal ?? 0) + ", previous " + (previousTotal ?? 0) + "."}
         >
@@ -121,9 +121,9 @@ export function LeadActivityChart({
                 dataKey="current"
                 name="This period"
                 stroke="currentColor"
-                strokeWidth={2.5}
+                strokeWidth={2.4}
                 fill="currentColor"
-                fillOpacity={0.09}
+                fillOpacity={0.12}
                 dot={false}
                 activeDot={{ r: 4 }}
                 isAnimationActive={false}
