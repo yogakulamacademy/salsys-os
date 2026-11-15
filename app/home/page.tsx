@@ -96,13 +96,15 @@ export default async function HomePage({ searchParams }: HomePageProps) {
     counts,
     revenueSummary,
     upcomingBatches,
-    unvaluedOpenLeads,
   } = snapshot;
 
   const primaryRevenue =
     revenueSummary.find((row) => row.collected > 0) ?? revenueSummary[0] ?? null;
 
   const pipelineTruth = metricTruth.pipeline;
+  const unvaluedCurrentOpen = pipelineTruth
+    ? pipelineTruth.missingValueCount + pipelineTruth.missingCurrencyCount
+    : null;
   const valuationCoverage = pipelineTruth && pipelineTruth.eligibleCount > 0
     ? Math.round((pipelineTruth.valuedCount / pipelineTruth.eligibleCount) * 1000) / 10
     : null;
@@ -398,9 +400,9 @@ export default async function HomePage({ searchParams }: HomePageProps) {
           <div className="space-y-1 p-3 sm:p-4">
             {activeAttention.length ? activeAttention.map((item) => <AttentionRow key={item.label} item={item} />) : <HomeEmptyState variant="queue" compact title="All caught up" description="No urgent reply, follow-up, first-touch or payment actions are recorded right now." />}
           </div>
-          {unvaluedOpenLeads > 0 ? (
+          {unvaluedCurrentOpen != null && unvaluedCurrentOpen > 0 ? (
             <Link href="/revenue/valuation" className="mx-4 mb-4 flex items-center gap-2 rounded-lg bg-surface-muted px-3 py-2.5 text-xs text-copy-muted hover:text-brand-700">
-              <CircleDollarSign size={15} /> <span className="flex-1">{unvaluedOpenLeads} open opportunities have no estimated value</span><ArrowRight size={13} />
+              <CircleDollarSign size={15} /> <span className="flex-1">{unvaluedCurrentOpen} eligible open leads need an explicit value or currency</span><ArrowRight size={13} />
             </Link>
           ) : null}
         </section>
