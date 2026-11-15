@@ -10,7 +10,7 @@ import type { HomeGeographyCoverage } from "@/lib/home-geography-coverage";
  */
 function LockedWorldMap() {
   return (
-    <div data-testid="home-world-map-disabled" data-map-state="locked" className="relative flex min-h-48 items-center justify-center overflow-hidden rounded-xl bg-violet-50/70 p-3 dark:bg-violet-950/20">
+    <div data-testid="home-world-map-disabled" data-map-state="locked" className="relative flex min-h-[134px] items-center justify-center overflow-hidden rounded-xl bg-violet-50/60 p-2 dark:bg-violet-950/20">
       <svg aria-hidden="true" focusable="false" viewBox="0 0 800 350" className="absolute inset-0 h-full w-full fill-violet-200/75 dark:fill-violet-700/35" preserveAspectRatio="xMidYMid meet">
         <path d="M60 89 95 62 142 54 167 65 200 61 221 76 241 85 228 110 205 117 199 139 178 151 169 174 145 183 133 205 116 203 111 179 91 162 74 155 63 132 41 124 44 103Z" />
         <path d="M133 49 151 27 174 20 206 29 226 44 214 58 178 64Z" />
@@ -22,7 +22,7 @@ function LockedWorldMap() {
         <path d="M657 231 684 220 708 232 729 250 721 270 697 276 677 270 663 285 648 269Z" />
         <path d="M742 265 755 281 751 306 743 316 735 295Z M278 52 295 44 311 52 307 70 290 78Z" />
       </svg>
-      <div className="relative z-10 flex max-w-[260px] flex-col items-center rounded-xl border border-line bg-surface/95 px-4 py-3 text-center shadow-sm">
+      <div className="relative z-10 flex max-w-[230px] flex-col items-center rounded-xl border border-line bg-surface/95 px-3 py-2 text-center shadow-sm">
         <span className="grid h-8 w-8 place-items-center rounded-full bg-violet-100 text-brand-700 dark:bg-violet-900/50 dark:text-violet-200">
           <LockKeyhole size={16} aria-hidden="true" />
         </span>
@@ -59,20 +59,20 @@ export function HomeGeographyReadiness({
   const completion = valid ? coverage.populatedPercent : null;
 
   return (
-    <section aria-label="Geographic data readiness" className="min-w-0 overflow-hidden rounded-2xl border border-line bg-surface p-4 sm:p-5">
+    <section aria-label="Geographic data readiness" className="min-w-0 overflow-hidden rounded-2xl border border-line bg-surface p-3 sm:p-4">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="min-w-0">
           <h2 className="flex items-center gap-2 text-sm font-semibold text-copy-strong">
             <Globe2 size={16} aria-hidden="true" className="text-brand-700" /> Geographic data readiness
           </h2>
-          <p className="mt-1 text-[11px] text-copy-muted">Selected acquisition cohort · {periodLabel}</p>
+          <p className="sr-only">Selected acquisition cohort · {periodLabel}</p>
         </div>
-        <Link href="/leads" className="inline-flex items-center gap-1 text-[11px] font-semibold text-brand-700 hover:text-brand-800">
+        <Link href="/leads" className="sr-only">
           Review leads <ArrowRight size={12} />
         </Link>
       </div>
 
-      <div className="mt-3 grid min-w-0 gap-4 lg:grid-cols-[minmax(220px,0.85fr)_minmax(0,1.15fr)] lg:items-center">
+      <div className="mt-2 grid min-w-0 gap-3 sm:grid-cols-[minmax(0,0.75fr)_minmax(0,1.25fr)] sm:items-center">
         <div className="min-w-0">
           {cohort === null ? (
             <div data-evidence-state="unavailable">
@@ -99,7 +99,7 @@ export function HomeGeographyReadiness({
               <p className="mt-2 text-[11px] text-copy-subtle">{missing!.toLocaleString("en-IN")} leads missing country</p>
             </div>
           )}
-          <details className="group mt-4 border-t border-line pt-3">
+          <details className="group mt-2 border-t border-line pt-2">
             <summary className="cursor-pointer text-[11px] font-medium text-brand-700 focus-visible:outline-2 focus-visible:outline-brand-700">Why is the map locked?</summary>
             <p className="mt-2 text-[11px] leading-5 text-copy-muted">
               A filled field is not a verified country. Free-text entries may contain cities or regions.
