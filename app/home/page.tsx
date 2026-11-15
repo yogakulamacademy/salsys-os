@@ -19,6 +19,7 @@ import { HomeEmptyState } from "@/components/home/home-empty-state";
 import { isMockMode } from "@/lib/data";
 import { getHomeV1MetricTruth, type HomeV1MetricTruth } from "@/lib/home-v1-metric-truth";
 import { percentageWidth, sourceLabel } from "@/lib/ui-format";
+import { buildHomeSourceSignals, reconcileHomeSourceQualification } from "@/lib/home-source-intelligence";
 import {
   getDashboardSnapshot,
   type DashboardBatchDemand,
@@ -126,21 +127,22 @@ export default async function HomePage({ searchParams }: HomePageProps) {
     ? pickPeriodRevenue(periodAnalytics, primaryRevenue?.currency ?? null)
     : null;
 
-  const qualificationBySource = new Map(
-    historicalQualification?.sources.map((item) => [item.source, item] as const) ?? [],
-  );
   const acquisitionSources: DashboardPeriodSource[] = periodAnalytics.available.leads
-    ? periodAnalytics.sources.map((source) => {
-        const historical = qualificationBySource.get(source.source);
-        return {
-          ...source,
-          qualified: historical?.qualified ?? 0,
-          conversionRate: historical && historical.leads === source.leads && source.leads > 0
-            ? Math.round((historical.qualified / source.leads) * 1000) / 10
-            : null,
-        };
-      })
+    ? periodAnalytics.sources
     : [];
+  const validatedSourceQuality = historicalQualification
+    ? reconcileHomeSourceQualification(
+        acquisitionSources,
+        historicalQualification.sources,
+        historicalQualification.cohortLeads,
+        historicalQualification.qualifiedLeads,
+      )
+    : null;
+  const sourceSignals = buildHomeSourceSignals(
+    periodAnalytics.available.leads ? periodAnalytics.leads.current : null,
+    acquisitionSources,
+    historicalQualification?.qualifiedLeads ?? null,
+  );
 
   const totalLeads = periodAnalytics.available.leads
     ? periodAnalytics.leads.current
@@ -217,7 +219,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
   const changeSignals = buildChangeSignals(periodAnalytics, metrics.waitingOverHour);
   const executiveBrief = buildExecutiveBrief({
     analytics: periodAnalytics,
-    sources: historicalQualification ? acquisitionSources : [],
+    sources: validatedSourceQuality ?? [],
     attention: activeAttention,
     qualifiedRate,
   });
@@ -398,7 +400,15 @@ export default async function HomePage({ searchParams }: HomePageProps) {
         <section className="min-w-0 overflow-hidden rounded-2xl border border-line bg-surface">
           <SectionHeader eyebrow="Acquisition · period" title="Lead sources" actionHref="/marketing" actionLabel="See sources" />
           <div className="space-y-1 p-3 sm:p-4">
-            {acquisitionSources.length ? acquisitionSources.slice(0, 4).map((source) => <SourceRow key={source.source} source={source} qualificationAvailable={historicalQualification != null} periodTotal={totalLeads} disambiguate={acquisitionSources.slice(0, 4).filter((row) => sourceLabel(row.source) === sourceLabel(source.source)).length > 1} />) : <HomeEmptyState variant="sources" compact unavailable={!periodAnalytics.available.leads} title={periodAnalytics.available.leads ? "No source activity yet" : "Source data unavailable"} description={periodAnalytics.available.leads ? "No acquisition data is recorded for this period yet." : "Selected-period acquisition evidence is unavailable. Current all-time source totals have not been substituted."} />}
+            {acquisitionSources.length ? acquisitionSources.slice(0, 4).map((source) => <SourceRow key={source.source} source={validatedSourceQuality?.find((item) => item.source === source.source) ?? source} qualificationAvailable={validatedSourceQuality != null} periodTotal={totalLeads} />) : <HomeEmptyState variant="sources" compact unavailable={!periodAnalytics.available.leads} title={periodAnalytics.available.leads ? "No source activity yet" : "Source data unavailable"} description={periodAnalytics.available.leads ? "No acquisition data is recorded for this period yet." : "Selected-period acquisition evidence is unavailable. Current all-time source totals have not been substituted."} />}
+            {acquisitionSources.length && !validatedSourceQuality ? <p className="px-2 pt-2 text-[11px] leading-5 text-copy-subtle">Source-level qualification is unavailable until the acquisition cohort reconciles with recorded stage history.</p> : null}
+            {sourceSignals.map((signal) => (
+              <div key={signal.title} className="mt-3 rounded-xl border border-line bg-surface-muted px-3 py-3">
+                <p className="text-xs font-semibold text-copy-strong">{signal.title}</p>
+                <p className="mt-1 text-[11px] leading-5 text-copy-muted">{signal.detail}</p>
+                <Link href={signal.href} className="mt-2 inline-flex items-center gap-1 text-[11px] font-semibold text-brand-700">{signal.actionLabel} <ArrowRight size={12} /></Link>
+              </div>
+            ))}
           </div>
         </section>
         <section className="min-w-0 overflow-hidden rounded-2xl border border-line bg-surface">
@@ -777,15 +787,14 @@ function RevenueTrend({
   );
 }
 
-function SourceRow({ source, periodTotal, disambiguate = false, qualificationAvailable = false }: { source: DashboardPeriodSource; periodTotal: number | null; disambiguate?: boolean; qualificationAvailable?: boolean }) {
+function SourceRow({ source, periodTotal, qualificationAvailable = false }: { source: DashboardPeriodSource; periodTotal: number | null; qualificationAvailable?: boolean }) {
   const share = periodTotal != null && periodTotal > 0 ? (source.leads / periodTotal) * 100 : null;
   const displaySource = sourceLabel(source.source);
-  const alias = disambiguate || displaySource.trim().toLowerCase() !== source.source.trim().toLowerCase();
   return (
     <Link href={"/marketing?source=" + encodeURIComponent(source.source)} className="group block rounded-xl px-2 py-2.5 transition hover:bg-surface-muted">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <span className="block truncate text-xs font-medium text-copy-strong" title={"CRM source: " + source.source}>{displaySource}{alias ? <span className="ml-1 font-normal text-copy-subtle">· {source.source}</span> : null}</span>
+          <span className="block truncate text-xs font-medium text-copy-strong" title={"CRM source: " + source.source}>{displaySource}</span>
           <span className="mt-0.5 block text-[11px] text-copy-subtle">{qualificationAvailable ? source.qualified.toLocaleString("en-IN") + " qualified by period end" : "Qualification evidence unavailable"}</span>
         </div>
         <span className="shrink-0 text-right text-xs font-semibold tabular-nums text-copy-strong">
@@ -958,11 +967,11 @@ function buildExecutiveBrief({
     );
   }
   if (qualifiedRate != null) {
-    parts.push(`${qualifiedRate}% of leads in scope are qualified.`);
+    parts.push(`${qualifiedRate}% of new leads reached a recorded qualification milestone by period end.`);
   }
   if (strongestSource) {
     parts.push(
-      `${pretty(strongestSource.source)} currently contributes the most qualified leads among visible sources.`,
+      `${pretty(strongestSource.source)} contributed the most documented qualification milestones among sources in the selected lead cohort.`,
     );
   }
   if (topAttention) parts.push(`${topAttention.detail}.`);
