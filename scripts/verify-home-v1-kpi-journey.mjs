@@ -71,7 +71,7 @@ assert(
   "RPC execute grants must be explicit.",
 );
 
-expect(
+assert(
   home.includes("{activeAttention[0].reason}") &&
     home.includes("{activeAttention[0].evidence} · {activeAttention[0].timing}") &&
     home.includes("{item.reason}</span>") &&
