@@ -398,7 +398,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
 
       <section aria-label="Business breakdown" className="grid min-w-0 gap-4 lg:grid-cols-3">
         <section className="min-w-0 overflow-hidden rounded-2xl border border-line bg-surface">
-          <SectionHeader eyebrow="Acquisition · period" title="Lead sources" actionHref="/marketing" actionLabel="See sources" />
+          <SectionHeader eyebrow="Acquisition · period" title="Lead sources" actionHref="/home/sources" actionLabel="Analyze sources" />
           <div className="space-y-1 p-3 sm:p-4">
             {acquisitionSources.length ? acquisitionSources.slice(0, 4).map((source) => <SourceRow key={source.source} source={validatedSourceQuality?.find((item) => item.source === source.source) ?? source} qualificationAvailable={validatedSourceQuality != null} periodTotal={totalLeads} />) : <HomeEmptyState variant="sources" compact unavailable={!periodAnalytics.available.leads} title={periodAnalytics.available.leads ? "No source activity yet" : "Source data unavailable"} description={periodAnalytics.available.leads ? "No acquisition data is recorded for this period yet." : "Selected-period acquisition evidence is unavailable. Current all-time source totals have not been substituted."} />}
             {acquisitionSources.length && !validatedSourceQuality ? <p className="px-2 pt-2 text-[11px] leading-5 text-copy-subtle">Source-level qualification is unavailable until the acquisition cohort reconciles with recorded stage history.</p> : null}
@@ -791,7 +791,7 @@ function SourceRow({ source, periodTotal, qualificationAvailable = false }: { so
   const share = periodTotal != null && periodTotal > 0 ? (source.leads / periodTotal) * 100 : null;
   const displaySource = sourceLabel(source.source);
   return (
-    <Link href={"/marketing?source=" + encodeURIComponent(source.source)} className="group block rounded-xl px-2 py-2.5 transition hover:bg-surface-muted">
+    <Link href="/home/sources" className="group block rounded-xl px-2 py-2.5 transition hover:bg-surface-muted">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <span className="block truncate text-xs font-medium text-copy-strong" title={"CRM source: " + source.source}>{displaySource}</span>
