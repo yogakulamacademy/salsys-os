@@ -348,6 +348,13 @@ export default async function HomePage({ searchParams }: HomePageProps) {
         </section>
         <section id="home-action-queue" className="min-w-0 scroll-mt-24 overflow-hidden rounded-2xl border border-line bg-surface">
           <SectionHeader eyebrow="Needs attention · current" title="Action queue" actionHref="/admissions" actionLabel="View all" />
+          {activeAttention.length ? (
+            <div className="mx-4 mt-1 rounded-lg border border-brand-100 bg-brand-50 px-3 py-2 text-[11px] leading-4">
+              <p className="font-semibold text-brand-700">{activeAttention[0].value.toLocaleString("en-IN")} · {recommendedActionTitle(activeAttention[0])}</p>
+              <p className="mt-1 text-copy-muted">{activeAttention[0].reason}</p>
+              <p className="mt-0.5 text-copy-subtle">{activeAttention[0].evidence} · {activeAttention[0].timing}</p>
+            </div>
+          ) : null}
           {metrics.needsReply > 0 ? (
             <details className="mx-4 mt-1 text-xs">
               <summary className="cursor-pointer font-medium text-brand-700">Reply waiting-time breakdown</summary>
