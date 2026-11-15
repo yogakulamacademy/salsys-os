@@ -6,6 +6,13 @@ import {
   Clock3,
   CreditCard,
   Inbox,
+  Sparkles,
+  Activity,
+  BarChart3,
+  GitBranch,
+  Lightbulb,
+  MessageSquareText,
+  Target,
   Zap,
   UserRoundCheck,
   Users,
@@ -198,10 +205,10 @@ export default async function HomePage({ searchParams }: HomePageProps) {
 
   return (
     <div className="command-center-v2 w-full min-w-0 space-y-4 pb-8 sm:space-y-5">
-      <header className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+      <header className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
         <div className="min-w-0">
-          <h1 className="text-[28px] font-semibold tracking-[-0.04em] text-copy-strong">Home</h1>
-          <p className="mt-1 text-[13px] leading-5 text-copy-muted">Executive command center</p>
+          <h1 className="text-[28px] font-bold tracking-[-0.045em] text-copy-strong">Command Center</h1>
+          <p className="mt-1 text-[13px] leading-5 text-copy-muted">Real-time performance and growth</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <PeriodPresets selected={periodAnalytics.period.preset} />
@@ -221,6 +228,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
               </form>
             </div>
           </details>
+          <Link href="/marketing" className="inline-flex h-10 items-center gap-2 rounded-ui border border-line bg-surface px-3 text-xs font-semibold text-copy-strong shadow-sm hover:border-brand-600 hover:text-brand-700"><Sparkles size={15} className="text-brand-700" />Explore intelligence</Link>
         </div>
       </header>
 
@@ -257,7 +265,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
         <div className="command-kpi min-w-0">
           <DecisionMetricCard
             compact
-            icon={<CircleDollarSign size={17} />}
+            icon={<GitBranch size={17} />}
             label="Open pipeline value"
             value={openPipelineValue}
             detail={openPipelineDetail}
@@ -271,7 +279,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
         <div className="command-kpi min-w-0">
           <DecisionMetricCard
             compact
-            icon={<CircleDollarSign size={17} />}
+            icon={<CreditCard size={17} />}
             label="Recorded collections"
             value={collectedValue}
             detail={!periodAnalytics.available.revenue ? "Selected-period payment evidence unavailable" : periodPrimaryRevenue ? periodPrimaryRevenue.currency + " net paid in CRM ledger · settlement review pending" : "No paid ledger entries · reconciliation pending"}
@@ -309,25 +317,6 @@ export default async function HomePage({ searchParams }: HomePageProps) {
           </Link>
         ))}
       </nav>
-
-      {activeAttention.length > 0 ? (
-        <section aria-label="Top priority" className="flex flex-col gap-3 rounded-2xl border border-emerald-200 bg-gradient-to-r from-emerald-50 via-green-50 to-white px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between sm:px-5 dark:border-emerald-900 dark:from-emerald-950/30 dark:to-surface">
-          <div className="flex min-w-0 items-center gap-3">
-            <Zap size={22} className="shrink-0 text-brand-700" aria-hidden="true" />
-            <div className="min-w-0">
-              <h2 className="text-sm font-semibold text-copy-strong">Immediate priority</h2>
-              <p className="mt-0.5 text-xs text-copy-muted">
-                {activeAttention[0].value.toLocaleString("en-IN")} · {recommendedActionTitle(activeAttention[0])}
-              </p>
-              <p className="mt-1 text-[11px] leading-4 text-copy-muted">{activeAttention[0].reason}</p>
-              <p className="mt-0.5 text-[10px] leading-4 text-copy-subtle">{activeAttention[0].evidence} · {activeAttention[0].timing}</p>
-            </div>
-          </div>
-          <Link href={activeAttention[0].href} className="inline-flex h-9 shrink-0 items-center gap-2 self-start rounded-ui bg-brand-700 px-3 text-xs font-semibold text-white hover:bg-brand-800 sm:self-auto">
-            {activeAttention[0].actionLabel} <ArrowRight size={13} />
-          </Link>
-        </section>
-      ) : null}
 
       <section aria-label="Performance and work queue" className="grid min-w-0 gap-3 xl:grid-cols-[minmax(0,1.55fr)_minmax(300px,.85fr)]">
         <section className="min-w-0 overflow-hidden rounded-2xl border border-line bg-surface">
@@ -377,94 +366,106 @@ export default async function HomePage({ searchParams }: HomePageProps) {
       </section>
 
       <section id="home-conversion" aria-label="Conversion and collections" className="min-w-0 scroll-mt-24 space-y-3">
-        <div className="grid min-w-0 gap-3 lg:grid-cols-2">
-        <section className="min-w-0 overflow-hidden rounded-2xl border border-line bg-surface">
-          <SectionHeader eyebrow="Acquisition cohort · period" title="Qualification milestones" actionHref={sourceDetailHref} actionLabel="Inspect cohort" />
-          <QualificationCohortPanel
-            total={totalLeads}
-            qualified={qualifiedLeads}
-            periodLabel={periodAnalytics.period.label}
-            href={sourceDetailHref}
-          />
-        </section>
-        <section className="min-w-0 overflow-hidden rounded-2xl border border-line bg-surface">
-          <SectionHeader eyebrow="CRM ledger · period" title="Recorded collections trend" actionHref="/revenue" actionLabel="Review ledger" />
-          <div className="p-4 sm:p-5">
-            <RevenueTrend
-              points={periodAnalytics.revenueSeries}
-              currency={periodAnalytics.primaryCurrency}
-              available={periodAnalytics.available.revenue}
-            />
-            {periodAnalytics.available.revenue && periodAnalytics.revenue.length > 1 ? (
-              <p className="mt-3 border-t border-line pt-3 text-[11px] leading-5 text-copy-subtle">
-                This trend shows {periodAnalytics.primaryCurrency ?? "a single currency"} only.
-                {" "}{periodAnalytics.revenue.length - 1} other currency
-                {periodAnalytics.revenue.length === 2 ? " ledger is" : " ledgers are"} excluded.
-                Currencies are never summed without approved FX evidence.
-              </p>
-            ) : null}
-          </div>
-        </section>
-        </div>
-
-      <div id="home-business-breakdown" aria-label="Business breakdown" className="grid min-w-0 scroll-mt-24 gap-3 lg:grid-cols-3">
-        <section className="min-w-0 overflow-hidden rounded-2xl border border-line bg-surface">
-          <SectionHeader eyebrow="Acquisition · period" title="Lead sources" actionHref={sourceDetailHref} actionLabel="Analyze sources" />
-          <div className="space-y-1 p-3 sm:p-4">
-            {acquisitionSources.length ? (
-              <div className="grid items-center gap-2 2xl:grid-cols-[116px_minmax(0,1fr)]">
-                <div className="hidden 2xl:block"><SourceMixRing sources={acquisitionSources} total={totalLeads} /></div>
-                <div className="min-w-0">
-                  {acquisitionSources.slice(0, 4).map((source) => (
-                    <SourceRow key={source.source} source={validatedSourceQuality?.find((item) => item.source === source.source) ?? source} qualificationAvailable={validatedSourceQuality != null} periodTotal={totalLeads} href={sourceDetailHref} />
-                  ))}
+        <div className="grid min-w-0 gap-3 lg:grid-cols-3">
+          <section className="min-w-0 overflow-hidden rounded-2xl border border-line bg-surface">
+            <SectionHeader eyebrow="Current CRM stage distribution" title="Pipeline health" actionHref="/admissions?view=pipeline" actionLabel="Open pipeline" />
+            <div className="px-4 pb-4 pt-1">
+              <PipelineSnapshot active={metrics.activePipeline} highIntent={metrics.highIntent} payment={metrics.paymentPending} enrolled={counts.enrolled ?? 0} counts={counts} />
+            </div>
+          </section>
+          <section className="min-w-0 overflow-hidden rounded-2xl border border-line bg-surface">
+            <SectionHeader eyebrow="Selected acquisition cohort" title="Qualification" actionHref={sourceDetailHref} actionLabel="Inspect" />
+            <div className="flex min-h-[170px] items-center justify-center gap-5 px-4 pb-4 pt-1">
+              <div className="relative grid h-28 w-28 shrink-0 place-items-center rounded-full" style={{background: qualifiedRate == null ? "conic-gradient(#e9e3fb 0 100%)" : `conic-gradient(#5a19d8 0 ${qualifiedRate}%, #e9e3fb ${qualifiedRate}% 100%)`}}>
+                <div className="grid h-20 w-20 place-content-center rounded-full bg-surface text-center">
+                  <span className="text-[23px] font-bold text-copy-strong">{qualifiedRate == null ? "—" : qualifiedRate.toFixed(1) + "%"}</span>
+                  <span className="text-[10px] text-copy-muted">Qualified</span>
                 </div>
               </div>
-            ) : (
-              <HomeEmptyState variant="sources" compact unavailable={!periodAnalytics.available.leads} title={periodAnalytics.available.leads ? "No source activity yet" : "Source data unavailable"} description={periodAnalytics.available.leads ? "No acquisition data is recorded for this period yet." : "Selected-period acquisition evidence is unavailable. Current all-time source totals have not been substituted."} />
-            )}
-            {acquisitionSources.length && !validatedSourceQuality ? <p className="px-2 pt-2 text-[11px] leading-5 text-copy-subtle">Source-level qualification is unavailable until the acquisition cohort reconciles with recorded stage history.</p> : null}
-            {sourceSignals.length > 0 ? (
-              <details className="mt-3 rounded-xl bg-surface-muted px-3 py-2.5">
-                <summary className="cursor-pointer text-[11px] font-semibold text-brand-700 focus-visible:outline-2 focus-visible:outline-brand-700">
-                  {sourceSignals.length} source insight{sourceSignals.length === 1 ? "" : "s"} · Inspect
-                </summary>
-                <div className="mt-3 space-y-3">
-                  {sourceSignals.map((signal) => (
-                    <div key={signal.title} className="border-t border-line pt-2.5">
-                      <p className="text-xs font-semibold text-copy-strong">{signal.title}</p>
-                      <p className="mt-1 text-[11px] leading-5 text-copy-muted">{signal.detail}</p>
-                      <Link href={signal.href} className="mt-2 inline-flex items-center gap-1 text-[11px] font-semibold text-brand-700">{signal.actionLabel} <ArrowRight size={12} /></Link>
-                    </div>
-                  ))}
+              <div className="min-w-0 space-y-3 text-xs">
+                <div><p className="text-xl font-bold text-copy-strong">{qualifiedLeads == null ? "—" : qualifiedLeads.toLocaleString("en-IN")}</p><p className="text-copy-muted">Qualified by period end</p></div>
+                <div className="border-t border-line pt-2"><p className="text-xl font-bold text-copy-strong">{totalLeads == null || qualifiedLeads == null ? "—" : (totalLeads-qualifiedLeads).toLocaleString("en-IN")}</p><p className="text-copy-muted">Without milestone</p></div>
+              </div>
+            </div>
+          </section>
+          <section className="min-w-0 overflow-hidden rounded-2xl border border-line bg-surface">
+            <SectionHeader eyebrow="Current opportunity valuation" title="Opportunity pipeline" actionHref="/revenue/valuation" actionLabel="Review values" />
+            <div className="space-y-3 px-4 pb-4 pt-1">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-2xl font-bold tracking-tight text-copy-strong">{openPipelineValue}</p>
+                <span className="rounded-full bg-brand-50 px-2 py-1 text-[10px] font-semibold text-brand-700">{pipelineTruth ? valuationCoverage == null ? "Coverage unknown" : valuationCoverage.toFixed(1) + "% valued" : "Valuation unavailable"}</span>
+              </div>
+              <div className="grid grid-cols-4 gap-1 text-center">
+                {[
+                  {label:"New",value:counts.new},
+                  {label:"Contacted",value:counts.contacted},
+                  {label:"Qualified",value:counts.qualified},
+                  {label:"Enrolled",value:counts.enrolled ?? 0},
+                ].map((step) => <div key={step.label} className="min-w-0 rounded-lg bg-brand-50 px-1 py-3 text-brand-900"><p className="text-[10px] font-semibold">{step.label}</p><p className="mt-2 text-[15px] font-bold tabular-nums">{step.value.toLocaleString("en-IN")}</p></div>)}
+              </div>
+              <p className="text-[10px] leading-4 text-copy-subtle">Current independent stage counts, not a sequential conversion funnel. Missing or mixed-currency values are excluded.</p>
+            </div>
+          </section>
+        </div>
+
+        <div id="home-business-breakdown" aria-label="Business breakdown" className="grid min-w-0 scroll-mt-24 gap-3 lg:grid-cols-[0.95fr_1.55fr]">
+          <section className="min-w-0 overflow-hidden rounded-2xl border border-line bg-surface">
+            <SectionHeader eyebrow="Acquisition · period" title="Lead sources" actionHref={sourceDetailHref} actionLabel="Analyze sources" />
+            <div className="p-3 sm:p-4">
+              {acquisitionSources.length ? (
+                <div className="grid items-center gap-3 sm:grid-cols-[130px_minmax(0,1fr)]">
+                  <SourceMixRing sources={acquisitionSources} total={totalLeads} />
+                  <div className="min-w-0">
+                    {acquisitionSources.slice(0, 4).map((source) => (
+                      <SourceRow key={source.source} source={validatedSourceQuality?.find((item) => item.source === source.source) ?? source} qualificationAvailable={validatedSourceQuality != null} periodTotal={totalLeads} href={sourceDetailHref} />
+                    ))}
+                  </div>
                 </div>
-              </details>
-            ) : null}
-          </div>
-        </section>
-        <section className="min-w-0 overflow-hidden rounded-2xl border border-line bg-surface">
-          <SectionHeader eyebrow="Operations · current" title="Upcoming batch demand" actionHref="/course-management" actionLabel="See batches" />
-          <div className="space-y-1 p-3 sm:p-4">
-            {visibleUpcomingBatches.length ? visibleUpcomingBatches.map((batch) => <BatchCard key={batch.id} batch={batch} maxDemand={maxUpcomingDemand} />) : <HomeEmptyState variant="batches" compact title="No upcoming batches" description="No future-start batches are currently available in this workspace." action={{ href: "/course-management", label: "View courses" }} />}
-            {visibleUpcomingBatches.length > 0 ? (
-              <p className="border-t border-line px-2 pt-3 text-[11px] leading-5 text-copy-subtle">
-                Lead demand reflects current CRM associations, not course sales. Higher-intent and payment-stage indicators may overlap and are never summed. Course-level collections require a verified payment-to-enrollment link.
-              </p>
-            ) : null}
-          </div>
-        </section>
-        <section className="min-w-0 overflow-hidden rounded-2xl border border-line bg-surface">
-          <SectionHeader eyebrow="Sales · current" title="Pipeline health" actionHref="/admissions?view=pipeline" actionLabel="Open pipeline" />
-          <div className="p-4">
-            <PipelineSnapshot active={metrics.activePipeline} highIntent={metrics.highIntent} payment={metrics.paymentPending} enrolled={counts.enrolled ?? 0} counts={counts} />
-          </div>
-        </section>
-      </div>
+              ) : (
+                <HomeEmptyState variant="sources" compact unavailable={!periodAnalytics.available.leads} title={periodAnalytics.available.leads ? "No source activity yet" : "Source data unavailable"} description={periodAnalytics.available.leads ? "No acquisition data is recorded for this period yet." : "Selected-period acquisition evidence is unavailable. Current all-time source totals have not been substituted."} />
+              )}
+              {sourceSignals.length > 0 ? <details className="mt-2 text-[11px] text-copy-muted"><summary className="cursor-pointer font-semibold text-brand-700">Inspect {sourceSignals.length} source insight{sourceSignals.length === 1 ? "" : "s"}</summary><div className="mt-2 space-y-2">{sourceSignals.map(signal=><p key={signal.title}><strong>{signal.title}:</strong> {signal.detail}</p>)}</div></details> : null}
+            </div>
+          </section>
+          <section className="min-w-0 overflow-hidden rounded-2xl border border-line bg-surface">
+            <SectionHeader eyebrow="Acquisition cohort · period" title="Qualification milestones" actionHref={sourceDetailHref} actionLabel="Inspect cohort" />
+            <QualificationCohortPanel total={totalLeads} qualified={qualifiedLeads} periodLabel={periodAnalytics.period.label} href={sourceDetailHref} />
+          </section>
+        </div>
+
+        <div className="grid min-w-0 gap-3 lg:grid-cols-[0.9fr_1.5fr]">
+          <section className="min-w-0 overflow-hidden rounded-2xl border border-line bg-surface">
+            <SectionHeader eyebrow="CRM ledger · period" title="Recorded collections trend" actionHref="/revenue" actionLabel="Review ledger" />
+            <div className="p-4">
+              <RevenueTrend points={periodAnalytics.revenueSeries} currency={periodAnalytics.primaryCurrency} available={periodAnalytics.available.revenue} />
+              {periodAnalytics.available.revenue && periodAnalytics.revenue.length > 1 ? (
+                <p className="mt-2 text-[11px] text-copy-subtle">This trend uses {periodAnalytics.primaryCurrency ?? "one currency"} only; other currency ledgers are excluded without approved FX evidence.</p>
+              ) : null}
+            </div>
+          </section>
+          <HomeGeographyReadiness coverage={periodAnalytics.geography} periodLabel={periodAnalytics.period.label} />
+        </div>
+
+        <div className="grid min-w-0 gap-3 lg:grid-cols-[0.9fr_1.5fr]">
+          <section className="min-w-0 overflow-hidden rounded-2xl border border-line bg-surface">
+            <SectionHeader eyebrow="Operations · current" title="Upcoming batch demand" actionHref="/course-management" actionLabel="See batches" />
+            <div className="p-3 sm:p-4">
+              {visibleUpcomingBatches.length ? visibleUpcomingBatches.map((batch) => <BatchCard key={batch.id} batch={batch} maxDemand={maxUpcomingDemand} />) : <HomeEmptyState variant="batches" compact title="No upcoming batches" description="No future-start batches are currently available in this workspace." action={{ href: "/course-management", label: "View courses" }} />}
+              <p className="mt-2 text-[10px] leading-4 text-copy-subtle">Course-level collections require verified payment-to-enrollment links; demand indicators may overlap.</p>
+            </div>
+          </section>
+          <section className="min-w-0 overflow-hidden rounded-2xl border border-line bg-surface">
+            <div className="px-4 pb-1 pt-4"><h2 className="text-sm font-bold text-copy-strong">Trends &amp; momentum</h2><p className="mt-1 text-[11px] text-copy-subtle">Recorded comparable changes only</p></div>
+            <div className="grid grid-cols-1 gap-3 p-4 sm:grid-cols-3">
+              <div className="rounded-xl bg-brand-50 p-3"><p className="text-[11px] text-copy-muted">Lead momentum</p><p className="mt-2 text-xl font-bold text-brand-700">{changeSignals[0].value}</p><p className="mt-1 text-[10px] text-copy-muted">{changeSignals[0].detail}</p></div>
+              <div className="rounded-xl bg-brand-50 p-3"><p className="text-[11px] text-copy-muted">Qualification rate</p><p className="mt-2 text-xl font-bold text-brand-700">{qualifiedRate == null ? "—" : qualifiedRate.toFixed(1) + "%"}</p><p className="mt-1 text-[10px] text-copy-muted">Recorded cohort milestone share</p></div>
+              <div className="rounded-xl bg-brand-50 p-3"><p className="text-[11px] text-copy-muted">Valuation coverage</p><p className="mt-2 text-xl font-bold text-brand-700">{valuationCoverage == null ? "—" : valuationCoverage.toFixed(1) + "%"}</p><p className="mt-1 text-[10px] text-copy-muted">Open opportunities with recorded values</p></div>
+            </div>
+          </section>
+        </div>
       </section>
 
-      <HomeGeographyReadiness coverage={periodAnalytics.geography} periodLabel={periodAnalytics.period.label} />
-
-      <section aria-label="Daily workspace" className="grid min-w-0 gap-4 lg:grid-cols-3">
+      <section aria-label="Daily workspace" className="grid min-w-0 gap-3 lg:grid-cols-3">
         <section className="min-w-0 rounded-2xl border border-line bg-surface p-4 sm:p-5">
           <h2 className="text-sm font-semibold text-copy-strong">Operational insights</h2>
           <p className="mt-1 text-xs leading-5 text-copy-muted">Evidence from your CRM, not a predicted outcome.</p>
@@ -476,14 +477,13 @@ export default async function HomePage({ searchParams }: HomePageProps) {
         <section className="min-w-0 rounded-2xl border border-line bg-surface p-4 sm:p-5">
           <h2 className="text-sm font-semibold text-copy-strong">Quick actions</h2>
           <p className="mt-1 text-xs leading-5 text-copy-muted">Open the workspace you need.</p>
-          <div className="mt-4 grid grid-cols-2 gap-2">
+          <div className="mt-4 grid grid-cols-3 gap-2">
             {[
               { href: "/conversations", label: "Conversations" },
               { href: "/leads", label: "Leads" },
-              { href: "/course-management", label: "Courses" },
               { href: "/campaigns", label: "Campaigns" },
             ].map((action) => (
-              <Link key={action.href} href={action.href} className="flex min-h-12 items-center justify-between gap-2 rounded-xl border border-line bg-surface-muted px-3 text-xs font-semibold text-copy-strong transition hover:border-brand-300 hover:text-brand-700">
+              <Link key={action.href} href={action.href} className="flex min-h-20 flex-col items-center justify-center gap-2 rounded-xl border border-line bg-brand-50 px-2 text-center text-xs font-semibold text-brand-700 transition hover:border-brand-300 hover:bg-brand-100">
                 <span className="truncate">{action.label}</span><ArrowRight size={13} className="shrink-0" />
               </Link>
             ))}
@@ -513,7 +513,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
         {activeAttention.length ? (
           <div className="mt-3 grid gap-2 md:grid-cols-3">
             {activeAttention.slice(0, 3).map((item) => (
-              <Link key={item.id} href={item.href} title={item.evidence + " · " + item.reason} className="flex min-w-0 items-center justify-between gap-2 rounded-xl border border-emerald-100 bg-emerald-50/50 px-3 py-3 text-xs text-copy-strong transition hover:border-brand-600 hover:bg-brand-50 dark:border-emerald-900 dark:bg-emerald-950/20">
+              <Link key={item.id} href={item.href} title={item.evidence + " · " + item.reason} className="flex min-w-0 items-center justify-between gap-2 rounded-xl border border-brand-100 bg-brand-50 px-3 py-3 text-xs text-copy-strong transition hover:border-brand-600 hover:bg-brand-100">
                 <span className="min-w-0"><span className="block font-semibold">{recommendedActionTitle(item)}</span><span className="mt-1 block text-[11px] text-copy-muted">{item.value.toLocaleString("en-IN")} to review</span></span>
                 <ArrowRight size={15} className="shrink-0 text-brand-700" />
               </Link>
