@@ -46,27 +46,30 @@ export async function getOpportunityValuationQueue(): Promise<OpportunityValuati
   const missingValuePredicate =
     "potential_value.is.null,potential_value.lte.0,potential_currency.is.null";
 
-  const base = () => supabase
-    .from("leads")
-    .eq("organization_id", workspace.organizationId)
-    .eq("status", "open")
-    .in("current_stage", ELIGIBLE_STAGES);
+  const leadColumns =
+    "id, lead_code, display_name, first_name, last_name, current_stage, created_at, interested_course_id, preferred_batch_id";
 
   const [eligibleResult, missingResult, priorityResult, recentResult] =
     await Promise.all([
-      base().select("id", { count: "exact", head: true }),
-      base().select("id", { count: "exact", head: true })
+      supabase.from("leads").select("id", { count: "exact", head: true })
+        .eq("organization_id", workspace.organizationId)
+        .eq("status", "open")
+        .in("current_stage", ELIGIBLE_STAGES),
+      supabase.from("leads").select("id", { count: "exact", head: true })
+        .eq("organization_id", workspace.organizationId)
+        .eq("status", "open")
+        .in("current_stage", ELIGIBLE_STAGES)
         .or(missingValuePredicate),
-      base().select(
-        "id, lead_code, display_name, first_name, last_name, current_stage, created_at, interested_course_id, preferred_batch_id",
-      )
+      supabase.from("leads").select(leadColumns)
+        .eq("organization_id", workspace.organizationId)
+        .eq("status", "open")
         .in("current_stage", PRIORITY_STAGES)
         .or(missingValuePredicate)
         .order("created_at", { ascending: false })
         .limit(20),
-      base().select(
-        "id, lead_code, display_name, first_name, last_name, current_stage, created_at, interested_course_id, preferred_batch_id",
-      )
+      supabase.from("leads").select(leadColumns)
+        .eq("organization_id", workspace.organizationId)
+        .eq("status", "open")
         .in("current_stage", OTHER_STAGES)
         .or(missingValuePredicate)
         .order("created_at", { ascending: false })
