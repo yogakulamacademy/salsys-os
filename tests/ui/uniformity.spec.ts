@@ -313,6 +313,9 @@ test('Command Center uses reference 1024px geometry without changing the violet 
   const firstConversionRow = conversion.locator('div.grid').first();
   expect(await firstConversionRow.evaluate(node => getComputedStyle(node).gridTemplateColumns.split(' ').length)).toBe(3);
 
+  const stagePanel = page.getByTestId('home-pipeline-stage-mix');
+  await expect(stagePanel).toBeVisible();
+  await expect(stagePanel.getByRole('progressbar')).toHaveCount(5);
   const navigation = page.locator('aside[aria-label="Primary navigation"]');
   expect(Math.round(await navigation.evaluate(node => node.getBoundingClientRect().width))).toBe(64);
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(1024);

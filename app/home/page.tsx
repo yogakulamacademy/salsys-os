@@ -606,66 +606,34 @@ function PipelineSnapshot({
   counts: DashboardSnapshot["counts"];
 }) {
   const rows = [
-    ["Active pipeline", active],
-    ["High intent", highIntent],
-    ["Payment pending", payment],
-    ["Enrolled stage", enrolled],
-  ] as const;
-  const max = Math.max(1, ...rows.map(([, value]) => value));
-  const segments = [
-    { label: "New", value: counts.new, tone: "bg-violet-300 dark:bg-violet-400" },
-    { label: "Contacted / engaged", value: counts.contacted + counts.engaged, tone: "bg-violet-500 dark:bg-violet-500" },
-    { label: "Qualified / high intent", value: counts.qualified + counts.high_intent, tone: "bg-indigo-600 dark:bg-indigo-400" },
-    { label: "Payment pending", value: counts.payment_pending, tone: "bg-amber-500 dark:bg-amber-400" },
+    { label: "New", value: counts.new },
+    { label: "Contacted", value: counts.contacted + counts.engaged },
+    { label: "High intent", value: counts.qualified + counts.high_intent },
+    { label: "Payment pending", value: counts.payment_pending },
+    { label: "Enrolled", value: counts.enrolled ?? 0 },
   ];
-  const activeStages = segments.reduce((sum, segment) => sum + segment.value, 0);
-
+  const max = Math.max(1, ...rows.map((row) => row.value));
   return (
-    <div className="space-y-4">
-      {activeStages > 0 ? (
-        <div data-testid="home-pipeline-stage-mix" className="rounded-xl bg-surface-muted p-3">
-          <div className="flex items-center justify-between text-[11px]">
-            <span className="font-medium text-copy-strong">Active stage mix</span>
-            <span className="tabular-nums text-copy-muted">{activeStages.toLocaleString("en-IN")} leads</span>
+    <div data-testid="home-pipeline-stage-mix" className="space-y-2">
+      <div className="flex items-baseline justify-between gap-2">
+        <span className="text-xl font-bold tabular-nums text-copy-strong">{active.toLocaleString("en-IN")}</span>
+        <span className="text-[10px] text-copy-muted">Current active pipeline</span>
+      </div>
+      {rows.map((row) => (
+        <div key={row.label} className="grid grid-cols-[84px_minmax(0,1fr)_38px] items-center gap-2 text-[10px]">
+          <span className="truncate font-semibold text-copy-strong">{row.label}</span>
+          <div className="h-[7px] overflow-hidden rounded-full bg-brand-100" role="progressbar" aria-label={row.label + " relative stage count"} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(row.value / max * 100)}>
+            <div className="h-full rounded-full bg-brand-700" style={{width: percentageWidth(row.value / max * 100) + "%"}} />
           </div>
-          <div role="img" aria-label="Distribution across current active CRM stages" className="mt-2.5 flex h-3 overflow-hidden rounded-full bg-surface">
-            {segments.map((segment) => segment.value > 0 ? (
-              <div
-                key={segment.label}
-                className={segment.tone}
-                style={{ width: (segment.value / activeStages) * 100 + "%" }}
-                title={segment.label + ": " + segment.value.toLocaleString("en-IN")}
-              />
-            ) : null)}
-          </div>
-          <div className="mt-2.5 grid grid-cols-2 gap-x-3 gap-y-1.5">
-            {segments.map((segment) => (
-              <div key={segment.label} className="flex items-center gap-1.5 text-[10px] text-copy-muted">
-                <span className={"h-2 w-2 shrink-0 rounded-sm " + segment.tone} />
-                <span className="min-w-0 truncate" title={segment.label}>{segment.label}</span>
-                <span className="ml-auto tabular-nums">{segment.value.toLocaleString("en-IN")}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      ) : null}
-      <details className="border-t border-line pt-2 text-xs">
-        <summary className="cursor-pointer font-medium text-brand-700">Detailed stage counts</summary>
-        <div className="mt-3 space-y-3">
-        {rows.map(([label, value]) => (
-        <div key={label}>
-          <div className="flex items-center justify-between gap-3 text-xs">
-            <span className="text-copy-muted">{label}</span>
-            <span className="font-semibold tabular-nums text-copy-strong">{value.toLocaleString("en-IN")}</span>
-          </div>
-          <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-surface-muted">
-            <div className="h-full rounded-full bg-brand-700" style={{ width: percentageWidth((value / max) * 100) + "%" }} />
-          </div>
+          <span className="text-right font-bold tabular-nums text-copy-strong">{row.value.toLocaleString("en-IN")}</span>
         </div>
       ))}
-        </div>
+      <details className="border-t border-line pt-2 text-[10px] text-copy-subtle">
+        <summary className="cursor-pointer font-semibold text-brand-700">Detailed stage counts</summary>
+        <p className="mt-2 leading-4">
+          Current CRM stage indicators, not a sequential conversion funnel. "High intent" combines qualified and high-intent stages. Payment pending: {payment.toLocaleString("en-IN")}; enrolled: {enrolled.toLocaleString("en-IN")}; high intent: {highIntent.toLocaleString("en-IN")}.
+        </p>
       </details>
-      <p className="text-[10px] leading-4 text-copy-subtle">Current CRM stage indicators; not a sequential conversion funnel.</p>
     </div>
   );
 }
@@ -852,26 +820,36 @@ function RevenueTrend({
 
 /** Visual emphasis for the dominant source, without hiding the other sources. */
 function SourceMixRing({ sources, total }: { sources: DashboardPeriodSource[]; total: number | null }) {
-  if (total === null || total <= 0 || sources.length === 0) return null;
-  const leading = sources[0];
-  if (!leading || !Number.isSafeInteger(leading.leads) || leading.leads < 0 || leading.leads > total) return null;
-  const share = (leading.leads / total) * 100;
-  const circumference = 2 * Math.PI * 44;
+  if (total == null || total <= 0 || !sources.length) return null;
+  const records = sources.filter((row) => Number.isSafeInteger(row.leads) && row.leads >= 0);
+  if (records.reduce((sum,row) => sum + row.leads, 0) > total) return null;
+  const palette = ["#5216D3", "#8D52EB", "#AE84F4", "#D4BFF9"];
+  const circumference = 2 * Math.PI * 43;
+  let offset = 0;
+  const segments = records.slice(0, 4).map((row, index) => {
+    const length = circumference * (row.leads / total);
+    const segment = { key: row.source, label: sourceLabel(row.source), offset, length, color: palette[index] };
+    offset += length;
+    return segment;
+  });
   return (
     <div
       data-testid="home-source-mix-ring"
       role="img"
-      aria-label={sourceLabel(leading.source) + " accounts for " + share.toFixed(1) + "% of " + total + " acquired leads"}
+      aria-label={"Recorded source distribution for " + total.toLocaleString("en-IN") + " selected-period leads"}
       className="relative mx-auto grid h-28 w-28 shrink-0 place-items-center"
-      title={leading.leads.toLocaleString("en-IN") + " of " + total.toLocaleString("en-IN") + " leads from " + sourceLabel(leading.source)}
     >
-      <svg viewBox="0 0 120 120" className="absolute inset-0 h-full w-full" aria-hidden="true" focusable="false">
-        <circle cx="60" cy="60" r="44" fill="none" stroke="currentColor" strokeWidth="12" className="text-emerald-100 dark:text-emerald-900/50" />
-        <circle cx="60" cy="60" r="44" fill="none" stroke="currentColor" strokeWidth="12" className="text-brand-700" strokeDasharray={String(circumference * share / 100) + " " + String(circumference)} transform="rotate(-90 60 60)" />
+      <svg viewBox="0 0 120 120" className="absolute inset-0 h-full w-full -rotate-90" aria-hidden="true" focusable="false">
+        <circle cx="60" cy="60" r="43" stroke="#eae1fa" strokeWidth="12" fill="none" />
+        {segments.map((segment) => (
+          <circle key={segment.key} cx="60" cy="60" r="43" stroke={segment.color} strokeWidth="12" fill="none" strokeDasharray={segment.length + " " + (circumference - segment.length)} strokeDashoffset={-segment.offset}>
+            <title>{segment.label}</title>
+          </circle>
+        ))}
       </svg>
       <div className="relative z-10 text-center">
-        <p className="text-[22px] font-semibold tabular-nums tracking-tight text-copy-strong">{total.toLocaleString("en-IN")}</p>
-        <p className="max-w-24 truncate text-[10px] text-copy-muted">Leads</p>
+        <p className="text-[21px] font-bold tabular-nums tracking-tight text-copy-strong">{total.toLocaleString("en-IN")}</p>
+        <p className="text-[10px] text-copy-muted">Leads</p>
       </div>
     </div>
   );

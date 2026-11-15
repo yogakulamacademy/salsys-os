@@ -329,3 +329,38 @@
     padding-block: 6px;
   }
 }
+
+
+/* Reference refinement: keep decision evidence accessible while reducing
+   queue height and displaying the full five-stage distribution at 1024px. */
+.command-center-v2 .home-action-list a {
+  padding-block: 5px;
+  min-height: 42px;
+}
+.command-center-v2 .home-action-list a > span:nth-child(2) {
+  min-width: 0;
+}
+.command-center-v2 .home-action-list a > span:nth-child(2) > span {
+  display: block;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.command-center-v2 .home-queue-evidence {
+  padding-block: 5px;
+  line-height: 1.25;
+}
+.command-center-v2 .home-queue-evidence p {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.command-center-v2 [data-testid="home-pipeline-stage-mix"] {
+  padding: 0 2px 2px;
+}
+.command-center-v2 [data-testid="home-source-mix-ring"] {
+  filter: drop-shadow(0 2px 6px rgba(92, 27, 199, .06));
+}
+.command-center-v2 section[aria-label="Conversion and collections"] [data-testid="home-pipeline-stage-mix"] .bg-brand-700 {
+  background: linear-gradient(90deg, #ab77f5, #6924ec);
+}

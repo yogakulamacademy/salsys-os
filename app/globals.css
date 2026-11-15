@@ -10279,21 +10279,3 @@ html.dark .app-shell-v3 .topbar-profile-divider {
 }
 
 
-/* Home executive command center. Scopes the approved green visual language
-   to /home, leaving other workspace screens and the Inter type scale intact. */
-.command-center-v2 {
-  --app-brand-50: #ecfaef;
-  --app-brand-100: #dbf5e1;
-  --app-brand-600: #178d34;
-  --app-brand-700: #087b28;
-  --app-brand-800: #086421;
-  --app-brand-900: #07501d;
-  --app-brand-950: #073719;
-}
-.command-center-v2 > section,
-.command-center-v2 > header {
-  scroll-margin-top: 5.5rem;
-}
-.command-center-v2 .command-kpi {
-  min-width: 0;
-}
