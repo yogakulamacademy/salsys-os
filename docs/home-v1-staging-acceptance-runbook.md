@@ -14,7 +14,22 @@ This checklist covers the stacked work in draft PRs #705–#708. It is not autho
 
 ## Preflight — staging database (read only)
 
-An authorized operator first confirms that the **exact staging** project and application preview are intended for Home V1. The known temporary staging project has fewer applied migrations than production and did **not** contain the two new Home V1 reporting RPCs at the last read-only inspection. Do not assume staging and production are equivalent.
+An authorized operator first confirms that the **exact staging** project and application preview are intended for Home V1. A read-only audit on 2026-11-15 confirmed the temporary staging project and production histories have diverged substantially:
+
+| Migration ledger | Version count |
+| --- | ---: |
+| Temporary staging | 433 |
+| Production | 524 |
+| Shared version numbers | 237 |
+| Present only in staging | 196 |
+| Present only in production | 287 |
+
+The exact read-only staging audit in `docs/sql/home-v1-staging-metadata-audit-v1.sql` returned **metadata_pass=false** for all three functions:
+- `get_dashboard_snapshot`: present, authenticated-executable, anonymous denied, but missing the proposed explicit session-binding and NULL-safe authorization guards;
+- `get_home_v1_qualification_snapshot`: absent;
+- `get_home_v1_pipeline_snapshot`: absent.
+
+**NO-GO:** do not assume the temporary staging project can accept a straightforward Home V1 migration. Prefer an isolated, disposable acceptance environment created from the validated clean-replay dependency sequence. That environment requires separate approval before cloud provisioning or migration application. Do not attempt to replay hundreds of divergent historical migrations onto temporary staging.
 
 Run `docs/sql/home-v1-staging-metadata-audit-v1.sql` using a private, authorized database connection against the chosen staging database.
 
@@ -59,5 +74,7 @@ Use explicitly approved test accounts with ordinary login and real, separate bro
 Approval requires: exact commit's CI + CodeQL + migration replay success; metadata preflight green on approved staging; signed-in role/tenant matrix; KPI/source/valuation parity; responsive/error-state checks; explicit review of rollout and rollback procedure.
 
 Current decision: **NO-GO pending staging migrations/role tests and the latest CI completion.**
+
+The synthetic Playwright acceptance suite now includes `tests/ui/home-v1-evidence.spec.ts`: four Home headlines, period-preserving source drilldown, evidence-unavailable states, currency/collection disclaimers and 390px/768px/1440px layout checks. Its outcome must be obtained from CI for the exact commit containing the test; adding a test is not proof it passed.
 
 Keep PR #708 **draft**, and do not merge to `main` or apply SQL to production.
