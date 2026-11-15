@@ -66,7 +66,9 @@ expect(
 expect(
   home.includes("pipelineTruth.missingValueCount + pipelineTruth.missingCurrencyCount") &&
     !home.includes("unvaluedOpenLeads") &&
-    home.includes("unvaluedCurrentOpen != null && unvaluedCurrentOpen > 0"),
+    home.includes("missingOpportunityValue: unvaluedCurrentOpen") &&
+    home.includes("buildHomeNextActions({") &&
+    home.includes('"missing-valuation": CircleDollarSign'),
   "Home valuation attention must use the eligible pipeline snapshot, not legacy counts.",
 );
 
