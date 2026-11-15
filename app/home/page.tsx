@@ -387,7 +387,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
             {activeAttention.length ? activeAttention.map((item) => <AttentionRow key={item.label} item={item} />) : <HomeEmptyState variant="queue" compact title="All caught up" description="No urgent reply, follow-up, first-touch or payment actions are recorded right now." />}
           </div>
           {unvaluedOpenLeads > 0 ? (
-            <Link href="/revenue" className="mx-4 mb-4 flex items-center gap-2 rounded-lg bg-surface-muted px-3 py-2.5 text-xs text-copy-muted hover:text-brand-700">
+            <Link href="/revenue/valuation" className="mx-4 mb-4 flex items-center gap-2 rounded-lg bg-surface-muted px-3 py-2.5 text-xs text-copy-muted hover:text-brand-700">
               <CircleDollarSign size={15} /> <span className="flex-1">{unvaluedOpenLeads} open opportunities have no estimated value</span><ArrowRight size={13} />
             </Link>
           ) : null}
