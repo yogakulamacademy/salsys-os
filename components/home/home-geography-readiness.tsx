@@ -26,8 +26,8 @@ function LockedWorldMap() {
         <span className="grid h-8 w-8 place-items-center rounded-full bg-emerald-100 text-brand-700 dark:bg-emerald-900/50 dark:text-emerald-200">
           <LockKeyhole size={16} aria-hidden="true" />
         </span>
-        <p className="mt-2 text-xs font-semibold text-copy-strong">Map disabled until enough data</p>
-        <p className="mt-1 text-[11px] leading-4 text-copy-muted">Validated country coverage required</p>
+        <p className="mt-2 text-xs font-semibold text-copy-strong">Map unavailable</p>
+        <p className="mt-1 text-[11px] leading-4 text-copy-muted">Disabled until validated country coverage is sufficient</p>
       </div>
     </div>
   );
