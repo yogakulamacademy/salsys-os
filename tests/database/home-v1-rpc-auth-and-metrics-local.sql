@@ -104,9 +104,8 @@ DO $auth_diagnostic$
 DECLARE
   a uuid := '00000000-0000-4000-8000-00000000a001';
 BEGIN
-  RAISE NOTICE 'Home test diagnostics: auth.role=%, auth.uid=%, bound_org=%, session_enforced=%, has_role=%, bound_to_org=%',
+  RAISE NOTICE 'Home test diagnostics: auth.role=%, auth.uid=%, bound_org=%, has_role=%, bound_to_org=%',
     auth.role(), auth.uid(), public.current_tenant_organization_id(),
-    public.tenant_session_enforcement_enabled(),
     public.has_organization_role(a, array['owner','admin','manager']::text[]),
     public.session_is_bound_to_organization(a);
 END $auth_diagnostic$;
