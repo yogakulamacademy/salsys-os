@@ -26,7 +26,9 @@ export default async function ValuationReadinessPage() {
     ? await Promise.all([getCourses(), getCourseBatches()])
     : [[], []];
 
-  const courseNames = new Map(courses.map((course) => [course.id, course.name]));
+  const courseNames = new Map<string, string>(
+    courses.map((course): [string, string] => [course.id, course.name]),
+  );
   const pricedBatches = new Map<string, PriceReference[]>();
   for (const batch of batches) {
     if (!(batch.expectedValue != null && batch.expectedValue > 0 && batch.currency)) continue;
