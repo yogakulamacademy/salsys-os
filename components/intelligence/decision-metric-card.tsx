@@ -37,6 +37,8 @@ export type DecisionMetricCardProps = {
   evidenceState?: MetricEvidenceState;
   trend?: number[];
   inspectable?: boolean;
+  /** Compact, data-auditable dashboard presentation; detail remains accessible in the investigator. */
+  compact?: boolean;
 };
 
 const toneStyles: Record<
@@ -101,6 +103,7 @@ export function DecisionMetricCard({
   evidenceState,
   trend,
   inspectable,
+  compact = false,
 }: DecisionMetricCardProps) {
   const canonical = resolveMetricDefinition(label);
   const effectiveDefinition = definition ?? canonical?.definition;
@@ -184,13 +187,13 @@ export function DecisionMetricCard({
         </div>
       </div>
 
-      <div className="mt-4 flex min-w-0 items-end justify-between gap-3">
+      <div className={`${compact ? "mt-2" : "mt-4"} flex min-w-0 items-end justify-between gap-3`}>
         <div className="min-w-0">
-          <div className="truncate text-[26px] font-semibold tracking-[-0.045em] text-copy-strong">
+          <div className={`truncate font-semibold tracking-[-0.045em] text-copy-strong ${compact ? "text-[27px]" : "text-[26px]"}`}>
             {value}
           </div>
           {detail ? (
-            <div className="mt-1 text-xs leading-5 text-copy-muted">{detail}</div>
+            <div className={compact ? "sr-only" : "mt-1 text-xs leading-5 text-copy-muted"}>{detail}</div>
           ) : null}
         </div>
 
@@ -200,7 +203,7 @@ export function DecisionMetricCard({
       </div>
 
       {(delta !== undefined || effectiveEvidenceLabel || effectiveEvidenceStateName) ? (
-        <div className="mt-3 flex min-h-6 flex-wrap items-center gap-2 border-t border-line pt-3">
+        <div className={compact ? "mt-2 flex min-h-5 flex-wrap items-center gap-2" : "mt-3 flex min-h-6 flex-wrap items-center gap-2 border-t border-line pt-3"}>
           {delta !== undefined ? (
             <span
               className={`inline-flex items-center gap-1 text-[10px] font-semibold ${deltaState.className}`}
@@ -226,7 +229,7 @@ export function DecisionMetricCard({
               {effectiveEvidenceStateName && effectiveEvidenceLabel ? (
                 <span aria-hidden="true" className="opacity-60">·</span>
               ) : null}
-              {effectiveEvidenceLabel ? (
+              {effectiveEvidenceLabel && !compact ? (
                 <span className="max-w-[150px] truncate sm:max-w-[210px]">
                   {effectiveEvidenceLabel}
                 </span>
@@ -239,7 +242,7 @@ export function DecisionMetricCard({
   );
 
   const className =
-    "group relative block overflow-hidden rounded-card border border-line bg-surface p-4 shadow-sm transition duration-200 hover:-translate-y-[1px] hover:border-line-strong hover:shadow-panel";
+    "group relative block overflow-hidden rounded-card border border-line bg-surface shadow-sm transition duration-200 hover:-translate-y-[1px] hover:border-line-strong hover:shadow-panel " + (compact ? "min-h-[114px] p-3 sm:p-3.5" : "p-4");
 
   if (shouldInspect) {
     return (
