@@ -26,7 +26,7 @@ export function QualificationCohortPanel({
   const withoutMilestone = cohortTotal - milestoneCount;
 
   return (
-    <div className="p-4 sm:p-5" data-testid="home-qualification-cohort">
+    <div className="px-4 pb-3 pt-1 sm:px-5" data-testid="home-qualification-cohort">
       <p className="text-[11px] leading-5 text-copy-muted">Acquired leads · {periodLabel}</p>
 
       {!available ? (
@@ -52,7 +52,7 @@ export function QualificationCohortPanel({
               className="relative mx-auto grid aspect-square w-[140px] place-items-center"
             >
               <svg viewBox="0 0 120 120" aria-hidden="true" focusable="false" className="absolute inset-0 h-full w-full">
-                <circle cx="60" cy="60" r="46" fill="none" strokeWidth="10" stroke="currentColor" className="text-violet-100 dark:text-violet-900/50" />
+                <circle cx="60" cy="60" r="46" fill="none" strokeWidth="10" stroke="currentColor" className="text-emerald-100 dark:text-emerald-900/50" />
                 <circle cx="60" cy="60" r="46" fill="none" strokeWidth="10" stroke="currentColor" className="text-brand-700" strokeDasharray={String(2 * Math.PI * 46 * rate! / 100) + " " + String(2 * Math.PI * 46)} transform="rotate(-90 60 60)" />
               </svg>
               <div className="relative z-10 text-center">
@@ -74,7 +74,7 @@ export function QualificationCohortPanel({
         </div>
       )}
 
-      <details className="mt-4 border-t border-line pt-3 text-[10px] leading-4 text-copy-subtle">
+      <details className="mt-2 border-t border-line pt-2 text-[10px] leading-4 text-copy-subtle">
         <summary className="cursor-pointer font-medium text-brand-700">How qualification is measured</summary>
         <p className="mt-2">
           Historical milestone rate, not an end-to-end conversion funnel or evidence of lead quality.
