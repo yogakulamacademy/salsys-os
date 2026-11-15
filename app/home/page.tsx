@@ -369,7 +369,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
         </section>
       </section>
 
-      <section id="home-conversion" aria-label="Conversion and collections" className="grid min-w-0 scroll-mt-24 gap-4 lg:grid-cols-2">
+      <section id="home-conversion" aria-label="Conversion and collections" className="grid min-w-0 scroll-mt-24 gap-4 lg:grid-cols-3">
         <section className="min-w-0 overflow-hidden rounded-2xl border border-line bg-surface">
           <SectionHeader eyebrow="Acquisition cohort · period" title="Qualification milestones" actionHref={sourceDetailHref} actionLabel="Inspect cohort" />
           <QualificationCohortPanel
@@ -397,9 +397,15 @@ export default async function HomePage({ searchParams }: HomePageProps) {
             ) : null}
           </div>
         </section>
+        <section className="min-w-0 overflow-hidden rounded-2xl border border-line bg-surface">
+          <SectionHeader eyebrow="Sales · current" title="Pipeline health" actionHref="/admissions?view=pipeline" actionLabel="Open pipeline" />
+          <div className="p-4">
+            <PipelineSnapshot active={metrics.activePipeline} highIntent={metrics.highIntent} payment={metrics.paymentPending} enrolled={counts.enrolled ?? 0} counts={counts} />
+          </div>
+        </section>
       </section>
 
-      <section id="home-business-breakdown" aria-label="Business breakdown" className="grid min-w-0 scroll-mt-24 gap-4 lg:grid-cols-3">
+      <section id="home-business-breakdown" aria-label="Business breakdown" className="grid min-w-0 scroll-mt-24 gap-4 lg:grid-cols-2">
         <section className="min-w-0 overflow-hidden rounded-2xl border border-line bg-surface">
           <SectionHeader eyebrow="Acquisition · period" title="Lead sources" actionHref={sourceDetailHref} actionLabel="Analyze sources" />
           <div className="space-y-1 p-3 sm:p-4">
@@ -443,12 +449,6 @@ export default async function HomePage({ searchParams }: HomePageProps) {
                 Lead demand reflects current CRM associations, not course sales. Higher-intent and payment-stage indicators may overlap and are never summed. Course-level collections require a verified payment-to-enrollment link.
               </p>
             ) : null}
-          </div>
-        </section>
-        <section className="min-w-0 overflow-hidden rounded-2xl border border-line bg-surface">
-          <SectionHeader eyebrow="Sales · current" title="Pipeline health" actionHref="/admissions?view=pipeline" actionLabel="Open pipeline" />
-          <div className="p-4">
-            <PipelineSnapshot active={metrics.activePipeline} highIntent={metrics.highIntent} payment={metrics.paymentPending} enrolled={counts.enrolled ?? 0} counts={counts} />
           </div>
         </section>
       </section>
