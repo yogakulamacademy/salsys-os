@@ -66,15 +66,41 @@ begin
       ) as reached_qualified
     from cohort c
   ),
+  normalized_sources as (
+    select
+      case
+        when lower(btrim(s.source)) in ('unknown','(not set)','not set') then 'Unknown'
+        when lower(btrim(s.source)) in (
+          'instagram','ig','instagram.com','www.instagram.com',
+          'm.instagram.com','l.instagram.com','ig.me'
+        ) then 'Instagram'
+        when lower(btrim(s.source)) in (
+          'facebook','fb','facebook.com','m.facebook.com',
+          'l.facebook.com','www.facebook.com'
+        ) then 'Facebook'
+        when lower(btrim(s.source)) in (
+          'google','google.com','www.google.com',
+          'com.google.android.googlequicksearchbox'
+        ) then 'Google'
+        when lower(btrim(s.source)) in (
+          'whatsapp','wa.me','api.whatsapp.com','web.whatsapp.com'
+        ) then 'WhatsApp'
+        when lower(btrim(s.source)) in (
+          'chatgpt','chatgpt.com','chat.openai.com','www.chatgpt.com'
+        ) then 'ChatGPT'
+        when lower(btrim(s.source)) in ('direct','(direct)') then 'Direct'
+        else 'Other sources'
+      end as source,
+      s.reached_qualified
+    from scored s
+  ),
   source_rows as (
     select
       s.source,
       count(*)::bigint as leads,
       count(*) filter (where s.reached_qualified)::bigint as qualified
-    from scored s
+    from normalized_sources s
     group by s.source
-    order by count(*) desc, s.source asc
-    limit 25
   )
   select jsonb_build_object(
     'cohort_leads', (select count(*) from scored),
