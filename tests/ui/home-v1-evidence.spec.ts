@@ -44,6 +44,12 @@ test('Home has exactly four metric headlines, and opens source detail in the sel
   }
   await expect(pulse.getByText('Needs reply', { exact: true })).toHaveCount(0);
   await expect(pulse.getByText('Open pipeline value', { exact: true })).toBeVisible();
+  const performance = page.getByRole('region', { name: 'Conversion and collections' });
+  await expect(performance.getByRole('heading', { name: 'Qualification milestones', exact: true })).toBeVisible();
+  await expect(performance.getByRole('heading', { name: 'Recorded collections trend', exact: true })).toBeVisible();
+  await expect(performance.getByText('Qualification history unavailable', { exact: true })).toBeVisible();
+  await expect(performance.locator('[data-empty-variant="revenue"]')).toHaveAttribute('data-evidence-state', 'unavailable');
+
   await expect(page.getByText('UTC reporting days', { exact: true })).toBeVisible();
 
   const detail = page.getByRole('link', { name: 'Analyze sources', exact: true });
