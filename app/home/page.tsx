@@ -236,6 +236,8 @@ export default async function HomePage({ searchParams }: HomePageProps) {
       : { period: periodAnalytics.period.preset },
   );
   const sourceDetailHref = "/home/sources?" + sourceDetailParams.toString();
+  const visibleUpcomingBatches = upcomingBatches.slice(0, 3);
+  const maxUpcomingDemand = Math.max(1, ...visibleUpcomingBatches.map((batch) => batch.activeDemand));
   const missingPeriodEvidence = [
     !periodAnalytics.available.leads ? "lead acquisition" : null,
     !periodAnalytics.available.revenue ? "collected revenue" : null,
@@ -460,7 +462,12 @@ export default async function HomePage({ searchParams }: HomePageProps) {
         <section className="min-w-0 overflow-hidden rounded-2xl border border-line bg-surface">
           <SectionHeader eyebrow="Operations · current" title="Upcoming batch demand" actionHref="/course-management" actionLabel="See batches" />
           <div className="space-y-1 p-3 sm:p-4">
-            {upcomingBatches.length ? upcomingBatches.slice(0, 3).map((batch) => <BatchCard key={batch.id} batch={batch} />) : <HomeEmptyState variant="batches" compact title="No upcoming batches" description="No future-start batches are currently available in this workspace." action={{ href: "/course-management", label: "View courses" }} />}
+            {visibleUpcomingBatches.length ? visibleUpcomingBatches.map((batch) => <BatchCard key={batch.id} batch={batch} maxDemand={maxUpcomingDemand} />) : <HomeEmptyState variant="batches" compact title="No upcoming batches" description="No future-start batches are currently available in this workspace." action={{ href: "/course-management", label: "View courses" }} />}
+            {visibleUpcomingBatches.length > 0 ? (
+              <p className="border-t border-line px-2 pt-3 text-[11px] leading-5 text-copy-subtle">
+                Lead demand reflects current CRM associations, not course sales. Higher-intent and payment-stage indicators may overlap and are never summed. Course-level collections require a verified payment-to-enrollment link.
+              </p>
+            ) : null}
           </div>
         </section>
         <section className="min-w-0 overflow-hidden rounded-2xl border border-line bg-surface">
@@ -855,26 +862,60 @@ function SourceRow({ source, periodTotal, href = "/home/sources", qualificationA
   );
 }
 
-function BatchCard({ batch }: { batch: DashboardBatchDemand }) {
+function BatchCard({ batch, maxDemand }: { batch: DashboardBatchDemand; maxDemand: number }) {
   const capacityKnown = batch.capacity != null && batch.capacity > 0;
   const capacityText = !capacityKnown
     ? "Capacity not set"
     : batch.seatsRemaining != null
       ? String(batch.seatsRemaining) + " seats left"
       : String(batch.capacity) + " capacity";
+
+  const indicators = [
+    { label: "High intent", value: batch.hotDemand },
+    { label: "Payment stage", value: batch.paymentPending },
+    { label: "Enrolled stage", value: batch.enrolled },
+  ].filter((indicator) => indicator.value > 0);
+  const comparisonShare = Math.max(0, Math.min(100, (batch.activeDemand / maxDemand) * 100));
+
   return (
-    <Link href="/course-management" className="group flex items-start justify-between gap-3 rounded-xl px-2 py-3 transition hover:bg-surface-muted">
-      <span className="min-w-0">
-        <span className="block line-clamp-1 text-xs font-medium text-copy-strong">{batch.courseName}</span>
-        <span className="mt-0.5 block text-[11px] text-copy-subtle">
-          {batch.startDate ? formatDate(batch.startDate) : "Date not set"} · {batch.location}
+    <Link
+      href="/course-management"
+      className="group block rounded-xl px-2 py-3 transition hover:bg-surface-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-700"
+    >
+      <div className="flex items-start justify-between gap-3">
+        <span className="min-w-0">
+          <span className="block line-clamp-1 text-xs font-semibold text-copy-strong">{batch.courseName}</span>
+          <span className="mt-0.5 block text-[11px] leading-4 text-copy-subtle">
+            {batch.batchCode} · {batch.startDate ? formatDate(batch.startDate) : "Date not set"} · {batch.location}
+          </span>
+          <span className="mt-1 block text-[10px] text-copy-subtle">{capacityText}</span>
         </span>
-        <span className="mt-1 block text-[10px] text-copy-subtle">{capacityText}</span>
-      </span>
-      <span className="shrink-0 text-right">
-        <span className="block text-sm font-semibold tabular-nums text-copy-strong">{batch.activeDemand.toLocaleString("en-IN")}</span>
-        <span className="block text-[10px] text-copy-subtle">active leads</span>
-      </span>
+        <span className="shrink-0 text-right">
+          <span className="block text-[17px] font-semibold tabular-nums text-copy-strong">{batch.activeDemand.toLocaleString("en-IN")}</span>
+          <span className="block text-[10px] text-copy-subtle">active leads</span>
+        </span>
+      </div>
+      <div
+        role="progressbar"
+        aria-label={batch.courseName + " relative active lead demand among displayed upcoming batches"}
+        aria-valuenow={Math.round(comparisonShare)}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        className="mt-2.5 h-1.5 overflow-hidden rounded-full bg-surface-muted"
+      >
+        <div className="h-full rounded-full bg-brand-700" style={{ width: comparisonShare + "%" }} />
+      </div>
+      {indicators.length > 0 ? (
+        <div className="mt-2 flex flex-wrap gap-1.5 text-[10px] text-copy-muted">
+          {indicators.map((indicator) => (
+            <span key={indicator.label} className="rounded-md border border-line px-1.5 py-1">
+              {indicator.label} · <span className="font-semibold tabular-nums text-copy-strong">{indicator.value.toLocaleString("en-IN")}</span>
+            </span>
+          ))}
+        </div>
+      ) : (
+        <p className="mt-2 text-[10px] text-copy-subtle">No advanced-stage demand recorded for this batch.</p>
+      )}
     </Link>
   );
 }
