@@ -19,7 +19,7 @@ expect(
 expect(
   home.includes("historicalQualification?.qualifiedLeads") &&
     home.includes("historicalQualification.cohortLeads === periodAnalytics.leads.current") &&
-    home.includes("historicalQualification.historyCovered === historicalQualification.cohortLeads"),
+    home.includes("metricTruth.qualification.historyCovered === metricTruth.qualification.cohortLeads"),
   "Historical qualification requires reconciliation with the selected acquisition cohort and stage history coverage.",
 );
 expect(
