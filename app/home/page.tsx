@@ -7,6 +7,9 @@ import {
   CreditCard,
   Inbox,
   Sparkles,
+  Megaphone,
+  MessageCircle,
+  Target,
   GitBranch,
   Zap,
   UserRoundCheck,
@@ -289,13 +292,6 @@ export default async function HomePage({ searchParams }: HomePageProps) {
         </div>
       </section>
 
-      <details className="rounded-lg px-1 text-[11px] text-copy-subtle">
-        <summary className="w-fit cursor-pointer text-brand-700">Metric definitions and reporting scope</summary>
-        <p className="mt-2 max-w-4xl leading-5">
-          Leads and recorded collections refer to the selected UTC period. Qualified leads reached a recorded milestone by period end.
-          Open pipeline is a current-state estimate and does not change with the period filter.
-        </p>
-      </details>
 
       <nav aria-label="Home section shortcuts" className="flex flex-wrap gap-2 xl:hidden">
         {[
@@ -490,14 +486,15 @@ export default async function HomePage({ searchParams }: HomePageProps) {
         <section className="min-w-0 rounded-2xl border border-line bg-surface p-4 sm:p-5">
           <h2 className="text-sm font-semibold text-copy-strong">Quick actions</h2>
           <p className="mt-1 text-xs leading-5 text-copy-muted">Open the workspace you need.</p>
-          <div className="mt-4 grid grid-cols-3 gap-2">
+          <div className="mt-3 grid grid-cols-3 gap-2">
             {[
-              { href: "/conversations", label: "Conversations" },
-              { href: "/leads", label: "Leads" },
-              { href: "/campaigns", label: "Campaigns" },
+              { href: "/conversations", label: "Conversations", icon: MessageCircle },
+              { href: "/leads", label: "Leads", icon: Target },
+              { href: "/campaigns", label: "Campaigns", icon: Megaphone },
             ].map((action) => (
-              <Link key={action.href} href={action.href} className="flex min-h-20 flex-col items-center justify-center gap-2 rounded-xl border border-line bg-brand-50 px-2 text-center text-xs font-semibold text-brand-700 transition hover:border-brand-300 hover:bg-brand-100">
-                <span className="truncate">{action.label}</span><ArrowRight size={13} className="shrink-0" />
+              <Link key={action.href} href={action.href} className="flex min-h-[85px] flex-col items-center justify-center gap-1.5 rounded-xl border border-line bg-brand-50 px-2 text-center text-[11px] font-semibold text-brand-700 transition hover:border-brand-300 hover:bg-brand-100">
+                <action.icon size={20} aria-hidden="true" />
+                <span className="truncate">{action.label}</span><ArrowRight size={12} className="shrink-0" />
               </Link>
             ))}
           </div>
@@ -526,6 +523,15 @@ export default async function HomePage({ searchParams }: HomePageProps) {
           <p className="mt-3 rounded-xl border border-line bg-surface-muted px-3 py-4 text-xs text-copy-muted">No evidence-backed recommendation is available from the current action snapshot.</p>
         )}
       </section>
+
+      <details className="rounded-lg px-1 text-[11px] text-copy-subtle">
+        <summary className="w-fit cursor-pointer text-brand-700">Metric definitions and reporting scope</summary>
+        <p className="mt-2 max-w-4xl leading-5">
+          Leads and recorded collections refer to the selected UTC period. Qualified leads reached a recorded milestone by period end.
+          Open pipeline is a current-state estimate and does not change with the period filter.
+        </p>
+      </details>
+
 
       <HomeReportingCoverage items={reportingEvidence} />
     </div>
@@ -870,18 +876,18 @@ function SourceRow({ source, periodTotal, href = "/home/sources", qualificationA
   const share = periodTotal != null && periodTotal > 0 ? (source.leads / periodTotal) * 100 : null;
   const displaySource = sourceLabel(source.source);
   return (
-    <Link href={href} className="group block rounded-xl px-2 py-2.5 transition hover:bg-surface-muted">
+    <Link href={href} className="group block rounded-xl px-2 py-1 transition hover:bg-surface-muted">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <span className="block truncate text-xs font-medium text-copy-strong" title={"CRM source: " + source.source}>{displaySource}</span>
-          <span className="mt-0.5 block text-[11px] text-copy-subtle">{qualificationAvailable ? source.qualified.toLocaleString("en-IN") + " qualified by period end" : "Qualification evidence unavailable"}</span>
+          <span className="sr-only">{qualificationAvailable ? source.qualified.toLocaleString("en-IN") + " qualified by period end" : "Qualification evidence unavailable"}</span>
         </div>
         <span className="shrink-0 text-right text-xs font-semibold tabular-nums text-copy-strong">
           {source.leads.toLocaleString("en-IN")}
           <span className="ml-2 font-normal text-copy-subtle">{share == null ? "—" : share.toFixed(1) + "%"}</span>
         </span>
       </div>
-      <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-surface-muted">
+      <div className="mt-1 h-1 overflow-hidden rounded-full bg-surface-muted">
         <div role="progressbar" aria-label={displaySource + " share of selected-period leads"} aria-valuenow={share == null ? undefined : Math.round(share * 10) / 10} aria-valuemin={0} aria-valuemax={100} className="h-full rounded-full bg-brand-700" style={{ width: percentageWidth(share) + "%" }} />
       </div>
     </Link>
