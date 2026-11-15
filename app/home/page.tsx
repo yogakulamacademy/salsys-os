@@ -316,9 +316,11 @@ export default async function HomePage({ searchParams }: HomePageProps) {
             <Zap size={22} className="shrink-0 text-brand-700" aria-hidden="true" />
             <div className="min-w-0">
               <h2 className="text-sm font-semibold text-copy-strong">Immediate priority</h2>
-              <p className="mt-0.5 text-xs text-copy-muted" title={activeAttention[0].reason + " · " + activeAttention[0].evidence}>
+              <p className="mt-0.5 text-xs text-copy-muted">
                 {activeAttention[0].value.toLocaleString("en-IN")} · {recommendedActionTitle(activeAttention[0])}
               </p>
+              <p className="mt-1 text-[11px] leading-4 text-copy-muted">{activeAttention[0].reason}</p>
+              <p className="mt-0.5 text-[10px] leading-4 text-copy-subtle">{activeAttention[0].evidence} · {activeAttention[0].timing}</p>
             </div>
           </div>
           <Link href={activeAttention[0].href} className="inline-flex h-9 shrink-0 items-center gap-2 self-start rounded-ui bg-brand-700 px-3 text-xs font-semibold text-white hover:bg-brand-800 sm:self-auto">
@@ -559,7 +561,8 @@ function AttentionRow({ item }: { item: AttentionItem }) {
       </span>
       <span className="min-w-0 flex-1">
         <span className="block text-xs font-semibold text-copy-strong">{recommendedActionTitle(item)}</span>
-        <span className="sr-only">{item.reason} · {item.priority} · {item.evidence}</span>
+        <span className="mt-1 block text-[11px] leading-4 text-copy-muted">{item.reason}</span>
+        <span className="mt-0.5 block text-[10px] leading-4 text-copy-subtle">{item.priority} · {item.evidence}</span>
       </span>
       <span className="shrink-0 rounded-lg bg-surface-muted px-2 py-1 text-xs font-semibold tabular-nums text-copy-strong">
         {item.value.toLocaleString("en-IN")}
