@@ -33,6 +33,18 @@ begin
         array['owner','admin','manager']::text[]
       )
       and public.session_is_bound_to_organization(p_organization_id)
+      -- A sole-membership fallback in older recovery schemas must never
+      -- substitute for a real tenant-session binding on executive RPCs.
+      and exists (
+        select 1
+        from public.tenant_session_bindings binding
+        join public.organizations org
+          on org.id = binding.organization_id
+         and org.status = 'active'
+        where binding.organization_id = p_organization_id
+          and binding.user_id = auth.uid()
+          and binding.session_id = nullif(auth.jwt()->>'session_id','')::uuid
+      )
     )
   ) is distinct from true then
     raise exception 'not authorized for Home qualification'
@@ -151,6 +163,18 @@ begin
         array['owner','admin','manager']::text[]
       )
       and public.session_is_bound_to_organization(p_organization_id)
+      -- A sole-membership fallback in older recovery schemas must never
+      -- substitute for a real tenant-session binding on executive RPCs.
+      and exists (
+        select 1
+        from public.tenant_session_bindings binding
+        join public.organizations org
+          on org.id = binding.organization_id
+         and org.status = 'active'
+        where binding.organization_id = p_organization_id
+          and binding.user_id = auth.uid()
+          and binding.session_id = nullif(auth.jwt()->>'session_id','')::uuid
+      )
     )
   ) is distinct from true then
     raise exception 'not authorized for Home pipeline'
