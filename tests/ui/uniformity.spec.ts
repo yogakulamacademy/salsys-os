@@ -295,3 +295,26 @@ test('Home keeps icon-only violet sidebar with hover expansion and the reference
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
   }
 });
+
+test('Command Center uses reference 1024px geometry without changing the violet sidebar', async ({ page }) => {
+  await page.setViewportSize({ width: 1024, height: 1100 });
+  await page.goto('/home');
+  await page.mouse.move(800, 400);
+  const shell = page.locator('.command-center-v2');
+  await expect(shell).toBeVisible();
+
+  const pulse = page.locator('section[aria-label="Business pulse"]');
+  const pulseColumns = await pulse.evaluate(node => getComputedStyle(node).gridTemplateColumns.split(' ').length);
+  expect(pulseColumns).toBe(4);
+
+  const performance = page.locator('section[aria-label="Performance and work queue"]');
+  expect(await performance.evaluate(node => getComputedStyle(node).gridTemplateColumns.split(' ').length)).toBe(2);
+  const conversion = page.locator('section[aria-label="Conversion and collections"]');
+  const firstConversionRow = conversion.locator('div.grid').first();
+  expect(await firstConversionRow.evaluate(node => getComputedStyle(node).gridTemplateColumns.split(' ').length)).toBe(3);
+
+  const navigation = page.locator('aside[aria-label="Primary navigation"]');
+  expect(Math.round(await navigation.evaluate(node => node.getBoundingClientRect().width))).toBe(64);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(1024);
+  await page.screenshot({ animations: 'disabled', fullPage: true, path: 'test-results/home-reference-1024.png' });
+});
