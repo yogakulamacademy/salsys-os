@@ -21,6 +21,7 @@ import { isMockMode } from "@/lib/data";
 import { getHomeV1MetricTruth, type HomeV1MetricTruth } from "@/lib/home-v1-metric-truth";
 import { percentageWidth, sourceLabel } from "@/lib/ui-format";
 import { buildHomeSourceSignals, reconcileHomeSourceQualification } from "@/lib/home-source-intelligence";
+import { buildHomeNextActions, type HomeNextAction, type HomeActionId } from "@/lib/home-next-actions";
 import {
   getDashboardSnapshot,
   type DashboardBatchDemand,
@@ -41,17 +42,13 @@ type HomePageProps = {
   }>;
 };
 
-type AttentionItem = {
-  label: string;
-  value: number;
-  detail: string;
-  reason: string;
-  evidence: string;
-  timing: string;
-  actionLabel: string;
-  href: string;
-  icon: LucideIcon;
-  tone: "info" | "warning" | "critical";
+type AttentionItem = HomeNextAction & { icon: LucideIcon };
+const actionIcons: Record<HomeActionId, LucideIcon> = {
+  "reply-queue": Inbox,
+  "overdue-followups": Clock3,
+  "first-touch": UserRoundCheck,
+  "payment-stage": CreditCard,
+  "missing-valuation": CircleDollarSign,
 };
 
 type ChangeSignal = {
@@ -161,64 +158,14 @@ export default async function HomePage({ searchParams }: HomePageProps) {
   const collectedValue = periodPrimaryRevenue
     ? formatMoney(periodPrimaryRevenue.current, periodPrimaryRevenue.currency)
     : "—";
-  const attentionItems: AttentionItem[] = [
-    {
-      label: "Needs reply",
-      value: metrics.needsReply,
-      detail: "Active conversations waiting on your team",
-      reason: "A human reply is still outstanding on active customer conversations.",
-      evidence: "Observed conversation state",
-      timing:
-        metrics.waitingOverHour > 0
-          ? `${metrics.waitingOverHour} waiting >1h`
-          : "Open now",
-      actionLabel: "Open inbox",
-      href: "/conversations",
-      icon: Inbox,
-      tone: metrics.waitingOverHour > 0 ? "critical" : "info",
-    },
-    {
-      label: "Overdue follow-ups",
-      value: metrics.followupsDue,
-      detail: "Scheduled sales actions already due",
-      reason:
-        "The recorded follow-up due time has already passed and the task remains open.",
-      evidence: "Scheduled task evidence",
-      timing: "Past due",
-      actionLabel: "Work follow-ups",
-      href: "/follow-ups",
-      icon: Clock3,
-      tone: metrics.followupsDue > 0 ? "warning" : "info",
-    },
-    {
-      label: "First touch needed",
-      value: metrics.needsFirstTouch,
-      detail: "New opportunities without recorded contact",
-      reason:
-        "These opportunities do not yet have a recorded first outbound touch in CRM.",
-      evidence: "CRM contact history",
-      timing: "First touch pending",
-      actionLabel: "Review new leads",
-      href: "/leads?view=unassigned",
-      icon: UserRoundCheck,
-      tone: metrics.needsFirstTouch > 0 ? "warning" : "info",
-    },
-    {
-      label: "Payment pending",
-      value: metrics.paymentPending,
-      detail: "Opportunities currently at payment stage",
-      reason:
-        "Payment-stage opportunities need proof, questions or collection status reconciled before enrollment is treated as complete.",
-      evidence: "Pipeline & payment state",
-      timing: "Payment stage",
-      actionLabel: "Review payments",
-      href: "/admissions?view=payments",
-      icon: CreditCard,
-      tone: "info",
-    },
-  ];
-
-  const activeAttention = attentionItems.filter((item) => item.value > 0);
+  const activeAttention: AttentionItem[] = buildHomeNextActions({
+    needsReply: metrics.needsReply,
+    waitingOverHour: metrics.waitingOverHour,
+    followupsDue: metrics.followupsDue,
+    needsFirstTouch: metrics.needsFirstTouch,
+    paymentPending: metrics.paymentPending,
+    missingOpportunityValue: unvaluedCurrentOpen,
+  }).map((item) => ({ ...item, icon: actionIcons[item.id] }));
   const changeSignals = buildChangeSignals(periodAnalytics, metrics.waitingOverHour);
   const executiveBrief = buildExecutiveBrief({
     analytics: periodAnalytics,
@@ -355,7 +302,8 @@ export default async function HomePage({ searchParams }: HomePageProps) {
         <section aria-label="Top priority" className="flex flex-col gap-3 rounded-2xl border border-line bg-surface-soft px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between sm:px-5">
           <div className="min-w-0">
             <h2 className="text-sm font-semibold text-copy-strong">
-              {activeAttention[0].value.toLocaleString("en-IN")} · {recommendedActionTitle(activeAttention[0])}
+              <span className="mr-2 text-[11px] font-medium text-copy-muted">{activeAttention[0].priority}</span>
+                {activeAttention[0].value.toLocaleString("en-IN")} · {recommendedActionTitle(activeAttention[0])}
             </h2>
             <p className="mt-1 text-xs leading-5 text-copy-muted">{activeAttention[0].detail}. {activeAttention[0].timing}.</p>
           </div>
@@ -404,13 +352,8 @@ export default async function HomePage({ searchParams }: HomePageProps) {
             <ReplyPressure total={metrics.needsReply} overHour={metrics.waitingOverHour} />
           ) : null}
           <div className="space-y-1 p-3 sm:p-4">
-            {activeAttention.length ? activeAttention.map((item) => <AttentionRow key={item.label} item={item} />) : <HomeEmptyState variant="queue" compact title="All caught up" description="No urgent reply, follow-up, first-touch or payment actions are recorded right now." />}
+            {activeAttention.length ? activeAttention.map((item) => <AttentionRow key={item.id} item={item} />) : <HomeEmptyState variant="queue" compact title={mock ? "Queue evidence unavailable" : "No recorded action backlog"} description={mock ? "Current conversation and follow-up evidence cannot be verified in this environment." : "No current reply, overdue follow-up, first-touch, payment-stage, or valuation actions were returned by the CRM snapshot."} unavailable={mock} />}
           </div>
-          {unvaluedCurrentOpen != null && unvaluedCurrentOpen > 0 ? (
-            <Link href="/revenue/valuation" className="mx-4 mb-4 flex items-center gap-2 rounded-lg bg-surface-muted px-3 py-2.5 text-xs text-copy-muted hover:text-brand-700">
-              <CircleDollarSign size={15} /> <span className="flex-1">{unvaluedCurrentOpen} eligible open leads need an explicit value or currency</span><ArrowRight size={13} />
-            </Link>
-          ) : null}
         </section>
       </section>
 
@@ -551,7 +494,7 @@ function AttentionRow({ item }: { item: AttentionItem }) {
       </span>
       <span className="min-w-0 flex-1">
         <span className="block text-xs font-semibold text-copy-strong">{recommendedActionTitle(item)}</span>
-        <span className="mt-0.5 block text-[11px] leading-4 text-copy-muted">{item.timing}</span>
+        <span className="mt-0.5 block text-[11px] leading-4 text-copy-muted">{item.priority} · {item.timing}</span>
       </span>
       <span className="shrink-0 rounded-lg bg-surface-muted px-2 py-1 text-xs font-semibold tabular-nums text-copy-strong">
         {item.value.toLocaleString("en-IN")}
@@ -1031,7 +974,7 @@ function buildExecutiveBrief({
         b.qualified - a.qualified ||
         (b.conversionRate ?? 0) - (a.conversionRate ?? 0),
     )[0];
-  const topAttention = [...attention].sort((a, b) => b.value - a.value)[0];
+  const topAttention = attention[0];
   const leadChange = analytics.available.leads
     ? analytics.leads.changePercent
     : null;
@@ -1040,6 +983,7 @@ function buildExecutiveBrief({
     "Overdue follow-ups": topAttention?.value === 1 ? "follow-up is overdue" : "follow-ups are overdue",
     "First touch needed": topAttention?.value === 1 ? "lead needs a first contact" : "leads need a first contact",
     "Payment pending": topAttention?.value === 1 ? "opportunity needs payment follow-up" : "opportunities need payment follow-up",
+    "Missing opportunity values": topAttention?.value === 1 ? "open lead needs valuation" : "open leads need valuation",
   };
   const title = topAttention
     ? `${topAttention.value.toLocaleString("en-IN")} ${attentionPhrases[topAttention.label] ?? "items need attention"}.`
