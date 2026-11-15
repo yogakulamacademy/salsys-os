@@ -74,7 +74,10 @@ const homeGuard = read("supabase/migrations/20261115091500_home_dashboard_privil
 expect(
   homeGuard.includes(") is distinct from true then") &&
     !homeGuard.includes("if not (") &&
+    homeGuard.includes("from public.tenant_session_bindings binding") &&
+    homeGuard.includes("binding.session_id = nullif(auth.jwt()->>'session_id','')::uuid") &&
     migration.split(") is distinct from true then").length - 1 === 2 &&
+    migration.split("from public.tenant_session_bindings binding").length - 1 === 2 &&
     !migration.includes("if not ("),
   "All three Home privileged RPC guards must reject SQL NULL as unauthorized.",
 );
