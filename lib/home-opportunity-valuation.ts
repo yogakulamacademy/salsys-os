@@ -81,7 +81,13 @@ export async function getOpportunityValuationQueue(): Promise<OpportunityValuati
     priorityResult.error, recentResult.error,
   ].find(Boolean);
   if (firstError || eligibleResult.count == null || missingResult.count == null) {
-    throw new Error("Unable to load organization-scoped opportunity valuation queue.");
+    return {
+      available: false,
+      eligibleCount: null,
+      needsValuationCount: null,
+      priority: [],
+      recent: [],
+    };
   }
 
   const mapLead = (row: Record<string, unknown>): UnvaluedOpportunity => ({
