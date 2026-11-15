@@ -1,6 +1,5 @@
 import Link from "next/link";
 import {
-  AlertTriangle,
   ArrowRight,
   CalendarDays,
   CircleDollarSign,
@@ -15,9 +14,16 @@ import {
 
 import { DecisionMetricCard } from "@/components/intelligence/decision-metric-card";
 import { LeadActivityChart } from "@/components/home/lead-activity-chart";
+import { QualificationCohortPanel } from "@/components/home/qualification-cohort-panel";
+import { HomeGeographyReadiness } from "@/components/home/home-geography-readiness";
+import { HomeReportingCoverage, type HomeReportingEvidence } from "@/components/home/home-reporting-coverage";
 import { HomeEmptyState } from "@/components/home/home-empty-state";
 import { isMockMode } from "@/lib/data";
+import { getHomeV1MetricTruth, type HomeV1MetricTruth } from "@/lib/home-v1-metric-truth";
 import { percentageWidth, sourceLabel } from "@/lib/ui-format";
+import { buildHomeSourceSignals, reconcileHomeSourceQualification } from "@/lib/home-source-intelligence";
+import { buildHomeNextActions, type HomeNextAction, type HomeActionId } from "@/lib/home-next-actions";
+import { calculateHomeReplyWaitingBreakdown } from "@/lib/home-reply-waiting";
 import {
   getDashboardSnapshot,
   type DashboardBatchDemand,
@@ -38,17 +44,13 @@ type HomePageProps = {
   }>;
 };
 
-type AttentionItem = {
-  label: string;
-  value: number;
-  detail: string;
-  reason: string;
-  evidence: string;
-  timing: string;
-  actionLabel: string;
-  href: string;
-  icon: LucideIcon;
-  tone: "info" | "warning" | "critical";
+type AttentionItem = HomeNextAction & { icon: LucideIcon };
+const actionIcons: Record<HomeActionId, LucideIcon> = {
+  "reply-queue": Inbox,
+  "overdue-followups": Clock3,
+  "first-touch": UserRoundCheck,
+  "payment-stage": CreditCard,
+  "missing-valuation": CircleDollarSign,
 };
 
 type ChangeSignal = {
@@ -63,7 +65,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
   const mock = isMockMode();
   const periodFallback = resolveDashboardPeriod(query);
 
-  const [snapshot, periodAnalytics] = await Promise.all([
+  const [snapshot, periodAnalytics, metricTruth] = await Promise.all([
     getDashboardSnapshot(),
     mock
       ? Promise.resolve<DashboardPeriodAnalytics>({
@@ -82,8 +84,12 @@ export default async function HomePage({ searchParams }: HomePageProps) {
           },
           enrollments: { current: 0, previous: 0, changePercent: null },
           sources: [],
+          geography: null,
         })
       : getDashboardPeriodAnalytics(query),
+    mock
+      ? Promise.resolve<HomeV1MetricTruth>({ qualification: null, pipeline: null })
+      : getHomeV1MetricTruth(periodFallback),
   ]);
 
   const {
@@ -91,11 +97,35 @@ export default async function HomePage({ searchParams }: HomePageProps) {
     counts,
     revenueSummary,
     upcomingBatches,
-    unvaluedOpenLeads,
   } = snapshot;
 
   const primaryRevenue =
     revenueSummary.find((row) => row.collected > 0) ?? revenueSummary[0] ?? null;
+
+  const pipelineTruth = metricTruth.pipeline;
+  const unvaluedCurrentOpen = pipelineTruth
+    ? pipelineTruth.missingValueCount + pipelineTruth.missingCurrencyCount
+    : null;
+  const valuationCoverage = pipelineTruth && pipelineTruth.eligibleCount > 0
+    ? Math.round((pipelineTruth.valuedCount / pipelineTruth.eligibleCount) * 1000) / 10
+    : null;
+  const openPipelineValue = !pipelineTruth || pipelineTruth.valuedCount === 0
+    ? "—"
+    : pipelineTruth.currencies.length === 1
+      ? formatMoney(pipelineTruth.currencies[0].amount, pipelineTruth.currencies[0].currency)
+      : "—";
+  const openPipelineDetail = !pipelineTruth
+    ? "Verified opportunity snapshot unavailable"
+    : pipelineTruth.currencies.length > 1
+      ? "Multiple currencies · inspect each separately"
+      : `${pipelineTruth.valuedCount} of ${pipelineTruth.eligibleCount} open leads valued · ${valuationCoverage == null ? "No coverage baseline" : valuationCoverage + "% value coverage"}`;
+  const historicalQualification =
+    periodAnalytics.available.leads &&
+    metricTruth.qualification &&
+    metricTruth.qualification.cohortLeads === periodAnalytics.leads.current &&
+    metricTruth.qualification.historyCovered === metricTruth.qualification.cohortLeads
+      ? metricTruth.qualification
+      : null;
   const periodPrimaryRevenue = periodAnalytics.available.revenue
     ? pickPeriodRevenue(periodAnalytics, primaryRevenue?.currency ?? null)
     : null;
@@ -103,15 +133,26 @@ export default async function HomePage({ searchParams }: HomePageProps) {
   const acquisitionSources: DashboardPeriodSource[] = periodAnalytics.available.leads
     ? periodAnalytics.sources
     : [];
+  const validatedSourceQuality = historicalQualification
+    ? reconcileHomeSourceQualification(
+        acquisitionSources,
+        historicalQualification.sources,
+        historicalQualification.cohortLeads,
+        historicalQualification.qualifiedLeads,
+      )
+    : null;
+  const sourceSignals = buildHomeSourceSignals(
+    periodAnalytics.available.leads ? periodAnalytics.leads.current : null,
+    acquisitionSources,
+    historicalQualification?.qualifiedLeads ?? null,
+  );
 
   const totalLeads = periodAnalytics.available.leads
     ? periodAnalytics.leads.current
     : null;
-  const qualifiedLeads = periodAnalytics.available.leads
-    ? periodAnalytics.leads.qualified
-    : null;
-  const qualifiedRate = periodAnalytics.available.leads
-    ? periodAnalytics.leads.conversionRate
+  const qualifiedLeads = historicalQualification?.qualifiedLeads ?? null;
+  const qualifiedRate = historicalQualification && historicalQualification.cohortLeads > 0
+    ? Math.round((historicalQualification.qualifiedLeads / historicalQualification.cohortLeads) * 1000) / 10
     : null;
   const enrolledLeads = periodAnalytics.available.enrollments
     ? periodAnalytics.enrollments.current
@@ -120,76 +161,40 @@ export default async function HomePage({ searchParams }: HomePageProps) {
   const collectedValue = periodPrimaryRevenue
     ? formatMoney(periodPrimaryRevenue.current, periodPrimaryRevenue.currency)
     : "—";
-  const attentionItems: AttentionItem[] = [
-    {
-      label: "Needs reply",
-      value: metrics.needsReply,
-      detail: "Active conversations waiting on your team",
-      reason: "A human reply is still outstanding on active customer conversations.",
-      evidence: "Observed conversation state",
-      timing:
-        metrics.waitingOverHour > 0
-          ? `${metrics.waitingOverHour} waiting >1h`
-          : "Open now",
-      actionLabel: "Open inbox",
-      href: "/conversations",
-      icon: Inbox,
-      tone: metrics.waitingOverHour > 0 ? "critical" : "info",
-    },
-    {
-      label: "Overdue follow-ups",
-      value: metrics.followupsDue,
-      detail: "Scheduled sales actions already due",
-      reason:
-        "The recorded follow-up due time has already passed and the task remains open.",
-      evidence: "Scheduled task evidence",
-      timing: "Past due",
-      actionLabel: "Work follow-ups",
-      href: "/follow-ups",
-      icon: Clock3,
-      tone: metrics.followupsDue > 0 ? "warning" : "info",
-    },
-    {
-      label: "First touch needed",
-      value: metrics.needsFirstTouch,
-      detail: "New opportunities without recorded contact",
-      reason:
-        "These opportunities do not yet have a recorded first outbound touch in CRM.",
-      evidence: "CRM contact history",
-      timing: "First touch pending",
-      actionLabel: "Review new leads",
-      href: "/leads?view=unassigned",
-      icon: UserRoundCheck,
-      tone: metrics.needsFirstTouch > 0 ? "warning" : "info",
-    },
-    {
-      label: "Payment pending",
-      value: metrics.paymentPending,
-      detail: "Opportunities currently at payment stage",
-      reason:
-        "Payment-stage opportunities need proof, questions or collection status reconciled before enrollment is treated as complete.",
-      evidence: "Pipeline & payment state",
-      timing: "Payment stage",
-      actionLabel: "Review payments",
-      href: "/admissions?view=payments",
-      icon: CreditCard,
-      tone: "info",
-    },
-  ];
-
-  const activeAttention = attentionItems.filter((item) => item.value > 0);
+  const activeAttention: AttentionItem[] = buildHomeNextActions({
+    needsReply: metrics.needsReply,
+    waitingOverHour: metrics.waitingOverHour,
+    followupsDue: metrics.followupsDue,
+    needsFirstTouch: metrics.needsFirstTouch,
+    paymentPending: metrics.paymentPending,
+    missingOpportunityValue: unvaluedCurrentOpen,
+  }).map((item) => ({ ...item, icon: actionIcons[item.id] }));
   const changeSignals = buildChangeSignals(periodAnalytics, metrics.waitingOverHour);
   const executiveBrief = buildExecutiveBrief({
     analytics: periodAnalytics,
-    sources: acquisitionSources,
+    sources: validatedSourceQuality ?? [],
     attention: activeAttention,
     qualifiedRate,
   });
-  const missingPeriodEvidence = [
-    !periodAnalytics.available.leads ? "lead acquisition" : null,
-    !periodAnalytics.available.revenue ? "collected revenue" : null,
-    !periodAnalytics.available.enrollments ? "enrolled-lead history" : null,
-  ].filter((value): value is string => Boolean(value));
+  const sourceDetailParams = new URLSearchParams(
+    periodAnalytics.period.preset === "custom"
+      ? {
+          period: "custom",
+          from: periodAnalytics.period.startDate,
+          to: periodAnalytics.period.endDate,
+        }
+      : { period: periodAnalytics.period.preset },
+  );
+  const sourceDetailHref = "/home/sources?" + sourceDetailParams.toString();
+  const visibleUpcomingBatches = upcomingBatches.slice(0, 3);
+  const maxUpcomingDemand = Math.max(1, ...visibleUpcomingBatches.map((batch) => batch.activeDemand));
+  const reportingEvidence: HomeReportingEvidence[] = [
+    { id: "lead-acquisition", label: "Lead acquisition", available: periodAnalytics.available.leads, basis: "Period event" },
+    { id: "qualification-cohort", label: "Qualification milestones", available: historicalQualification != null, basis: "Period cohort" },
+    { id: "recorded-payments", label: "Recorded payment ledger", available: periodAnalytics.available.revenue, basis: "Period event" },
+    { id: "enrolled-stage", label: "Enrolled-stage history", available: periodAnalytics.available.enrollments, basis: "Period event" },
+    { id: "open-valuation", label: "Open opportunity values", available: pipelineTruth != null, basis: "Current snapshot" },
+  ];
 
   return (
     <div className="command-center-v2 w-full min-w-0 space-y-4 pb-8 sm:space-y-5">
@@ -202,6 +207,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <PeriodPresets selected={periodAnalytics.period.preset} />
+          <span className="hidden text-[11px] text-copy-subtle sm:inline" title="Date boundaries currently use UTC, not the organization's business timezone.">UTC reporting days</span>
           <details className="relative group">
             <summary className="inline-flex h-10 cursor-pointer list-none items-center gap-2 rounded-ui border border-line bg-surface px-3 text-xs font-medium text-copy-muted hover:border-line-strong">
               <CalendarDays size={14} className="text-brand-700" />
@@ -223,15 +229,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
         </div>
       </header>
 
-      {missingPeriodEvidence.length ? (
-        <section aria-label="Reporting coverage" className="flex items-start gap-2.5 rounded-xl border border-amber-200 bg-amber-50/70 px-4 py-3 text-xs leading-5 text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/20 dark:text-amber-200">
-          <AlertTriangle size={16} className="mt-0.5 shrink-0" />
-          <p>
-            <strong>Selected-period evidence is incomplete.</strong> Unavailable: {missingPeriodEvidence.join(", ")}.
-            Period KPIs stay unknown rather than falling back to all-time snapshot totals. Current attention and pipeline panels use current-state evidence.
-          </p>
-        </section>
-      ) : null}
+      <HomeReportingCoverage items={reportingEvidence} />
 
       <section aria-label="Business pulse" className="grid grid-cols-2 gap-2 sm:gap-3 xl:grid-cols-4">
         <div className="command-kpi min-w-0">
@@ -250,49 +248,76 @@ export default async function HomePage({ searchParams }: HomePageProps) {
         </div>
         <div className="command-kpi min-w-0">
           <DecisionMetricCard
-            icon={<Inbox size={17} />}
-            label="Needs reply"
-            value={metrics.needsReply.toLocaleString("en-IN")}
-            detail="Current conversations awaiting a team reply"
-            href="/conversations"
-            evidenceLabel="Current conversation state"
-            definition="Current active customer conversations that need a reply. Unlike the other cards, this is a current queue count, not a selected-period conversation total."
-          />
-        </div>
-        <div className="command-kpi min-w-0">
-          <DecisionMetricCard
             icon={<UserRoundCheck size={17} />}
             label="Qualified leads"
             value={qualifiedLeads == null ? "—" : qualifiedLeads.toLocaleString("en-IN")}
-            detail={qualifiedRate == null ? "Selected-period stage evidence unavailable" : String(qualifiedRate) + "% of new leads in scope"}
-            href="/admissions"
-            evidenceLabel={periodAnalytics.available.leads ? "CRM stage evidence" : "Evidence unavailable"}
-            definition="Leads created in the selected period whose current CRM stage is qualified or later. This is a cohort-stage snapshot, not a sequential funnel conversion probability."
+            detail={qualifiedLeads == null ? "Period-end qualification evidence unavailable" : qualifiedRate == null ? "No qualifying leads in the cohort" : qualifiedRate + "% reached a qualification milestone by period end"}
+            href="/leads"
+            evidenceLabel={historicalQualification ? "Qualification-stage history" : "Evidence unavailable"}
+            evidenceState={historicalQualification ? "derived" : "unknown"}
+            definition="New leads in the selected acquisition cohort that reached qualified, high intent, payment pending, or enrolled by the selected period-end cutoff. Counts qualifying milestones, not their present-day stage. Requires complete recorded stage history."
           />
         </div>
         <div className="command-kpi min-w-0">
           <DecisionMetricCard
             icon={<CircleDollarSign size={17} />}
-            label="Collected"
+            label="Open pipeline value"
+            value={openPipelineValue}
+            detail={openPipelineDetail}
+            statusLabel="As of now"
+            href="/revenue"
+            evidenceLabel={pipelineTruth ? "Open-lead valuation evidence" : "Evidence unavailable"}
+            evidenceState={pipelineTruth ? (pipelineTruth.eligibleCount === pipelineTruth.valuedCount ? "derived" : "partial") : "unknown"}
+            definition="Sum of positive explicit potential values for currently open, nonarchived sales leads in new, contacted, engaged, qualified, high-intent, or payment-pending stages. Values require an explicit currency; multi-currency amounts are never merged. Missing values are excluded, disclosed in coverage, and must not be interpreted as zero potential. As-of-now, not period-based."
+          />
+        </div>
+        <div className="command-kpi min-w-0">
+          <DecisionMetricCard
+            icon={<CircleDollarSign size={17} />}
+            label="Recorded collections"
             value={collectedValue}
-            detail={!periodAnalytics.available.revenue ? "Selected-period payment evidence unavailable" : periodPrimaryRevenue ? periodPrimaryRevenue.currency + " verified net paid" : "No verified paid amount in scope"}
+            detail={!periodAnalytics.available.revenue ? "Selected-period payment evidence unavailable" : periodPrimaryRevenue ? periodPrimaryRevenue.currency + " net paid in CRM ledger · settlement review pending" : "No paid ledger entries · reconciliation pending"}
             delta={periodPrimaryRevenue?.changePercent}
             deltaDirection="higher_is_better"
             comparisonLabel="vs previous comparable period"
             href="/revenue"
-            evidenceLabel={periodAnalytics.available.revenue ? "Verified payment evidence" : "Evidence unavailable"}
-            definition="Net collected revenue from verified payment evidence in the selected period and displayed currency. Different currencies are never combined without approved FX evidence."
+            evidenceLabel={periodAnalytics.available.revenue ? "Recorded payment ledger · unverified" : "Evidence unavailable"}
+            evidenceState="partial"
+            definition="Net paid-status payment records less refund records in the selected period and displayed currency. The CRM ledger has not been reconciled to external settlement evidence; do not treat this as independently verified total business collections."
           />
         </div>
       </section>
+
+      <p className="text-[11px] leading-5 text-copy-subtle">
+        Leads and recorded collections refer to the selected UTC period. Qualified leads reached a recorded milestone by period end.
+        Open pipeline is a current-state estimate and does not change with the period filter.
+      </p>
+
+      <nav aria-label="Home section shortcuts" className="flex flex-wrap gap-2 xl:hidden">
+        {[
+          { href: "#home-action-queue", label: "Work queue" },
+          { href: "#home-conversion", label: "Conversion" },
+          { href: "#home-business-breakdown", label: "Business breakdown" },
+        ].map((shortcut) => (
+          <Link
+            key={shortcut.href}
+            href={shortcut.href}
+            className="inline-flex min-h-10 items-center rounded-ui border border-line bg-surface px-3 py-2 text-xs font-semibold text-copy-strong transition hover:border-brand-300 hover:text-brand-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-700"
+          >
+            {shortcut.label}
+          </Link>
+        ))}
+      </nav>
 
       {activeAttention.length > 0 ? (
         <section aria-label="Top priority" className="flex flex-col gap-3 rounded-2xl border border-line bg-surface-soft px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between sm:px-5">
           <div className="min-w-0">
             <h2 className="text-sm font-semibold text-copy-strong">
-              {activeAttention[0].value.toLocaleString("en-IN")} · {recommendedActionTitle(activeAttention[0])}
+              <span className="mr-2 text-[11px] font-medium text-copy-muted">{activeAttention[0].priority}</span>
+                {activeAttention[0].value.toLocaleString("en-IN")} · {recommendedActionTitle(activeAttention[0])}
             </h2>
-            <p className="mt-1 text-xs leading-5 text-copy-muted">{activeAttention[0].detail}. {activeAttention[0].timing}.</p>
+            <p className="mt-1 text-xs leading-5 text-copy-muted">{activeAttention[0].reason}</p>
+            <p className="mt-1 text-[11px] leading-5 text-copy-subtle">{activeAttention[0].evidence} · {activeAttention[0].timing}</p>
           </div>
           <Link href={activeAttention[0].href} className="inline-flex h-9 shrink-0 items-center gap-2 self-start rounded-ui bg-brand-700 px-3 text-xs font-semibold text-white hover:bg-brand-800 sm:self-auto">
             {activeAttention[0].actionLabel} <ArrowRight size={13} />
@@ -321,42 +346,83 @@ export default async function HomePage({ searchParams }: HomePageProps) {
             </p>
             <details className="mt-3 border-t border-line pt-3">
               <summary className="cursor-pointer text-xs font-medium text-brand-700 dark:text-brand-300">Financial context</summary>
-              <div className="mt-3 grid gap-4 rounded-xl bg-surface-muted p-3 sm:grid-cols-3">
-                <SnapshotMetric label="Collected in period" value={collectedValue} change={periodPrimaryRevenue?.changePercent ?? null} />
-                <SnapshotMetric label="Current pipeline value" value={primaryRevenue ? formatMoney(primaryRevenue.pipeline, primaryRevenue.currency) : "—"} />
-                <SnapshotMetric label="Current weighted value" value={primaryRevenue ? formatMoney(primaryRevenue.weighted, primaryRevenue.currency) : "—"} />
+              <div className="mt-3 grid gap-4 rounded-xl bg-surface-muted p-3 sm:grid-cols-2">
+                <SnapshotMetric label="Recorded collections · period" value={collectedValue} change={periodPrimaryRevenue?.changePercent ?? null} />
+                <SnapshotMetric label="Eligible open value · now" value={openPipelineValue} />
               </div>
-              <RevenueTrend points={periodAnalytics.revenueSeries} currency={periodAnalytics.primaryCurrency} available={periodAnalytics.available.revenue} />
+              <p className="mt-2 text-[11px] leading-5 text-copy-subtle">
+                Current snapshot revenue has not been substituted into the selected reporting period.
+                Recorded collections are CRM ledger entries pending external settlement reconciliation.
+                Open pipeline values are current commercial estimates, not recognized revenue.
+              </p>
             </details>
           </div>
         </section>
-        <section className="min-w-0 overflow-hidden rounded-2xl border border-line bg-surface">
+        <section id="home-action-queue" className="min-w-0 scroll-mt-24 overflow-hidden rounded-2xl border border-line bg-surface">
           <SectionHeader eyebrow="Needs attention · current" title="Action queue" actionHref="/admissions" actionLabel="View all" />
           {metrics.needsReply > 0 ? (
             <ReplyPressure total={metrics.needsReply} overHour={metrics.waitingOverHour} />
           ) : null}
           <div className="space-y-1 p-3 sm:p-4">
-            {activeAttention.length ? activeAttention.map((item) => <AttentionRow key={item.label} item={item} />) : <HomeEmptyState variant="queue" compact title="All caught up" description="No urgent reply, follow-up, first-touch or payment actions are recorded right now." />}
+            {activeAttention.length ? activeAttention.map((item) => <AttentionRow key={item.id} item={item} />) : <HomeEmptyState variant="queue" compact title={mock ? "Queue evidence unavailable" : "No recorded action backlog"} description={mock ? "Current conversation and follow-up evidence cannot be verified in this environment." : "No current reply, overdue follow-up, first-touch, payment-stage, or valuation actions were returned by the CRM snapshot."} unavailable={mock} />}
           </div>
-          {unvaluedOpenLeads > 0 ? (
-            <Link href="/revenue" className="mx-4 mb-4 flex items-center gap-2 rounded-lg bg-surface-muted px-3 py-2.5 text-xs text-copy-muted hover:text-brand-700">
-              <CircleDollarSign size={15} /> <span className="flex-1">{unvaluedOpenLeads} open opportunities have no estimated value</span><ArrowRight size={13} />
-            </Link>
-          ) : null}
         </section>
       </section>
 
-      <section aria-label="Business breakdown" className="grid min-w-0 gap-4 lg:grid-cols-3">
+      <section id="home-conversion" aria-label="Conversion and collections" className="grid min-w-0 scroll-mt-24 gap-4 lg:grid-cols-2">
         <section className="min-w-0 overflow-hidden rounded-2xl border border-line bg-surface">
-          <SectionHeader eyebrow="Acquisition · period" title="Lead sources" actionHref="/marketing" actionLabel="See sources" />
+          <SectionHeader eyebrow="Acquisition cohort · period" title="Qualification milestones" actionHref={sourceDetailHref} actionLabel="Inspect cohort" />
+          <QualificationCohortPanel
+            total={totalLeads}
+            qualified={qualifiedLeads}
+            periodLabel={periodAnalytics.period.label}
+            href={sourceDetailHref}
+          />
+        </section>
+        <section className="min-w-0 overflow-hidden rounded-2xl border border-line bg-surface">
+          <SectionHeader eyebrow="CRM ledger · period" title="Recorded collections trend" actionHref="/revenue" actionLabel="Review ledger" />
+          <div className="p-4 sm:p-5">
+            <RevenueTrend
+              points={periodAnalytics.revenueSeries}
+              currency={periodAnalytics.primaryCurrency}
+              available={periodAnalytics.available.revenue}
+            />
+            {periodAnalytics.available.revenue && periodAnalytics.revenue.length > 1 ? (
+              <p className="mt-3 border-t border-line pt-3 text-[11px] leading-5 text-copy-subtle">
+                This trend shows {periodAnalytics.primaryCurrency ?? "a single currency"} only.
+                {" "}{periodAnalytics.revenue.length - 1} other currency
+                {periodAnalytics.revenue.length === 2 ? " ledger is" : " ledgers are"} excluded.
+                Currencies are never summed without approved FX evidence.
+              </p>
+            ) : null}
+          </div>
+        </section>
+      </section>
+
+      <section id="home-business-breakdown" aria-label="Business breakdown" className="grid min-w-0 scroll-mt-24 gap-4 lg:grid-cols-3">
+        <section className="min-w-0 overflow-hidden rounded-2xl border border-line bg-surface">
+          <SectionHeader eyebrow="Acquisition · period" title="Lead sources" actionHref={sourceDetailHref} actionLabel="Analyze sources" />
           <div className="space-y-1 p-3 sm:p-4">
-            {acquisitionSources.length ? acquisitionSources.slice(0, 4).map((source) => <SourceRow key={source.source} source={source} periodTotal={totalLeads} disambiguate={acquisitionSources.slice(0, 4).filter((row) => sourceLabel(row.source) === sourceLabel(source.source)).length > 1} />) : <HomeEmptyState variant="sources" compact unavailable={!periodAnalytics.available.leads} title={periodAnalytics.available.leads ? "No source activity yet" : "Source data unavailable"} description={periodAnalytics.available.leads ? "No acquisition data is recorded for this period yet." : "Selected-period acquisition evidence is unavailable. Current all-time source totals have not been substituted."} />}
+            {acquisitionSources.length ? acquisitionSources.slice(0, 4).map((source) => <SourceRow key={source.source} source={validatedSourceQuality?.find((item) => item.source === source.source) ?? source} qualificationAvailable={validatedSourceQuality != null} periodTotal={totalLeads} href={sourceDetailHref} />) : <HomeEmptyState variant="sources" compact unavailable={!periodAnalytics.available.leads} title={periodAnalytics.available.leads ? "No source activity yet" : "Source data unavailable"} description={periodAnalytics.available.leads ? "No acquisition data is recorded for this period yet." : "Selected-period acquisition evidence is unavailable. Current all-time source totals have not been substituted."} />}
+            {acquisitionSources.length && !validatedSourceQuality ? <p className="px-2 pt-2 text-[11px] leading-5 text-copy-subtle">Source-level qualification is unavailable until the acquisition cohort reconciles with recorded stage history.</p> : null}
+            {sourceSignals.map((signal) => (
+              <div key={signal.title} className="mt-3 rounded-xl border border-line bg-surface-muted px-3 py-3">
+                <p className="text-xs font-semibold text-copy-strong">{signal.title}</p>
+                <p className="mt-1 text-[11px] leading-5 text-copy-muted">{signal.detail}</p>
+                <Link href={signal.href} className="mt-2 inline-flex items-center gap-1 text-[11px] font-semibold text-brand-700">{signal.actionLabel} <ArrowRight size={12} /></Link>
+              </div>
+            ))}
           </div>
         </section>
         <section className="min-w-0 overflow-hidden rounded-2xl border border-line bg-surface">
           <SectionHeader eyebrow="Operations · current" title="Upcoming batch demand" actionHref="/course-management" actionLabel="See batches" />
           <div className="space-y-1 p-3 sm:p-4">
-            {upcomingBatches.length ? upcomingBatches.slice(0, 3).map((batch) => <BatchCard key={batch.id} batch={batch} />) : <HomeEmptyState variant="batches" compact title="No upcoming batches" description="No future-start batches are currently available in this workspace." action={{ href: "/course-management", label: "View courses" }} />}
+            {visibleUpcomingBatches.length ? visibleUpcomingBatches.map((batch) => <BatchCard key={batch.id} batch={batch} maxDemand={maxUpcomingDemand} />) : <HomeEmptyState variant="batches" compact title="No upcoming batches" description="No future-start batches are currently available in this workspace." action={{ href: "/course-management", label: "View courses" }} />}
+            {visibleUpcomingBatches.length > 0 ? (
+              <p className="border-t border-line px-2 pt-3 text-[11px] leading-5 text-copy-subtle">
+                Lead demand reflects current CRM associations, not course sales. Higher-intent and payment-stage indicators may overlap and are never summed. Course-level collections require a verified payment-to-enrollment link.
+              </p>
+            ) : null}
           </div>
         </section>
         <section className="min-w-0 overflow-hidden rounded-2xl border border-line bg-surface">
@@ -366,6 +432,8 @@ export default async function HomePage({ searchParams }: HomePageProps) {
           </div>
         </section>
       </section>
+
+      <HomeGeographyReadiness coverage={periodAnalytics.geography} periodLabel={periodAnalytics.period.label} />
 
       <section aria-label="Daily workspace" className="grid min-w-0 gap-4 lg:grid-cols-3">
         <section className="min-w-0 rounded-2xl border border-line bg-surface p-4 sm:p-5">
@@ -440,7 +508,8 @@ function AttentionRow({ item }: { item: AttentionItem }) {
       </span>
       <span className="min-w-0 flex-1">
         <span className="block text-xs font-semibold text-copy-strong">{recommendedActionTitle(item)}</span>
-        <span className="mt-0.5 block text-[11px] leading-4 text-copy-muted">{item.timing}</span>
+        <span className="mt-1 block text-[11px] leading-4 text-copy-muted">{item.reason}</span>
+        <span className="mt-1 block text-[10px] leading-4 text-copy-subtle">{item.priority} · {item.evidence}</span>
       </span>
       <span className="shrink-0 rounded-lg bg-surface-muted px-2 py-1 text-xs font-semibold tabular-nums text-copy-strong">
         {item.value.toLocaleString("en-IN")}
@@ -451,12 +520,24 @@ function AttentionRow({ item }: { item: AttentionItem }) {
 }
 
 function ReplyPressure({ total, overHour }: { total: number; overHour: number }) {
-  const older = Math.min(Math.max(0, overHour), Math.max(0, total));
-  const recent = Math.max(0, total - older);
-  const share = total > 0 ? (older / total) * 100 : 0;
+  const breakdown = calculateHomeReplyWaitingBreakdown(total, overHour);
+  if (!breakdown) {
+    return (
+      <div data-testid="home-reply-pressure" data-evidence-state="unavailable" className="mx-4 mt-2 rounded-xl border border-line bg-surface-muted px-3 py-3 sm:mx-5">
+        <p className="text-xs font-semibold text-copy-strong">Reply waiting-time breakdown unavailable</p>
+        <p className="mt-1 text-[11px] leading-5 text-copy-muted">
+          The recorded waiting-time count is missing or inconsistent with the reply queue. No waiting percentage can be verified.
+        </p>
+        <Link href="/conversations" className="mt-3 inline-flex items-center gap-1 text-[11px] font-semibold text-brand-700 dark:text-brand-300">
+          Work reply queue <ArrowRight size={12} />
+        </Link>
+      </div>
+    );
+  }
+  const { older, recent, percentOverHour: share } = breakdown;
 
   return (
-    <div data-testid="home-reply-pressure" className="mx-4 mt-2 rounded-xl border border-line bg-surface-muted px-3 py-3 sm:mx-5">
+    <div data-testid="home-reply-pressure" data-evidence-state="available" className="mx-4 mt-2 rounded-xl border border-line bg-surface-muted px-3 py-3 sm:mx-5">
       <div className="flex items-center justify-between gap-3 text-xs">
         <span className="font-medium text-copy-strong">Reply waiting time</span>
         <span className="font-semibold tabular-nums text-copy-strong">{share.toFixed(0)}% over 1h</span>
@@ -683,8 +764,8 @@ function RevenueTrend({
         <HomeEmptyState
           variant="revenue"
           compact
-          title="No collected revenue yet"
-          description="Revenue trend will appear once verified paid transactions are recorded in the selected period."
+          title="No paid ledger activity yet"
+          description="The recorded trend will appear when paid-status transactions exist in the selected period. Independent settlement evidence is not yet available."
           action={{ href: "/revenue", label: "Open revenue" }}
         />
       </div>
@@ -708,13 +789,13 @@ function RevenueTrend({
     <div className="mt-3">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <p className="text-[11px] text-copy-muted">Cumulative collected · {currency}</p>
+          <p className="text-[11px] text-copy-muted">Cumulative recorded net payments · {currency}</p>
           <p className="mt-1 text-[22px] font-semibold tracking-[-0.03em] text-copy-strong">{formatMoney(running, currency)}</p>
         </div>
-        <span className="text-[11px] text-copy-subtle">Verified payments · refunds netted</span>
+        <span className="text-[11px] text-copy-subtle">CRM ledger · refunds netted where recorded</span>
       </div>
-      <svg className="mt-4 block h-[150px] w-full overflow-visible text-brand-700 dark:text-brand-300" viewBox="0 0 560 140" preserveAspectRatio="none" role="img" aria-label={"Cumulative verified net collected " + currency + " for the selected period"}>
-        <title>Cumulative verified net collected {currency} for the selected period</title>
+      <svg className="mt-4 block h-[150px] w-full overflow-visible text-brand-700 dark:text-brand-300" viewBox="0 0 560 140" preserveAspectRatio="none" role="img" aria-label={"Cumulative recorded net payments " + currency + " for the selected period; settlement unverified"}>
+        <title>Cumulative recorded net payments {currency} for the selected period, settlement unverified</title>
         {[0, 0.5, 1].map((p, index) => (
           <line key={index} x1="7" x2="553" y1={12 + p * 116} y2={12 + p * 116} stroke="currentColor" strokeOpacity="0.09" strokeWidth="1" />
         ))}
@@ -729,16 +810,15 @@ function RevenueTrend({
   );
 }
 
-function SourceRow({ source, periodTotal, disambiguate = false }: { source: DashboardPeriodSource; periodTotal: number | null; disambiguate?: boolean }) {
+function SourceRow({ source, periodTotal, href = "/home/sources", qualificationAvailable = false }: { source: DashboardPeriodSource; periodTotal: number | null; href?: string; qualificationAvailable?: boolean }) {
   const share = periodTotal != null && periodTotal > 0 ? (source.leads / periodTotal) * 100 : null;
   const displaySource = sourceLabel(source.source);
-  const alias = disambiguate || displaySource.trim().toLowerCase() !== source.source.trim().toLowerCase();
   return (
-    <Link href={"/marketing?source=" + encodeURIComponent(source.source)} className="group block rounded-xl px-2 py-2.5 transition hover:bg-surface-muted">
+    <Link href={href} className="group block rounded-xl px-2 py-2.5 transition hover:bg-surface-muted">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <span className="block truncate text-xs font-medium text-copy-strong" title={"CRM source: " + source.source}>{displaySource}{alias ? <span className="ml-1 font-normal text-copy-subtle">· {source.source}</span> : null}</span>
-          <span className="mt-0.5 block text-[11px] text-copy-subtle">{source.qualified.toLocaleString("en-IN")} qualified</span>
+          <span className="block truncate text-xs font-medium text-copy-strong" title={"CRM source: " + source.source}>{displaySource}</span>
+          <span className="mt-0.5 block text-[11px] text-copy-subtle">{qualificationAvailable ? source.qualified.toLocaleString("en-IN") + " qualified by period end" : "Qualification evidence unavailable"}</span>
         </div>
         <span className="shrink-0 text-right text-xs font-semibold tabular-nums text-copy-strong">
           {source.leads.toLocaleString("en-IN")}
@@ -752,26 +832,60 @@ function SourceRow({ source, periodTotal, disambiguate = false }: { source: Dash
   );
 }
 
-function BatchCard({ batch }: { batch: DashboardBatchDemand }) {
+function BatchCard({ batch, maxDemand }: { batch: DashboardBatchDemand; maxDemand: number }) {
   const capacityKnown = batch.capacity != null && batch.capacity > 0;
   const capacityText = !capacityKnown
     ? "Capacity not set"
     : batch.seatsRemaining != null
       ? String(batch.seatsRemaining) + " seats left"
       : String(batch.capacity) + " capacity";
+
+  const indicators = [
+    { label: "High intent", value: batch.hotDemand },
+    { label: "Payment stage", value: batch.paymentPending },
+    { label: "Enrolled stage", value: batch.enrolled },
+  ].filter((indicator) => indicator.value > 0);
+  const comparisonShare = Math.max(0, Math.min(100, (batch.activeDemand / maxDemand) * 100));
+
   return (
-    <Link href="/course-management" className="group flex items-start justify-between gap-3 rounded-xl px-2 py-3 transition hover:bg-surface-muted">
-      <span className="min-w-0">
-        <span className="block line-clamp-1 text-xs font-medium text-copy-strong">{batch.courseName}</span>
-        <span className="mt-0.5 block text-[11px] text-copy-subtle">
-          {batch.startDate ? formatDate(batch.startDate) : "Date not set"} · {batch.location}
+    <Link
+      href="/course-management"
+      className="group block rounded-xl px-2 py-3 transition hover:bg-surface-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-700"
+    >
+      <div className="flex items-start justify-between gap-3">
+        <span className="min-w-0">
+          <span className="block line-clamp-1 text-xs font-semibold text-copy-strong">{batch.courseName}</span>
+          <span className="mt-0.5 block text-[11px] leading-4 text-copy-subtle">
+            {batch.batchCode} · {batch.startDate ? formatDate(batch.startDate) : "Date not set"} · {batch.location}
+          </span>
+          <span className="mt-1 block text-[10px] text-copy-subtle">{capacityText}</span>
         </span>
-        <span className="mt-1 block text-[10px] text-copy-subtle">{capacityText}</span>
-      </span>
-      <span className="shrink-0 text-right">
-        <span className="block text-sm font-semibold tabular-nums text-copy-strong">{batch.activeDemand.toLocaleString("en-IN")}</span>
-        <span className="block text-[10px] text-copy-subtle">active leads</span>
-      </span>
+        <span className="shrink-0 text-right">
+          <span className="block text-[17px] font-semibold tabular-nums text-copy-strong">{batch.activeDemand.toLocaleString("en-IN")}</span>
+          <span className="block text-[10px] text-copy-subtle">active leads</span>
+        </span>
+      </div>
+      <div
+        role="progressbar"
+        aria-label={batch.courseName + " relative active lead demand among displayed upcoming batches"}
+        aria-valuenow={Math.round(comparisonShare)}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        className="mt-2.5 h-1.5 overflow-hidden rounded-full bg-surface-muted"
+      >
+        <div className="h-full rounded-full bg-brand-700" style={{ width: comparisonShare + "%" }} />
+      </div>
+      {indicators.length > 0 ? (
+        <div className="mt-2 flex flex-wrap gap-1.5 text-[10px] text-copy-muted">
+          {indicators.map((indicator) => (
+            <span key={indicator.label} className="rounded-md border border-line px-1.5 py-1">
+              {indicator.label} · <span className="font-semibold tabular-nums text-copy-strong">{indicator.value.toLocaleString("en-IN")}</span>
+            </span>
+          ))}
+        </div>
+      ) : (
+        <p className="mt-2 text-[10px] text-copy-subtle">No advanced-stage demand recorded for this batch.</p>
+      )}
     </Link>
   );
 }
@@ -887,7 +1001,7 @@ function buildExecutiveBrief({
         b.qualified - a.qualified ||
         (b.conversionRate ?? 0) - (a.conversionRate ?? 0),
     )[0];
-  const topAttention = [...attention].sort((a, b) => b.value - a.value)[0];
+  const topAttention = attention[0];
   const leadChange = analytics.available.leads
     ? analytics.leads.changePercent
     : null;
@@ -896,6 +1010,7 @@ function buildExecutiveBrief({
     "Overdue follow-ups": topAttention?.value === 1 ? "follow-up is overdue" : "follow-ups are overdue",
     "First touch needed": topAttention?.value === 1 ? "lead needs a first contact" : "leads need a first contact",
     "Payment pending": topAttention?.value === 1 ? "opportunity needs payment follow-up" : "opportunities need payment follow-up",
+    "Missing opportunity values": topAttention?.value === 1 ? "open lead needs valuation" : "open leads need valuation",
   };
   const title = topAttention
     ? `${topAttention.value.toLocaleString("en-IN")} ${attentionPhrases[topAttention.label] ?? "items need attention"}.`
@@ -910,11 +1025,11 @@ function buildExecutiveBrief({
     );
   }
   if (qualifiedRate != null) {
-    parts.push(`${qualifiedRate}% of leads in scope are qualified.`);
+    parts.push(`${qualifiedRate}% of new leads reached a recorded qualification milestone by period end.`);
   }
   if (strongestSource) {
     parts.push(
-      `${pretty(strongestSource.source)} currently contributes the most qualified leads among visible sources.`,
+      `${pretty(strongestSource.source)} contributed the most documented qualification milestones among sources in the selected lead cohort.`,
     );
   }
   if (topAttention) parts.push(`${topAttention.detail}.`);

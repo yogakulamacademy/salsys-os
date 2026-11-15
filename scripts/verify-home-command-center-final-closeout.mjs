@@ -5,6 +5,7 @@ const root = process.cwd();
 const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
 
 const homePage = read("app/home/page.tsx");
+const homeCoverage = read("components/home/home-reporting-coverage.tsx");
 const homeLayout = read("app/home/layout.tsx");
 const periodData = read("lib/dashboard-period-data.ts");
 const migration = read(
@@ -30,11 +31,12 @@ expect(
 );
 
 expect(
-  homePage.includes("Selected-period evidence is incomplete"),
+  homePage.includes("<HomeReportingCoverage items={reportingEvidence} />") &&
+    homeCoverage.includes("Selected-period evidence is incomplete."),
   "Home must visibly disclose incomplete selected-period evidence.",
 );
 expect(
-  homePage.includes("Period KPIs stay unknown rather than falling back to all-time snapshot totals"),
+  homeCoverage.includes("Period KPIs stay unknown rather than falling back to all-time snapshot totals"),
   "Home must state that unavailable period KPIs are not replaced by snapshot totals.",
 );
 expect(
@@ -68,10 +70,13 @@ expect(
   "Acquisition quality must not silently replace unavailable period data with all-time sources.",
 );
 expect(
-  homePage.includes('label="Collected in period"') &&
-    homePage.includes('label="Current pipeline value"') &&
-    homePage.includes('label="Current weighted value"'),
-  "Home must distinguish period collected revenue from current pipeline snapshot values.",
+  homePage.includes('label="Recorded collections"') &&
+    homePage.includes('label="Open pipeline value"') &&
+    homePage.includes('label="Recorded collections · period"') &&
+    homePage.includes('label="Eligible open value · now"') &&
+    homePage.includes("Recorded collections are CRM ledger entries pending external settlement reconciliation.") &&
+    !homePage.includes('label="Current weighted value"'),
+  "Home must distinguish unverified period ledger activity from current, explicitly valued open opportunities.",
 );
 expect(
   homePage.includes("batch.capacity != null && batch.capacity > 0") &&

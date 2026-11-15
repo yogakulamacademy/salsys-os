@@ -149,9 +149,19 @@ test('Home evidence-first charts preserve empty-data and action semantics', asyn
   await expect(page.getByRole('heading', { name: 'Action queue', exact: true })).toBeVisible();
   await expect(page.getByTestId('home-reply-pressure')).toHaveCount(0);
 
+  const conversion = page.getByRole('region', { name: 'Conversion and collections' });
+  await expect(conversion.getByRole('heading', { name: 'Qualification milestones', exact: true })).toBeVisible();
+  await expect(conversion.getByRole('heading', { name: 'Recorded collections trend', exact: true })).toBeVisible();
+  await expect(conversion.getByTestId('home-qualification-cohort')).toHaveAttribute('data-testid', 'home-qualification-cohort');
+  await expect(conversion.getByText('Qualification history unavailable', { exact: true })).toBeVisible();
+  await expect(conversion.locator('[data-empty-variant="revenue"]')).toHaveAttribute('data-evidence-state', 'unavailable');
+
   await expect(page.getByText('Financial context', { exact: true })).toBeVisible();
   await page.getByText('Financial context', { exact: true }).click();
-  await expect(page.getByText('Current snapshot revenue has not been substituted', { exact: false })).toBeVisible();
+  await expect(
+    page.locator('details').filter({ has: page.getByText('Financial context', { exact: true }) })
+      .getByText('Current snapshot revenue has not been substituted', { exact: false }),
+  ).toBeVisible();
   await expect(page.locator('[data-empty-variant="revenue"]')).toHaveAttribute('data-evidence-state', 'unavailable');
   await expect(page.getByRole('link', { name: /View system health/ })).toBeVisible();
 

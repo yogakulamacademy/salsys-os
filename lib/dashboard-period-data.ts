@@ -1,6 +1,8 @@
 import { createClient } from "@/lib/supabase/server";
 import { requireCurrentOrganizationId } from "@/lib/workspace";
 import { fetchCompleteDashboardPeriodRows } from "@/lib/dashboard-period-pagination";
+import { normalizeFirstTouchSource } from "@/lib/home-source-intelligence";
+import { buildHomeGeographyCoverage, type HomeGeographyCoverage } from "@/lib/home-geography-coverage";
 
 export type DashboardPeriodPreset = "7d" | "30d" | "90d" | "ytd" | "custom";
 
@@ -69,6 +71,7 @@ export type DashboardPeriodAnalytics = {
     changePercent: number | null;
   };
   sources: DashboardPeriodSource[];
+  geography: HomeGeographyCoverage | null;
 };
 
 type PeriodInput = {
@@ -81,6 +84,7 @@ type LeadRow = {
   created_at: string | null;
   current_stage: string | null;
   first_touch_source: string | null;
+  country?: string | null;
 };
 
 type PaymentRow = {
@@ -178,7 +182,7 @@ export async function getDashboardPeriodAnalytics(
     fetchCompleteDashboardPeriodRows<LeadRow>(async (from, to) => {
       const { data, error } = await supabase
         .from("leads")
-        .select("created_at,current_stage,first_touch_source")
+        .select("created_at,current_stage,first_touch_source,country")
         .eq("organization_id", organizationId)
         .neq("status", "archived")
         .gte("created_at", period.previousStartIso)
@@ -285,6 +289,7 @@ export async function getDashboardPeriodAnalytics(
       changePercent: percentChange(currentEnrollmentIds.size, previousEnrollmentIds.size),
     },
     sources: buildSources(currentLeads),
+    geography: !leadResult.error ? buildHomeGeographyCoverage(currentLeads) : null,
   };
 }
 
@@ -347,27 +352,25 @@ function buildLeadActivitySeries(
 }
 
 function buildSources(rows: LeadRow[]): DashboardPeriodSource[] {
-  const grouped = new Map<string, { leads: number; qualified: number }>();
-
+  // Normalize AFTER retrieving every lead in the acquisition cohort, not
+  // after ranking the raw source rows. That prevents 'ig' and
+  // 'l.instagram.com' from disappearing outside a top-five raw-source limit.
+  // Do not derive qualification from current_stage here: Home reconciles
+  // historic stage milestones through a separately authorized RPC.
+  const grouped = new Map<string, number>();
   for (const row of rows) {
-    const source = String(row.first_touch_source ?? "").trim() || "Unknown";
-    const bucket = grouped.get(source) ?? { leads: 0, qualified: 0 };
-    bucket.leads += 1;
-    if (QUALIFIED_STAGES.has(String(row.current_stage ?? ""))) bucket.qualified += 1;
-    grouped.set(source, bucket);
+    const source = normalizeFirstTouchSource(row.first_touch_source);
+    grouped.set(source, (grouped.get(source) ?? 0) + 1);
   }
 
   return [...grouped.entries()]
-    .map(([source, values]) => ({
+    .map(([source, leads]) => ({
       source,
-      leads: values.leads,
-      qualified: values.qualified,
-      conversionRate: values.leads
-        ? Math.round((values.qualified / values.leads) * 1000) / 10
-        : null,
+      leads,
+      qualified: 0,
+      conversionRate: null,
     }))
-    .sort((a, b) => b.leads - a.leads || b.qualified - a.qualified || a.source.localeCompare(b.source))
-    .slice(0, 5);
+    .sort((a, b) => b.leads - a.leads || a.source.localeCompare(b.source));
 }
 
 function buildRevenueSeries(
