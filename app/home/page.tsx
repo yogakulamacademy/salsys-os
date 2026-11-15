@@ -96,6 +96,22 @@ export default async function HomePage({ searchParams }: HomePageProps) {
 
   const primaryRevenue =
     revenueSummary.find((row) => row.collected > 0) ?? revenueSummary[0] ?? null;
+
+  // Pipeline value is an as-of-now estimate, not a selected-period cash metric.
+  // Do not select its currency based on which currency has collections.
+  const valuedPipelineCurrencies = revenueSummary.filter((row) => row.pipeline > 0);
+  const singlePipelineCurrency = valuedPipelineCurrencies.length === 1
+    ? valuedPipelineCurrencies[0]
+    : null;
+  const openPipelineValue = singlePipelineCurrency
+    ? formatMoney(singlePipelineCurrency.pipeline, singlePipelineCurrency.currency)
+    : "—";
+  const openPipelineDetail =
+    valuedPipelineCurrencies.length > 1
+      ? "Multiple currencies · inspect each separately"
+      : singlePipelineCurrency
+        ? `Current snapshot · ${singlePipelineCurrency.opportunities} valued opportunities`
+        : "No valued opportunities in the current snapshot";
   const periodPrimaryRevenue = periodAnalytics.available.revenue
     ? pickPeriodRevenue(periodAnalytics, primaryRevenue?.currency ?? null)
     : null;
@@ -202,6 +218,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <PeriodPresets selected={periodAnalytics.period.preset} />
+          <span className="hidden text-[11px] text-copy-subtle sm:inline" title="Date boundaries currently use UTC, not the organization's business timezone.">UTC reporting days</span>
           <details className="relative group">
             <summary className="inline-flex h-10 cursor-pointer list-none items-center gap-2 rounded-ui border border-line bg-surface px-3 text-xs font-medium text-copy-muted hover:border-line-strong">
               <CalendarDays size={14} className="text-brand-700" />
@@ -250,41 +267,52 @@ export default async function HomePage({ searchParams }: HomePageProps) {
         </div>
         <div className="command-kpi min-w-0">
           <DecisionMetricCard
-            icon={<Inbox size={17} />}
-            label="Needs reply"
-            value={metrics.needsReply.toLocaleString("en-IN")}
-            detail="Current conversations awaiting a team reply"
-            href="/conversations"
-            evidenceLabel="Current conversation state"
-            definition="Current active customer conversations that need a reply. Unlike the other cards, this is a current queue count, not a selected-period conversation total."
-          />
-        </div>
-        <div className="command-kpi min-w-0">
-          <DecisionMetricCard
             icon={<UserRoundCheck size={17} />}
             label="Qualified leads"
             value={qualifiedLeads == null ? "—" : qualifiedLeads.toLocaleString("en-IN")}
-            detail={qualifiedRate == null ? "Selected-period stage evidence unavailable" : String(qualifiedRate) + "% of new leads in scope"}
-            href="/admissions"
-            evidenceLabel={periodAnalytics.available.leads ? "CRM stage evidence" : "Evidence unavailable"}
-            definition="Leads created in the selected period whose current CRM stage is qualified or later. This is a cohort-stage snapshot, not a sequential funnel conversion probability."
+            detail={qualifiedRate == null ? "Stage evidence unavailable" : String(qualifiedRate) + "% currently qualified in this lead cohort"}
+            href="/leads"
+            evidenceLabel={periodAnalytics.available.leads ? "Current-stage evidence" : "Evidence unavailable"}
+            evidenceState="partial"
+            definition="Leads created during the selected period whose CURRENT stage is qualified or later. Past period totals are not historical as-of-stage counts; they can change when leads progress later."
           />
         </div>
         <div className="command-kpi min-w-0">
           <DecisionMetricCard
             icon={<CircleDollarSign size={17} />}
-            label="Collected"
+            label="Open pipeline value"
+            value={openPipelineValue}
+            detail={unvaluedOpenLeads > 0
+              ? `${openPipelineDetail} · ${unvaluedOpenLeads} open leads lack value`
+              : openPipelineDetail}
+            statusLabel="As of now"
+            href="/revenue"
+            evidenceLabel="CRM planning values · preliminary"
+            evidenceState="partial"
+            definition="Recorded potential value of open leads in the current dashboard snapshot, separated by currency. This is not cash or a probability forecast. Existing stage eligibility and source valuation need reconciliation; period filters do not apply to this current-state number."
+          />
+        </div>
+        <div className="command-kpi min-w-0">
+          <DecisionMetricCard
+            icon={<CircleDollarSign size={17} />}
+            label="Recorded collections"
             value={collectedValue}
-            detail={!periodAnalytics.available.revenue ? "Selected-period payment evidence unavailable" : periodPrimaryRevenue ? periodPrimaryRevenue.currency + " verified net paid" : "No verified paid amount in scope"}
+            detail={!periodAnalytics.available.revenue ? "Selected-period payment evidence unavailable" : periodPrimaryRevenue ? periodPrimaryRevenue.currency + " net paid in CRM ledger · settlement review pending" : "No paid ledger entries · reconciliation pending"}
             delta={periodPrimaryRevenue?.changePercent}
             deltaDirection="higher_is_better"
             comparisonLabel="vs previous comparable period"
             href="/revenue"
-            evidenceLabel={periodAnalytics.available.revenue ? "Verified payment evidence" : "Evidence unavailable"}
-            definition="Net collected revenue from verified payment evidence in the selected period and displayed currency. Different currencies are never combined without approved FX evidence."
+            evidenceLabel={periodAnalytics.available.revenue ? "Recorded payment ledger · unverified" : "Evidence unavailable"}
+            evidenceState="partial"
+            definition="Net paid-status payment records less refund records in the selected period and displayed currency. The CRM ledger has not been reconciled to external settlement evidence; do not treat this as independently verified total business collections."
           />
         </div>
       </section>
+
+      <p className="text-[11px] leading-5 text-copy-subtle">
+        Leads and recorded collections refer to the selected UTC period; qualified leads use current stages for that lead cohort.
+        Open pipeline is a current-state estimate and does not change with the period filter.
+      </p>
 
       {activeAttention.length > 0 ? (
         <section aria-label="Top priority" className="flex flex-col gap-3 rounded-2xl border border-line bg-surface-soft px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between sm:px-5">
