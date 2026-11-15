@@ -199,8 +199,8 @@ export default async function HomePage({ searchParams }: HomePageProps) {
   ];
 
   return (
-    <div className="command-center-v2 w-full min-w-0 space-y-4 pb-8 sm:space-y-5">
-      <header className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+    <div className="command-center-v2 w-full min-w-0 space-y-3 pb-7">
+      <header className="flex flex-col gap-3 min-[900px]:flex-row min-[900px]:items-center min-[900px]:justify-between">
         <div className="min-w-0">
           <h1 className="text-[28px] font-bold tracking-[-0.045em] text-copy-strong">Command Center</h1>
           <p className="mt-1 text-[13px] leading-5 text-copy-muted">Real-time performance and growth</p>
@@ -227,7 +227,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
         </div>
       </header>
 
-      <section aria-label="Business pulse" className="grid grid-cols-2 gap-2 sm:gap-3 xl:grid-cols-4">
+      <section aria-label="Business pulse" className="grid grid-cols-2 gap-2 sm:gap-3 min-[900px]:grid-cols-4">
         <div className="command-kpi min-w-0">
           <DecisionMetricCard
             compact
@@ -297,7 +297,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
         </p>
       </details>
 
-      <nav aria-label="Home section shortcuts" className="flex flex-wrap gap-2 xl:hidden">
+      <nav aria-label="Home section shortcuts" className="flex flex-wrap gap-2 min-[900px]:hidden">
         {[
           { href: "#home-action-queue", label: "Work queue" },
           { href: "#home-conversion", label: "Conversion" },
@@ -313,9 +313,9 @@ export default async function HomePage({ searchParams }: HomePageProps) {
         ))}
       </nav>
 
-      <section aria-label="Performance and work queue" className="grid min-w-0 gap-3 xl:grid-cols-[minmax(0,1.55fr)_minmax(300px,.85fr)]">
+      <section aria-label="Performance and work queue" className="grid min-w-0 gap-3 min-[900px]:grid-cols-[minmax(0,1.28fr)_minmax(300px,1fr)]">
         <section className="min-w-0 overflow-hidden rounded-2xl border border-line bg-surface">
-          <SectionHeader eyebrow="Performance · period" title="Lead activity" actionHref="/leads" actionLabel="Open leads" />
+          <SectionHeader eyebrow="" title="Lead activity" actionHref="/leads" actionLabel="Open leads" />
           <div className="px-4 pb-3 pt-1 sm:px-5">
             <LeadActivityChart
               points={periodAnalytics.leadSeries}
@@ -347,9 +347,9 @@ export default async function HomePage({ searchParams }: HomePageProps) {
           </div>
         </section>
         <section id="home-action-queue" className="min-w-0 scroll-mt-24 overflow-hidden rounded-2xl border border-line bg-surface">
-          <SectionHeader eyebrow="Needs attention · current" title="Action queue" actionHref="/admissions" actionLabel="View all" />
+          <SectionHeader eyebrow="" title="Action queue" actionHref="/conversations" actionLabel="Work queue" />
           {activeAttention.length ? (
-            <div className="mx-4 mt-1 rounded-lg border border-brand-100 bg-brand-50 px-3 py-2 text-[11px] leading-4">
+            <div className="home-queue-evidence mx-4 mt-1 rounded-lg border border-brand-100 bg-brand-50 px-3 py-2 text-[11px] leading-4">
               <p className="font-semibold text-brand-700">{activeAttention[0].value.toLocaleString("en-IN")} · {recommendedActionTitle(activeAttention[0])}</p>
               <p className="mt-1 text-copy-muted">{activeAttention[0].reason}</p>
               <p className="mt-0.5 text-copy-subtle">{activeAttention[0].evidence} · {activeAttention[0].timing}</p>
@@ -361,14 +361,14 @@ export default async function HomePage({ searchParams }: HomePageProps) {
               <ReplyPressure total={metrics.needsReply} overHour={metrics.waitingOverHour} />
             </details>
           ) : null}
-          <div className="space-y-1 p-3 sm:p-4">
+          <div className="home-action-list space-y-0 px-3 pb-3 pt-1 sm:px-4">
             {activeAttention.length ? activeAttention.map((item) => <AttentionRow key={item.id} item={item} />) : <HomeEmptyState variant="queue" compact title={mock ? "Queue evidence unavailable" : "No recorded action backlog"} description={mock ? "Current conversation and follow-up evidence cannot be verified in this environment." : "No current reply, overdue follow-up, first-touch, payment-stage, or valuation actions were returned by the CRM snapshot."} unavailable={mock} />}
           </div>
         </section>
       </section>
 
       <section id="home-conversion" aria-label="Conversion and collections" className="min-w-0 scroll-mt-24 space-y-3">
-        <div className="grid min-w-0 gap-3 lg:grid-cols-3">
+        <div className="grid min-w-0 gap-3 min-[900px]:grid-cols-3">
           <section className="min-w-0 overflow-hidden rounded-2xl border border-line bg-surface">
             <SectionHeader eyebrow="Current CRM stage distribution" title="Pipeline health" actionHref="/admissions?view=pipeline" actionLabel="Open pipeline" />
             <div className="px-4 pb-4 pt-1">
@@ -377,7 +377,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
           </section>
           <section className="min-w-0 overflow-hidden rounded-2xl border border-line bg-surface">
             <SectionHeader eyebrow="Selected acquisition cohort" title="Qualification" actionHref={sourceDetailHref} actionLabel="Inspect" />
-            <div className="flex min-h-[170px] items-center justify-center gap-5 px-4 pb-4 pt-1">
+            <div className="home-qualification-card flex min-h-[170px] items-center justify-center gap-3 px-3 pb-4 pt-1 sm:gap-5 sm:px-4">
               <div className="relative grid h-28 w-28 shrink-0 place-items-center rounded-full" style={{background: qualifiedRate == null ? "conic-gradient(#e9e3fb 0 100%)" : `conic-gradient(#5a19d8 0 ${qualifiedRate}%, #e9e3fb ${qualifiedRate}% 100%)`}}>
                 <div className="grid h-20 w-20 place-content-center rounded-full bg-surface text-center">
                   <span className="text-[23px] font-bold text-copy-strong">{qualifiedRate == null ? "—" : qualifiedRate.toFixed(1) + "%"}</span>
@@ -397,7 +397,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
                 <p className="text-2xl font-bold tracking-tight text-copy-strong">{openPipelineValue}</p>
                 <span className="rounded-full bg-brand-50 px-2 py-1 text-[10px] font-semibold text-brand-700">{pipelineTruth ? valuationCoverage == null ? "Coverage unknown" : valuationCoverage.toFixed(1) + "% valued" : "Valuation unavailable"}</span>
               </div>
-              <div className="grid grid-cols-4 gap-1 text-center">
+              <div className="home-stage-strip grid grid-cols-4 gap-1 text-center">
                 {[
                   {label:"New",value:counts.new},
                   {label:"Contacted",value:counts.contacted},
@@ -410,12 +410,12 @@ export default async function HomePage({ searchParams }: HomePageProps) {
           </section>
         </div>
 
-        <div id="home-business-breakdown" aria-label="Business breakdown" className="grid min-w-0 scroll-mt-24 gap-3 lg:grid-cols-[0.95fr_1.55fr]">
+        <div id="home-business-breakdown" aria-label="Business breakdown" className="grid min-w-0 scroll-mt-24 gap-3 min-[900px]:grid-cols-[0.96fr_1.56fr]">
           <section className="min-w-0 overflow-hidden rounded-2xl border border-line bg-surface">
             <SectionHeader eyebrow="Acquisition · period" title="Lead sources" actionHref={sourceDetailHref} actionLabel="Analyze sources" />
             <div className="p-3 sm:p-4">
               {acquisitionSources.length ? (
-                <div className="grid items-center gap-3 sm:grid-cols-[130px_minmax(0,1fr)]">
+                <div className="grid items-center gap-3 min-[420px]:grid-cols-[115px_minmax(0,1fr)]">
                   <SourceMixRing sources={acquisitionSources} total={totalLeads} />
                   <div className="min-w-0">
                     {acquisitionSources.slice(0, 4).map((source) => (
@@ -435,7 +435,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
           </section>
         </div>
 
-        <div className="grid min-w-0 gap-3 lg:grid-cols-[0.9fr_1.5fr]">
+        <div className="grid min-w-0 gap-3 min-[900px]:grid-cols-[0.9fr_1.5fr]">
           <section className="min-w-0 overflow-hidden rounded-2xl border border-line bg-surface">
             <SectionHeader eyebrow="CRM ledger · period" title="Recorded collections trend" actionHref="/revenue" actionLabel="Review ledger" />
             <div className="p-4">
@@ -448,7 +448,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
           <HomeGeographyReadiness coverage={periodAnalytics.geography} periodLabel={periodAnalytics.period.label} />
         </div>
 
-        <div className="grid min-w-0 gap-3 lg:grid-cols-[0.9fr_1.5fr]">
+        <div className="grid min-w-0 gap-3 min-[900px]:grid-cols-[0.9fr_1.5fr]">
           <section className="min-w-0 overflow-hidden rounded-2xl border border-line bg-surface">
             <SectionHeader eyebrow="Operations · current" title="Upcoming batch demand" actionHref="/course-management" actionLabel="See batches" />
             <div className="p-3 sm:p-4">
@@ -458,7 +458,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
           </section>
           <section className="min-w-0 overflow-hidden rounded-2xl border border-line bg-surface">
             <div className="px-4 pb-1 pt-4"><h2 className="text-sm font-bold text-copy-strong">Trends &amp; momentum</h2><p className="mt-1 text-[11px] text-copy-subtle">Recorded comparable changes only</p></div>
-            <div className="grid grid-cols-1 gap-3 p-4 sm:grid-cols-3">
+            <div className="grid grid-cols-1 gap-3 p-4 min-[640px]:grid-cols-3">
               <div className="rounded-xl bg-brand-50 p-3"><p className="text-[11px] text-copy-muted">Lead momentum</p><p className="mt-2 text-xl font-bold text-brand-700">{changeSignals[0].value}</p><p className="mt-1 text-[10px] text-copy-muted">{changeSignals[0].detail}</p></div>
               <div className="rounded-xl bg-brand-50 p-3"><p className="text-[11px] text-copy-muted">Qualification rate</p><p className="mt-2 text-xl font-bold text-brand-700">{qualifiedRate == null ? "—" : qualifiedRate.toFixed(1) + "%"}</p><p className="mt-1 text-[10px] text-copy-muted">Recorded cohort milestone share</p></div>
               <div className="rounded-xl bg-brand-50 p-3"><p className="text-[11px] text-copy-muted">Valuation coverage</p><p className="mt-2 text-xl font-bold text-brand-700">{valuationCoverage == null ? "—" : valuationCoverage.toFixed(1) + "%"}</p><p className="mt-1 text-[10px] text-copy-muted">Open opportunities with recorded values</p></div>
@@ -467,7 +467,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
         </div>
       </section>
 
-      <section aria-label="Daily workspace" className="grid min-w-0 gap-3 lg:grid-cols-3">
+      <section aria-label="Daily workspace" className="grid min-w-0 gap-3 min-[900px]:grid-cols-3">
         <section className="min-w-0 rounded-2xl border border-line bg-surface p-4 sm:p-5">
           <h2 className="text-sm font-semibold text-copy-strong">Operational insights</h2>
           <p className="mt-1 text-xs leading-5 text-copy-muted">Evidence from your CRM, not a predicted outcome.</p>
@@ -475,21 +475,6 @@ export default async function HomePage({ searchParams }: HomePageProps) {
             {changeSignals.slice(0, 2).map((signal) => <ChangeSignalCard key={signal.label} signal={signal} />)}
           </div>
           <p className="mt-3 text-[11px] leading-5 text-copy-subtle">{executiveBrief.summary}</p>
-        </section>
-        <section className="min-w-0 rounded-2xl border border-line bg-surface p-4 sm:p-5">
-          <h2 className="text-sm font-semibold text-copy-strong">Quick actions</h2>
-          <p className="mt-1 text-xs leading-5 text-copy-muted">Open the workspace you need.</p>
-          <div className="mt-4 grid grid-cols-3 gap-2">
-            {[
-              { href: "/conversations", label: "Conversations" },
-              { href: "/leads", label: "Leads" },
-              { href: "/campaigns", label: "Campaigns" },
-            ].map((action) => (
-              <Link key={action.href} href={action.href} className="flex min-h-20 flex-col items-center justify-center gap-2 rounded-xl border border-line bg-brand-50 px-2 text-center text-xs font-semibold text-brand-700 transition hover:border-brand-300 hover:bg-brand-100">
-                <span className="truncate">{action.label}</span><ArrowRight size={13} className="shrink-0" />
-              </Link>
-            ))}
-          </div>
         </section>
         <section className="min-w-0 rounded-2xl border border-line bg-surface p-4 sm:p-5">
           <h2 className="text-sm font-semibold text-copy-strong">System health</h2>
@@ -500,6 +485,22 @@ export default async function HomePage({ searchParams }: HomePageProps) {
           <Link href="/system-health" className="mt-4 inline-flex items-center gap-1.5 text-xs font-semibold text-brand-700 dark:text-brand-300">
             View system health <ArrowRight size={13} />
           </Link>
+        </section>
+        <section className="min-w-0 rounded-2xl border border-line bg-surface p-4 sm:p-5">
+          <h2 className="text-sm font-semibold text-copy-strong">Quick actions</h2>
+          <p className="mt-1 text-xs leading-5 text-copy-muted">Open the workspace you need.</p>
+          <div className="home-quick-actions mt-3 grid grid-cols-3 gap-2">
+            {[
+              { href: "/conversations", label: "Conversations" },
+              { href: "/leads", label: "Leads" },
+              { href: "/campaigns", label: "Campaigns" },
+            ].map((action) => (
+              <Link key={action.href} href={action.href} className="flex min-h-20 flex-col items-center justify-center gap-2 rounded-xl border border-line bg-brand-50 px-2 text-center text-xs font-semibold text-brand-700 transition hover:border-brand-300 hover:bg-brand-100">
+                {action.label === "Conversations" ? <MessageSquareText size={23} aria-hidden="true" /> : action.label === "Leads" ? <Users size={23} aria-hidden="true" /> : <GitBranch size={23} aria-hidden="true" />}
+                <span className="truncate">{action.label}</span><ArrowRight size={13} className="shrink-0 self-end" />
+              </Link>
+            ))}
+          </div>
         </section>
       </section>
 
@@ -883,7 +884,7 @@ function SourceMixRing({ sources, total }: { sources: DashboardPeriodSource[]; t
       data-testid="home-source-mix-ring"
       role="img"
       aria-label={sourceLabel(leading.source) + " accounts for " + share.toFixed(1) + "% of " + total + " acquired leads"}
-      className="relative mx-auto grid h-32 w-32 shrink-0 place-items-center"
+      className="relative mx-auto grid h-28 w-28 shrink-0 place-items-center"
       title={leading.leads.toLocaleString("en-IN") + " of " + total.toLocaleString("en-IN") + " leads from " + sourceLabel(leading.source)}
     >
       <svg viewBox="0 0 120 120" className="absolute inset-0 h-full w-full" aria-hidden="true" focusable="false">
@@ -891,8 +892,8 @@ function SourceMixRing({ sources, total }: { sources: DashboardPeriodSource[]; t
         <circle cx="60" cy="60" r="44" fill="none" stroke="currentColor" strokeWidth="12" className="text-brand-700" strokeDasharray={String(circumference * share / 100) + " " + String(circumference)} transform="rotate(-90 60 60)" />
       </svg>
       <div className="relative z-10 text-center">
-        <p className="text-[22px] font-semibold tabular-nums tracking-tight text-copy-strong">{share.toFixed(1)}%</p>
-        <p className="max-w-24 truncate text-[10px] text-copy-muted" title={sourceLabel(leading.source)}>{sourceLabel(leading.source)}</p>
+        <p className="text-[22px] font-semibold tabular-nums tracking-tight text-copy-strong">{total.toLocaleString("en-IN")}</p>
+        <p className="max-w-24 truncate text-[10px] text-copy-muted">Leads</p>
       </div>
     </div>
   );
