@@ -430,6 +430,14 @@ export default async function HomePage({ searchParams }: HomePageProps) {
               currency={periodAnalytics.primaryCurrency}
               available={periodAnalytics.available.revenue}
             />
+            {periodAnalytics.available.revenue && periodAnalytics.revenue.length > 1 ? (
+              <p className="mt-3 border-t border-line pt-3 text-[11px] leading-5 text-copy-subtle">
+                This trend shows {periodAnalytics.primaryCurrency ?? "a single currency"} only.
+                {" "}{periodAnalytics.revenue.length - 1} other currency
+                {periodAnalytics.revenue.length === 2 ? " ledger is" : " ledgers are"} excluded.
+                Currencies are never summed without approved FX evidence.
+              </p>
+            ) : null}
           </div>
         </section>
       </section>
