@@ -93,7 +93,7 @@ export function LeadActivityChart({
       </div>
       {hasActivity ? (
         <div
-          className="mt-4 h-[216px] min-w-0 text-brand-700"
+          className="mt-3 h-[188px] min-w-0 text-brand-700"
           role="img"
           aria-label={"New lead volume compared with the previous equal-length period. Current " + (currentTotal ?? 0) + ", previous " + (previousTotal ?? 0) + "."}
         >
@@ -153,7 +153,7 @@ export function LeadActivityChart({
           />
         </div>
       )}
-      <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t border-line pt-3">
+      <div className="mt-2 flex flex-wrap items-center justify-between gap-3 border-t border-line pt-2">
         <span className="text-[11px] leading-4 text-copy-subtle">
           {previousTotal == null ? "Comparison unavailable" : previousTotal.toLocaleString("en-IN") + " leads in the previous equal-length period"}
         </span>
@@ -161,9 +161,7 @@ export function LeadActivityChart({
           View leads <ArrowRight size={13} />
         </Link>
       </div>
-      <p className="mt-2 text-[10px] leading-4 text-copy-subtle">
-        Each point uses the same day-count interval in both periods; no predicted conversions.
-      </p>
+      <p className="sr-only">Each point uses the same day-count interval in both periods; no predicted conversions.</p>
     </div>
   );
 }

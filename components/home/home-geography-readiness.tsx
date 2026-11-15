@@ -10,8 +10,8 @@ import type { HomeGeographyCoverage } from "@/lib/home-geography-coverage";
  */
 function LockedWorldMap() {
   return (
-    <div data-testid="home-world-map-disabled" data-map-state="locked" className="relative flex min-h-48 items-center justify-center overflow-hidden rounded-xl bg-violet-50/70 p-3 dark:bg-violet-950/20">
-      <svg aria-hidden="true" focusable="false" viewBox="0 0 800 350" className="absolute inset-0 h-full w-full fill-violet-200/75 dark:fill-violet-700/35" preserveAspectRatio="xMidYMid meet">
+    <div data-testid="home-world-map-disabled" data-map-state="locked" className="relative flex min-h-48 items-center justify-center overflow-hidden rounded-xl bg-emerald-50/70 p-3 dark:bg-emerald-950/20">
+      <svg aria-hidden="true" focusable="false" viewBox="0 0 800 350" className="absolute inset-0 h-full w-full fill-emerald-200/75 dark:fill-emerald-700/35" preserveAspectRatio="xMidYMid meet">
         <path d="M60 89 95 62 142 54 167 65 200 61 221 76 241 85 228 110 205 117 199 139 178 151 169 174 145 183 133 205 116 203 111 179 91 162 74 155 63 132 41 124 44 103Z" />
         <path d="M133 49 151 27 174 20 206 29 226 44 214 58 178 64Z" />
         <path d="M198 204 220 214 235 244 251 265 245 287 234 317 218 338 208 322 203 297 184 275 172 249 179 225Z" />
@@ -23,11 +23,11 @@ function LockedWorldMap() {
         <path d="M742 265 755 281 751 306 743 316 735 295Z M278 52 295 44 311 52 307 70 290 78Z" />
       </svg>
       <div className="relative z-10 flex max-w-[260px] flex-col items-center rounded-xl border border-line bg-surface/95 px-4 py-3 text-center shadow-sm">
-        <span className="grid h-8 w-8 place-items-center rounded-full bg-violet-100 text-brand-700 dark:bg-violet-900/50 dark:text-violet-200">
+        <span className="grid h-8 w-8 place-items-center rounded-full bg-emerald-100 text-brand-700 dark:bg-emerald-900/50 dark:text-emerald-200">
           <LockKeyhole size={16} aria-hidden="true" />
         </span>
         <p className="mt-2 text-xs font-semibold text-copy-strong">Map unavailable</p>
-        <p className="mt-1 text-[11px] leading-4 text-copy-muted">Awaiting validated country data</p>
+        <p className="mt-1 text-[11px] leading-4 text-copy-muted">Disabled until validated country coverage is sufficient</p>
       </div>
     </div>
   );
@@ -88,8 +88,8 @@ export function HomeGeographyReadiness({
             <div data-evidence-state="available">
               <div className="flex flex-wrap items-end justify-between gap-2">
                 <div>
-                  <p className="text-[26px] font-semibold tabular-nums tracking-tight text-copy-strong">{completion!.toFixed(1)}%</p>
-                  <p className="text-[11px] text-copy-muted">Country field populated</p>
+                  <p className="text-[26px] font-semibold tabular-nums tracking-tight text-brand-700">{completion!.toFixed(1)}% <span className="text-base">coverage</span></p>
+                  <p className="text-[11px] text-copy-muted">Country field populated (not validated)</p>
                 </div>
                 <span className="text-xs font-semibold tabular-nums text-copy-strong">{populated!.toLocaleString("en-IN")} / {cohort.toLocaleString("en-IN")}</span>
               </div>
