@@ -341,11 +341,11 @@ export default async function HomePage({ searchParams }: HomePageProps) {
             <details className="mt-2 border-t border-line pt-2">
               <summary className="cursor-pointer text-[11px] font-medium text-brand-700">Operational and financial context</summary>
               <div className="mt-3 grid gap-3 sm:grid-cols-3">
-                <SnapshotMetric label="Enrolled leads · period" value={enrolledLeads == null ? "—" : enrolledLeads.toLocaleString("en-IN")} />
+                <SnapshotMetric label="Enrolled leads" value={enrolledLeads == null ? "—" : enrolledLeads.toLocaleString("en-IN")} />
                 <SnapshotMetric label="Active pipeline · now" value={metrics.activePipeline.toLocaleString("en-IN")} />
                 <SnapshotMetric label="High intent · now" value={metrics.highIntent.toLocaleString("en-IN")} />
               </div>
-              <p className="mt-2 text-[11px] text-copy-subtle">Stage-history counts are distinct from authoritative enrollment records.</p>
+              <p className="mt-2 text-[11px] text-copy-subtle">Enrolled leads reflect CRM stage-history entries in the period, not the authoritative operational Enrollment-record count.</p>
               <details className="mt-3">
               <summary className="cursor-pointer text-xs font-medium text-brand-700 dark:text-brand-300">Financial context</summary>
               <div className="mt-3 grid gap-4 rounded-xl bg-surface-muted p-3 sm:grid-cols-2">
