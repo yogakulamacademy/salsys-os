@@ -24,10 +24,10 @@ export function HomeReportingCoverage({ items }: { items: HomeReportingEvidence[
         <summary className="flex cursor-pointer list-none flex-wrap items-center gap-x-3 gap-y-1.5 text-xs text-copy-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-700">
           <Database size={15} aria-hidden="true" className="shrink-0 text-copy-subtle" />
           <span className="font-semibold text-copy-strong">
-            {returned} of {items.length} reporting sources available
+            {returned} of {items.length} reporting indicators available
           </span>
           <span className="min-w-0 flex-1 text-[11px] text-copy-subtle">
-            {incomplete ? "Selected-period evidence is incomplete." : "All reporting queries returned evidence."}
+            {incomplete ? "Selected-period evidence is incomplete." : "All required reporting evidence returned."}
           </span>
           <span className="inline-flex items-center gap-1 text-[11px] font-medium text-brand-700">
             Inspect evidence <ChevronDown size={13} aria-hidden="true" className="transition-transform group-open:rotate-180" />
@@ -52,7 +52,7 @@ export function HomeReportingCoverage({ items }: { items: HomeReportingEvidence[
             ))}
           </ul>
           <p className="mt-3 text-[11px] leading-5 text-copy-subtle">
-            Availability means the scoped data query returned usable evidence, not that source systems are synchronized
+            Period KPIs stay unknown rather than falling back to all-time snapshot totals. Reporting days use UTC. Availability means the scoped data query returned usable evidence, not that source systems are synchronized
             or transactions are externally reconciled. Source-update timestamps are not currently tracked here;
             data freshness and live synchronization are unverified. Period event metrics and current snapshots
             are not directly comparable.
