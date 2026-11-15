@@ -9,6 +9,7 @@ const period = read("lib/dashboard-period-data.ts");
 const migration = read(
   "supabase/migrations/20261115091500_home_dashboard_privileged_rpc_guard_v1.sql",
 );
+const nextActions = read("lib/home-next-actions.ts");
 const failures = [];
 const assert = (condition, message) => {
   if (!condition) failures.push(message);
@@ -23,7 +24,10 @@ assert(
   "The executive KPI order must be Leads, Qualified, Open Pipeline, Recorded Collections.",
 );
 assert(
-  !pulse.includes('label="Needs reply"') && home.includes('label: "Needs reply"'),
+  !pulse.includes('label="Needs reply"') &&
+    nextActions.includes('label: "Needs reply"') &&
+    home.includes("buildHomeNextActions({") &&
+    home.includes("const topAttention = attention[0];"),
   "Needs reply must stay in the operational attention queue, not the KPI row.",
 );
 assert(
