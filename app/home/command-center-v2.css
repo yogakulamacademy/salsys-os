@@ -364,3 +364,53 @@
 .command-center-v2 section[aria-label="Conversion and collections"] [data-testid="home-pipeline-stage-mix"] .bg-brand-700 {
   background: linear-gradient(90deg, #ab77f5, #6924ec);
 }
+
+
+/* KPI content must never be cut off by a fixed-height compact card. */
+.command-center-v2 section[aria-label="Business pulse"] > .command-kpi > * {
+  height: auto;
+  min-height: 128px;
+  overflow: visible;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  padding-bottom: 12px;
+}
+.command-center-v2 section[aria-label="Business pulse"] > .command-kpi {
+  min-width: 0;
+}
+.command-center-v2 section[aria-label="Business pulse"] > .command-kpi > * > div:last-child {
+  margin-top: auto;
+  padding-top: 8px;
+}
+.command-center-v2 section[aria-label="Business pulse"] .command-kpi > * span[class*="rounded-full"] {
+  white-space: nowrap;
+}
+.command-center-v2 [data-testid="home-world-map-disabled"] {
+  min-height: 235px;
+  background: #faf8ff;
+  overflow: hidden;
+}
+.command-center-v2 [data-testid="home-world-map-disabled"] img {
+  object-fit: contain;
+  object-position: center center;
+}
+.command-center-v2 [data-testid="home-world-map-disabled"] > div:first-child {
+  width: 100%;
+  min-width: 0;
+}
+.command-center-v2 section[aria-label="Geographic data readiness"] > div:nth-child(2) {
+  grid-template-columns: minmax(0, 0.7fr) minmax(0, 1.3fr);
+  align-items: center;
+}
+@media (max-width: 899px) {
+  .command-center-v2 section[aria-label="Geographic data readiness"] > div:nth-child(2) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (max-width: 639px) {
+  .command-center-v2 section[aria-label="Business pulse"] > .command-kpi > * {
+    min-height: 132px;
+    height: auto;
+  }
+}
