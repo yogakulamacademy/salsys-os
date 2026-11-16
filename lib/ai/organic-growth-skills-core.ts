@@ -71,6 +71,81 @@ export function summarizeGoogleAdsSyncHealth(row: GoogleAdsSyncHealthRow | null)
   };
 }
 
+
+export type OrganicCoverageInput = {
+  organicExpected: number | null;
+  organicRead: number;
+  paidExpected: number | null;
+  paidRead: number;
+  gscLatestDate: string | null;
+  adsLatestDate: string | null;
+  adsSyncStatus: string;
+  asOfDate: string;
+};
+
+function daysSinceDate(asOfDate: string, observedDate: string | null): number | null {
+  if (!observedDate || !/^\d{4}-\d{2}-\d{2}$/.test(observedDate) ||
+      !/^\d{4}-\d{2}-\d{2}$/.test(asOfDate)) return null;
+  const today = Date.parse(asOfDate + 'T00:00:00Z');
+  const observed = Date.parse(observedDate + 'T00:00:00Z');
+  if (!Number.isFinite(today) || !Number.isFinite(observed)) return null;
+  return Math.floor((today - observed) / 86400000);
+}
+
+/**
+ * Integrity gate: a comparison is reviewable only with complete reads and
+ * reasonably recent, healthy source data. This NEVER proves aligned periods,
+ * incrementality, exhaustive Google search-term coverage or recoverable spend.
+ */
+export function assessOrganicComparisonCoverage(input: OrganicCoverageInput) {
+  const organicComplete =
+    Number.isSafeInteger(input.organicExpected) &&
+    input.organicExpected !== null &&
+    input.organicExpected >= 0 &&
+    input.organicRead === input.organicExpected;
+  const paidComplete =
+    Number.isSafeInteger(input.paidExpected) &&
+    input.paidExpected !== null &&
+    input.paidExpected >= 0 &&
+    input.paidRead === input.paidExpected;
+  const gscAgeDays = daysSinceDate(input.asOfDate, input.gscLatestDate);
+  const adsAgeDays = daysSinceDate(input.asOfDate, input.adsLatestDate);
+  const gscFresh = gscAgeDays !== null && gscAgeDays >= 0 && gscAgeDays <= 7;
+  const adsFresh = adsAgeDays !== null && adsAgeDays >= 0 && adsAgeDays <= 7;
+  const syncHealthy = input.adsSyncStatus === 'last_sync_succeeded';
+  const canCompareForInvestigation = organicComplete && paidComplete &&
+    gscFresh && adsFresh && syncHealthy && input.organicRead > 0 && input.paidRead > 0;
+
+  const reasons: string[] = [];
+  if (!organicComplete || !paidComplete) reasons.push('incomplete_or_unverified_row_coverage');
+  if (!gscFresh) reasons.push('gsc_data_stale_or_unverified');
+  if (!adsFresh) reasons.push('ads_data_stale_or_unverified');
+  if (!syncHealthy) reasons.push('google_ads_sync_not_healthy');
+  if (input.organicRead === 0) reasons.push('no_observed_organic_queries');
+  if (input.paidRead === 0) reasons.push('no_observed_paid_search_terms');
+
+  return {
+    comparisonReadiness: canCompareForInvestigation
+      ? 'review_candidates_only' as const : 'blocked_incomplete_or_stale' as const,
+    rows: {
+      organicRead: input.organicRead,
+      organicReported: input.organicExpected,
+      paidRead: input.paidRead,
+      paidReported: input.paidExpected,
+      organicComplete,
+      paidComplete,
+    },
+    asOfDate: input.asOfDate,
+    gscLatestDate: input.gscLatestDate,
+    adsLatestDate: input.adsLatestDate,
+    gscAgeDays,
+    adsAgeDays,
+    periodAlignmentVerified: false as const,
+    reasons,
+    neverInferSavings: true as const,
+  };
+}
+
 export type KeywordPageRow = {
   query: string;
   leader_page: string | null;
