@@ -21,6 +21,9 @@ import { WhatsAppComposer } from "@/components/conversation-composer";
 import { ConversationIntelligencePanel } from "@/components/conversation-intelligence-panel";
 import { AILeadInsightPanel } from "@/components/ai-lead-insight-panel";
 import { InboxQuickActions } from "@/components/inbox-quick-actions";
+import { changeInboxLeadStageAction } from "@/app/conversations/team-actions";
+import { buildQuickReplies } from "@/lib/inbox-quick-replies";
+import { getUpcomingBatchesForQuickReplies } from "@/lib/inbox-quick-reply-data";
 import { InboxHeaderActions } from "@/components/inbox-header-actions";
 import { InboxLeadOverview } from "@/components/inbox-lead-overview";
 import { InboxOfferCard } from "@/components/inbox-offer-card";
@@ -175,6 +178,19 @@ export default async function ConversationsPage({
   const whatsappTemplateAction = selectedId
     ? sendWhatsAppTemplateAction.bind(null, selectedId)
     : undefined;
+  const stageAction = selectedId
+    ? changeInboxLeadStageAction.bind(null, selectedId)
+    : undefined;
+  const quickBatches = selected && !mock
+    ? await getUpcomingBatchesForQuickReplies(selected.interestedCourseId).catch(() => [])
+    : [];
+  const quickReplies = selected
+    ? buildQuickReplies({
+        firstName: selected.name.split(" ")[0] ?? null,
+        courseName: selected.course,
+        batches: quickBatches,
+      })
+    : null;
   const leadContextAction = selectedId
     ? updateConversationLeadContextWithActivityAction.bind(null, selectedId)
     : undefined;
@@ -451,8 +467,9 @@ export default async function ConversationsPage({
         </div>
       )}
 
-      <InboxQuickActions phone={selectedPhone} canCall={Boolean(hasTelephoneContact)}
-        canAssign={team.canManageAssignments} profileHref={`/leads/${selected.id}`}/>
+      <InboxQuickActions key={`qa-${selected.id}`} phone={selectedPhone} canCall={Boolean(hasTelephoneContact)}
+        profileHref={`/leads/${selected.id}`} channel={selected.currentContactChannel}
+        replies={quickReplies!} logAction={interactionAction} stageAction={stageAction} mock={mock}/>
 
       {leadContextAction ? (
         <section className="border-b border-line px-4 py-4">
@@ -592,6 +609,7 @@ function noticeFor(value?: string) {
   if (value === "whatsapp-template-sent") return "WhatsApp template sent.";
   if (value === "whatsapp-started") return "WhatsApp conversation started.";
   if (value === "lead-context-updated") return "Lead details updated.";
+  if (value === "interaction-logged") return "Call recorded on the lead.";
   if (value === "owner-updated") return "Conversation owner updated across CRM and open work.";
   if (value === "conversation-snoozed") return "Conversation snoozed in your inbox.";
   if (value === "conversation-unsnoozed") return "Conversation returned to your active inbox.";

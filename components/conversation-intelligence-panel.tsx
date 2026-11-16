@@ -17,6 +17,13 @@ import {
 
 import { LeadInspectorButton } from "@/components/crm/lead-inspector";
 import type { LeadStage } from "@/types/crm";
+import {
+  FOLLOWUP_METHODS,
+  FOLLOWUP_WHENS,
+  followupDueAt,
+  followupTitle,
+  type FollowupMethod,
+} from "@/lib/inbox-quick-replies";
 
 type Availability = "available" | "empty" | "unavailable";
 
@@ -97,6 +104,7 @@ export function ConversationIntelligencePanel({
   const [actionSuccess, setActionSuccess] = useState<string | null>(null);
   const [loadedAt, setLoadedAt] = useState(0);
   const [expanded, setExpanded] = useState(false);
+  const [fuMethod, setFuMethod] = useState<FollowupMethod>("whatsapp");
   const customFollowupTriggerRef = useRef<HTMLButtonElement | null>(null);
   const customFollowupDialogRef = useRef<HTMLDivElement | null>(null);
 
@@ -228,6 +236,29 @@ export function ConversationIntelligencePanel({
     );
     await load(true);
     router.refresh();
+  }
+
+  async function quickSchedule(dueAt: Date, label: string) {
+    if (scheduling || customScheduling) return;
+    if (dueAt.getTime() < Date.now() - 60_000) {
+      setActionError("Choose a follow-up time in the future.");
+      return;
+    }
+    setScheduling(true);
+    setActionError(null);
+    setActionSuccess(null);
+    try {
+      await createFollowup({
+        title: followupTitle(fuMethod),
+        dueAt,
+        description: `Scheduled from Inbox: ${followupTitle(fuMethod)}, ${label}`,
+        successMessage: `${followupTitle(fuMethod)} set for ${formatDateTime(dueAt.toISOString())}.`,
+      });
+    } catch (reason) {
+      setActionError(reason instanceof Error ? reason.message : "Unable to schedule follow-up.");
+    } finally {
+      setScheduling(false);
+    }
   }
 
   async function scheduleRecommendedFollowup() {
@@ -362,8 +393,37 @@ export function ConversationIntelligencePanel({
             <p className="ibx-v2-tasks-info">No open follow-ups for this lead.</p>}
         {actionError ? <p role="alert" className="ibx-v2-tasks-info">{actionError}</p> : null}
         {actionSuccess ? <p role="status" className="ibx-v2-tasks-info">{actionSuccess}</p> : null}
+        <div className="ibx-v3-fu" aria-label="Schedule a follow-up">
+          <div className="ibx-v3-fu-head">Schedule a follow-up</div>
+          <div role="group" aria-label="Follow-up method" className="ibx-v3-fu-methods">
+            {FOLLOWUP_METHODS.map(([value, label]) => (
+              <button key={value} type="button" aria-pressed={fuMethod === value}
+                onClick={() => setFuMethod(value)}>{label}</button>
+            ))}
+          </div>
+          <div className="ibx-v3-fu-whens">
+            {FOLLOWUP_WHENS.map(([value, label]) => (
+              <button key={value} type="button" disabled={scheduling || customScheduling}
+                onClick={() => void quickSchedule(followupDueAt(value), label)}>{label}</button>
+            ))}
+          </div>
+          <label className="ibx-v3-fu-date">
+            <span>Pick date</span>
+            <input type="datetime-local" disabled={scheduling || customScheduling}
+              min={new Date(Date.now() - new Date().getTimezoneOffset() * 60_000).toISOString().slice(0, 16)}
+              onChange={(event) => {
+                const value = event.currentTarget.value;
+                if (!value) return;
+                const due = new Date(value);
+                if (!Number.isNaN(due.getTime())) void quickSchedule(due, formatDateTime(due.toISOString()));
+              }}/>
+          </label>
+          <p className="ibx-v3-fu-hint">
+            {fuMethod === "email" ? "Creates a reminder task; email is sent from your mail app." : "Creates a reminder task for the lead owner."}
+          </p>
+        </div>
         <button type="button" className="ibx-v2-link-action" onClick={() => setExpanded(true)}>
-          <span>+ </span> Add / manage follow-up
+          More follow-up options
         </button>
       </section>
     );

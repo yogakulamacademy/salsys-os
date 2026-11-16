@@ -23,6 +23,7 @@ type NoteResponse =
 type CopilotDraftEvent = CustomEvent<{
   channel?: string;
   body?: string;
+  source?: string;
 }>;
 
 const CHANNELS: Array<[Channel, string]> = [
@@ -123,21 +124,20 @@ export function ConversationSafeComposer({
   );
 
   useEffect(() => {
-    if (!isInstagram) return;
-
     const applyCopilotDraft = (event: Event) => {
       const detail = (event as CopilotDraftEvent).detail;
-      if (detail?.channel !== "instagram" || !detail.body?.trim()) return;
+      if (detail?.channel !== channel || !detail.body?.trim()) return;
 
       setMode("reply");
       updateReplyDraft(detail.body);
-      setCopilotAssisted(true);
+      // Quick-reply drafts are team templates, not AI output.
+      setCopilotAssisted(detail.source !== "quick_reply");
       requestAnimationFrame(() => replyTextareaRef.current?.focus());
     };
 
     window.addEventListener("crm:copilot-draft", applyCopilotDraft);
     return () => window.removeEventListener("crm:copilot-draft", applyCopilotDraft);
-  }, [isInstagram, updateReplyDraft]);
+  }, [channel, updateReplyDraft]);
 
   async function saveInternalNote() {
     const value = note.trim();
