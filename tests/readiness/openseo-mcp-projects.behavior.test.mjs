@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { parseOpenSeoProjectInventory } from "../../lib/integrations/openseo-mcp-response.ts";
+import { parseOpenSeoProjectInventory, parseOpenSeoRankTrackers } from "../../lib/integrations/openseo-mcp-response.ts";
 
 const sample = {
   id: "openseo-p1",
@@ -78,6 +78,55 @@ test("does not accept a response without structuredContent as successful", () =>
       jsonrpc: "2.0",
       id: 1,
       result: { content: [{ type: "text", text: "All good" }] },
+    })),
+    null,
+  );
+});
+
+test("parses saved zero-credit rank trackers without implying positions are current", () => {
+  const rankResponse = {
+    jsonrpc: "2.0",
+    id: 1,
+    result: {
+      structuredContent: {
+        configs: [{
+          id: "tracker-1",
+          domain: "yogakulam.com",
+          locationCode: 2356,
+          locationName: "India",
+          languageCode: "en",
+          scheduleInterval: "weekly",
+          lastCheckedAt: null,
+        }],
+      },
+    },
+  };
+  assert.deepEqual(parseOpenSeoRankTrackers(JSON.stringify(rankResponse)), [{
+    id: "tracker-1",
+    domain: "yogakulam.com",
+    locationCode: 2356,
+    locationName: "India",
+    languageCode: "en",
+    scheduleInterval: "weekly",
+    lastCheckedAt: null,
+  }]);
+});
+
+test("rejects rank tracker errors and forged rows", () => {
+  assert.equal(parseOpenSeoRankTrackers(JSON.stringify(mcp([]))), null);
+  assert.equal(
+    parseOpenSeoRankTrackers(JSON.stringify({
+      jsonrpc: "2.0",
+      id: 1,
+      result: { structuredContent: { configs: [{ id: "", domain: "example.com" }] } },
+    })),
+    null,
+  );
+  assert.equal(
+    parseOpenSeoRankTrackers(JSON.stringify({
+      jsonrpc: "2.0",
+      id: 1,
+      result: { structuredContent: { configs: [{ id: "tracker-1", domain: "example.com", lastCheckedAt: 0 }] } },
     })),
     null,
   );
