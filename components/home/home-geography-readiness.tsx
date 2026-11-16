@@ -24,10 +24,12 @@ function LockedWorldMap() {
           aria-hidden="true"
         />
       </div>
-      <div className="relative z-10 mt-1 flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-center">
-        <LockKeyhole size={13} aria-hidden="true" className="shrink-0 text-brand-700" />
-        <p className="text-[11px] font-semibold text-copy-strong">Map unavailable</p>
-        <span className="text-[10px] text-copy-muted">Country-level plotting awaits validated location data</span>
+      <div className="relative z-10 mt-1 flex min-w-0 flex-col items-center justify-center gap-1 px-1 text-center">
+        <div className="flex items-center justify-center gap-1.5">
+          <LockKeyhole size={13} aria-hidden="true" className="shrink-0 text-brand-700" />
+          <p className="text-[11px] font-semibold text-copy-strong">Map unavailable</p>
+        </div>
+        <p className="max-w-full text-[10px] leading-4 text-copy-muted">Country-level plotting awaits validated location data</p>
       </div>
     </div>
   );
