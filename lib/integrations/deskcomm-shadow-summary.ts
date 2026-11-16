@@ -18,12 +18,13 @@ export type DeskcommShadowSummary = {
   candidateBatchDates: number;
   candidateMonths: number;
   candidateOptOuts: number;
+  candidateHumanHandoffs: number;
   lastTaggedAt: string | null;
 };
 
 const FAMILY = new Set(['inbound_message', 'delivery_status', 'unsupported_event', 'untrusted']);
 const EVIDENCE = new Set(['verified', 'incomplete', 'untrusted', 'unsupported']);
-const INTENT = new Set(['none', 'batch_information_request', 'preferred_month_candidate', 'opt_out_candidate']);
+const INTENT = new Set(['none', 'batch_information_request', 'preferred_month_candidate', 'opt_out_candidate', 'human_handoff_candidate']);
 
 function record(value: unknown): Record<string, unknown> | null {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
@@ -46,6 +47,7 @@ export function summarizeDeskcommInboundShadow(rows: ShadowRow[]): DeskcommShado
     candidateBatchDates: 0,
     candidateMonths: 0,
     candidateOptOuts: 0,
+    candidateHumanHandoffs: 0,
     lastTaggedAt: null,
   };
 
@@ -89,6 +91,7 @@ export function summarizeDeskcommInboundShadow(rows: ShadowRow[]): DeskcommShado
     if (shadow.intent_candidate === 'batch_information_request') output.candidateBatchDates += 1;
     if (shadow.intent_candidate === 'preferred_month_candidate') output.candidateMonths += 1;
     if (shadow.intent_candidate === 'opt_out_candidate') output.candidateOptOuts += 1;
+    if (shadow.intent_candidate === 'human_handoff_candidate') output.candidateHumanHandoffs += 1;
 
     if (!output.lastTaggedAt || receivedAt > output.lastTaggedAt) {
       output.lastTaggedAt = receivedAt;
