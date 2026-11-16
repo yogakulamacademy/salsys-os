@@ -178,7 +178,9 @@ export default async function WhatsAppHumanReviewQueuePage({
                                   ) : null}
                                 </>
                               ) : queue.actionsEnabled && row.kind === 'human_request' && row.rawEventId ? (
-                                queue.assignees.length > 0 ? (
+                                queue.assignees.some((staff) =>
+                                  staff.canViewAllLeads || staff.id === row.leadOwnerId
+                                ) ? (
                                   <form action={claimDeskcommHumanReviewAction} className="flex flex-wrap items-center gap-2">
                                     <input type="hidden" name="raw_event_id" value={row.rawEventId} />
                                     <label className="text-xs font-semibold text-slate-600" htmlFor={`assignee-${i}`}>
@@ -189,9 +191,15 @@ export default async function WhatsAppHumanReviewQueuePage({
                                       id={`assignee-${i}`}
                                       required
                                       className="max-w-[200px] rounded-lg border border-slate-300 bg-white px-2 py-1 text-xs"
-                                      defaultValue={queue.assignees[0]?.id}
+                                      defaultValue={queue.assignees.find((staff) =>
+                                        staff.canViewAllLeads || staff.id === row.leadOwnerId
+                                      )?.id}
                                     >
-                                      {queue.assignees.map((staff) => (
+                                      {queue.assignees
+                                        .filter((staff) =>
+                                          staff.canViewAllLeads || staff.id === row.leadOwnerId
+                                        )
+                                        .map((staff) => (
                                         <option key={staff.id} value={staff.id}>
                                           {staff.name} · {staff.role}
                                         </option>
@@ -202,7 +210,7 @@ export default async function WhatsAppHumanReviewQueuePage({
                                     </button>
                                   </form>
                                 ) : (
-                                  <span className="text-xs text-amber-700">No eligible Sales staff available</span>
+                                  <span className="text-xs text-amber-700">No eligible staff with lead access. Assign a lead owner or select a Sales manager.</span>
                                 )
                               ) : null}
                             </div>
