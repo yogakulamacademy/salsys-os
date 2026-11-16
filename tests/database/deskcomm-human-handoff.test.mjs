@@ -466,7 +466,9 @@ test('an in-flight claim and handoff serialize under the same advisory lock',asy
   );
   const sender=await f.connect('handoff-provider-claim-race');
   const reviewer=await f.connect('handoff-reviewer-race');
-  await signed(sender);
+  // The provider-send process holds a privileged server transaction, while
+  // the human reviewer uses an authenticated owner/admin session.
+  await sender.query('begin');
   await signed(reviewer);
   await sender.query(
     'update public.automation_provider_send_audits set status=$1 where id=$2',
