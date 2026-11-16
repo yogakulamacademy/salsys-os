@@ -27,6 +27,7 @@ import { percentageWidth, sourceLabel } from "@/lib/ui-format";
 import { buildHomeSourceSignals, reconcileHomeSourceQualification } from "@/lib/home-source-intelligence";
 import { buildHomeNextActions, type HomeNextAction, type HomeActionId } from "@/lib/home-next-actions";
 import { calculateHomeReplyWaitingBreakdown } from "@/lib/home-reply-waiting";
+import { groupHomePipelineStages } from "@/lib/home-stage-groups";
 import {
   getDashboardSnapshot,
   type DashboardBatchDemand,
@@ -399,12 +400,9 @@ export default async function HomePage({ searchParams }: HomePageProps) {
                 <span className="rounded-full bg-brand-50 px-2 py-1 text-[10px] font-semibold text-brand-700">{pipelineTruth ? valuationCoverage == null ? "Coverage unknown" : valuationCoverage.toFixed(1) + "% valued" : "Valuation unavailable"}</span>
               </div>
               <div className="home-stage-strip grid grid-cols-4 gap-1 text-center">
-                {[
-                  {label:"New",value:counts.new},
-                  {label:"Contacted",value:counts.contacted},
-                  {label:"Qualified",value:counts.qualified},
-                  {label:"Enrolled",value:counts.enrolled ?? 0},
-                ].map((step) => <div key={step.label} className="min-w-0 rounded-lg bg-brand-50 px-1 py-3 text-brand-900"><p className="text-[10px] font-semibold">{step.label}</p><p className="mt-2 text-[15px] font-bold tabular-nums">{step.value.toLocaleString("en-IN")}</p></div>)}
+                {groupHomePipelineStages(counts)
+                  .filter((step) => step.id !== "payment_pending")
+                  .map((step) => <div key={step.label} className="min-w-0 rounded-lg bg-brand-50 px-1 py-3 text-brand-900"><p className="text-[10px] font-semibold">{step.label}</p><p className="mt-2 text-[15px] font-bold tabular-nums">{step.value.toLocaleString("en-IN")}</p></div>)}
               </div>
               <p className="text-[10px] leading-4 text-copy-subtle">Current independent stage counts, not a sequential conversion funnel. Missing or mixed-currency values are excluded.</p>
             </div>
@@ -605,13 +603,7 @@ function PipelineSnapshot({
   enrolled: number;
   counts: DashboardSnapshot["counts"];
 }) {
-  const rows = [
-    { label: "New", value: counts.new },
-    { label: "Contacted", value: counts.contacted + counts.engaged },
-    { label: "High intent", value: counts.qualified + counts.high_intent },
-    { label: "Payment pending", value: counts.payment_pending },
-    { label: "Enrolled", value: counts.enrolled ?? 0 },
-  ];
+  const rows = groupHomePipelineStages(counts);
   const max = Math.max(1, ...rows.map((row) => row.value));
   return (
     <div data-testid="home-pipeline-stage-mix" className="space-y-2">
