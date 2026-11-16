@@ -8,13 +8,18 @@ import {
   type DeskcommReviewCandidate,
 } from '@/lib/integrations/deskcomm-human-review-queue';
 
+export type DeskcommReviewActionRow = DeskcommReviewCandidate & {
+  handoff: { id: string; status: 'open' | 'closed'; assignedTo: string; taskId: string } | null;
+};
+
 export type DeskcommHumanReviewQueueReadiness = {
+  actionsEnabled: boolean;
   status: 'disabled' | 'ready' | 'unavailable' | 'over_limit';
   checkedAt: string;
   lookbackDays: 7;
   candidateCount: number | null;
   displayedCount: number;
-  rows: DeskcommReviewCandidate[];
+  rows: DeskcommReviewActionRow[];
 };
 
 /**
@@ -28,7 +33,16 @@ export async function getCurrentDeskcommHumanReviewQueue():
   Promise<DeskcommHumanReviewQueueReadiness> {
   const active = await requireAdminWorkspaceAccess();
   const checkedAt = new Date().toISOString();
-  const base = { checkedAt, lookbackDays: 7 as const, displayedCount: 0, rows: [] as DeskcommReviewCandidate[] };
+  const actionsEnabled =
+    process.env.SALSYS_DESKCOMM_HANDOFF_ACTIONS === 'true' &&
+    process.env.SALSYS_DESKCOMM_INBOUND_SHADOW === 'true';
+  const base = {
+    checkedAt,
+    lookbackDays: 7 as const,
+    actionsEnabled,
+    displayedCount: 0,
+    rows: [] as DeskcommReviewActionRow[],
+  };
 
   if (process.env.SALSYS_DESKCOMM_INBOUND_SHADOW !== 'true') {
     return { ...base, status: 'disabled', candidateCount: null };
@@ -128,13 +142,54 @@ export async function getCurrentDeskcommHumanReviewQueue():
       verifiedLeadIds = leadData.map((row) => String(row.id));
     }
 
-    const rows = reconcileDeskcommHumanReviewQueue({
+    const verifiedRows = reconcileDeskcommHumanReviewQueue({
       candidates: recent,
       links: linkRows,
       messages: msgRows,
       conversations: conversationRows,
       tenantLeadIds: verifiedLeadIds,
     });
+
+    let handoffs = new Map<string, DeskcommReviewActionRow['handoff']>();
+    if (actionsEnabled) {
+      // The handoff table exists only after the separately reviewed migration.
+      // If that prerequisite is missing, fail closed rather than presenting
+      // a button that could create duplicate or untracked work.
+      const eventIds = [...new Set(verifiedRows.flatMap((row) =>
+        row.rawEventId ? [row.rawEventId] : []))];
+      if (eventIds.length) {
+        const { data: handoffRows, error: handoffError } = await admin
+          .from('whatsapp_human_handoffs')
+          .select('id,raw_event_id,task_id,assigned_to,status')
+          .eq('organization_id', organizationId)
+          .in('raw_event_id', eventIds)
+          .limit(100);
+        if (handoffError || !Array.isArray(handoffRows) || handoffRows.length >= 100) {
+          return { ...base, status: 'unavailable', candidateCount: null };
+        }
+        for (const handoff of handoffRows) {
+          if (handoff.status !== 'open' && handoff.status !== 'closed') {
+            return { ...base, status: 'unavailable', candidateCount: null };
+          }
+          const rawId = String(handoff.raw_event_id ?? '');
+          if (handoffs.has(rawId)) {
+            return { ...base, status: 'unavailable', candidateCount: null };
+          }
+          handoffs.set(rawId, {
+            id: String(handoff.id),
+            status: handoff.status,
+            assignedTo: String(handoff.assigned_to),
+            taskId: String(handoff.task_id),
+          });
+        }
+      }
+    }
+
+    const rows: DeskcommReviewActionRow[] = verifiedRows.map((row) => ({
+      ...row,
+      handoff: row.rawEventId ? handoffs.get(row.rawEventId) ?? null : null,
+    }));
+
     return { ...base, status: 'ready', candidateCount, displayedCount: rows.length, rows };
   } catch {
     return { ...base, status: 'unavailable', candidateCount: null };
