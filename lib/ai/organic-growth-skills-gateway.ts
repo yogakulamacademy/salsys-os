@@ -7,6 +7,7 @@ import {
   buildSeoVsAdsEvidence,
   ORGANIC_GROWTH_READ_ONLY_TOOLS,
   primaryTopicTerm,
+  assessOrganicComparisonCoverage,
   summarizeGoogleAdsSyncHealth,
   type GoogleAdsSyncHealthRow,
   type OrganicGrowthToolName,
@@ -90,14 +91,14 @@ export async function runOrganicGrowthReadOnlyTool(
     const [queriesResult, pagesResult] = await Promise.all([
       supabase
         .from('v_seo_query_30d')
-        .select('query,clicks,impressions,avg_position')
+        .select('query,clicks,impressions,avg_position', { count: 'exact' })
         .eq('organization_id', organizationId)
         .ilike('query', '%' + term + '%')
         .order('impressions', { ascending: false })
         .limit(150),
       supabase
         .from('v_seo_keyword_intelligence_30d')
-        .select('query,leader_page,clicks,impressions,avg_position,recommendation')
+        .select('query,leader_page,clicks,impressions,avg_position,recommendation', { count: 'exact' })
         .eq('organization_id', organizationId)
         .ilike('query', '%' + term + '%')
         .order('impressions', { ascending: false })
@@ -108,48 +109,125 @@ export async function runOrganicGrowthReadOnlyTool(
     }
 
     await assertAccessStillActive();
-    return buildContentBriefEvidence(
-      topic,
-      (queriesResult.data ?? []) as OrganicQueryRow[],
-      (pagesResult.data ?? []) as KeywordPageRow[],
-    );
+    return {
+      ...buildContentBriefEvidence(
+        topic,
+        (queriesResult.data ?? []) as OrganicQueryRow[],
+        (pagesResult.data ?? []) as KeywordPageRow[],
+      ),
+      sourceCoverage: {
+        searchQueriesReturned: (queriesResult.data ?? []).length,
+        searchQueriesReported: queriesResult.count,
+        mappedPagesReturned: (pagesResult.data ?? []).length,
+        mappedPagesReported: pagesResult.count,
+        sourceCompletenessVerified:
+          typeof queriesResult.count === 'number' &&
+          typeof pagesResult.count === 'number' &&
+          queriesResult.count === (queriesResult.data ?? []).length &&
+          pagesResult.count === (pagesResult.data ?? []).length,
+      },
+    };
   }
 
-  const [organicResult, paidResult, adsHealthResult] = await Promise.all([
-    supabase
-      .from('v_seo_query_30d')
-      .select('query,clicks,impressions,avg_position')
-      .eq('organization_id', organizationId)
-      .order('impressions', { ascending: false })
-      .limit(1000),
-    supabase
-      .from('v_google_ads_search_term_30d')
-      .select('search_term,currency_code,spend,clicks,conversions,campaign_id')
-      .eq('organization_id', organizationId)
-      .order('spend', { ascending: false })
-      .limit(1000),
-    supabase
-      .from('v_google_ads_sync_health')
-      .select('last_sync_status,latest_data_date,last_sync_error')
-      .eq('organization_id', organizationId)
-      .maybeSingle(),
-  ]);
+  // Offset pagination is bounded, stable-sorted and count-checked. The
+  // previous single 1,000-row read could silently omit legitimate queries.
+  const PAGE_SIZE = 500;
+  const MAX_SOURCE_ROWS = 3000;
 
-  if (organicResult.error || paidResult.error || adsHealthResult.error) {
-    throw new Error('Organic or paid search evidence is unavailable; comparison has not been generated.');
+  async function loadBoundedRows(
+    table: 'v_seo_query_30d' | 'v_google_ads_search_term_30d',
+    columns: string,
+    orderColumn: 'impressions' | 'spend',
+    termColumn: 'query' | 'search_term',
+  ) {
+    const rows: Record<string, unknown>[] = [];
+    let expected: number | null = null;
+
+    for (let offset = 0; offset < MAX_SOURCE_ROWS; offset += PAGE_SIZE) {
+      const result = await supabase
+        .from(table)
+        .select(columns, { count: 'exact' })
+        .eq('organization_id', organizationId)
+        .order(orderColumn, { ascending: false })
+        .order(termColumn, { ascending: true })
+        .range(offset, offset + PAGE_SIZE - 1);
+
+      if (result.error) {
+        throw new Error('Search reporting data is unavailable. No comparison has been generated.');
+      }
+      const nextCount = result.count;
+      if (typeof nextCount !== 'number' || !Number.isSafeInteger(nextCount) ||
+          nextCount < 0 || (expected !== null && expected !== nextCount)) {
+        throw new Error('Search reporting row count changed or is not verifiable.');
+      }
+      expected = nextCount;
+      const batch = (result.data ?? []) as Record<string, unknown>[];
+      rows.push(...batch);
+      if (batch.length < PAGE_SIZE || rows.length >= expected) break;
+    }
+    // When >MAX_SOURCE_ROWS, the caller receives an explicit partial marker
+    // and all analytical candidates are withheld until coverage is complete.
+    return { rows, expected };
   }
+
+  const [organicResult, paidResult, adsHealthResult, gscHealthResult] =
+    await Promise.all([
+      loadBoundedRows('v_seo_query_30d',
+        'query,clicks,impressions,avg_position', 'impressions', 'query'),
+      loadBoundedRows('v_google_ads_search_term_30d',
+        'search_term,currency_code,spend,clicks,conversions,campaign_id',
+        'spend', 'search_term'),
+      supabase
+        .from('v_google_ads_sync_health')
+        .select('last_sync_status,latest_data_date,last_sync_error')
+        .eq('organization_id', organizationId)
+        .maybeSingle(),
+      supabase
+        .from('v_gsc_sync_health')
+        .select('latest_gsc_date')
+        .eq('organization_id', organizationId)
+        .maybeSingle(),
+    ]);
+
+  if (adsHealthResult.error || gscHealthResult.error) {
+    throw new Error('Reporting source health is unavailable; comparison has not been generated.');
+  }
+
+  const sourceReadiness = summarizeGoogleAdsSyncHealth(
+    (adsHealthResult.data ?? null) as GoogleAdsSyncHealthRow | null,
+  );
+  const sourceCoverage = assessOrganicComparisonCoverage({
+    organicExpected: organicResult.expected,
+    organicRead: organicResult.rows.length,
+    paidExpected: paidResult.expected,
+    paidRead: paidResult.rows.length,
+    gscLatestDate: typeof gscHealthResult.data?.latest_gsc_date === 'string'
+      ? gscHealthResult.data.latest_gsc_date : null,
+    adsLatestDate: sourceReadiness.latestDataDate,
+    adsSyncStatus: sourceReadiness.status,
+    asOfDate: new Date().toISOString().slice(0, 10),
+  });
 
   const evidence = buildSeoVsAdsEvidence(
-    (organicResult.data ?? []) as OrganicQueryRow[],
-    (paidResult.data ?? []) as PaidSearchTermRow[],
+    organicResult.rows as unknown as OrganicQueryRow[],
+    paidResult.rows as unknown as PaidSearchTermRow[],
   );
+
   await assertAccessStillActive();
-  // Raw provider error strings are read only for server-side classification.
-  // Return the allowlisted blocker code, never upstream error text.
+  const reviewable = sourceCoverage.comparisonReadiness === 'review_candidates_only';
+  // Never surface overlap candidates from stale, partial or unhealthy data.
   return {
     ...evidence,
-    sourceReadiness: summarizeGoogleAdsSyncHealth(
-      (adsHealthResult.data ?? null) as GoogleAdsSyncHealthRow | null,
-    ),
+    status: reviewable ? evidence.status :
+      evidence.status === 'insufficient_paid_evidence' ? evidence.status :
+      'source_quality_blocked',
+    overlap: reviewable ? evidence.overlap : [],
+    paidWithoutObservedOrganic: reviewable ? evidence.paidWithoutObservedOrganic : [],
+    counts: {
+      ...evidence.counts,
+      overlapCandidates: reviewable ? evidence.counts.overlapCandidates : 0,
+    },
+    sourceReadiness,
+    sourceCoverage,
   };
 }
