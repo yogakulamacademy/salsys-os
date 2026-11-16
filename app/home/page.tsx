@@ -271,11 +271,21 @@ export default async function HomePage({ searchParams }: HomePageProps) {
   ].slice(0, 5);
 
   const stageGroups = groupHomePipelineStages(counts);
-  const insights = buildHomeInsights({
-    sources: validatedSourceQuality,
-    currentLeads: periodAnalytics.available.leads ? periodAnalytics.leads.current : null,
-    previousLeads: periodAnalytics.available.leads ? periodAnalytics.leads.previous : null,
-  });
+  const insights = [
+    ...buildHomeInsights({
+      sources: validatedSourceQuality,
+      currentLeads: periodAnalytics.available.leads ? periodAnalytics.leads.current : null,
+      previousLeads: periodAnalytics.available.leads ? periodAnalytics.leads.previous : null,
+    }),
+    ...sourceSignals.map((signal, index) => ({
+      id: `signal-${index}`,
+      title: signal.title,
+      detail: signal.detail,
+      value: "",
+      tone: "warn" as ChipTone,
+      href: signal.href,
+    })),
+  ].slice(0, 3);
 
   const donutTotal = acquisitionSources.reduce((sum, row) => sum + row.leads, 0);
   const donutRows = [...acquisitionSources].sort((a, b) => b.leads - a.leads);
@@ -314,7 +324,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
     { label: "Instagram app replies", note: replyProvisional ? "Not captured" : "Live", state: replyProvisional ? "bad" : "ok" },
     {
       label: "Google & Meta ads",
-      note: adsAgeDays == null ? "Not synced" : adsAgeDays === 0 ? "Today" : `${adsAgeDays}d old`,
+      note: adsAgeDays == null ? "Never synced" : adsAgeDays === 0 ? (extras.freshness.adsLatestFailed ? "Today · last run failed" : "Today") : `${adsAgeDays}d old`,
       state: adsAgeDays != null && adsAgeDays <= ADS_STALE_DAYS && !extras.freshness.adsLatestFailed ? "ok" : "bad",
     },
   ];
@@ -332,7 +342,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
         <div className="min-w-0">
           <h1 className="text-[28px] font-extrabold tracking-[-0.03em] text-copy-strong">Command Center</h1>
           <p className="mt-0.5 text-sm text-copy-muted">
-            {totalLeads == null ? "—" : totalLeads.toLocaleString("en-IN")} leads · {qualifiedLeads == null ? "—" : qualifiedLeads.toLocaleString("en-IN")} qualified · {collectedValue} recorded
+            {totalLeads == null ? "—" : totalLeads.toLocaleString("en-IN")} leads · {qualifiedLeads == null ? "—" : qualifiedLeads.toLocaleString("en-IN")} qualified · {collectedValue === "—" ? "no payments recorded" : `${collectedValue} recorded`}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -387,6 +397,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
           trend={null}
           href="/revenue/valuation"
           muted={openPipelineValue === "—"}
+          emptyText="Not valued yet"
           evidenceLabel={pipelineTruth ? "Open-lead valuation evidence" : "Evidence unavailable"}
           evidenceState={pipelineTruth ? (pipelineTruth.eligibleCount === pipelineTruth.valuedCount ? "derived" : "partial") : "unknown"}
           definition="As of now: positive potential values on open leads, one currency at a time. Not revenue; does not change with the period filter."
@@ -399,6 +410,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
           trend={null}
           href="/revenue"
           muted={collectedValue === "—"}
+          emptyText="None confirmed"
           evidenceLabel={periodAnalytics.available.revenue ? "Recorded payment ledger · unverified" : "Evidence unavailable"}
           evidenceState="partial"
           definition="Paid minus refunded CRM payment records in the selected period. Not yet reconciled to bank or payment-provider settlement."
@@ -534,16 +546,8 @@ export default async function HomePage({ searchParams }: HomePageProps) {
                       <span className="text-sm font-bold text-copy-strong">{insight.title}</span>
                       <span className={`text-sm font-extrabold tabular-nums ${INSIGHT_TONES[insight.tone]}`}>{insight.value}</span>
                     </span>
-                    <span className="text-xs text-copy-muted">{insight.detail}</span>
+                    <span className="line-clamp-2 text-xs text-copy-muted">{insight.detail}</span>
                   </Link>
-                </li>
-              ))}
-            </ul>
-          ) : sourceSignals.length ? (
-            <ul className="flex flex-col gap-2">
-              {sourceSignals.map((signal) => (
-                <li key={signal.title}>
-                  <Link href={signal.href} className="text-sm font-semibold text-copy-strong hover:text-brand-700">{signal.title}</Link>
                 </li>
               ))}
             </ul>

@@ -208,6 +208,8 @@ export type HomeInsight = {
 type InsightSource = { source: string; leads: number; qualified: number };
 
 const MIN_SOURCE_LEADS = 5;
+const MIN_BEST_QUALIFIED = 3;
+const MIN_BEST_RATE = 0.05;
 
 /**
  * Up to three deterministic, evidence-backed observations. They describe what
@@ -227,7 +229,12 @@ export function buildHomeInsights(input: {
   const total = (input.sources ?? []).reduce((sum, row) => sum + (row.leads > 0 ? row.leads : 0), 0);
 
   const largest = [...sources].sort((a, b) => b.leads - a.leads)[0];
-  const best = [...sources].filter((row) => row.qualified > 0).sort((a, b) => rateOf(b) - rateOf(a) || b.leads - a.leads)[0];
+  const ranked = [...sources].filter((row) => row.qualified >= MIN_BEST_QUALIFIED && rateOf(row) >= MIN_BEST_RATE).sort((a, b) => rateOf(b) - rateOf(a) || b.leads - a.leads);
+  const candidate = ranked[0];
+  // "Qualifies best" only means something against another source of real size.
+  const best = candidate && sources.some((row) => row.source !== candidate.source && rateOf(row) < rateOf(candidate))
+    ? candidate
+    : undefined;
 
   if (largest && total > 0 && largest.leads / total >= 0.5 && best && best.source !== largest.source && rateOf(largest) < rateOf(best)) {
     insights.push({

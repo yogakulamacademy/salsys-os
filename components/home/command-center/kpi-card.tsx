@@ -23,6 +23,7 @@ export function KpiCard({
   evidenceLabel,
   evidenceState,
   muted = false,
+  emptyText,
 }: {
   icon: ReactNode;
   label: string;
@@ -34,6 +35,8 @@ export function KpiCard({
   evidenceLabel: string;
   evidenceState: MetricEvidenceState;
   muted?: boolean;
+  /** Shown instead of a bare "—" when the value is unknown or zero-evidence. */
+  emptyText?: string;
 }) {
   const spark = trend && trend.length ? sparklinePoints(trend, 110, 44) : null;
   return (
@@ -57,9 +60,13 @@ export function KpiCard({
       </span>
       <span className="flex items-end justify-between gap-2">
         <span className="flex min-w-0 flex-col gap-2">
-          <span className={`text-[30px] font-extrabold leading-none tracking-[-0.02em] tabular-nums ${muted ? "text-copy-subtle" : "text-copy-strong"}`}>
-            {value}
-          </span>
+          {value === "—" && emptyText ? (
+            <span className="flex h-[30px] items-end text-lg font-bold leading-none text-copy-subtle">{emptyText}</span>
+          ) : (
+            <span className={`text-[30px] font-extrabold leading-none tracking-[-0.02em] tabular-nums ${muted ? "text-copy-subtle" : "text-copy-strong"}`}>
+              {value}
+            </span>
+          )}
           <ToneChip chip={chip} />
         </span>
         {spark ? (
