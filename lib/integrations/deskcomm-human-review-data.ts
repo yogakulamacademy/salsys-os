@@ -12,9 +12,11 @@ export type DeskcommHandoffAssignee = {
   id: string;
   name: string;
   role: string;
+  canViewAllLeads: boolean;
 };
 
 export type DeskcommReviewActionRow = DeskcommReviewCandidate & {
+  leadOwnerId: string | null;
   handoff: {
     id: string;
     status: 'open' | 'closed';
@@ -141,6 +143,8 @@ export async function getCurrentDeskcommHumanReviewQueue():
             name: names.get(id)!,
             role: member.role === 'owner' || member.role === 'admin'
               ? member.role : salesRoles.get(id) ?? 'member',
+            canViewAllLeads: member.role === 'owner' ||
+              member.role === 'admin' || salesRoles.get(id) === 'manager',
           }];
         }).sort((a, b) => a.name.localeCompare(b.name));
       }
@@ -213,6 +217,7 @@ export async function getCurrentDeskcommHumanReviewQueue():
       external_conversation_id: string | null;
     }> = [];
     let verifiedLeadIds: string[] = [];
+    const leadOwners = new Map<string, string | null>();
 
     if (conversationIds.length && leadIds.length) {
       const [{ data: convData, error: convError }, { data: leadData, error: leadError }] =
@@ -224,7 +229,7 @@ export async function getCurrentDeskcommHumanReviewQueue():
             .in('id', conversationIds)
             .limit(100),
           admin.from('leads')
-            .select('id')
+            .select('id,owner_user_id')
             .eq('organization_id', organizationId)
             .in('id', leadIds)
             .limit(100),
@@ -235,6 +240,9 @@ export async function getCurrentDeskcommHumanReviewQueue():
       }
       conversationRows = convData;
       verifiedLeadIds = leadData.map((row) => String(row.id));
+      for (const row of leadData) {
+        leadOwners.set(String(row.id), row.owner_user_id ? String(row.owner_user_id) : null);
+      }
     }
 
     const verifiedRows = reconcileDeskcommHumanReviewQueue({
@@ -287,6 +295,7 @@ export async function getCurrentDeskcommHumanReviewQueue():
 
     const rows: DeskcommReviewActionRow[] = verifiedRows.map((row) => ({
       ...row,
+      leadOwnerId: row.leadId ? leadOwners.get(row.leadId) ?? null : null,
       handoff: row.rawEventId ? handoffs.get(row.rawEventId) ?? null : null,
     }));
 
