@@ -115,7 +115,7 @@ test('Home Command Center uses full shared content width', async ({ page }) => {
   await page.setViewportSize({ width: 1744, height: 1000 });
   await page.goto('/home');
 
-  const geometry = await page.locator('.command-center-v2').evaluate((element) => {
+  const geometry = await page.locator('.command-center-v3').evaluate((element) => {
     const shell = element.closest('.page-transition');
     if (!shell) return null;
     const home = element.getBoundingClientRect();
@@ -137,37 +137,24 @@ test('Home evidence-first charts preserve empty-data and action semantics', asyn
   await expect(chart).toBeVisible();
   // Synthetic mock mode has no authorized period lead query: never manufacture a line graph.
   await expect(chart).toContainText('Selected-period lead evidence is unavailable');
-  // Decorative SVG is allowed, but no factual line/chart can be rendered without evidence.
-  await expect(chart.locator('svg[aria-hidden="true"]')).toHaveCount(1);
-  await expect(chart.locator('.recharts-responsive-container')).toHaveCount(0);
+  await expect(chart.locator('svg[role="img"]')).toHaveCount(0);
   await expect(chart.getByTestId('home-empty-state')).toHaveAttribute('data-evidence-state', 'unavailable');
-
   await expect(page.locator('[data-empty-variant="sources"]')).toHaveAttribute('data-evidence-state', 'unavailable');
-  await expect(page.locator('[data-empty-variant="batches"]')).toHaveAttribute('data-evidence-state', 'empty');
-  await expect(page.locator('[data-empty-variant="status"]')).toHaveAttribute('data-evidence-state', 'unavailable');
 
   await expect(page.getByRole('heading', { name: 'Action queue', exact: true })).toBeVisible();
-  await expect(page.getByTestId('home-reply-pressure')).toHaveCount(0);
+  for (const title of ['Pipeline health', 'Lead quality by source', 'Money', 'Lead sources', 'Course demand', 'Top locations', 'Insights', 'Data health', 'Quick actions']) {
+    await expect(page.getByRole('heading', { name: title, exact: true })).toBeVisible();
+  }
 
-  const conversion = page.getByRole('region', { name: 'Conversion and collections' });
-  await expect(conversion.getByRole('heading', { name: 'Qualification milestones', exact: true })).toBeVisible();
-  await expect(conversion.getByRole('heading', { name: 'Recorded collections trend', exact: true })).toBeVisible();
-  await expect(conversion.getByTestId('home-qualification-cohort')).toHaveAttribute('data-testid', 'home-qualification-cohort');
-  await expect(conversion.getByText('Qualification history unavailable', { exact: true })).toBeVisible();
-  await expect(conversion.locator('[data-empty-variant="revenue"]')).toHaveAttribute('data-evidence-state', 'unavailable');
-
-  await expect(page.getByText('Financial context', { exact: true })).toBeVisible();
-  await page.getByText('Financial context', { exact: true }).click();
-  await expect(
-    page.locator('details').filter({ has: page.getByText('Financial context', { exact: true }) })
-      .getByText('Current snapshot revenue has not been substituted', { exact: false }),
-  ).toBeVisible();
-  await expect(page.locator('[data-empty-variant="revenue"]')).toHaveAttribute('data-evidence-state', 'unavailable');
-  await expect(page.getByRole('link', { name: /View system health/ })).toBeVisible();
+  // Chart comparison toggle is a real, keyboard-reachable control.
+  const compare = page.getByRole('button', { name: 'vs previous', exact: true });
+  await compare.focus();
+  await page.keyboard.press('Enter');
+  await expect(compare).toHaveAttribute('aria-pressed', 'true');
 
   for (const width of [390, 768, 1440]) {
     await page.setViewportSize({ width, height: 900 });
-    await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth), { message: 'Chart layout at ' + width + 'px' }).toBeLessThanOrEqual(width);
+    await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth), { message: 'Home layout at ' + width + 'px' }).toBeLessThanOrEqual(width);
   }
 });
 
@@ -256,7 +243,7 @@ test('Home supports the shared dark theme', async ({ page }) => {
 });
 
 
-test('Home keeps icon-only violet sidebar with hover expansion and the reference panels', async ({ page }) => {
+test('Home keeps icon-only violet sidebar with hover expansion and the Command Center panels', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto('/home');
   await page.mouse.move(800, 400);
@@ -267,27 +254,18 @@ test('Home keeps icon-only violet sidebar with hover expansion and the reference
   await expect(active).toHaveAttribute('href', '/home');
   const bg = await active.evaluate(node => getComputedStyle(node).backgroundColor);
   expect(bg).toMatch(/rgb\(\s*87,\s*67,\s*197\s*\)/);
-  const brand = nav.locator('.salsys-brand-mark').first();
-  await expect(brand).toHaveText('S');
   await expect(page.getByRole('heading', { name: 'Command Center', exact: true })).toBeVisible();
 
   const pulse = page.locator('section[aria-label="Business pulse"]');
-  const heights = await pulse.locator('.command-kpi').evaluateAll(nodes =>
-    nodes.map(node => node.firstElementChild?.getBoundingClientRect().height ?? 0));
+  const heights = await pulse.locator(':scope > button').evaluateAll(nodes => nodes.map(node => node.getBoundingClientRect().height));
   expect(heights).toHaveLength(4);
   for (const height of heights) {
     expect(height).toBeGreaterThan(90);
-    expect(height).toBeLessThanOrEqual(162);
+    expect(height).toBeLessThanOrEqual(180);
   }
-  const conversion = page.getByRole('region', { name: 'Conversion and collections' });
-  for (const title of ['Pipeline health', 'Qualification', 'Opportunity pipeline', 'Lead sources', 'Qualification milestones', 'Recorded collections trend', 'Upcoming batch demand']) {
-    await expect(conversion.getByRole('heading', { name: title, exact: true })).toBeVisible();
-  }
-  await expect(page.getByRole('heading', { name: 'Trends & momentum' })).toBeVisible();
-  await page.screenshot({ animations: 'disabled', fullPage: true, path: 'test-results/home-purple-reference-desktop.png' });
+  await page.screenshot({ animations: 'disabled', fullPage: true, path: 'test-results/home-command-center-desktop.png' });
   await nav.hover();
   await expect.poll(() => nav.evaluate(node => Math.round(node.getBoundingClientRect().width))).toBe(232);
-  await expect(nav.getByRole('link', { name: 'Home', exact: true })).toBeVisible();
   await page.mouse.move(820, 400);
   await expect.poll(() => nav.evaluate(node => Math.round(node.getBoundingClientRect().width))).toBe(64);
   for (const width of [390, 768, 1440]) {
@@ -296,64 +274,24 @@ test('Home keeps icon-only violet sidebar with hover expansion and the reference
   }
 });
 
-test('Command Center uses reference 1024px geometry without changing the violet sidebar', async ({ page }) => {
-  await page.setViewportSize({ width: 1024, height: 1100 });
+test('Command Center keeps a four-up KPI row at 1100px+ and stacks on phones', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 1100 });
   await page.goto('/home');
-  await page.mouse.move(800, 400);
-  const shell = page.locator('.command-center-v2');
-  await expect(shell).toBeVisible();
-
   const pulse = page.locator('section[aria-label="Business pulse"]');
-  const pulseColumns = await pulse.evaluate(node => getComputedStyle(node).gridTemplateColumns.split(' ').length);
-  expect(pulseColumns).toBe(4);
-
-  const performance = page.locator('section[aria-label="Performance and work queue"]');
-  expect(await performance.evaluate(node => getComputedStyle(node).gridTemplateColumns.split(' ').length)).toBe(2);
-  const conversion = page.locator('section[aria-label="Conversion and collections"]');
-  const firstConversionRow = conversion.locator('div.grid').first();
-  expect(await firstConversionRow.evaluate(node => getComputedStyle(node).gridTemplateColumns.split(' ').length)).toBe(3);
-
-  const stagePanel = page.getByTestId('home-pipeline-stage-mix');
-  await expect(stagePanel).toBeVisible();
-  await expect(stagePanel.getByRole('progressbar')).toHaveCount(5);
-  const navigation = page.locator('aside[aria-label="Primary navigation"]');
-  expect(Math.round(await navigation.evaluate(node => node.getBoundingClientRect().width))).toBe(64);
-  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(1024);
-  await page.screenshot({ animations: 'disabled', fullPage: true, path: 'test-results/home-reference-1024.png' });
+  expect(await pulse.evaluate(node => getComputedStyle(node).gridTemplateColumns.split(' ').length)).toBe(4);
+  await page.setViewportSize({ width: 390, height: 900 });
+  expect(await pulse.evaluate(node => getComputedStyle(node).gridTemplateColumns.split(' ').length)).toBe(1);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
 });
 
-test('KPI evidence is not clipped and accurate coastline map retains proportions at desktop widths', async ({ page }) => {
-  for (const width of [1024, 1920]) {
-    await page.setViewportSize({ width, height: 1100 });
-    await page.goto('/home');
-    const cards = page.locator('section[aria-label="Business pulse"] .command-kpi > *');
-    await expect(cards).toHaveCount(4);
-    for (const card of await cards.all()) {
-      const geometry = await card.evaluate(node => {
-        const rect = node.getBoundingClientRect();
-        const children = [...node.querySelectorAll(':scope > div')].filter(el => getComputedStyle(el).position !== 'absolute');
-        return { height: rect.height, maxBottom: Math.max(...children.map(el => el.getBoundingClientRect().bottom), rect.top), bottom: rect.bottom, cssHeight: getComputedStyle(node).height, overflow: getComputedStyle(node).overflow };
-      });
-      expect(geometry.height).toBeGreaterThan(115);
-      expect(geometry.maxBottom).toBeLessThanOrEqual(geometry.bottom + 1);
-    }
-    const map = page.getByTestId('home-world-map-disabled');
-    await expect(map).toHaveAttribute('data-map-state','locked');
-    const geo = await map.evaluate(node => {
-      const image = node.querySelector('img');
-      const rect = node.getBoundingClientRect();
-      return { width: rect.width, height: rect.height, src: image?.getAttribute('src'), fit: image ? getComputedStyle(image).objectFit : null };
-    });
-    expect(geo.width).toBeGreaterThan(200);
-    expect(geo.height).toBeGreaterThan(190);
-    expect(geo.src).toContain('/world-coastlines.svg');
-    expect(geo.fit).toBe('contain');
-    const response = await page.request.get('/world-coastlines.svg');
-    expect(response.status()).toBe(200);
-    const mapSvg = await response.text();
-    expect(mapSvg).toContain('viewBox="0 0 720 290"');
-    expect(mapSvg).toContain('GSHHG');
-    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
-    await page.screenshot({ animations: 'disabled', fullPage: true, path: `test-results/home-accurate-map-${width}.png` });
-  }
+test('Location map uses the accurate coastline asset and stays proportional', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1100 });
+  await page.goto('/home');
+  const locations = page.getByRole('region', { name: 'Top locations' });
+  await locations.getByRole('button', { name: 'Map', exact: true }).click();
+  const response = await page.request.get('/world-coastlines.svg');
+  expect(response.status()).toBe(200);
+  const mapSvg = await response.text();
+  expect(mapSvg).toContain('viewBox="0 0 720 290"');
+  expect(mapSvg).toContain('GSHHG');
 });

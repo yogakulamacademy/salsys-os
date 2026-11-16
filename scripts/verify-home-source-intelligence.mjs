@@ -26,7 +26,8 @@ expect(sql.includes("normalized_sources as (") &&
   "The qualification RPC must normalize and aggregate all channels without top-N truncation.");
 expect(home.includes("reconcileHomeSourceQualification(") &&
   home.includes("buildHomeSourceSignals(") &&
-  home.includes('qualificationAvailable={validatedSourceQuality != null}') &&
+  home.includes("rows={validatedSourceQuality ? validatedSourceQuality.map(") &&
+  home.includes(": null}") &&
   home.includes("sourceDetailHref"),
   "Home must show channel quality only when reconciled and route to scoped details.");
 expect(page.includes("getDashboardPeriodAnalytics(query)") &&
