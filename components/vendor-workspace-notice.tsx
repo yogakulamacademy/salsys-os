@@ -22,6 +22,12 @@ export function VendorWorkspaceNotice({ kind }: { kind: VendorWorkspace }) {
         </p>
       ) : null}
       <div className="mt-3 flex flex-wrap gap-3 text-xs font-semibold">
+        <a
+          className="text-violet-700 underline underline-offset-2"
+          href="/settings/vendor-workspaces"
+        >
+          Check engine health (read-only)
+        </a>
         {preview.url ? (
           <a
             className="text-violet-700 underline underline-offset-2"
