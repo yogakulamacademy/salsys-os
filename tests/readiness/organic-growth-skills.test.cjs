@@ -74,7 +74,7 @@ function mockGateway({
   let authorizationChecks = 0;
   const client = {
     from(table) {
-      const call = { table, eq: [], filters: [], ranges: [], countRequested: false };
+      const call = { table, eq: [], filters: [], ranges: [], orders: [], countRequested: false };
       reads.push(call);
       const builder = {
         select(_columns, options) {
@@ -83,7 +83,7 @@ function mockGateway({
         },
         eq(col, value) { call.eq.push([col, value]); return builder; },
         ilike(col, value) { call.filters.push([col, value]); return builder; },
-        order() { return builder; },
+        order(column) { call.orders.push(column); return builder; },
         maybeSingle() {
           return Promise.resolve({
             data: table === 'v_gsc_sync_health'
@@ -164,6 +164,8 @@ test('Gateway only reads canonical organization-scoped views', async () => {
       'v_google_ads_search_term_30d', 'v_google_ads_sync_health', 'v_gsc_sync_health', 'v_seo_query_30d',
     ]);
     for (const read of f.reads) assert.deepEqual(read.eq, [['organization_id', 'org-a']]);
+    const paidRead = f.reads.find(x => x.table === 'v_google_ads_search_term_30d');
+    assert.deepEqual(paidRead.orders, ['spend', 'search_term', 'customer_id', 'campaign_id', 'ad_group_id']);
   } finally { f.restore(); }
 });
 
