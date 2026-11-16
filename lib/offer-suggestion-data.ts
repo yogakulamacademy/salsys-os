@@ -11,7 +11,7 @@ import {
 import { createClient } from "@/lib/supabase/server";
 import { requireCurrentOrganizationId } from "@/lib/workspace";
 
-export type OfferPrice = { amount: number; currency: string; batchLabel: string; source: "batch" } | null;
+export type OfferPrice = { amount: number; currency: string; batchLabel: string; source: "batch" | "batch_inr" } | null;
 
 export type LatestOfferDecision = {
   id: string;
@@ -55,6 +55,7 @@ export async function getLeadOfferSuggestion(input: {
   courseName?: string | null;
   waitingSince?: string | null;
   replyWindowOpen?: boolean | null;
+  country?: string | null;
 }): Promise<LeadOfferSuggestion | null> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -66,7 +67,7 @@ export async function getLeadOfferSuggestion(input: {
     input.interestedCourseId
       ? supabase
           .from("course_batches")
-          .select("start_date, location, mode, currency, price_shared, price_course_only, price_private")
+          .select("start_date, location, mode, currency, price_shared, price_course_only, price_private, metadata")
           .eq("organization_id", organizationId)
           .eq("course_id", input.interestedCourseId)
           .eq("active", true)
@@ -96,9 +97,15 @@ export async function getLeadOfferSuggestion(input: {
   ]);
 
   // Price only from a real batch price; never invented.
-  type BatchRow = { start_date: string; location: string | null; mode: string | null; currency: string | null; price_shared: number | null; price_course_only: number | null; price_private: number | null };
+  type BatchRow = { start_date: string; location: string | null; mode: string | null; currency: string | null; price_shared: number | null; price_course_only: number | null; price_private: number | null; metadata: { website_pricing?: { inr?: { shared?: number; private?: number } } } | null };
   const batch = ((batchResult.data ?? []) as BatchRow[]).find((b) => (b.price_shared ?? b.price_course_only ?? b.price_private) && b.currency);
-  const price: OfferPrice = batch
+  // Indian leads get the approved INR price when one exists (approved separately on the website prices page).
+  const isIndia = /^(india|in|bharat)$/i.test((input.country ?? "").trim());
+  const inr = batch?.metadata?.website_pricing?.inr;
+  const inrAmount = isIndia ? Number(inr?.shared ?? inr?.private ?? 0) : 0;
+  const price: OfferPrice = batch && inrAmount > 0
+    ? { amount: inrAmount, currency: "INR", batchLabel: `${batch.location || batch.mode || "Batch"} · starts ${batch.start_date} · approved Indian price`, source: "batch_inr" }
+    : batch
     ? {
         amount: Number(batch.price_shared ?? batch.price_course_only ?? batch.price_private),
         currency: String(batch.currency).toUpperCase(),

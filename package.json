@@ -105,7 +105,7 @@
     "test:home-stage-groups": "node --experimental-strip-types --test tests/readiness/home-stage-groups.behavior.test.mjs",
     "test:home-command-center": "node --experimental-strip-types --test tests/readiness/home-command-center.behavior.test.mjs",
     "test:conversation-learning": "node --experimental-strip-types --test tests/readiness/conversation-learning.behavior.test.mjs tests/readiness/chat-export-import.behavior.test.mjs",
-    "test:offer-suggestion": "node --experimental-strip-types --test tests/readiness/offer-suggestion.behavior.test.mjs",
+    "test:offer-suggestion": "node --experimental-strip-types --test tests/readiness/offer-suggestion.behavior.test.mjs tests/readiness/website-price-extract.behavior.test.mjs",
     "test:phone-normalization": "node --experimental-strip-types --test tests/readiness/phone-normalization.behavior.test.mjs",
     "test:home-geography-coverage": "node --experimental-strip-types --test tests/readiness/home-geography-coverage.behavior.test.mjs",
     "verify:vendor-workspace-pilot": "node scripts/verify-vendor-workspace-pilot.mjs",
