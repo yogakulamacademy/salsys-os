@@ -267,7 +267,7 @@ export function ConversationsSidebar({
       <div className="ibx-v2-sidebar-header shrink-0 border-b border-line px-4 pt-3">
         <h2 className="sr-only">Conversations</h2>
         <div
-          className="ibx-v2-tabs flex overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden [&>button]:shrink-0 [&>button]:whitespace-nowrap"
+          className="ibx-v2-tabs ibx-v3-pills flex gap-1.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden [&>button]:shrink-0 [&>button]:whitespace-nowrap"
           role="tablist"
           aria-label="Conversation filters"
           onKeyDown={handleFilterKeyDown}
@@ -365,7 +365,7 @@ export function ConversationsSidebar({
       {pagination?.topicCounts && Object.keys(pagination.topicCounts).length ? (
         <div className="ibx-v3-topic-chips shrink-0 border-b border-line bg-surface px-4 py-2">
           <p className="mb-1.5 text-[10.5px] font-semibold uppercase tracking-wide text-copy-subtle">What people are asking</p>
-          <div role="group" aria-label="Filter by question topic" className="flex flex-wrap gap-1.5">
+          <div role="group" aria-label="Filter by question topic" className="flex gap-1.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {INBOX_TOPICS.filter((key) => (pagination.topicCounts?.[key] ?? 0) > 0)
               .sort((a, b) => (pagination.topicCounts?.[b] ?? 0) - (pagination.topicCounts?.[a] ?? 0))
               .map((key) => {
@@ -373,7 +373,7 @@ export function ConversationsSidebar({
                 return (
                   <button key={key} type="button" aria-pressed={active}
                     onClick={() => setInboxParam("topic", active ? "all" : key)}
-                    className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold transition ${active ? "border-brand-600 bg-brand-50 text-brand-700" : "border-line bg-surface text-copy hover:border-brand-300"}`}>
+                    className={`shrink-0 whitespace-nowrap rounded-full border px-2.5 py-1 text-[11px] font-semibold transition ${active ? "border-brand-600 bg-brand-50 text-brand-700" : "border-line bg-surface text-copy hover:border-brand-300"}`}>
                     {INBOX_TOPIC_LABELS[key]} · {(pagination.topicCounts?.[key] ?? 0).toLocaleString("en-IN")}
                   </button>
                 );
@@ -636,19 +636,15 @@ function InboxTab({
       aria-selected={active}
       tabIndex={active ? 0 : -1}
       onClick={onClick}
-      className={`border-b-2 px-1 pb-2.5 pt-1 text-[11px] transition ${
+      className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-semibold transition ${
         active
-          ? "border-brand-700 font-semibold text-brand-700"
-          : "border-transparent text-copy-muted hover:text-copy-strong"
+          ? "border-brand-600 bg-brand-50 text-brand-700"
+          : "border-line bg-surface text-copy-muted hover:text-copy-strong"
       }`}
     >
       {children}
-      <span
-        className={`ml-1 rounded px-1 py-0.5 text-[9.5px] font-medium ${
-          active ? "bg-brand-50 text-brand-700" : "bg-surface-muted text-copy-muted"
-        }`}
-      >
-        {count}
+      <span className="tabular-nums opacity-70">
+        {count.toLocaleString("en-IN")}
       </span>
     </button>
   );

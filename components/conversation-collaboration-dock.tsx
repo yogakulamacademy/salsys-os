@@ -260,20 +260,22 @@ export function ConversationCollaborationDock() {
       <button
         type="button"
         onClick={() => setOpen((value) => !value)}
-        className={`relative inline-flex h-11 items-center gap-2 rounded-full border px-4 text-[12px] font-semibold shadow-lg transition ${
+        aria-label={otherViewers.length > 0 ? `${otherViewers.length} teammate viewing` : "Collaborate"}
+        title="Collaborate: team notes, mentions and who is viewing"
+        className={`relative inline-flex h-11 items-center gap-2 rounded-full border text-[12px] font-semibold shadow-lg transition ${otherViewers.length > 0 || open ? "px-4" : "w-11 justify-center px-0"} ${
           otherViewers.length > 0
             ? "border-amber-200 bg-amber-50 text-amber-800"
             : "border-brand-200 bg-surface text-brand-700 hover:bg-brand-50"
         }`}
       >
         {otherViewers.length > 0 ? <ShieldAlert size={15} /> : <UsersRound size={15} />}
-        {otherViewers.length > 0 ? `${otherViewers.length} teammate viewing` : "Collaborate"}
+        {otherViewers.length > 0 ? `${otherViewers.length} teammate viewing` : open ? "Collaborate" : null}
         {badgeCount > 0 ? (
           <span className="absolute -right-1 -top-1 grid min-h-5 min-w-5 place-items-center rounded-full bg-danger px-1 text-[9px] font-bold text-white">
             {badgeCount > 9 ? "9+" : badgeCount}
           </span>
         ) : null}
-        {open ? <ChevronDown size={13} /> : <ChevronUp size={13} />}
+        {open ? <ChevronDown size={13} /> : otherViewers.length > 0 ? <ChevronUp size={13} /> : null}
       </button>
     </div>
   );
