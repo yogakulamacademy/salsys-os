@@ -38,3 +38,7 @@ Never publish or modify website content through this skill. No automated outreac
 
 ## Activation
 Not active in production or current Co-Pilot. Load only through a separately approved, metered Claude orchestrator after the pilot gate is explicitly authorized.
+
+## Partial evidence
+
+Read sourceCoverage.sourceCompletenessVerified before describing the result. If false, state that top-N limits or unknown query counts may omit relevant terms/pages. Never call the returned keyword list exhaustive. Search terms that look like personal contact information and URL parameters must be excluded from the Claude evidence context.
