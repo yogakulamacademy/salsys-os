@@ -161,30 +161,34 @@ async function fixture(run) {
     await observer.query(foundation);
     await observer.query(migration);
 
-    await observer.query(
-      `insert into public.organizations(id) values ($1),($2);
-      insert into public.profiles(id) values ($3),($4),($5);
+    // All identifiers below are fixed synthetic UUIDs, never external inputs.
+    // PostgreSQL prepared statements cannot contain multiple commands, so this
+    // deliberately executes a local-only synthetic seed as one simple batch.
+    await observer.query(`
+      insert into public.organizations(id) values ('${org}'),('${otherOrg}');
+      insert into public.profiles(id) values ('${actor}'),('${assignee}'),('${otherOwner}');
       insert into public.organization_members(organization_id,user_id,role,active)
-      values ($1,$3,'owner',true),($1,$4,'member',true),($2,$5,'owner',true);
+      values ('${org}','${actor}','owner',true),
+             ('${org}','${assignee}','member',true),
+             ('${otherOrg}','${otherOwner}','owner',true);
       insert into public.organization_workspaces(organization_id,workspace_code,enabled)
-      values ($1,'sales',true),($2,'sales',true);
+      values ('${org}','sales',true),('${otherOrg}','sales',true);
       insert into public.workspace_memberships(organization_id,workspace_code,user_id,role,active)
-      values ($1,'sales',$4,'member',true);
-      insert into public.leads(id,organization_id) values($6,$1);
+      values ('${org}','sales','${assignee}','member',true);
+      insert into public.leads(id,organization_id) values('${lead}','${org}');
       insert into public.conversations(id,organization_id,lead_id,channel,external_account_id,external_conversation_id)
-      values ($7,$1,$6,'whatsapp','meta-phone-a','919999123456');
+      values ('${conversation}','${org}','${lead}','whatsapp','meta-phone-a','919999123456');
       insert into public.messages(organization_id,lead_id,conversation_id,external_message_id,direction)
-      values ($1,$6,$7,'wamid-unique','inbound');
+      values ('${org}','${lead}','${conversation}','wamid-unique','inbound');
       insert into public.whatsapp_crm_message_links(organization_id,lead_id,conversation_id,external_message_id)
-      values ($1,$6,$7,'wamid-unique');
+      values ('${org}','${lead}','${conversation}','wamid-unique');
       insert into public.automation_enrollments(id,organization_id,lead_id,status)
-      values($8,$1,$6,'active');
+      values('${enrollment}','${org}','${lead}','active');
       insert into public.automation_scheduled_jobs(organization_id,lead_id,status)
-      values($1,$6,'scheduled');
+      values('${org}','${lead}','scheduled');
       insert into public.automation_wait_states(organization_id,lead_id,status)
-      values($1,$6,'waiting');`,
-      [org,otherOrg,actor,assignee,otherOwner,lead,conversation,enrollment],
-    );
+      values('${org}','${lead}','waiting');
+    `);
 
     await observer.query(
       `insert into public.raw_events(
