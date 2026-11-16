@@ -106,6 +106,15 @@ create table public.tasks (
   created_by_id text,metadata jsonb,
   completed_at timestamptz
 );
+create table public.automation_provider_send_audits (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null,
+  lead_id uuid not null,
+  channel text not null,
+  provider text not null,
+  status text not null,
+  customer_message_sent boolean not null default false
+);
 create table public.automation_enrollments (
   id uuid primary key,organization_id uuid not null,
   lead_id uuid not null,status text not null
@@ -337,4 +346,142 @@ test('concurrent duplicate staff claims serialize on the unique source without d
   assert.equal(second.result.created,false);
   assert.equal(second.result.task_id,first.task_id);
   assert.equal((await f.observer.query('select count(*)::int as n from public.tasks')).rows[0].n,1);
+}));
+
+
+test('claimed WhatsApp send must settle before human handoff can open',async()=>fixture(async f=>{
+  await f.observer.query(
+    'insert into public.whatsapp_handoff_pilot_controls(organization_id,actions_enabled) values($1,true)',
+    [org],
+  );
+  const audit = randomUUID();
+  await f.observer.query(
+    'insert into public.automation_provider_send_audits(id,organization_id,lead_id,channel,provider,status) values($1,$2,$3,$4,$5,$6)',
+    [audit,org,lead,'whatsapp','meta_cloud_api','ready'],
+  );
+  // Existing worker claim commits before the human clicks. Meta may be in flight.
+  await f.observer.query(
+    'update public.automation_provider_send_audits set status=$1 where id=$2',
+    ['sending',audit],
+  );
+  const c=await f.connect();
+  const blocked=await open(c);
+  assert.equal(blocked.ok,false);
+  assert.equal(blocked.reason,'whatsapp_provider_send_in_flight');
+  assert.equal(blocked.customer_message_sent,false);
+  assert.equal(
+    (await f.observer.query('select count(*)::int as n from public.tasks')).rows[0].n,0,
+  );
+  // Only the original provider worker's terminal reconciliation clears the
+  // in-flight state; a handoff cannot shortcut provider reconciliation.
+  await f.observer.query(
+    'update public.automation_provider_send_audits set status=$1,customer_message_sent=true where id=$2',
+    ['sent',audit],
+  );
+  const opened=await open(c);
+  assert.equal(opened.created,true);
+  assert.equal(opened.paused_enrollments,1);
+}));
+
+test('new provider send claims fail closed under a human handoff hold',async()=>fixture(async f=>{
+  await f.observer.query(
+    'insert into public.whatsapp_handoff_pilot_controls(organization_id,actions_enabled) values($1,true)',
+    [org],
+  );
+  const c=await f.connect();
+  const handoff=await open(c);
+  assert.equal(handoff.created,true);
+  const audit=randomUUID();
+  await f.observer.query(
+    'insert into public.automation_provider_send_audits(id,organization_id,lead_id,channel,provider,status) values($1,$2,$3,$4,$5,$6)',
+    [audit,org,lead,'whatsapp','meta_cloud_api','ready'],
+  );
+  // Both standard and broadcast claim paths transition this same audit to
+  // sending. The trigger rejects that transition before any Meta HTTP call.
+  await assert.rejects(
+    f.observer.query('update public.automation_provider_send_audits set status=$1 where id=$2',['sending',audit]),
+    /blocked by an active human handoff/,
+  );
+  assert.equal(
+    (await f.observer.query('select status from public.automation_provider_send_audits where id=$1',[audit])).rows[0].status,
+    'ready',
+  );
+
+  await close(c,handoff.handoff_id);
+  await assert.rejects(
+    f.observer.query('update public.automation_provider_send_audits set status=$1 where id=$2',['sending',audit]),
+    /blocked by an active human handoff/,
+  );
+  const released=await authenticatedCall(c,
+    'select public.release_verified_whatsapp_handoff_ai_hold_v1($1,$2) as result',
+    [org,handoff.handoff_id],
+  );
+  assert.equal(released.jobs_replayed,false);
+  await f.observer.query(
+    'update public.automation_provider_send_audits set status=$1 where id=$2',['sending',audit],
+  );
+  assert.equal(
+    (await f.observer.query('select status from public.automation_provider_send_audits where id=$1',[audit])).rows[0].status,
+    'sending',
+  );
+}));
+
+test('unrelated tenants and channels have no new provider-send restrictions',async()=>fixture(async f=>{
+  await f.observer.query(
+    'insert into public.whatsapp_handoff_pilot_controls(organization_id,actions_enabled) values($1,true)',
+    [org],
+  );
+  const c=await f.connect();
+  assert.equal((await open(c)).created,true);
+  for(const [tenant,channel,provider] of [
+    [otherOrg,'whatsapp','meta_cloud_api'],
+    [org,'instagram','meta'],
+    [org,'whatsapp','non_meta_provider'],
+  ]) {
+    const audit=randomUUID();
+    await f.observer.query(
+      'insert into public.automation_provider_send_audits(id,organization_id,lead_id,channel,provider,status) values($1,$2,$3,$4,$5,$6)',
+      [audit,tenant,lead,channel,provider,'ready'],
+    );
+    await f.observer.query(
+      'update public.automation_provider_send_audits set status=$1 where id=$2',
+      ['sending',audit],
+    );
+    const current=await f.observer.query(
+      'select status from public.automation_provider_send_audits where id=$1',[audit],
+    );
+    assert.equal(current.rows[0].status,'sending');
+  }
+}));
+
+test('an in-flight claim and handoff serialize under the same advisory lock',async()=>fixture(async f=>{
+  await f.observer.query(
+    'insert into public.whatsapp_handoff_pilot_controls(organization_id,actions_enabled) values($1,true)',
+    [org],
+  );
+  const audit=randomUUID();
+  await f.observer.query(
+    'insert into public.automation_provider_send_audits(id,organization_id,lead_id,channel,provider,status) values($1,$2,$3,$4,$5,$6)',
+    [audit,org,lead,'whatsapp','meta_cloud_api','ready'],
+  );
+  const sender=await f.connect('handoff-provider-claim-race');
+  const reviewer=await f.connect('handoff-reviewer-race');
+  await signed(sender);
+  await signed(reviewer);
+  await sender.query(
+    'update public.automation_provider_send_audits set status=$1 where id=$2',
+    ['sending',audit],
+  );
+  // Sender has transitioned to 'sending' but not committed. Reviewer waits
+  // for the advisory lock. Once it commits, reviewer must observe 'sending'.
+  const pending=reviewer.query(
+    'select public.open_verified_whatsapp_human_handoff_v1($1,$2,$3) as result',
+    [org,event,assignee],
+  ).then(x=>({value:x.rows[0].result}),error=>({error}));
+  await sender.query('commit');
+  const result=await pending;
+  assert.equal(result.error,undefined,result.error?.message);
+  assert.equal(result.value.reason,'whatsapp_provider_send_in_flight');
+  await reviewer.query('commit');
+  assert.equal((await f.observer.query('select count(*)::int as n from public.tasks')).rows[0].n,0);
 }));
