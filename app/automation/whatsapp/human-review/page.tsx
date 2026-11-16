@@ -50,6 +50,9 @@ export default async function WhatsAppHumanReviewQueuePage({
           <Link href="/automation/approvals" className="font-semibold text-violet-700 underline underline-offset-2">
             Existing send approvals
           </Link>
+          <Link href="/automation/whatsapp/uncertain-sends" className="font-semibold text-violet-700 underline underline-offset-2">
+            Uncertain send outcomes
+          </Link>
         </div>
       </header>
 
