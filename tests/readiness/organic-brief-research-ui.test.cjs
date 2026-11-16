@@ -46,7 +46,8 @@ test("Specialist data loader avoids full SEO fanout and fails closed on tenant d
   assert.match(loader, /supabase\.rpc\("get_seo_content_intelligence"/);
   assert.match(loader, /p_organization_id: authorizedOrganizationId/);
   assert.match(loader, /gaps\.slice\(0, 200\)/);
-  assert.doesNotMatch(loader, /getSeoWorkspace\(|get_seo_workspace_v2|get_seo_experiment_intelligence|get_seo_optimization_intelligence/);
+  const executableLoader = loader.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+  assert.doesNotMatch(executableLoader, /getSeoWorkspace\(|get_seo_workspace_v2|get_seo_experiment_intelligence|get_seo_optimization_intelligence/);
   assert.doesNotMatch(loader, /service_role|from\(|insert\(|update\(|delete\(/);
   assert.doesNotMatch(page, /getSeoWorkspace\(/);
 });
