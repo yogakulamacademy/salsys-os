@@ -204,6 +204,45 @@ async function preserveProviderAcceptance(params: {
   }
 }
 
+/**
+ * A transport failure AFTER dispatch has no trustworthy delivery answer.
+ * Keep the audit in 'sending' with a bounded uncertainty marker. The existing
+ * retry RPC accepts only 'failed' audits, so the operator MUST reconcile
+ * provider acceptance before any additional attempt.
+ */
+async function preserveAmbiguousTransportOutcome(params: {
+  organizationId: string;
+  auditId: string;
+}) {
+  const admin = createAdminClient();
+  const { data, error } = await admin
+    .from('automation_provider_send_audits')
+    .update({
+      provider_error: 'Meta transport outcome unknown: operator reconciliation required; do not retry.',
+      provider_response: {
+        transport_outcome: {
+          status: 'unknown',
+          recorded_at: new Date().toISOString(),
+          retry_safe: false,
+        },
+      },
+      updated_at: new Date().toISOString(),
+    })
+    .eq('organization_id', params.organizationId)
+    .eq('id', params.auditId)
+    .eq('channel', 'whatsapp')
+    .eq('provider', 'meta_cloud_api')
+    .eq('status', 'sending')
+    .eq('customer_message_sent', false)
+    .is('provider_message_id', null)
+    .select('id')
+    .maybeSingle();
+
+  if (error || !data?.id) {
+    throw new Error('Unable to preserve ambiguous WhatsApp transport audit for operator reconciliation.');
+  }
+}
+
 async function resolveRecipient(organizationId: string, leadId: string) {
   const admin = createAdminClient();
   const { data, error } = await admin
@@ -364,6 +403,7 @@ export async function executePreparedWhatsAppProviderSend(params: {
   }
 
   let providerAccepted = false;
+  let providerCallStarted = false;
   let acceptedProviderMessageId: string | null = null;
   let acceptedProviderResponse: JsonRecord | null = null;
 
@@ -397,6 +437,9 @@ export async function executePreparedWhatsAppProviderSend(params: {
       templateId: optionalString(claim.whatsapp_template_id),
     });
 
+    // After dispatch begins, a thrown network/response-body error cannot
+    // prove the provider rejected the message. Never classify it retry-safe.
+    providerCallStarted = true;
     const response = await fetch(
       `https://graph.facebook.com/${apiVersion()}/${encodeURIComponent(runtime.phoneNumberId)}/messages`,
       {
@@ -506,6 +549,25 @@ export async function executePreparedWhatsAppProviderSend(params: {
       };
     }
 
+    if (providerCallStarted) {
+      try {
+        await preserveAmbiguousTransportOutcome({ organizationId, auditId });
+      } catch {
+        // Never mark the original audit failed or allow a retry just because
+        // audit-marker persistence failed. It stays 'sending' for investigation.
+      }
+      return {
+        ok: false,
+        auditId,
+        status: 'sending',
+        providerCallAttempted: true,
+        providerMessageId: null,
+        canonicalMessageId: null,
+        customerMessageSent: false,
+        error: 'WhatsApp provider outcome is unknown. Do not retry until the provider audit has been independently reconciled.',
+      };
+    }
+
     try {
       await finalize({
         organizationId,
@@ -514,8 +576,8 @@ export async function executePreparedWhatsAppProviderSend(params: {
         providerError: message,
       });
     } catch {
-      // Preserve the original provider/runtime error. The audit remains in sending
-      // state for explicit operator investigation if finalization itself fails.
+      // A pre-dispatch failure is not a provider acceptance; still preserve
+      // an unresolved sending audit if local finalization fails.
     }
 
     return {

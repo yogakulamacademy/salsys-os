@@ -5,6 +5,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { secretMatches } from '@/lib/security/machine-bearer-auth';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { recordWhatsappMessageSeenActivity } from '@/lib/integrations/message-read-activity';
+import { projectDeskcommInboundShadow } from '@/lib/integrations/deskcomm-inbound-shadow';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -242,6 +243,23 @@ export async function POST(request: NextRequest) {
       const externalMessageId = stringValue(event.external_message_id);
       const contactWaId = stringValue(event.contact_wa_id);
 
+      // Deskcomm-inspired channel boundary, shadow-only and OFF by default.
+      // This runs strictly AFTER the Meta HMAC check and active phone -> tenant
+      // lookup. It cannot change the existing synchronous webhook processing,
+      // acknowledgment, consent, routing, or provider-send behavior.
+      const deskcommInboundShadow =
+        process.env.SALSYS_DESKCOMM_INBOUND_SHADOW === 'true'
+          ? projectDeskcommInboundShadow({
+              event_key: event.event_key,
+              event_type: event.event_type,
+              external_message_id: event.external_message_id,
+              contact_wa_id: event.contact_wa_id,
+              signature_valid: event.signature_valid,
+              payload: event.payload,
+              organizationMapped: true,
+            })
+          : null;
+
       const { error: rawEventError } = await supabase.rpc(
         'ingest_raw_event',
         {
@@ -274,6 +292,9 @@ export async function POST(request: NextRequest) {
           p_metadata: {
             adapter: 'app/api/whatsapp/webhook',
             legacy_webhook_event_id: eventId,
+            ...(deskcommInboundShadow
+              ? { deskcomm_inbound_shadow: deskcommInboundShadow }
+              : {}),
           },
           p_schema_version: 1,
         },

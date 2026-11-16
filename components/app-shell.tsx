@@ -50,6 +50,7 @@ import {
 } from "react";
 import { signOutAction } from "@/app/actions/auth";
 import { LiveRefresh } from "@/components/live-refresh";
+import { useWhatsAppHandoffAlerts, WhatsAppHandoffAlertsList } from "@/components/whatsapp-handoff-alerts";
 import { BrandMark } from "@/components/brand";
 import { useModalFocus } from "@/components/use-modal-focus";
 import { personInitials } from "@/lib/ui-format";
@@ -148,6 +149,9 @@ export function AppShell({ children }: { children: ReactNode }) {
   const manager = !mock && effectiveRole === "manager";
   const explicitAdmin = admin || manager;
   const accessResolved = mock || (!profileLoading && !workspaceLoading);
+  const handoffAlerts = useWhatsAppHandoffAlerts(
+    !mock && accessResolved && !!activeWorkspace,
+  );
 
   const visibleSections = useMemo<NavSection[]>(() => {
     if (!accessResolved) return [];
@@ -844,8 +848,19 @@ export function AppShell({ children }: { children: ReactNode }) {
             <details className="topbar-notification-menu relative">
               <summary aria-label="Open notifications" className="grid h-9 w-9 cursor-pointer list-none place-items-center rounded-lg border border-slate-200 text-slate-500 transition hover:bg-slate-50 hover:text-slate-950 dark:border-slate-800 dark:hover:bg-slate-900 dark:hover:text-white">
                 <Bell size={16} />
+                {handoffAlerts.count > 0 ? (
+                  <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-600 px-1 text-[9px] font-bold text-white">
+                    {handoffAlerts.count > 9 ? "9+" : handoffAlerts.count}
+                  </span>
+                ) : null}
               </summary>
               <div className="absolute right-0 mt-2 w-[320px] rounded-2xl border border-slate-200 bg-white p-2 shadow-xl dark:border-slate-800 dark:bg-slate-950">
+                <WhatsAppHandoffAlertsList
+                  alerts={handoffAlerts.alerts}
+                  enabled={handoffAlerts.enabled}
+                  available={handoffAlerts.available}
+                  acknowledge={handoffAlerts.acknowledge}
+                />
                 <div className="px-3 py-2">
                   <div className="text-sm font-bold text-slate-900 dark:text-white">Needs attention</div>
                   <div className="mt-0.5 text-[11px] text-slate-500">Jump directly to priority work.</div>
