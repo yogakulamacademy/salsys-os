@@ -39,7 +39,7 @@ SEO vs Ads reads v_seo_query_30d and v_google_ads_search_term_30d.
 ## Known limits
 
 - SEO and Ads view date cutoffs are not known to be aligned.
-- SEO vs Ads samples up to 1,000 rows per source; it is not an exhaustive audit.
+- SEO vs Ads uses bounded 500-row pages up to 3,000 source rows per view, and withholds comparisons if counts are incomplete or unverifiable.
 - Content brief filters observed query terms; no live SERP, People Also Ask or external keyword volumes are implied.
 - Existing views aggregate by organization, not individual website property.
 - No person-level CRM data is read.
@@ -78,3 +78,12 @@ Tests also cover the allowlisted blocker code and non-disclosure of raw error st
 - Both `SALSYS_ORGANIC_GROWTH_SKILLS_PILOT=true` and `SALSYS_ORGANIC_GROWTH_CLAUDE_TOOL_BRIDGE_ENABLED=true` are required before an approved application caller could execute the gateway. Both default OFF.
 - Provider key and model configuration are intentionally absent from this contract. No user-facing route or UI was created, and no live Claude API request or paid search API call occurred.
 - Before any API activation: independent review of output validation, token/cost quota, ownership and tenancy at both invocation and result delivery, consent/data minimization, audit logging and human review.
+
+## Further evidence-quality hardening (2026-11-16)
+
+- SEO vs Ads gateway reads up to 3,000 rows per source in 500-row pages with exact row-count checks, replacing the first-1,000-row sample.
+- Content Brief now reports whether matching query and page-result limits truncated the source.
+- Deterministic quality gate withholds overlap candidates when counts are truncated/unverifiable, a provider sync failed, or GSC/Ads source data dates are stale/unknown (over seven days).
+- Existing 30-day SEO and Ads views do NOT have verified identical date windows. The status remains investigation-only, and the periodAlignmentVerified field is always false.
+- Search queries resembling emails or phone numbers are omitted from AI tool evidence; page URLs are stripped of query strings and fragments.
+- Both pilot and Claude bridge feature switches remain OFF. These improvements are not substitutes for independent review or signed-in staging tests.
