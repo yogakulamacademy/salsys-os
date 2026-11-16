@@ -9,7 +9,13 @@ import {
 } from '@/lib/integrations/deskcomm-human-review-queue';
 
 export type DeskcommReviewActionRow = DeskcommReviewCandidate & {
-  handoff: { id: string; status: 'open' | 'closed'; assignedTo: string; taskId: string } | null;
+  handoff: {
+    id: string;
+    status: 'open' | 'closed';
+    assignedTo: string;
+    taskId: string;
+    aiHoldActive: boolean;
+  } | null;
 };
 
 export type DeskcommHumanReviewQueueReadiness = {
@@ -175,7 +181,7 @@ export async function getCurrentDeskcommHumanReviewQueue():
       if (eventIds.length) {
         const { data: handoffRows, error: handoffError } = await admin
           .from('whatsapp_human_handoffs')
-          .select('id,raw_event_id,task_id,assigned_to,status')
+          .select('id,raw_event_id,task_id,assigned_to,status,ai_hold_active')
           .eq('organization_id', organizationId)
           .in('raw_event_id', eventIds)
           .limit(100);
@@ -183,7 +189,8 @@ export async function getCurrentDeskcommHumanReviewQueue():
           return { ...base, status: 'unavailable', candidateCount: null };
         }
         for (const handoff of handoffRows) {
-          if (handoff.status !== 'open' && handoff.status !== 'closed') {
+          if ((handoff.status !== 'open' && handoff.status !== 'closed') ||
+              typeof handoff.ai_hold_active !== 'boolean') {
             return { ...base, status: 'unavailable', candidateCount: null };
           }
           const rawId = String(handoff.raw_event_id ?? '');
@@ -195,6 +202,7 @@ export async function getCurrentDeskcommHumanReviewQueue():
             status: handoff.status,
             assignedTo: String(handoff.assigned_to),
             taskId: String(handoff.task_id),
+            aiHoldActive: handoff.ai_hold_active,
           });
         }
       }
