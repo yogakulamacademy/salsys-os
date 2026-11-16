@@ -43,7 +43,7 @@ Supabase project, Meta test sender, app secret, and reviewer are available.
 | W8 | Retry claim and open twice concurrently | Exactly one handoff, task and alert; same original identifiers returned |
 | W9 | Activate handoff when an audit is already `sending` | Refusal with `whatsapp_provider_send_in_flight`; no new task; operator reconciliation needed |
 | W10 | Transition a Meta send to `sending` after active handoff | Database trigger blocks standard and broadcast claims before network request |
-| W11 | Intentionally sever the **test Meta transport** after request dispatch and before response | Audit retained in `sending`; `provider_response.transport_outcome.status=unknown`; review-only `/automation/whatsapp/uncertain-sends` displays the exact tenant-scoped audit within 30 days; retry blocked pending independent proof; do not assert message was unsent |
+| W11 | Intentionally sever the **test Meta transport** after request dispatch and before response | Audit retained in `sending`; `provider_response.transport_outcome.status=unknown`; review-only `/automation/whatsapp/uncertain-sends` displays the exact tenant-scoped audit regardless of its age, while the audit is retained; retry blocked pending independent proof; do not assert message was unsent |
 | W12 | Attempt to change unknown-outcome audit to failed/ready | Trigger blocks unsafe retry transition |
 | W13 | Resolve assigned task, then explicitly release the hold | Closure preserves hold; release permits only future workflow evaluation, never replays cancelled jobs |
 | W14 | Disable the pilot after creating a hold | New actions vanish; existing hold remains protected and visible for controlled resolution |
@@ -62,19 +62,23 @@ WhatsApp message bodies or unrelated production records into the evidence.
 An HTTP timeout after dispatch does **not** prove that Meta rejected the
 message. Do not retry an unknown-outcome audit solely because the webhook has
 not appeared. The current client preserves `status=sending` with an
-`outcome_unknown` marker, and the audit trigger blocks conversion to a
+`provider_response.transport_outcome.status=unknown` marker, and the audit trigger blocks conversion to a
 retryable failure. Check Meta's response history, any corresponding accepted
-provider message ID and authentic signed delivery receipts. If acceptance is
-verified, use the existing provider-acceptance reconciliation controls to
-attach the provider ID and canonical message without another send. If no
-positive rejection/acceptance proof exists, keep the audit in investigation.
+provider message ID and authentic signed delivery receipts. If acceptance is verified, require an independently reviewed procedure to
+reconcile the provider ID, the audit and the canonical CRM message **without**
+another send. The normal provider-acceptance flow is not evidence that a
+manual unknown-outcome workflow has been staged and validated. If no
+positive provider evidence exists, keep the audit quarantined and escalate.
 
 The operator-only `/automation/whatsapp/uncertain-sends` page lists up to
-50 oldest matching Meta send audits from the last 30 days, with a lead link
+50 oldest matching Meta send audits from all retained history, with a lead link
 and the last recorded audit time. This is a **read-only, bounded view**, not
 an exact count, a provider-status verification, a production migration
 check, a replay facility, or evidence of successful reconciliation. A
 failure to read the audit table must be shown as unavailable, never as zero.
+An unresolved audit must not age out of the queue after 30 days. The full
+UUID is displayed to permit exact operator correlation; an abbreviated
+identifier is insufficient for independent reconciliation.
 
 The handoff opening RPC refuses the lead while an audit is in `sending`.
 Do not change `sending` to `failed` as a shortcut. This deliberately favors
