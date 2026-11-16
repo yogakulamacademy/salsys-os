@@ -62,7 +62,7 @@ export function InboxLeadOverview({
       <div className="ibx-v3-overview-line"><dt>Status</dt><dd>{state}</dd></div>
       <div className="ibx-v3-overview-line"><dt>Interest</dt><dd>{interest||"Not selected"}</dd></div>
       <div className="ibx-v3-overview-line"><dt>Country</dt><dd>{country||"Not recorded"}</dd></div>
-      <div className="ibx-v3-overview-line"><dt>Last contacted</dt><dd>{lastContacted}</dd></div>
+      <div className="ibx-v3-overview-line"><dt title="Time of the most recent message in this conversation (inbound or outbound)">Last message</dt><dd>{lastContacted}</dd></div>
     </dl>
     {mock?<p className="ibx-v3-data-note"><Info size={13}/> Demo mode: changes are not persisted.</p>:null}
   </section>;
