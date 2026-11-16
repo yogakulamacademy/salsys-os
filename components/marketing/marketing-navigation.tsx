@@ -50,6 +50,7 @@ const groups: NavigationGroup[] = [
     label: 'Organic discovery',
     items: [
       { href: '/seo', label: 'SEO Overview', icon: Globe2 },
+      { href: '/seo/intelligence', label: 'Organic Intelligence', icon: BarChart3 },
       { href: '/seo/search-performance', label: 'Search Performance', icon: Search },
       { href: '/seo/content-opportunities', label: 'Content Opportunities', icon: Sparkles },
       { href: '/seo/technical', label: 'Technical SEO', icon: ShieldCheck },
