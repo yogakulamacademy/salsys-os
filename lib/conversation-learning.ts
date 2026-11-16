@@ -51,6 +51,8 @@ export type LearningResult = {
 
 /** Minimum wins before the analyser reports what drives conversion. */
 export const MIN_WINS_FOR_OUTCOME_LEARNING = 20;
+/** Enrolments needed before team tactics are reported as an early signal. */
+export const MIN_WINS_FOR_EARLY_SIGNAL = 10;
 /** Minimum conversations an insight needs before it is reported at all. */
 export const MIN_INSIGHT_CONVERSATIONS = 3;
 const MAX_EXAMPLES = 3;
@@ -119,6 +121,23 @@ export const BUYING_SIGNAL_RULES: Rule[] = [
   { key: 'shared_contact', label: 'Shared a phone number', pattern: /(\+?\d[\d\s-]{8,}\d)/ },
 ];
 
+/** Things the team does in replies, compared against enrolment outcomes. */
+export const TEAM_TACTIC_RULES: Rule[] = [
+  { key: 'offer', label: 'Gave a discount or early-bird price', pattern: /\b(discount\w*|early.?bird|offer price|special price|discounted fee)\b/i },
+  { key: 'urgency', label: 'Gave a deadline or limited seats', pattern: /\b(valid till|valid until|limited (time|seats?)|seats? (left|filling)|last date|offer ends)\b/i },
+  { key: 'part_payment', label: 'Offered "pay part now, balance later"', pattern: /\b(pay \d+\s?k|balance (payment|amount)|registration (fee|amount)|advance|block (your|the) seat|token amount|10% deposit|50%)\b/i },
+  { key: 'social_proof', label: 'Shared testimonials or reviews', pattern: /\b(testimonials?|google reviews?|youtube\.com|what our students say)\b/i },
+  { key: 'call', label: 'Offered a call', pattern: /\b(call (you|me|us)|schedule a call|phone call|speak (with|to) (our|the) team)\b/i },
+  { key: 'question', label: 'Ended a reply with a question', pattern: /\?\s*$/ },
+];
+
+type StallOurs = { key: string; label: string; pattern: RegExp };
+const OUR_STALL_RULES: StallOurs[] = [
+  { key: 'our_fee', label: 'Went quiet after our fee message', pattern: /(₹|\$\s?\d|\d\s?(usd|inr)|\bfees?\b|\bprice\b)/i },
+  { key: 'our_dates', label: 'Went quiet after our dates message', pattern: /\b(batch(es)?|dates?|starts? on|\d{1,2}(st|nd|rd|th)\b)/i },
+  { key: 'our_question', label: 'Went quiet after we asked a question', pattern: /\?\s*$/ },
+];
+
 const STALL_RULES: Rule[] = [
   { key: 'fee', label: 'After asking the fee', pattern: QUESTION_RULES[0].pattern },
   { key: 'offer', label: 'After asking for a discount or installments', pattern: /\b(discount|instal+ment|payment plan|scholarship|offer|emi)\b/i },
@@ -185,6 +204,7 @@ function pct(share: number) {
 }
 
 function hourInZone(iso: string, timeZone: string): { hour: number; weekday: string } | null {
+  if (!/^\d{4}-\d{2}-\d{2}T/.test(iso)) return null; // e.g. sequence keys from exports without timestamps
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return null;
   const parts = new Intl.DateTimeFormat('en-GB', { timeZone, hour: '2-digit', hour12: false, weekday: 'short' }).formatToParts(date);
@@ -215,6 +235,8 @@ export function analyzeConversations(
   const offers = new Map<string, Bucket>();
   const signals = new Map<string, Bucket>();
   const stalls = new Map<string, Bucket>();
+  const ourStalls = new Map<string, Bucket>();
+  const tacticsByConversation = new Map<string, Set<string>>();
   const hours = new Array<number>(24).fill(0);
   const weekdays = new Map<string, number>();
   let withReply = 0;
@@ -246,22 +268,33 @@ export function analyzeConversations(
       }
     }
 
-    // Stall point: the last thing the lead said, when nothing followed from them.
-    const last = leadTexts[leadTexts.length - 1].body!.trim();
-    const stallKey = STALL_RULES.find((rule) => rule.pattern.test(last))?.key;
-    if (stallKey) bucketAdd(stalls, stallKey, conversationId, isQuickButton(last) ? undefined : redactExample(last));
+    // Stall point. If our message was last, the lead went quiet after it; otherwise
+    // classify the lead's last message (which may be waiting for our reply).
+    const lastMessage = list[list.length - 1];
+    if (lastMessage.direction === 'outbound' && lastMessage.body?.trim()) {
+      const ours = OUR_STALL_RULES.find((rule) => rule.pattern.test(lastMessage.body!.trim()));
+      if (ours) bucketAdd(ourStalls, ours.key, conversationId);
+    } else {
+      const last = leadTexts[leadTexts.length - 1].body!.trim();
+      const stallKey = STALL_RULES.find((rule) => rule.pattern.test(last))?.key;
+      if (stallKey) bucketAdd(stalls, stallKey, conversationId, isQuickButton(last) ? undefined : redactExample(last));
+      if (list.some((m) => m.direction === 'outbound')) bucketAdd(ourStalls, 'lead_waiting', conversationId, isQuickButton(last) ? undefined : redactExample(last));
+    }
+    const ourTexts = list.filter((m) => m.direction === 'outbound' && m.body?.trim()).map((m) => m.body!.trim());
+    tacticsByConversation.set(conversationId, new Set(TEAM_TACTIC_RULES.filter((rule) => ourTexts.some((t) => rule.pattern.test(t))).map((rule) => rule.key)));
   }
 
   const base = withText;
   const insights: LearningInsight[] = [
     ...toInsights('question', QUESTION_RULES, questions, base, (n, s) => `${n} conversations (${pct(s)}) asked this.`),
     ...toInsights('stall_point', STALL_RULES, stalls, base, (n, s) => `${n} conversations (${pct(s)}) went quiet right after this.`),
+    ...toInsights('stall_point', [...OUR_STALL_RULES, { key: 'lead_waiting', label: 'Lead wrote last and got no reply', pattern: /$^/ }], ourStalls, base, (n, s) => `${n} conversations (${pct(s)}) ended this way.`),
     ...toInsights('objection', OBJECTION_RULES, objections, base, (n, s) => `${n} conversations (${pct(s)}) raised this.`),
     ...toInsights('offer_request', OFFER_RULES, offers, base, (n, s) => `${n} conversations (${pct(s)}) asked for this.`),
     ...toInsights('buying_signal', BUYING_SIGNAL_RULES, signals, base, (n, s) => `${n} conversations (${pct(s)}) showed this signal.`),
   ];
 
-  if (base > 0) {
+  if (base > 0 && hours.some((count) => count > 0)) {
     const peakHours = hours
       .map((count, hour) => ({ hour, count }))
       .sort((a, b) => b.count - a.count)
@@ -294,11 +327,30 @@ export function analyzeConversations(
     if (outcome === 'payment_pending') paymentPending += 1;
   }
   const enoughForOutcomeLearning = won >= MIN_WINS_FOR_OUTCOME_LEARNING && withReply >= MIN_WINS_FOR_OUTCOME_LEARNING;
+  const earlySignal = won >= MIN_WINS_FOR_EARLY_SIGNAL && withReply >= MIN_WINS_FOR_OUTCOME_LEARNING;
+  if (earlySignal) {
+    const ids = [...byConversation.keys()].filter((id) => byConversation.get(id)!.some((m) => m.direction === 'outbound'));
+    for (const rule of TEAM_TACTIC_RULES) {
+      const withIds = ids.filter((id) => tacticsByConversation.get(id)?.has(rule.key));
+      const withoutIds = ids.filter((id) => !tacticsByConversation.get(id)?.has(rule.key));
+      if (withIds.length < 5 || withoutIds.length < 5) continue;
+      const wonWith = withIds.filter((id) => outcomes.get(id) === 'won').length;
+      const wonWithout = withoutIds.filter((id) => outcomes.get(id) === 'won').length;
+      const rateWith = wonWith / withIds.length;
+      const rateWithout = wonWithout / withoutIds.length;
+      if (wonWith < MIN_INSIGHT_CONVERSATIONS || rateWith <= rateWithout) continue;
+      insights.push({
+        kind: 'outcome_driver', key: `tactic_${rule.key}`, label: rule.label,
+        conversations: withIds.length, share: rateWith, examples: [],
+        detail: `${pct(rateWith)} enrolled when the team did this (${wonWith} of ${withIds.length}) vs ${pct(rateWithout)} when not (${wonWithout} of ${withoutIds.length}).${enoughForOutcomeLearning ? '' : ` Early signal: based on only ${won} enrolments.`}`,
+      });
+    }
+  }
   if (!enoughForOutcomeLearning) {
     insights.push({
       kind: 'data_gap', key: 'outcomes_missing', label: 'Not enough enrolments to learn what converts',
       conversations: won, share: totalConversations ? won / totalConversations : 0, examples: [],
-      detail: `${won} conversation${won === 1 ? '' : 's'} linked to an enrolment (need ${MIN_WINS_FOR_OUTCOME_LEARNING}+ with team replies). Until then, offer timing and "what converts" stay as rules you set, not learned patterns.`,
+      detail: `${won} conversation${won === 1 ? '' : 's'} linked to an enrolment (need ${MIN_WINS_FOR_OUTCOME_LEARNING}+ with team replies).${earlySignal ? ' Tactics below are early signals only.' : ' Until then, offer timing and "what converts" stay as rules you set, not learned patterns.'}`,
     });
   } else {
     // With enough wins: compare stall/offer behaviour of won vs not-won conversations.

@@ -238,3 +238,63 @@ export async function archiveKnowledgeDocumentAction(formData: FormData) {
   revalidatePath('/conversations');
   knowledgeRedirect('notice', 'Knowledge archived and removed from AI retrieval.');
 }
+
+const MAX_DRAFT_FILE_BYTES = 2 * 1024 * 1024;
+const MAX_DRAFTS = 400;
+
+type DraftInput = { title?: unknown; category?: unknown; content?: unknown; source_type?: unknown; source_name?: unknown; source_uri?: unknown; review_flag?: unknown };
+
+/**
+ * Imports a reviewed knowledge-drafts file (version 1 JSON) as DRAFTS only.
+ * Nothing is approved here: every item still needs a manager's approval before
+ * the Co-Pilot can retrieve it. Items with a review flag get a ⚠ title prefix.
+ */
+export async function importKnowledgeDraftsAction(formData: FormData) {
+  if (useMockData) knowledgeRedirect('error', 'Mock mode is active. Knowledge was not changed.');
+  const upload = formData.get('drafts');
+  if (!(upload instanceof File) || upload.size === 0) knowledgeRedirect('error', 'Choose a knowledge drafts file (.json).');
+  if (upload.size > MAX_DRAFT_FILE_BYTES) knowledgeRedirect('error', 'The drafts file is larger than 2 MB.');
+  let parsed: { version?: unknown; drafts?: unknown };
+  try {
+    parsed = JSON.parse(await upload.text());
+  } catch {
+    knowledgeRedirect('error', 'The drafts file is not valid JSON.');
+  }
+  if (parsed.version !== 1 || !Array.isArray(parsed.drafts)) knowledgeRedirect('error', 'Unsupported drafts file format.');
+  const drafts = (parsed.drafts as DraftInput[]).slice(0, MAX_DRAFTS);
+
+  const { supabase, organizationId } = await currentContext();
+  let created = 0;
+  let skipped = 0;
+  for (const draft of drafts) {
+    const flag = typeof draft.review_flag === 'string' ? draft.review_flag.trim() : '';
+    const rawTitle = typeof draft.title === 'string' ? draft.title.trim() : '';
+    const content = typeof draft.content === 'string' ? draft.content.trim() : '';
+    const sourceName = typeof draft.source_name === 'string' ? draft.source_name.trim().slice(0, 240) : '';
+    const sourceType = typeof draft.source_type === 'string' && sourceTypes.has(draft.source_type) ? draft.source_type : 'other';
+    const category = typeof draft.category === 'string' && draft.category.trim() ? draft.category.trim().slice(0, 60) : 'general';
+    const sourceUri = typeof draft.source_uri === 'string' && /^https?:\/\/\S+$/i.test(draft.source_uri) ? draft.source_uri.slice(0, 2048) : null;
+    const title = `${flag ? '⚠ ' : ''}${rawTitle}`.slice(0, 180);
+    if (!rawTitle || content.length < 10 || !sourceName) { skipped += 1; continue; }
+    const { error } = await supabase.rpc('create_source_backed_knowledge_document_v2', {
+      p_organization_id: organizationId,
+      p_title: title,
+      p_category: category,
+      p_content: content.slice(0, 8000),
+      p_source_name: flag ? `${sourceName} · Review: ${flag}`.slice(0, 240) : sourceName,
+      p_source_type: sourceType,
+      p_source_uri: sourceUri,
+      p_valid_from: null,
+      p_valid_until: null,
+      p_approve: false,
+    });
+    if (error) {
+      if (created === 0) knowledgeRedirect('error', error.message || 'Knowledge drafts could not be saved.');
+      skipped += 1;
+      continue;
+    }
+    created += 1;
+  }
+  revalidatePath('/settings/knowledge');
+  knowledgeRedirect('notice', `${created} drafts added for review${skipped ? `, ${skipped} skipped` : ''}. Nothing reaches the Co-Pilot until you approve it; items marked ⚠ need a check first.`);
+}

@@ -15,6 +15,10 @@ create table if not exists public.conversation_learning_runs (
   organization_id uuid not null references public.organizations(id) on delete cascade,
   started_by uuid references auth.users(id) on delete set null,
   status text not null default 'completed' check (status in ('running', 'completed', 'failed')),
+  -- crm_messages: messages stored in SalsysOS. *_export: a chat export a manager
+  -- uploaded; raw chats from exports are never stored, only these insights.
+  source text not null default 'crm_messages' check (source in ('crm_messages', 'whatsapp_export', 'instagram_export')),
+  source_label text check (source_label is null or char_length(source_label) <= 200),
   window_start timestamptz,
   window_end timestamptz,
   conversations_analyzed integer not null default 0 check (conversations_analyzed >= 0),
@@ -31,7 +35,7 @@ create table if not exists public.conversation_learning_runs (
 );
 
 create index if not exists conversation_learning_runs_org_created_idx
-  on public.conversation_learning_runs (organization_id, created_at desc);
+  on public.conversation_learning_runs (organization_id, source, created_at desc);
 
 create table if not exists public.conversation_learning_insights (
   id uuid primary key default gen_random_uuid(),
@@ -106,16 +110,17 @@ grant select on public.conversation_learning_runs to authenticated;
 grant select on public.conversation_learning_insights to authenticated;
 grant update (review_status, review_note, reviewed_by, reviewed_at) on public.conversation_learning_insights to authenticated;
 
--- Approved playbook for AI context: approved insights from the latest run only.
+-- Approved playbook for AI context: approved insights from the latest completed
+-- run of each source (CRM messages, WhatsApp export, Instagram export).
 create or replace view public.v_conversation_learning_playbook
 with (security_invoker = true) as
-select i.organization_id, i.kind, i.insight_key, i.label, i.conversations, i.share, i.detail, i.examples, i.reviewed_at, r.created_at as learned_at
+select i.organization_id, r.source, i.kind, i.insight_key, i.label, i.conversations, i.share, i.detail, i.examples, i.reviewed_at, r.created_at as learned_at
 from public.conversation_learning_insights i
 join public.conversation_learning_runs r on r.id = i.run_id
 where i.review_status = 'approved'
   and r.id = (
     select r2.id from public.conversation_learning_runs r2
-    where r2.organization_id = i.organization_id and r2.status = 'completed'
+    where r2.organization_id = i.organization_id and r2.source = r.source and r2.status = 'completed'
     order by r2.created_at desc limit 1
   );
 

@@ -8,6 +8,7 @@ import {
   approveKnowledgeDocumentAction,
   archiveKnowledgeDocumentAction,
   createKnowledgeDocumentAction,
+  importKnowledgeDraftsAction,
 } from '@/app/settings/knowledge/actions';
 import { PageHeader } from '@/components/ui';
 import type { ReactNode } from 'react';
@@ -316,6 +317,13 @@ export default async function KnowledgeSettingsPage({
               <button type="submit" name="intent" value="approve" className="kn-primary"><CheckCircle2 size={16}/> Save & Approve</button>
             </div>
           </form> : <div className="kn-readonly">Organization admin access is required to create or approve knowledge.</div>}
+          {canManage ? <form action={importKnowledgeDraftsAction} className="kn-create-form" style={{ marginTop: 16 }}>
+            <label className="kn-field"><span>Import drafts from a file <small>.json, reviewed drafts only</small></span>
+              <input name="drafts" type="file" accept=".json,application/json" required/>
+              <small>Every item is saved as a draft. Items marked ⚠ have a review note in their source name; check them before approving.</small>
+            </label>
+            <div className="kn-create-actions"><button type="submit" className="kn-secondary">Import as drafts</button></div>
+          </form> : null}
         </section>
 
         <section className="kn-panel kn-library" aria-labelledby="kn-library-heading">

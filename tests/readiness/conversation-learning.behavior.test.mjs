@@ -119,3 +119,26 @@ test('migration keeps learning tenant-scoped and review-gated', () => {
   assert.doesNotMatch(sql, /grant (insert|delete)[^;]*to authenticated/i);
   assert.match(sql, /security_invoker = true/);
 });
+
+test('team tactics are reported as an early signal only with enough enrolments, and only when they beat the baseline', async () => {
+  const { MIN_WINS_FOR_EARLY_SIGNAL } = await import('../../lib/conversation-learning.ts');
+  const messages = [];
+  const outcomes = new Map();
+  for (let i = 0; i < 30; i += 1) {
+    const offered = i < 15;
+    messages.push(msg(`e${i}`, 'What is the fee?'));
+    messages.push(msg(`e${i}`, offered ? 'Fee 25,000. Early-bird discount 20,000 valid till Friday' : 'Fee is 25,000', { direction: 'outbound' }));
+    outcomes.set(`e${i}`, offered && i < MIN_WINS_FOR_EARLY_SIGNAL + 1 ? 'won' : 'open');
+  }
+  const result = analyzeConversations(messages, { outcomes });
+  const offer = result.insights.find((i) => i.kind === 'outcome_driver' && i.key === 'tactic_offer');
+  assert.ok(offer);
+  assert.match(offer.detail, /Early signal/);
+  assert.equal(result.insights.some((i) => i.key === 'tactic_call'), false);
+});
+
+test('migration records the learning source and builds the playbook per source', () => {
+  const sql = readFileSync(new URL('../../supabase/migrations/20261116150000_conversation_learning_v1.sql', import.meta.url), 'utf8');
+  assert.match(sql, /source text not null default 'crm_messages'/);
+  assert.match(sql, /r2\.source = r\.source/);
+});
