@@ -29,6 +29,12 @@ export default async function WhatsAppIngressShadowPage() {
         >
           Back to WhatsApp operations
         </Link>
+        <Link
+          href="/automation/whatsapp/human-review"
+          className="ml-4 mt-3 inline-block text-sm font-semibold text-violet-700 underline underline-offset-2"
+        >
+          Open human review queue
+        </Link>
       </header>
 
       <section className="rounded-2xl border border-slate-200 bg-white p-5">
@@ -75,11 +81,12 @@ export default async function WhatsAppIngressShadowPage() {
             <h3 className="mt-6 text-sm font-bold text-slate-900">
               Unconfirmed reply intent candidates
             </h3>
-            <div className="mt-3 grid gap-3 sm:grid-cols-3">
+            <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
               {[
                 { label: 'DATES reply', value: summary.candidateBatchDates },
                 { label: 'Month reply', value: summary.candidateMonths },
                 { label: 'STOP reply', value: summary.candidateOptOuts },
+                { label: 'Human handoff requested', value: summary.candidateHumanHandoffs },
               ].map((item) => (
                 <div key={item.label} className="rounded-xl border border-slate-200 p-3">
                   <p className="text-xs text-slate-500">{item.label}</p>
