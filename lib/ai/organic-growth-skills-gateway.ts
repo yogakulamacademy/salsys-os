@@ -161,7 +161,7 @@ export async function runOrganicGrowthReadOnlyTool(
         throw new Error('Search reporting row count changed or is not verifiable.');
       }
       expected = nextCount;
-      const batch = (result.data ?? []) as Record<string, unknown>[];
+      const batch = (result.data ?? []) as unknown as Record<string, unknown>[];
       rows.push(...batch);
       if (batch.length < PAGE_SIZE || rows.length >= expected) break;
     }
