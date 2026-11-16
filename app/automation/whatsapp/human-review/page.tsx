@@ -23,6 +23,7 @@ export default async function WhatsAppHumanReviewQueuePage({
     already_assigned: 'This request already has a handoff task. No duplicate task was created.',
     closed: 'Handoff closed. The AI hold remains until separately released. No cancelled work was resumed.',
     hold_released: 'This handoff hold was released. Other active holds and normal messaging safeguards still apply; cancelled jobs were not replayed.',
+    send_in_flight: 'A WhatsApp provider send is already in flight for this lead. No handoff task was created. Reconcile the existing send audit before retrying; do not assume the message was unsent.',
     unavailable: 'The action could not be completed safely. Confirm the migration and exact CRM identity evidence before retrying.',
     invalid: 'Invalid handoff request. Nothing was changed.',
     disabled: 'Handoff task actions are disabled in this environment.',
