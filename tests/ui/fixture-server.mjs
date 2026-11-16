@@ -7,6 +7,8 @@ const secondaryOrganizationId='00000000-0000-4000-8000-000000000012';
 const user={id:userId,aud:'authenticated',role:'authenticated',email:'reviewer@example.test',app_metadata:{provider:'email'},user_metadata:{},created_at:'2026-01-01T00:00:00Z'};
 const workspace={organization_id:organizationId,active_organization_id:organizationId,organization_name:'Demo Academy',organization_slug:'demo-academy',role:'admin',workspace_codes:['sales','marketing','intelligence','operations','automation','system','performance'],organization_status:'active'};
 let knowledgeScenario='empty';
+let seoScenario='disconnected';
+let seoCalls=[];
 let financialScenario='empty';
 let refundCalls=[];
 let behaviorScenario='ready';
@@ -33,6 +35,16 @@ const server=http.createServer(async(req,res)=>{
     financialScenario=state;refundCalls=[];res.end('{}');return;
   }
   if(url.pathname==='/__refund_calls'){res.end(JSON.stringify(refundCalls));return;}
+  if(url.pathname==='/__seo_scenario'){
+    const state=url.searchParams.get('state');
+    if(!['disconnected','connected','empty','error'].includes(state)){
+      res.statusCode=400;res.end('{}');return;
+    }
+    seoScenario=state;seoCalls=[];res.end(JSON.stringify({state}));return;
+  }
+  if(url.pathname==='/__seo_calls'){
+    res.end(JSON.stringify(seoCalls));return;
+  }
   if(url.pathname==='/__behavior_scenario'){
     const state=url.searchParams.get('state');
     const tenant=url.searchParams.get('tenant')||'primary';
@@ -235,7 +247,39 @@ const server=http.createServer(async(req,res)=>{
     };
     if(behaviorScenario==='malformed-breakdown-count') result.status.identified_sessions=null;
   }
-  else if(url.pathname==='/rest/v1/rpc/get_current_provider_visibility_v1')result={organization_id:organizationId,google_connected:false,meta_connected:false,instagram_connected:false,whatsapp_connected:false};
+  else if(url.pathname==='/rest/v1/rpc/get_seo_content_intelligence'){
+    let raw='';for await(const chunk of req)raw+=chunk;
+    const body=JSON.parse(raw||'{}');
+    seoCalls.push({organization_id:body.p_organization_id});
+    if(body.p_organization_id!==organizationId){
+      res.statusCode=403;res.end(JSON.stringify({code:'42501',message:'Tenant-scoped content evidence unavailable'}));return;
+    }
+    if(seoScenario==='error'){
+      res.statusCode=503;res.end(JSON.stringify({code:'synthetic_unavailable',message:'Synthetic content evidence unavailable'}));return;
+    }
+    result={content_gaps:seoScenario==='connected'?[
+      {
+        site_id:'10000000-0000-4000-8000-000000000003',topic_id:'topic-1',
+        topic_name:'International student onboarding',topic_type:'informational',
+        mapped_pages:2,indexable_pages:1,query_count:2,gsc_clicks:12,
+        gsc_impressions:300,gsc_avg_position:7.5,gap_type:'coverage_gap',
+        priority_score_v1:81,recommendation:'Review source evidence before drafting.',
+        top_queries:[
+          {query:'international student onboarding guide',clicks:12,impressions:300,avg_position:7.5},
+          {query:'private-student@example.test',clicks:2,impressions:50,avg_position:6.8}
+        ]
+      },
+      {
+        site_id:'10000000-0000-4000-8000-000000000003',topic_id:'topic-2',
+        topic_name:'Privacy and consent documentation',topic_type:'informational',
+        mapped_pages:0,indexable_pages:0,query_count:0,gsc_clicks:null,
+        gsc_impressions:null,gsc_avg_position:null,gap_type:'new_topic',
+        priority_score_v1:45,recommendation:'Verify content demand before creating a new page.',
+        top_queries:[]
+      }
+    ]:[]};
+  }
+  else if(url.pathname==='/rest/v1/rpc/get_current_provider_visibility_v1')result={organization_id:organizationId,google_connected:seoScenario!=='disconnected',meta_connected:false,instagram_connected:false,whatsapp_connected:false};
   else if(url.pathname==='/rest/v1/rpc/get_admissions_snapshot')result={metrics:{needs_reply:0,unread:0},priority_queue:[],batch_capacity:[]};
   else if(url.pathname==='/rest/v1/rpc/get_course_management_workspace_v2')result={courses:[],batches:[],summary:{},audits:[]};
   else if(/\/rpc\/(?:can_|organization_has_capability)/.test(url.pathname))result=true;
