@@ -197,3 +197,34 @@ coverage, and no existing history is repaired by this feature.
 Do **not** copy the WAHA Plus QR sender or assume its anti-ban pacing makes
 unapproved bulk WhatsApp messages permissible. Meta Cloud API is still the only
 selected production sender.
+
+### Human handoff review queue (read-only checkpoint)
+
+The staging-only shadow now also recognizes conservative, explicit English requests
+for a human (for example, "Can I speak to a human?" or "Please connect me to
+an agent"). Numbered robot menus, ambiguous statements and requests lacking
+verified signed tenant evidence do **not** authorize handoff.
+
+An owner/admin can review at `/automation/whatsapp/human-review`. The server
+reads at most 1,000 current-tenant canonical WhatsApp receipts from the last
+7 days and displays the 40 most recent explicit-human or STOP candidates.
+The operator page shows only category, observation time and whether identity
+was verified, with a link to the existing lead page **only when all of the
+following match exactly** under the current tenant: provider message ID,
+canonical `whatsapp_crm_message_links` row, inbound `messages` row,
+conversation lead, account phone-number ID, sender WhatsApp ID and existing
+lead. Missing, contradictory, or duplicate evidence is marked as needing
+identity reconciliation rather than linking to potentially unrelated customers.
+
+The queue is **not a replacement for the existing durable automation scheduler**
+and does not claim jobs, create or assign tasks, send acknowledgements, apply
+STOP suppressions or silence AI. It is an actionable **human review view**
+built from the already-archived provider evidence; staff follow the existing
+CRM review and follow-up workflow. A permanent idempotent handoff task/action,
+consent-suppression integration, and governed AI pause/resume require a
+separately reviewed transactional SQL contract and staging acceptance.
+
+Run `npm run verify:deskcomm-inbound-shadow` and
+`npm run test:deskcomm-inbound-shadow` before merge. This checkpoint remains
+OFF by default and on staging hold.
+
