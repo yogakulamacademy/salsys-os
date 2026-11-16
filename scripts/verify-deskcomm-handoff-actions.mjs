@@ -15,6 +15,9 @@ const provider = read('lib/integrations/whatsapp-provider-send.ts');
 const appShell = read('components/app-shell.tsx');
 const alerts = read('components/whatsapp-handoff-alerts.tsx');
 const alertsRoute = read('app/api/whatsapp/handoff-alerts/route.ts');
+const unknownPage = read('app/automation/whatsapp/uncertain-sends/page.tsx');
+const unknownRead = read('lib/integrations/whatsapp-unknown-send-review.ts');
+const whatsappOperations = read('app/automation/whatsapp/page.tsx');
 
 assert.match(env, /^SALSYS_DESKCOMM_HANDOFF_ACTIONS=false$/m);
 assert.match(env, /^SALSYS_DESKCOMM_INBOUND_SHADOW=false$/m);
@@ -132,4 +135,33 @@ assert.ok(provider.includes('Do not retry until the provider audit has been inde
 assert.ok(!sql.includes('whatsapp_access_token'));
 assert.ok(!sql.includes('pg_sleep('));
 assert.ok(!actions.includes("fetch("));
+
+// Uncertain Meta HTTP outcomes are never treated as retry-safe. The operator
+// review is read-only, tenant filtered, role protected, and explicitly bounded.
+assert.ok(unknownRead.includes('await requireAdminWorkspaceAccess()'));
+assert.ok(unknownRead.includes('const admin = createAdminClient()'));
+assert.ok(
+  unknownRead.indexOf('await requireAdminWorkspaceAccess()') <
+  unknownRead.indexOf('const admin = createAdminClient()')
+);
+assert.ok(unknownRead.includes(".from('automation_provider_send_audits')"));
+assert.ok(unknownRead.includes(".eq('organization_id', workspace.organizationId)"));
+assert.ok(unknownRead.includes(".eq('channel', 'whatsapp')"));
+assert.ok(unknownRead.includes(".eq('provider', 'meta_cloud_api')"));
+assert.ok(unknownRead.includes(".eq('status', 'sending')"));
+assert.ok(unknownRead.includes("transport_outcome: { status: 'unknown' }"));
+assert.ok(unknownRead.includes(".gte('created_at', since)"));
+assert.ok(unknownRead.includes(".limit(MAX_ROWS + 1)"));
+assert.ok(unknownRead.includes('if (error || !Array.isArray(data)) return base'));
+assert.ok(unknownRead.includes('hasMore: data.length > MAX_ROWS'));
+assert.ok(!/\\.(insert|update|upsert|delete|rpc)\\(/.test(unknownRead));
+assert.ok(unknownPage.includes("getUnknownWhatsAppSendReview()"));
+assert.ok(unknownPage.includes("review.status !== 'ready'"));
+assert.ok(unknownPage.includes('review.hasMore'));
+assert.ok(unknownPage.includes('This does not prove all historic or external provider sends succeeded'));
+assert.ok(unknownPage.includes('This page cannot send messages'));
+assert.ok(page.includes('href="/automation/whatsapp/uncertain-sends"'));
+assert.ok(whatsappOperations.includes('href="/automation/whatsapp/uncertain-sends"'));
+assert.ok(!/\\b(form|action)=/.test(unknownPage));
+
 console.log('[deskcomm-handoff] PASS: manual owner/admin action, exact identity, atomic dedupe/task/pause, no send or auto-resume');
