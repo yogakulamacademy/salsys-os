@@ -5,7 +5,7 @@
  *
  * Pure URL builder: no browser navigation, messaging, reads, or CRM writes.
  */
-const inboxFilters = new Set(["filter", "priority", "channel"]);
+const inboxFilters = new Set(["filter", "priority", "channel", "topic"]);
 const staleDetailParams = ["lead", "notice", "error", "wamid"];
 
 function inboxHref(params: URLSearchParams): string {
@@ -15,7 +15,7 @@ function inboxHref(params: URLSearchParams): string {
 
 export function nextInboxQueueHref(
   current: string,
-  key: "q" | "page" | "sort" | "scope" | "filter" | "priority" | "channel",
+  key: "q" | "page" | "sort" | "scope" | "filter" | "priority" | "channel" | "topic",
   value: string,
   preservePage = false,
 ): string {
@@ -40,7 +40,7 @@ export function nextInboxQueueHref(
 export function resetInboxQueueHref(current: string): string {
   const params = new URLSearchParams(current);
   for (const key of [
-    "q", "page", "sort", "scope", "filter", "priority", "channel",
+    "q", "page", "sort", "scope", "filter", "priority", "channel", "topic",
     ...staleDetailParams,
   ]) params.delete(key);
   return inboxHref(params);

@@ -8,6 +8,8 @@ export type InboxScope = "team" | "mine" | "unassigned" | `owner:${string}`;
 export type InboxFilter = "all" | "reply" | "unread" | "snoozed";
 export type InboxChannel = "all" | "website" | "instagram" | "whatsapp";
 export type InboxPriority = "all" | "urgent" | "high" | "normal" | "waiting";
+import { INBOX_TOPICS, type InboxTopic } from "@/lib/inbox-topics";
+export type { InboxTopic };
 
 export type InboxQuery = {
   page?: string;
@@ -17,6 +19,7 @@ export type InboxQuery = {
   filter?: string;
   channel?: string;
   priority?: string;
+  topic?: string;
 };
 
 export type InboxPageCounts = {
@@ -29,12 +32,18 @@ export type InboxPageCounts = {
   snoozed: number;
 };
 
+export type InboxChannelCounts = { all: number; whatsapp: number; instagram: number; website: number };
+
 export type InboxPage = {
   rows: ConversationLeadSummary[];
   page: number;
   pageSize: number;
   totalMatching: number;
   counts: InboxPageCounts;
+  /** Null when the v2 inbox function is not deployed yet (v1 fallback). */
+  channelCounts: InboxChannelCounts | null;
+  topicCounts: Partial<Record<InboxTopic, number>> | null;
+  topic: InboxTopic;
   owners: Array<{id: string; name: string}>;
   sort: InboxSort;
   scope: InboxScope;
@@ -93,9 +102,10 @@ export async function getInboxPage(
   const channel = choice(query.channel, ["all", "website", "instagram", "whatsapp"] as const, "all");
   const priority = choice(query.priority, ["all", "urgent", "high", "normal", "waiting"] as const, "all");
   const search = (query.q || "").trim().slice(0, 120);
+  const topic = choice(query.topic, ["all", ...INBOX_TOPICS, "other"] as const, "all") as InboxTopic;
 
   const supabase = await createClient();
-  const { data, error } = await (supabase as any).rpc("get_current_conversations_page_v1", {
+  const args = {
     p_page: page,
     p_page_size: 50,
     p_search: search,
@@ -104,7 +114,14 @@ export async function getInboxPage(
     p_filter: filter,
     p_channel: channel,
     p_priority: priority,
-  });
+  };
+  // v2 adds topics and channel counts; fall back to v1 only when v2 is not deployed.
+  let { data, error } = await (supabase as any).rpc("get_current_conversations_page_v2", { ...args, p_topic: topic });
+  let usedV2 = true;
+  if (error && (error.code === "PGRST202" || error.code === "42883")) {
+    usedV2 = false;
+    ({ data, error } = await (supabase as any).rpc("get_current_conversations_page_v1", args));
+  }
 
   if (error) {
     if (error.code === "PGRST202" || error.code === "42883") {
@@ -137,6 +154,18 @@ export async function getInboxPage(
       unread: numberOrZero(counts.unread),
       snoozed: numberOrZero(counts.snoozed),
     },
+    channelCounts: usedV2 && data.channels && typeof data.channels === "object"
+      ? {
+          all: numberOrZero(data.channels.all),
+          whatsapp: numberOrZero(data.channels.whatsapp),
+          instagram: numberOrZero(data.channels.instagram),
+          website: numberOrZero(data.channels.website),
+        }
+      : null,
+    topicCounts: usedV2 && data.topics && typeof data.topics === "object"
+      ? Object.fromEntries(Object.entries(data.topics as Record<string, unknown>).map(([k, v]) => [k, numberOrZero(v)])) as Partial<Record<InboxTopic, number>>
+      : null,
+    topic: usedV2 ? topic : "all",
     sort, scope, filter, channel, priority, search,
   };
 }
