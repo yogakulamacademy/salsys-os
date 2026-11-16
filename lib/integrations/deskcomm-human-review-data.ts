@@ -172,7 +172,10 @@ export async function getCurrentDeskcommHumanReviewQueue():
     });
 
     let handoffs = new Map<string, DeskcommReviewActionRow['handoff']>();
-    if (base.actionsEnabled) {
+    // Continue displaying existing task/hold evidence when the DB pilot is
+    // disabled, but NEVER show action buttons. This avoids hiding active
+    // holds during an emergency rollback.
+    if (actionsRequested) {
       // The handoff table exists only after the separately reviewed migration.
       // If that prerequisite is missing, fail closed rather than presenting
       // a button that could create duplicate or untracked work.
