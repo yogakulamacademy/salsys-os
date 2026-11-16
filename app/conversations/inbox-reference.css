@@ -301,3 +301,16 @@ html.dark .ibx-v2 .ibx-v3-summary{background:#2b263c;color:#cebaff;border-color:
 .ibx-v2 .ibx-v2-tabs.ibx-v3-pills button{padding:4px 10px!important;font-size:11px!important;border-radius:999px!important;line-height:1.3!important;}
 .ibx-v2 .ibx-v2-tabs.ibx-v3-pills button[aria-selected="true"]{background:var(--app-brand-50)!important;border-color:var(--app-brand-600)!important;}
 .ibx-v2 .ibx-v2-tabs.ibx-v3-pills button span{background:none!important;padding:0!important;margin:0!important;font-size:11px!important;}
+
+/* v3 header: owner picker + snooze picker */
+.ibx-v3-header-owner-pick{position:relative;gap:4px!important;}
+.ibx-v3-header-owner-pick select{appearance:none;border:0;background:transparent;font:inherit;font-size:10px;font-weight:700;color:#5837dd;padding:2px 14px 2px 0;cursor:pointer;max-width:150px;text-overflow:ellipsis;}
+.ibx-v3-header-owner-pick.is-unassigned select{color:#b54708;}
+.ibx-v3-header-owner-pick>svg:last-of-type{position:absolute;right:0;pointer-events:none;}
+.ibx-v3-header-owner-pick .ibx-v3-field-saving{font-size:10px;margin-left:4px;}
+.ibx-v3-head-snooze{display:inline-flex!important;align-items:center;gap:6px;height:33px;padding:0 10px;border:1px solid #e3e5f0;border-radius:9px;background:#fff;color:#60647f;}
+.ibx-v3-head-snooze:hover{background:#f7f4ff;color:#593ae1;}
+.ibx-v3-head-snooze select{appearance:none;border:0;background:transparent;font:inherit;font-size:10px;font-weight:750;color:inherit;cursor:pointer;padding:0;}
+.ibx-v3-head-snooze select:disabled{opacity:.44;cursor:not-allowed;}
+a.ibx-v3-head-btn{text-decoration:none;}
+.ibx-v3-header-buttons{flex-wrap:wrap;justify-content:flex-end;row-gap:6px;}

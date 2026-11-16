@@ -7,7 +7,6 @@ import {
   MessageCircle,
   Phone,
   Save,
-  UserRound,
 } from "lucide-react";
 
 import { logLeadInteractionAction } from "@/app/actions/crm";
@@ -26,11 +25,12 @@ import { InboxHeaderActions } from "@/components/inbox-header-actions";
 import { InboxLeadOverview } from "@/components/inbox-lead-overview";
 import { InboxOfferCard } from "@/components/inbox-offer-card";
 import { InboxLeadIntelligence } from "@/components/inbox-lead-intelligence";
+import { InboxHeaderOwner } from "@/components/inbox-header-owner";
+import { InboxSnoozedBanner } from "@/components/inbox-snoozed-banner";
 import { buildLeadIntelligence } from "@/lib/lead-intelligence";
 import { getLeadOfferSuggestion } from "@/lib/offer-suggestion-data";
 import { ConversationReadMarker } from "@/components/conversation-read-marker";
 import { ConversationSafeComposer } from "@/components/conversation-safe-composer";
-import { ConversationTeamControls } from "@/components/conversation-team-controls";
 import { ConversationWorkspaceShell } from "@/components/conversation-workspace-shell";
 import { ConversationsRealtime } from "@/components/conversations-realtime";
 import { ConversationsSidebar } from "@/components/conversations-sidebar";
@@ -140,6 +140,7 @@ export default async function ConversationsPage({
         needsFirstContact: Boolean(selectedSummary?.needsFirstContact),
       })
     : null;
+  const isSnoozedNow = Boolean(selected?.snoozedUntil && new Date(selected.snoozedUntil).getTime() > Date.now());
   const selectedEmail = selectedContacts?.email ?? null;
   const conversationStatus = selectedSummary?.resolved ? "Done"
     : selectedSummary?.needsReply ? "Needs reply"
@@ -250,9 +251,9 @@ export default async function ConversationsPage({
               <span className="ibx-v3-header-channel"><MessageCircle size={12}/>
                 {selected.currentContactChannel.replaceAll("_"," ")}
               </span>
-              <span className="ibx-v3-header-owner"><UserRound size={12}/>
-                Owner: {selected.ownerName||"Unassigned"}
-              </span>
+              <InboxHeaderOwner key={`owner-${selected.id}`} leadId={selected.id}
+                ownerUserId={selected.ownerUserId} ownerName={selected.ownerName}
+                candidates={team.assignmentCandidates} canAssign={team.canManageAssignments} mock={mock}/>
               {selectedSummary?.needsReply || selectedSummary?.needsFirstContact ? (
                 <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ${selectedSummary.needsReply ? "bg-warning-soft text-warning" : "bg-sky-50 text-sky-700"}`}>
                   {selectedSummary.needsReply ? "Needs reply" : "First contact"}
@@ -269,9 +270,13 @@ export default async function ConversationsPage({
         </div>
         <InboxHeaderActions leadId={selected.id}
           resolved={Boolean(selectedSummary?.resolved)}
-          canResolve={workspace.evidence.inboxResolutionAvailable} mock={mock}/>
+          canResolve={workspace.evidence.inboxResolutionAvailable} mock={mock}
+          snoozed={isSnoozedNow}/>
 
       </header>
+      {isSnoozedNow && selected.snoozedUntil ? (
+        <InboxSnoozedBanner leadId={selected.id} until={selected.snoozedUntil} />
+      ) : null}
 
       <ConversationCenterView
         messages={selected.lastMessages}
@@ -414,7 +419,7 @@ export default async function ConversationsPage({
       {/* key: remount per lead so the stage/owner selects never keep the previous conversation's value */}
       <InboxLeadOverview key={selected.id} leadId={selected.id} stage={selected.stage}
         ownerUserId={selected.ownerUserId} ownerName={selected.ownerName}
-        candidates={team.assignmentCandidates} canAssign={team.canManageAssignments}
+        candidates={team.assignmentCandidates} canAssign={false}
         mock={mock} channel={selected.currentContactChannel}
         attributionSource={selectedAttribution?.firstTouchSource||"Not verified"} interest={selected.course}
         country={selected.country}
@@ -448,17 +453,6 @@ export default async function ConversationsPage({
 
       <InboxQuickActions phone={selectedPhone} canCall={Boolean(hasTelephoneContact)}
         canAssign={team.canManageAssignments} profileHref={`/leads/${selected.id}`}/>
-      <details id="inbox-assignment" className="ibx-v2-assignment-card ibx-v2-advanced-panel">
-        <summary>Team & ownership <ChevronDown size={14}/></summary>
-        <ConversationTeamControls
-        leadId={selected.id}
-        ownerUserId={selected.ownerUserId}
-        ownerName={selected.ownerName}
-        snoozedUntil={selected.snoozedUntil}
-        canManageAssignments={team.canManageAssignments}
-        assignmentCandidates={team.assignmentCandidates}
-      />
-      </details>
 
       {leadContextAction ? (
         <section className="border-b border-line px-4 py-4">

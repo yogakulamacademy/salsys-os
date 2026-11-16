@@ -1,11 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowRight, Check, ChevronDown, Clock3, Ellipsis, CalendarClock, ExternalLink, FileText } from "lucide-react";
+import { ArrowUpRight, Check, ChevronDown, Clock3, Ellipsis, CalendarClock, FileText } from "lucide-react";
 import { setConversationDoneAction, snoozeConversationAction } from "@/app/conversations/team-actions";
 
-export function InboxHeaderActions({ leadId, resolved, canResolve, mock }:{
-  leadId:string; resolved:boolean; canResolve:boolean; mock:boolean;
+export function InboxHeaderActions({ leadId, resolved, canResolve, mock, snoozed=false }:{
+  leadId:string; resolved:boolean; canResolve:boolean; mock:boolean; snoozed?:boolean;
 }) {
   const nextStep=()=>{
     const panel=document.getElementById('inbox-next-steps');
@@ -38,16 +38,28 @@ export function InboxHeaderActions({ leadId, resolved, canResolve, mock }:{
         <Check size={14}/> {resolved?'Reopen':'Mark done'}
       </button>
     </form>
+    <form action={snoozeAction} className="ibx-v3-head-snooze">
+      <Clock3 size={14} aria-hidden="true"/>
+      <label htmlFor="inbox-header-snooze" className="sr-only">Snooze this conversation</label>
+      <select id="inbox-header-snooze" name="snooze_for" defaultValue="" disabled={mock}
+        title="Hide from your queue until later. Teammates still see it."
+        onChange={event=>{ if(event.currentTarget.value) event.currentTarget.form?.requestSubmit(); }}>
+        <option value="" disabled>{snoozed?'Snoozed':'Snooze'}</option>
+        <option value="1h">For 1 hour</option>
+        <option value="4h">For 4 hours</option>
+        <option value="tomorrow">Until tomorrow 9:00 AM</option>
+        <option value="week">Until next week 9:00 AM</option>
+        {snoozed?<option value="clear">Return to inbox now</option>:null}
+      </select>
+    </form>
+    <Link href={`/leads/${leadId}`} className="ibx-v3-head-btn" title="Open full lead profile">
+      Profile <ArrowUpRight size={13}/>
+    </Link>
     <details className="ibx-v3-head-more">
       <summary aria-label="More conversation actions" title="More actions"><Ellipsis size={18}/></summary>
       <div className="ibx-v3-head-menu">
         <button type="button" onClick={openNotes}><FileText size={14}/> View notes</button>
         <button type="button" onClick={nextStep}><CalendarClock size={14}/> Schedule follow-up</button>
-        <Link href={`/leads/${leadId}`}><ExternalLink size={14}/> Open full profile</Link>
-        <form action={snoozeAction}>
-          <input type="hidden" name="snooze_for" value="1h"/>
-          <button type="submit" disabled={mock}><Clock3 size={14}/> Snooze for 1 hour</button>
-        </form>
       </div>
     </details>
   </div>;
