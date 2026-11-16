@@ -228,3 +228,102 @@ Run `npm run verify:deskcomm-inbound-shadow` and
 `npm run test:deskcomm-inbound-shadow` before merge. This checkpoint remains
 OFF by default and on staging hold.
 
+## WhatsApp Phase C: transactional human-handoff task and AI hold (draft PR #718)
+
+**Status: implemented in draft, not deployed.** A new additive migration
+(`20261116094500_deskcomm_human_handoff_task_v1.sql`) supplies a
+tenant-scoped, idempotent human-handoff ledger and three authenticated SQL RPCs.
+Only an *explicit owner/admin action* may open a handoff from a verified
+`human_handoff_candidate` raw event. STOP/opt-out candidates deliberately
+cannot invoke this RPC; the preexisting WhatsApp suppression system remains
+the authoritative consent control.
+
+**Activation requires two independent switches, both initially OFF:**
+
+1. SalsysOS server: `SALSYS_DESKCOMM_INBOUND_SHADOW=true` and
+   `SALSYS_DESKCOMM_HANDOFF_ACTIONS=true`.
+2. A service-role DBA explicitly enables `actions_enabled=true` for the
+   *specific staging organization* in
+   `public.whatsapp_handoff_pilot_controls`. The migration creates **zero
+   enabled organizations**, and authenticated users cannot update controls.
+
+Turning off the server flag prevents UI actions; setting the per-org database
+control to false blocks **new opens even from direct PostgREST/RPC callers**.
+Previously opened holds remain enforced and can be closed/released through the
+authorized database RPCs during a controlled rollback.
+
+### Open: atomic evidence -> assigned task -> scheduled automation pause
+
+`open_verified_whatsapp_human_handoff_v1(org,raw_event_id,assigned_to)`:
+
+- Requires live authenticated `auth.uid()`, active owner/admin membership,
+  and explicit database pilot authorization; rejects cross-organization calls.
+- Validates the source from **canonical immutable WhatsApp raw event evidence**,
+  including signed Meta signature, exact active phone-to-tenant mapping, human
+  candidate, message type, sender and business phone account.
+- Joins the same tenant's provider-message link, **inbound** CRM message,
+  conversation and lead. A missing or ambiguous join fails closed.
+- Validates the assignee is an active Sales workspace user (employee/member,
+  manager, owner or admin), not an arbitrary supplied UUID.
+- Uses unique `(organization_id,raw_event_id)` ledger claim so repeated and
+  concurrent submissions cannot create a second task.
+- Creates one immediate `tasks.task_type='human_review'` task, assigned
+  to staff. Reconciles `leads.next_followup_at` without overwriting an
+  earlier deadline.
+- Pauses active `automation_enrollments` for the lead, cancels **scheduled,
+  not claimed** jobs and waiting states, in the same transaction.
+- Records no message or provider send and does not modify consent.
+
+### Closing versus releasing
+
+`close_verified_whatsapp_human_handoff_v1` resolves or dismisses the task
+once. Closing keeps `ai_hold_active=true`. A lightweight database trigger
+rejects new **active** automation enrollments for any lead with an active
+handoff hold. It uses a per-tenant/per-lead PostgreSQL advisory transaction
+lock to serialize fresh workflow starts against the handoff transaction;
+for organizations never enabled and with no holds, it avoids that lock.
+
+Only the **separate explicit** owner/admin
+`release_verified_whatsapp_handoff_ai_hold_v1` action may clear this
+individual hold **after** task closure. If other holds remain, they still
+block new automation. Release never resumes paused enrollments, requeues
+cancelled jobs, restarts a prior workflow, approves a template or contacts
+a customer. Future new workflows still require all normal eligibility and
+approval gates.
+
+The operator UI is at `/automation/whatsapp/human-review` and displays the
+current task and hold status. Assign-to-self, Resolve/Dismiss and Release
+actions are visible only when both server switches and the database organization
+control have been enabled. The UI re-authenticates, and SQL independently
+rechecks all permissions and immutable source evidence.
+
+### Explicit limitations before rollout
+
+- An already-**claimed** automation job that passed its enrollment check
+  before the handoff transaction may continue. The existing provider
+  claim/approval/consent kill switches remain authoritative for messaging.
+  **Do not treat the handoff trigger alone as a universal provider-send lock.**
+- This V1 pauses the lead's active automation enrollments broadly, not just a
+  specific WhatsApp workflow. Test the effect on unrelated marketing sequences
+  with real staging workflows before approval.
+- Existing approval requests and directly operated human chat replies are
+  not silently revoked by handoff. There is no Deskcomm worker/WAHA sender,
+  automatic AI responder, payment operation, or bulk-send cutover.
+- Task changes outside the specialized close RPC may leave the handoff ledger
+  open; always close it through the dedicated action.
+- No live test, runtime migration, connection credential or production
+  deployment has been performed by this draft PR.
+
+### Checks and staging acceptance
+
+`npm run verify:deskcomm-handoff-actions` runs structural code,
+authorization and OFF-by-default contracts in the build; an isolated
+PostgreSQL 17 CI fixture tests direct RPC bypass denial, exact identity,
+owner/employee assignment, cross-tenant and STOP rejection, idempotent
+opening/closure, paused enrollment and cancelled jobs, separate release,
+and simultaneous claims. In staging, repeat with actual Meta signed test
+messages, real employee roles, duplicate webhook deliveries and two
+independently verified tenants. Verify the provider send approval boundary
+remains fail-closed. Do not enable a production organization or merge the
+draft before independent review and authorized acceptance.
+
