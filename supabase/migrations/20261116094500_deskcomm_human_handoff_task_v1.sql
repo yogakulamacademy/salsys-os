@@ -86,6 +86,21 @@ set search_path = public,auth,pg_temp
 as $function$
 begin
   if new.status = 'active' then
+    -- Zero advisory-lock overhead for tenants that have never opted into the
+    -- pilot and have no outstanding holds. A previously opened hold remains
+    -- enforced even if the pilot is later disabled.
+    if not exists (
+      select 1 from public.whatsapp_handoff_pilot_controls p
+      where p.organization_id = new.organization_id and p.actions_enabled is true
+    ) and not exists (
+      select 1 from public.whatsapp_human_handoffs h
+      where h.organization_id = new.organization_id
+        and h.lead_id = new.lead_id
+        and h.ai_hold_active is true
+    ) then
+      return new;
+    end if;
+
     perform pg_advisory_xact_lock(hashtextextended(
       'whatsapp-human-handoff:' || new.organization_id::text || ':' || new.lead_id::text,0
     ));
