@@ -22,6 +22,7 @@ const event = {
 
 function receipt(input = event) {
   return {
+    id: '1564b1fc-bb88-4911-a6a6-f260f466bc16',
     received_at: '2026-11-16T12:00:00.000Z',
     external_message_id: input.external_message_id,
     source_account_id: 'meta-phone-number-id',
@@ -104,6 +105,7 @@ test('exact same tenant/account/sender and inbound message gives verified lead l
     observedAt: '2026-11-16T12:00:00.000Z',
     leadId: 'lead-123',
     conversationId: 'conversation-123',
+    rawEventId: '1564b1fc-bb88-4911-a6a6-f260f466bc16',
     match: 'verified_identity',
   }]);
   const output = JSON.stringify(queue);
@@ -148,6 +150,7 @@ test('no lead is shown for mismatched account, sender, direction or tenant membe
     assert.equal(row.match, 'needs_identity_review');
     assert.equal(row.leadId, null);
     assert.equal(row.conversationId, null);
+    assert.equal(row.rawEventId, null);
   }
 });
 
