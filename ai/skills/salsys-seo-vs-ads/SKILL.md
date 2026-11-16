@@ -28,3 +28,7 @@ Call `salsys_seo_vs_ads_evidence_v1` with an empty object, and only through the 
 ## Activation
 
 This skill is a draft and is not yet wired into the production Claude API or Co-Pilot.
+
+## Provider readiness
+
+Review the returned `sourceReadiness` field before any paid/organic comparison. When `blockerCode` is `google_cloud_project_test_access`, state that Google Cloud project production API approval is required (Explorer or higher). Never forward raw Google Ads errors, account IDs, or credentials. If paid rows are absent, do not present stale historic rows as current. Do not retry or update provider configurations from this skill.
