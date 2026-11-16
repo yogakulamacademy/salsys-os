@@ -28,6 +28,11 @@ create table if not exists public.whatsapp_human_handoffs (
   task_id uuid references public.tasks(id) on delete restrict,
   assigned_to uuid not null references public.profiles(id) on delete restrict,
   status text not null default 'open' check (status in ('open','closed')),
+  -- Keep the automation hold even after a staff task is closed. Only an
+  -- additional, explicit authorized action can allow FUTURE new enrollments.
+  ai_hold_active boolean not null default true,
+  ai_hold_released_by uuid references public.profiles(id) on delete restrict,
+  ai_hold_released_at timestamptz,
   reason text not null default 'human_requested' check (reason = 'human_requested'),
   created_by uuid not null references public.profiles(id) on delete restrict,
   created_at timestamptz not null default now(),
@@ -38,6 +43,10 @@ create table if not exists public.whatsapp_human_handoffs (
   constraint whatsapp_human_handoffs_closure_check check (
     (status = 'open' and closed_at is null and closed_by is null and close_reason is null)
     or (status = 'closed' and closed_at is not null and closed_by is not null and close_reason is not null)
+  ),
+  constraint whatsapp_human_handoffs_hold_release_check check (
+    (ai_hold_active is true and ai_hold_released_by is null and ai_hold_released_at is null)
+    or (ai_hold_active is false and ai_hold_released_by is not null and ai_hold_released_at is not null)
   ),
   constraint whatsapp_human_handoffs_raw_tenant_fk
     foreign key (organization_id,raw_event_id)
@@ -64,6 +73,41 @@ using (
     array['owner','admin']::text[]
   )
 );
+
+-- Advisory lock serializes a new enrollment with the staff handoff on the
+-- same (tenant,lead) before either transaction sees the other committed row.
+-- This prevents a subsequent smart trigger from restarting automation while
+-- a human hold is active, even after the task is marked closed.
+create or replace function public.guard_human_handoff_enrollment_v1()
+returns trigger
+language plpgsql
+security definer
+set search_path = public,auth,pg_temp
+as $function$
+begin
+  if new.status = 'active' then
+    perform pg_advisory_xact_lock(hashtextextended(
+      'whatsapp-human-handoff:' || new.organization_id::text || ':' || new.lead_id::text,0
+    ));
+    if exists (
+      select 1 from public.whatsapp_human_handoffs h
+      where h.organization_id = new.organization_id
+        and h.lead_id = new.lead_id
+        and h.ai_hold_active is true
+    ) then
+      raise exception 'Automation enrollment is held for human review';
+    end if;
+  end if;
+  return new;
+end;
+$function$;
+
+drop trigger if exists guard_human_handoff_enrollment_v1
+  on public.automation_enrollments;
+create trigger guard_human_handoff_enrollment_v1
+before insert or update of status,lead_id,organization_id
+  on public.automation_enrollments
+for each row execute function public.guard_human_handoff_enrollment_v1();
 
 create or replace function public.open_verified_whatsapp_human_handoff_v1(
   p_organization_id uuid,
@@ -187,6 +231,11 @@ begin
 
   -- STRICT rejects missing or ambiguous joins. Never pick an arbitrary
   -- CRM identity from duplicate provider linkage.
+
+  -- Serialize new enrollments for the same tenant/lead against this hold.
+  perform pg_advisory_xact_lock(hashtextextended(
+    'whatsapp-human-handoff:' || p_organization_id::text || ':' || v_lead_id::text,0
+  ));
 
   -- Atomic idempotency. The unique (organization,raw_event) claim serializes
   -- concurrent admin actions without duplicating tasks or pausing again.
@@ -363,10 +412,70 @@ begin
 end;
 $function$;
 
+-- Explicit AI restart permission: only FUTURE events may create new
+-- enrollments. No paused enrollment, cancelled wait, scheduled job or provider
+-- send is reactivated. Previously scheduled messages are never replayed.
+create or replace function public.release_verified_whatsapp_handoff_ai_hold_v1(
+  p_organization_id uuid,
+  p_handoff_id uuid
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public,auth,pg_temp
+as $function$
+declare
+  v_actor uuid := auth.uid();
+  v_handoff public.whatsapp_human_handoffs%rowtype;
+begin
+  if v_actor is null or p_organization_id is null or p_handoff_id is null then
+    raise exception 'Authenticated organization and handoff are required';
+  end if;
+  if not public.has_organization_role(p_organization_id,array['owner','admin']::text[]) then
+    raise exception 'Only owners/admins can release a human handoff hold';
+  end if;
+  select * into v_handoff
+  from public.whatsapp_human_handoffs
+  where organization_id = p_organization_id and id = p_handoff_id
+  for update;
+  if not found then
+    raise exception 'Handoff not found in current organization';
+  end if;
+  if v_handoff.status <> 'closed' then
+    raise exception 'Human review task must be closed before allowing future automation';
+  end if;
+  if v_handoff.ai_hold_active is false then
+    return jsonb_build_object(
+      'ok',true,'changed',false,'handoff_id',v_handoff.id,
+      'future_automation_allowed',true,'jobs_replayed',false,
+      'automation_resumed',false,'customer_message_sent',false
+    );
+  end if;
+
+  perform pg_advisory_xact_lock(hashtextextended(
+    'whatsapp-human-handoff:' || p_organization_id::text || ':' || v_handoff.lead_id::text,0
+  ));
+
+  update public.whatsapp_human_handoffs
+  set ai_hold_active = false,
+      ai_hold_released_at = now(),
+      ai_hold_released_by = v_actor
+  where organization_id = p_organization_id and id = p_handoff_id;
+
+  return jsonb_build_object(
+    'ok',true,'changed',true,'handoff_id',v_handoff.id,
+    'future_automation_allowed',true,'jobs_replayed',false,
+    'automation_resumed',false,'customer_message_sent',false
+  );
+end;
+$function$;
+
 revoke all on function public.open_verified_whatsapp_human_handoff_v1(uuid,uuid,uuid) from public,anon;
 revoke all on function public.close_verified_whatsapp_human_handoff_v1(uuid,uuid,text) from public,anon;
+revoke all on function public.release_verified_whatsapp_handoff_ai_hold_v1(uuid,uuid) from public,anon;
 grant execute on function public.open_verified_whatsapp_human_handoff_v1(uuid,uuid,uuid) to authenticated;
 grant execute on function public.close_verified_whatsapp_human_handoff_v1(uuid,uuid,text) to authenticated;
+grant execute on function public.release_verified_whatsapp_handoff_ai_hold_v1(uuid,uuid) to authenticated;
 
 comment on table public.whatsapp_human_handoffs is
   'Operator-created WhatsApp human handoff ledger. Does not authorize sending or automation resumption.';
@@ -374,5 +483,7 @@ comment on function public.open_verified_whatsapp_human_handoff_v1(uuid,uuid,uui
   'Only owners/admins: exact verified inbound source -> tenant lead + staff task + pause current enrollments/cancel unclaimed work in one transaction; never send.';
 comment on function public.close_verified_whatsapp_human_handoff_v1(uuid,uuid,text) is
   'Only owners/admins: close handoff/task, never replay or resume existing automations.';
+comment on function public.release_verified_whatsapp_handoff_ai_hold_v1(uuid,uuid) is
+  'Only owners/admins: release hold after closure so future workflow starts can be evaluated; never restart or replay old jobs.';
 
 commit;
