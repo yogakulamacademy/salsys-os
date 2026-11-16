@@ -26,7 +26,23 @@ SALSYS_DESKCOMM_URL=https://messaging.example.org
 
 Only owner/admin users see the pilot notice within the relevant existing workspace; managers retain current capabilities without access to these optional links. URLs must use HTTPS in production, with no embedded userinfo, query, or fragment. Non-production localhost HTTP is allowed for developer testing. Do not put API credentials in URLs. Users sign into vendor tools separately.
 
-**Important:** A configured link or positive upstream health response does not prove subscription, authorized business API access, provider eligibility, Meta approval, tenant mapping, data isolation, or delivery success. Open `/settings/vendor-workspaces` as an owner/admin for a live read-only health check.
+### First functional OpenSEO adapter (read-only)
+
+Set these additional **server-only** variables after deploying OpenSEO and creating an API key in OpenSEO Settings:
+
+```env
+SALSYS_OPENSEO_SALSYS_ORG_ID=EXACT_SALSYS_TENANT_UUID
+SALSYS_OPENSEO_API_KEY=oseo_YOUR_OPEN_SEO_API_KEY
+```
+
+The administrator opens `/seo/open-seo` to verify a real OpenSEO project inventory. The adapter sends one authenticated `tools/call` JSON-RPC request to `/mcp` with tool name `list_projects`; OpenSEO documents this tool as zero credits. The adapter refuses all outbound calls unless the current SalsysOS organization ID exactly equals `SALSYS_OPENSEO_SALSYS_ORG_ID`. This **intentionally supports one mapped tenant per deployment**; for true multitenant support, use separately encrypted per-tenant connector credentials with revocation and RLS, not a global shared API key.
+
+The adapter accepts only bounded JSON or SSE replies and a validated `structuredContent.projects` array, and shows clear disconnected, unauthorized, malformed, and empty-project states. It never treats a health ping as proof of authenticated data access. It cannot write OpenSEO projects, trigger billable tools, publish SEO changes, or update SalsysOS attribution.
+
+Run `npm run test:openseo-mcp-projects` for deterministic JSON/SSE parser tests. Also run `npm run verify:vendor-workspace-pilot`, `npm run typecheck` and the complete build.
+
+
+**Important:** A configured link or positive upstream health response does not prove subscription, authorized business API access, provider eligibility, Meta approval, tenant mapping, data isolation, or delivery success. Open `/settings/vendor-workspaces` as an owner/admin for a live read-only health check. The new `/seo/open-seo` page uses OpenSEO's real zero-credit `list_projects` MCP tool but requires a fixed SalsysOS-tenant mapping and API key.
 
 ## Intended target architecture
 
