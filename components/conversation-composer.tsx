@@ -41,6 +41,7 @@ type ServerAction = (formData: FormData) => Promise<WhatsAppSendResult | void>;
 type CopilotDraftEvent = CustomEvent<{
   channel?: string;
   body?: string;
+  source?: string;
 }>;
 
 type SelectedSalesAsset = {
@@ -323,7 +324,7 @@ export function WhatsAppComposer({
 
       setMode("reply");
       updateDraft(detail.body);
-      setCopilotAssisted(true);
+      setCopilotAssisted(detail.source !== "quick_reply");
 
       requestAnimationFrame(() => {
         formRef.current

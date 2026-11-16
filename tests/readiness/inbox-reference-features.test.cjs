@@ -23,9 +23,9 @@ test('reference actions are real and do not substitute unrelated CRM task comple
   assert.ok(header.includes('Mark done'));
   assert.ok(header.includes('Reopen'));
   assert.ok(quick.includes('tel:'));
-  assert.ok(quick.includes('showSchedule'));
-  assert.ok(quick.includes('showAssignment'));
-  assert.ok(quick.includes('More quick actions'));
+  assert.ok(quick.includes('Log call'));
+  assert.ok(quick.includes('Not interested'));
+  assert.ok(quick.includes('crm:copilot-draft'));
   assert.ok(teamActions.includes("supabase.rpc('can_resolve_inbox_lead_v1'"));
   assert.ok(teamActions.includes("supabase.rpc('set_lead_stage'"));
 });

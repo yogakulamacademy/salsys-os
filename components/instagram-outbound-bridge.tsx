@@ -219,7 +219,7 @@ export function InstagramOutboundBridge() {
         channel.value = 'instagram';
         direction.value = 'outbound';
         body.value = detail.body.slice(0, 1000);
-        copilotAssisted = true;
+        copilotAssisted = (detail as { source?: string }).source !== 'quick_reply';
         updateUi();
         body.focus();
       };

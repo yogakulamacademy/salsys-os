@@ -16,7 +16,7 @@ export function InboxHeaderActions({ leadId, resolved, canResolve, mock, snoozed
     window.setTimeout(()=>{
       const nextPanel=document.getElementById('inbox-next-steps');
       nextPanel?.scrollIntoView({behavior:'smooth',block:'nearest'});
-      nextPanel?.querySelector<HTMLButtonElement>('.ibx-v2-link-action')?.click();
+      nextPanel?.querySelector<HTMLButtonElement>('.ibx-v3-fu-whens button')?.focus();
     },0);
   };
   const openNotes=()=>{

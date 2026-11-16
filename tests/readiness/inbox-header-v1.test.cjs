@@ -19,7 +19,7 @@ test('one place to assign: overview owner is read-only and the duplicate ownersh
   assert.match(page, /candidates=\{team\.assignmentCandidates\} canAssign=\{false\}/);
   assert.doesNotMatch(page, /id="inbox-assignment"/);
   assert.doesNotMatch(page, /ConversationTeamControls/);
-  assert.match(read('components/inbox-quick-actions.tsx'), /getElementById\("inbox-header-owner"\)/);
+  assert.doesNotMatch(read('components/inbox-quick-actions.tsx'), /inbox-assignment/);
 });
 
 test('header snooze offers durations and a way back; banner shows while snoozed', () => {

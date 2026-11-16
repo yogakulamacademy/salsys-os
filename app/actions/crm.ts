@@ -1176,6 +1176,9 @@ export async function logLeadInteractionAction(
   );
 
   if (error) {
+    if (textValue(formData, "return_to") === "conversations") {
+      redirect(`/conversations?lead=${encodeURIComponent(leadId)}&error=${encodeURIComponent(error.message)}`);
+    }
     redirect(`/leads/${leadId}?error=${encodeURIComponent(error.message)}`);
   }
 
@@ -1188,6 +1191,11 @@ export async function logLeadInteractionAction(
   revalidatePath("/pipeline");
 
   revalidatePath("/conversations");
+
+  // Inbox quick actions stay on the conversation instead of jumping to the profile.
+  if (textValue(formData, "return_to") === "conversations") {
+    redirect(`/conversations?lead=${encodeURIComponent(leadId)}&notice=interaction-logged`);
+  }
 
   redirect(`/leads/${leadId}?notice=interaction-logged`);
 }

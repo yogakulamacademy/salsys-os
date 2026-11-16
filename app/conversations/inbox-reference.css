@@ -314,3 +314,26 @@ html.dark .ibx-v2 .ibx-v3-summary{background:#2b263c;color:#cebaff;border-color:
 .ibx-v3-head-snooze select:disabled{opacity:.44;cursor:not-allowed;}
 a.ibx-v3-head-btn{text-decoration:none;}
 .ibx-v3-header-buttons{flex-wrap:wrap;justify-content:flex-end;row-gap:6px;}
+
+/* v3 quick actions (6 tiles) + inline follow-up scheduler */
+.ibx-v3-quick-grid-6{grid-template-columns:repeat(3,minmax(0,1fr))!important;}
+.ibx-v3-quick-danger{color:#b42318!important;border-color:#f6d4d0!important;}
+.ibx-v3-quick-panel{display:flex;flex-direction:column;gap:8px;margin-top:10px;padding:10px;border:1px solid #e6e3f3;border-radius:12px;background:#fff;}
+.ibx-v3-quick-panel-danger{border-color:#f6d4d0;background:#fff8f7;}
+.ibx-v3-quick-row{display:flex;gap:6px;}
+.ibx-v3-quick-note{margin-top:8px;font-size:11px;line-height:1.4;color:#12703f;}
+.ibx-v3-fu{display:flex;flex-direction:column;gap:8px;margin-top:10px;padding-top:10px;border-top:1px solid #efedf7;}
+.ibx-v3-fu-head{font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:#6b6882;}
+.ibx-v3-fu-methods{display:flex;gap:4px;padding:3px;border-radius:10px;background:#f4f2fb;}
+.ibx-v3-fu-methods button{flex:1;min-height:30px;border:0;border-radius:8px;background:transparent;font-size:12px;font-weight:700;color:#6b6882;}
+.ibx-v3-fu-methods button[aria-pressed="true"]{background:#fff;color:#3d3090;box-shadow:0 1px 2px rgba(29,27,47,.08);}
+.ibx-v3-fu-whens{display:flex;flex-wrap:wrap;gap:6px;}
+.ibx-v3-fu-whens button{min-height:30px;padding:0 10px;border:1px solid #e6e3f3;border-radius:999px;background:#fff;font-size:12px;font-weight:600;color:#3a3752;}
+.ibx-v3-fu-whens button:hover:not(:disabled){border-color:#8b7be0;color:#3d3090;}
+.ibx-v3-fu-whens button:disabled{opacity:.5;}
+.ibx-v3-fu-date{display:flex;align-items:center;gap:8px;font-size:12px;color:#6b6882;}
+.ibx-v3-fu-date input{flex:1;min-height:32px;border:1px solid #e6e3f3;border-radius:10px;padding:0 8px;font:inherit;font-size:12px;color:#1d1b2f;background:#fff;}
+.ibx-v3-fu-hint{font-size:11px;color:#8a87a0;}
+html.dark .ibx-v3-quick-panel,html.dark .ibx-v3-fu-whens button,html.dark .ibx-v3-fu-date input{background:var(--app-surface);border-color:var(--app-border);color:var(--app-text);}
+html.dark .ibx-v3-fu-methods{background:var(--app-surface-muted);}
+html.dark .ibx-v3-fu-methods button[aria-pressed="true"]{background:var(--app-surface);color:var(--app-text-strong);}
