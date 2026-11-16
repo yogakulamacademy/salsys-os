@@ -38,6 +38,9 @@ export async function claimDeskcommHumanReviewAction(form: FormData) {
   });
   const result = data && typeof data === 'object' && !Array.isArray(data)
     ? data as Record<string, unknown> : {};
+  if (!error && result.reason === 'whatsapp_provider_send_in_flight') {
+    redirect(responseUrl('send_in_flight'));
+  }
   if (error || result.ok !== true) redirect(responseUrl('unavailable'));
   revalidatePath(RETURN_TO);
   revalidatePath('/follow-ups');
