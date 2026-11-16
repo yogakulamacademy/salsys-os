@@ -8,6 +8,12 @@ import {
   type DeskcommReviewCandidate,
 } from '@/lib/integrations/deskcomm-human-review-queue';
 
+export type DeskcommHandoffAssignee = {
+  id: string;
+  name: string;
+  role: string;
+};
+
 export type DeskcommReviewActionRow = DeskcommReviewCandidate & {
   handoff: {
     id: string;
@@ -20,6 +26,7 @@ export type DeskcommReviewActionRow = DeskcommReviewCandidate & {
 
 export type DeskcommHumanReviewQueueReadiness = {
   actionsEnabled: boolean;
+  assignees: DeskcommHandoffAssignee[];
   status: 'disabled' | 'ready' | 'unavailable' | 'over_limit';
   checkedAt: string;
   lookbackDays: 7;
@@ -46,6 +53,7 @@ export async function getCurrentDeskcommHumanReviewQueue():
     checkedAt,
     lookbackDays: 7 as const,
     actionsEnabled: false,
+    assignees: [] as DeskcommHandoffAssignee[],
     displayedCount: 0,
     rows: [] as DeskcommReviewActionRow[],
   };
@@ -70,6 +78,72 @@ export async function getCurrentDeskcommHumanReviewQueue():
         return { ...base, status: 'unavailable', candidateCount: null };
       }
       base.actionsEnabled = pilot?.actions_enabled === true;
+    }
+
+    if (base.actionsEnabled) {
+      const [
+        { data: organizationMembers, error: orgError },
+        { data: workspaceMembers, error: workspaceError },
+        { data: salesWorkspace, error: salesError },
+      ] = await Promise.all([
+        admin.from('organization_members')
+          .select('user_id,role')
+          .eq('organization_id', organizationId)
+          .eq('active', true)
+          .limit(101),
+        admin.from('workspace_memberships')
+          .select('user_id,role')
+          .eq('organization_id', organizationId)
+          .eq('workspace_code', 'sales')
+          .eq('active', true)
+          .in('role', ['manager', 'member'])
+          .limit(101),
+        admin.from('organization_workspaces')
+          .select('enabled')
+          .eq('organization_id', organizationId)
+          .eq('workspace_code', 'sales')
+          .maybeSingle(),
+      ]);
+      if (orgError || workspaceError || salesError ||
+          !organizationMembers || !workspaceMembers ||
+          organizationMembers.length > 100 || workspaceMembers.length > 100 ||
+          salesWorkspace?.enabled !== true) {
+        return { ...base, status: 'unavailable', candidateCount: null };
+      }
+
+      const salesRoles = new Map(
+        workspaceMembers.map((row) => [String(row.user_id), String(row.role)]),
+      );
+      const eligible = organizationMembers.filter((row) =>
+        row.role === 'owner' || row.role === 'admin' ||
+        salesRoles.has(String(row.user_id)),
+      );
+      const staffIds = [...new Set(eligible.map((row) => String(row.user_id)))];
+      if (staffIds.length > 0) {
+        const { data: profiles, error: profilesError } = await admin
+          .from('profiles')
+          .select('id,full_name,active')
+          .in('id', staffIds)
+          .eq('active', true)
+          .limit(101);
+        if (profilesError || !profiles || profiles.length > 100) {
+          return { ...base, status: 'unavailable', candidateCount: null };
+        }
+        const names = new Map(profiles.map((profile) => [
+          String(profile.id),
+          String(profile.full_name ?? '').trim() || 'CRM User',
+        ]));
+        base.assignees = eligible.flatMap((member) => {
+          const id = String(member.user_id);
+          if (!names.has(id)) return [];
+          return [{
+            id,
+            name: names.get(id)!,
+            role: member.role === 'owner' || member.role === 'admin'
+              ? member.role : salesRoles.get(id) ?? 'member',
+          }];
+        }).sort((a, b) => a.name.localeCompare(b.name));
+      }
     }
 
     const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
