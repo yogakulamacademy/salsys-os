@@ -1,6 +1,6 @@
 import Link from "next/link";
 import {
-  ArrowLeft, ArrowRight, BookOpenText, CheckCircle2,
+  ArrowLeft, ArrowRight, BookOpenText, Circle,
   CircleAlert, FileSearch, ShieldCheck,
 } from "lucide-react";
 
@@ -60,14 +60,14 @@ function observedQueries(topic: ContentGapRow) {
 }
 
 function researchOutline(topic: Topic, queries: ReturnType<typeof observedQueries>,
-  gscDate: string, reviewNote: string | null) {
+  freshnessNote: string, reviewNote: string | null) {
   const row = topic.source;
   return [
     "CONTENT RESEARCH EVIDENCE (NOT AN AI-GENERATED BRIEF)",
     "Topic: " + topic.title,
     "Content model type: " + (safeLabel(row.topic_type) || "Not classified"),
     "Gap classification: " + (safeLabel(row.gap_type) || "Not classified"),
-    "Latest GSC data date: " + gscDate,
+    "GSC evidence freshness: " + freshnessNote,
     "Observed GSC clicks: " + metric(row.gsc_clicks),
     "Observed GSC impressions: " + metric(row.gsc_impressions),
     "Average GSC position: " + position(row.gsc_avg_position),
@@ -77,7 +77,8 @@ function researchOutline(topic: Topic, queries: ReturnType<typeof observedQuerie
     "Top observed queries (" + queries.length + " displayed):",
     ...queries.map((item) => "- " + item.query + " | clicks " + item.clicks +
       " | impressions " + item.impressions + " | position " + item.position),
-    "Source recommendation: " + (reviewNote || "No safe short recommendation available"),
+    "Unverified source-model recommendation (manual review required): " +
+      (reviewNote || "No safe short recommendation available"),
     "MANUAL NEXT STEPS:",
     "- Inspect search intent and competing results independently.",
     "- Verify which existing pages meet this topic before drafting.",
@@ -273,13 +274,13 @@ export default async function ContentBriefResearchPage({
                     "Validate claims and obtain human approval before publication.",
                   ].map((item) => (
                     <li className={styles.reviewItem} key={item}>
-                      <CheckCircle2 size={15} aria-hidden /> {item}
+                      <Circle size={15} aria-hidden /> {item}
                     </li>
                   ))}
                 </ul>
                 {reviewNote ? (
                   <div className={styles.footer}>
-                    <span className={styles.smallNote}>Source model recommendation: {reviewNote}</span>
+                    <span className={styles.smallNote}>Unverified source-model recommendation (review before use): {reviewNote}</span>
                   </div>
                 ) : null}
               </section>
