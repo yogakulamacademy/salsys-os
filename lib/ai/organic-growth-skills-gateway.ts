@@ -144,13 +144,21 @@ export async function runOrganicGrowthReadOnlyTool(
     let expected: number | null = null;
 
     for (let offset = 0; offset < MAX_SOURCE_ROWS; offset += PAGE_SIZE) {
-      const result = await supabase
+      let query = supabase
         .from(table)
         .select(columns, { count: 'exact' })
         .eq('organization_id', organizationId)
         .order(orderColumn, { ascending: false })
-        .order(termColumn, { ascending: true })
-        .range(offset, offset + PAGE_SIZE - 1);
+        .order(termColumn, { ascending: true });
+      // Paid search terms can share both spend and text across campaigns.
+      // Add the remaining GROUP BY dimensions for stable page boundaries.
+      if (table === 'v_google_ads_search_term_30d') {
+        query = query
+          .order('customer_id', { ascending: true })
+          .order('campaign_id', { ascending: true })
+          .order('ad_group_id', { ascending: true });
+      }
+      const result = await query.range(offset, offset + PAGE_SIZE - 1);
 
       if (result.error) {
         throw new Error('Search reporting data is unavailable. No comparison has been generated.');
