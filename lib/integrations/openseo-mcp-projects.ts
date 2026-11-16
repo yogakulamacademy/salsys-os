@@ -128,9 +128,13 @@ export async function getOpenSeoProjectInventory(
       }
       chunks.push(next.value);
     }
-    const raw = new TextDecoder().decode(
-      Uint8Array.from(chunks.flatMap((chunk) => Array.from(chunk))),
-    );
+    const body = new Uint8Array(size);
+    let cursor = 0;
+    for (const chunk of chunks) {
+      body.set(chunk, cursor);
+      cursor += chunk.byteLength;
+    }
+    const raw = new TextDecoder().decode(body);
     const projects = parseOpenSeoProjectInventory(raw);
     if (!projects) {
       return result("invalid_response", "OpenSEO project data could not be verified.", [], checkedAt);
