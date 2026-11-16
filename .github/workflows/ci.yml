@@ -311,6 +311,15 @@ jobs:
       - name: Verify UI with synthetic loopback services
         run: npm run test:ui
 
+      - name: Upload Organic Intelligence synthetic browser review
+        if: always()
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: organic-content-research-synthetic-review
+          path: test-results/organic-brief-research-*.png
+          if-no-files-found: warn
+          retention-days: 3
+
       - name: Upload Home reference screenshots
         if: always()
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
