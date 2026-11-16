@@ -313,11 +313,11 @@ export default async function ContentBriefResearchPage({
                 <CircleAlert size={20} aria-hidden />
                 <div>
                   <h2 className={core.sectionTitle}>
-                    {topics.length ? "Topic not found in this workspace" : "No research evidence yet"}
+                    {topics.length ? "Topic not available in the loaded list" : "No research evidence yet"}
                   </h2>
                   <p className={core.sectionDescription}>
                     {topics.length
-                      ? "Select a topic from the list. A URL parameter cannot select a topic outside the authenticated workspace."
+                      ? "Select a topic from this loaded, permission-scoped list. Topic IDs cannot request extra records, and the list is limited to the first 40 eligible entries."
                       : "Connect a supported search data source and review your Content Opportunities first."}
                   </p>
                 </div>
