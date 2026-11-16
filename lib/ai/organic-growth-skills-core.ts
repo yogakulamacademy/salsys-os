@@ -194,6 +194,35 @@ export const ORGANIC_GROWTH_READ_ONLY_TOOLS = [
 export type OrganicGrowthToolName =
   (typeof ORGANIC_GROWTH_READ_ONLY_TOOLS)[number]['name'];
 
+/**
+ * Minimize sensitive raw search strings before any external AI exposure.
+ * Source metrics remain on the server; PII-like / overly long queries are
+ * omitted rather than copied verbatim into Claude context.
+ */
+export function safeOrganicQuery(raw: unknown): string | null {
+  if (typeof raw !== 'string') return null;
+  const clean = raw.normalize('NFKC').replace(/[\u0000-\u001f\u007f]/g, ' ').trim();
+  if (!clean || clean.length > 180) return null;
+  if (/[^\s@]+@[^\s@]+\.[a-z]{2,}/i.test(clean)) return null;
+  if (/(?:\+?\d[\s().-]*){10,}/.test(clean)) return null;
+  return clean;
+}
+
+function safeObservedPageUrl(raw: unknown): string | null {
+  if (typeof raw !== 'string' || raw.length > 2048) return null;
+  try {
+    const url = new URL(raw);
+    if (!['http:', 'https:'].includes(url.protocol)) return null;
+    if (url.username || url.password) return null;
+    url.search = '';
+    url.hash = '';
+    const cleaned = url.toString();
+    return cleaned.length <= 400 ? cleaned : null;
+  } catch {
+    return null;
+  }
+}
+
 export function normalizeOrganicQuery(raw: string): string {
   return raw.normalize('NFKC').trim().toLowerCase().replace(/\s+/g, ' ');
 }
@@ -241,11 +270,11 @@ export function buildContentBriefEvidence(
   const isRelevant = (q: string) => terms.length > 0 &&
     terms.some((term) => normalizeOrganicQuery(q).includes(term));
 
-  const matched = queries.filter((row) => isRelevant(row.query))
+  const matched = queries.filter((row) => Boolean(safeOrganicQuery(row.query)) && isRelevant(row.query))
     .sort((a, b) => nonNegative(b.impressions) - nonNegative(a.impressions))
     .slice(0, 50)
     .map((row) => ({
-      query: row.query,
+      query: safeOrganicQuery(row.query)!,
       clicks: nonNegative(row.clicks),
       impressions: nonNegative(row.impressions),
       averagePosition: averagePosition(row.avg_position),
@@ -253,12 +282,13 @@ export function buildContentBriefEvidence(
     }));
 
   const existingPages = pages.filter((row) =>
-    Boolean(row.leader_page) && isRelevant(row.query))
+    Boolean(safeOrganicQuery(row.query)) &&
+    Boolean(safeObservedPageUrl(row.leader_page)) && isRelevant(row.query))
     .sort((a, b) => nonNegative(b.impressions) - nonNegative(a.impressions))
     .slice(0, 25)
     .map((row) => ({
-      query: row.query,
-      page: row.leader_page,
+      query: safeOrganicQuery(row.query)!,
+      page: safeObservedPageUrl(row.leader_page)!, 
       clicks: nonNegative(row.clicks),
       impressions: nonNegative(row.impressions),
       averagePosition: averagePosition(row.avg_position),
@@ -301,7 +331,9 @@ export function buildSeoVsAdsEvidence(
     query: string; clicks: number; impressions: number; weightedPosition: number;
   }>();
   for (const row of organicRows) {
-    const key = normalizeOrganicQuery(row.query);
+    const safeQuery = safeOrganicQuery(row.query);
+    if (!safeQuery) continue;
+    const key = normalizeOrganicQuery(safeQuery);
     if (!key) continue;
     const existing = organicByTerm.get(key) ?? {
       query: row.query, clicks: 0, impressions: 0, weightedPosition: 0,
@@ -318,7 +350,9 @@ export function buildSeoVsAdsEvidence(
     term: string; currency: string; spend: number; clicks: number; conversions: number;
   }>();
   for (const row of paidRows) {
-    const term = normalizeOrganicQuery(row.search_term);
+    const safeTerm = safeOrganicQuery(row.search_term);
+    if (!safeTerm) continue;
+    const term = normalizeOrganicQuery(safeTerm);
     if (!term) continue;
     const currency = String(row.currency_code || 'UNKNOWN').trim().toUpperCase();
     const key = JSON.stringify([term, currency]);
