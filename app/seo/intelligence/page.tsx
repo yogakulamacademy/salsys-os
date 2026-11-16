@@ -7,6 +7,7 @@ import {
 
 import { safeOrganicQuery } from "@/lib/ai/organic-growth-skills-core";
 import { getSeoWorkspace, type SeoWorkspace } from "@/lib/seo-data";
+import { requirePrivilegedWorkspaceAccess } from "@/lib/route-access";
 import styles from "./intelligence.module.css";
 
 export const dynamic = "force-dynamic";
@@ -142,6 +143,8 @@ export default async function OrganicIntelligencePage({
   const params = await searchParams;
   const focus: Focus = params.focus === "search" || params.focus === "content" ||
     params.focus === "answers" ? params.focus : "all";
+  const activeWorkspace = await requirePrivilegedWorkspaceAccess();
+  const canOpenSeoProjects = activeWorkspace.role === "owner" || activeWorkspace.role === "admin";
   const workspace = await getSeoWorkspace();
   const items = evidenceItems(workspace);
   const visible = items.filter((item) => focus === "all" || focus === item.category).slice(0, 9);
@@ -171,9 +174,15 @@ export default async function OrganicIntelligencePage({
           <Link href="/seo" className={styles.actionLink}>
             SEO overview <ArrowUpRight size={14} aria-hidden />
           </Link>
-          <Link href="/seo/open-seo" className={styles.actionLink + " " + styles.actionLinkPrimary}>
-            OpenSEO research <ArrowUpRight size={14} aria-hidden />
-          </Link>
+          {canOpenSeoProjects ? (
+            <Link href="/seo/open-seo" className={styles.actionLink + " " + styles.actionLinkPrimary}>
+              OpenSEO research <ArrowUpRight size={14} aria-hidden />
+            </Link>
+          ) : (
+            <span className={styles.actionLink} aria-label="OpenSEO requires an owner or admin">
+              OpenSEO · admin only <LockKeyhole size={13} aria-hidden />
+            </span>
+          )}
         </div>
       </header>
 
@@ -364,10 +373,12 @@ export default async function OrganicIntelligencePage({
                 <span className={styles.linkLeft}><FileSearch size={15} aria-hidden /> Technical SEO</span>
                 <ArrowUpRight size={14} aria-hidden />
               </Link>
-              <Link className={styles.linkRow} href="/seo/open-seo">
-                <span className={styles.linkLeft}><Globe2 size={15} aria-hidden /> OpenSEO projects</span>
-                <ArrowUpRight size={14} aria-hidden />
-              </Link>
+              {canOpenSeoProjects ? (
+                <Link className={styles.linkRow} href="/seo/open-seo">
+                  <span className={styles.linkLeft}><Globe2 size={15} aria-hidden /> OpenSEO projects</span>
+                  <ArrowUpRight size={14} aria-hidden />
+                </Link>
+              ) : null}
             </div>
           </section>
 
