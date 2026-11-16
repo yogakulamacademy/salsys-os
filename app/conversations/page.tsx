@@ -184,6 +184,8 @@ export default async function ConversationsPage({
           }
       : { templates: [], error: null };
 
+  const hasStartTemplates = whatsappTemplateCatalog.templates.some((template) => template.supported);
+
   const copilotChannel =
     selected?.currentContactChannel === "whatsapp" ||
     selected?.currentContactChannel === "instagram"
@@ -234,19 +236,10 @@ export default async function ConversationsPage({
               <span className="ibx-v3-header-owner"><UserRound size={12}/>
                 Owner: {selected.ownerName||"Unassigned"}
               </span>
-              {selectedSummary?.needsReply ? (
-                <span className="rounded-full bg-warning-soft px-2 py-0.5 text-[11px] font-semibold text-warning">
-                  Needs reply
-                </span>
-              ) : selectedSummary?.needsFirstContact ? (
-                <span className="rounded-full bg-sky-50 px-2 py-0.5 text-[11px] font-semibold text-sky-700">
-                  First contact
-                </span>
-              ) : null}
-              {selectedSummary?.waitingSince &&
-              (selectedSummary.needsReply || selectedSummary.needsFirstContact) ? (
-                <span className="inline-flex items-center gap-1 text-[11px] font-medium text-copy-muted">
-                  <Clock3 size={11} /> Waiting {formatWaiting(selectedSummary.waitingSince)}
+              {selectedSummary?.needsReply || selectedSummary?.needsFirstContact ? (
+                <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ${selectedSummary.needsReply ? "bg-warning-soft text-warning" : "bg-sky-50 text-sky-700"}`}>
+                  {selectedSummary.needsReply ? "Needs reply" : "First contact"}
+                  {selectedSummary.waitingSince ? <><Clock3 size={11} aria-hidden="true" /> {formatWaiting(selectedSummary.waitingSince)}</> : null}
                 </span>
               ) : null}
             </div>
@@ -344,7 +337,7 @@ export default async function ConversationsPage({
                 "WhatsApp sending is currently unavailable for this conversation."}
             </div>
           )
-        ) : canStartWhatsApp && whatsappTemplateAction ? (
+        ) : canStartWhatsApp && whatsappTemplateAction && (hasStartTemplates || whatsappTemplateCatalog.error) ? (
           <WhatsAppTemplateComposer
             action={whatsappTemplateAction}
             leadId={selected.id}
@@ -367,6 +360,10 @@ export default async function ConversationsPage({
                 ? messagingEligibility
                 : null
             }
+            emailTo={selected.currentContactChannel === "instagram" ? null : selectedEmail}
+            notice={canStartWhatsApp && !hasStartTemplates
+              ? "WhatsApp needs an approved Meta template first; none is approved yet. Reply by email or log a call instead."
+              : null}
           />
         )}
       </div>

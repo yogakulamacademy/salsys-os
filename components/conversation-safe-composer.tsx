@@ -1,6 +1,6 @@
 "use client";
 
-import { FileText, MessageSquareText, RefreshCw, Save, Send } from "lucide-react";
+import { FileText, Mail, MessageSquareText, RefreshCw, Save, Send } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 
@@ -40,11 +40,17 @@ export function ConversationSafeComposer({
   channel,
   interactionAction,
   eligibility,
+  emailTo,
+  notice,
 }: {
   leadId: string;
   channel: Channel;
   interactionAction?: ServerAction;
   eligibility?: MessagingEligibility | null;
+  /** When set, the draft can be opened in the user's mail app (nothing is sent from the CRM). */
+  emailTo?: string | null;
+  /** One-line context shown above the composer, e.g. why WhatsApp is not available. */
+  notice?: string | null;
 }) {
   const router = useRouter();
   const [mode, setMode] = useState<ComposeMode>("reply");
@@ -234,6 +240,7 @@ export function ConversationSafeComposer({
 
   return (
     <section className="bg-white p-3" aria-label="Conversation composer">
+      {notice ? <p className="ibx-v3-composer-notice mb-2 text-[10px] leading-4 text-[#715B31]">{notice}</p> : null}
       <div className="overflow-hidden rounded-lg border border-[#D4DFD2] bg-white shadow-[0_1px_3px_rgba(21,62,51,0.04)]">
         <div
           className="flex items-center gap-5 border-b border-[#EEF2EF] px-3 pt-2"
@@ -316,6 +323,14 @@ export function ConversationSafeComposer({
                   className="ibx-v3-save-draft inline-flex h-8 items-center justify-center gap-1.5 rounded-lg border border-[#DCE4DF] bg-white px-3 text-[9px] font-semibold text-[#596E64] disabled:opacity-50">
                   <Save size={11}/> Save draft
                 </button>
+                {emailTo && !isInstagram ? <a
+                  href={`mailto:${emailTo}?subject=${encodeURIComponent("Re: your enquiry")}&body=${encodeURIComponent(replyDraft)}`}
+                  onClick={() => persistDraft(replyDraft)}
+                  aria-disabled={!replyDraft.trim()}
+                  title={`Opens your email app with this draft to ${emailTo}. Nothing is sent from the CRM.`}
+                  className={`ibx-v3-email-draft inline-flex h-8 items-center justify-center gap-1.5 rounded-lg bg-[#153E33] px-3 text-[9px] font-semibold text-white ${replyDraft.trim() ? "" : "pointer-events-none opacity-50"}`}>
+                  <Mail size={11}/> Open in email
+                </a> : null}
                 {isInstagram ? <button type="button" onClick={sendInstagramReply}
                   disabled={!instagramSendAllowed || !replyDraft.trim() || isPending}
                   className="ibx-v3-send inline-flex h-8 items-center justify-center gap-1.5 rounded-lg bg-[#153E33] px-3 text-[9px] font-semibold text-white disabled:opacity-50">
