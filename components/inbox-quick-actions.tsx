@@ -10,11 +10,11 @@ export function InboxQuickActions({
 }) {
   const callNumber = phone?.replace(/[^\d+]/g, "") || "";
   const showAssignment = () => {
-    const panel = document.getElementById("inbox-assignment");
-    if (panel instanceof HTMLDetailsElement) {
-      panel.open = true;
-      panel.scrollIntoView({block:"nearest",behavior:"smooth"});
-      panel.querySelector<HTMLElement>("select")?.focus();
+    const select = document.getElementById("inbox-header-owner");
+    if (select instanceof HTMLSelectElement) {
+      select.scrollIntoView({block:"nearest",behavior:"smooth"});
+      select.focus();
+      try { select.showPicker?.(); } catch { /* some browsers only allow showPicker on a direct click */ }
     }
   };
   const showSchedule = () => {
