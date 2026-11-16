@@ -1,11 +1,31 @@
 import Link from 'next/link';
 
 import { getCurrentDeskcommHumanReviewQueue } from '@/lib/integrations/deskcomm-human-review-data';
+import {
+  claimDeskcommHumanReviewAction,
+  closeDeskcommHumanReviewAction,
+} from '@/app/automation/whatsapp/human-review/actions';
 
 export const dynamic = 'force-dynamic';
 
-export default async function WhatsAppHumanReviewQueuePage() {
-  const queue = await getCurrentDeskcommHumanReviewQueue();
+export default async function WhatsAppHumanReviewQueuePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ status?: string }>;
+}) {
+  const [queue, query] = await Promise.all([
+    getCurrentDeskcommHumanReviewQueue(),
+    searchParams,
+  ]);
+  const notices: Record<string, string> = {
+    assigned: 'Human review task created and assigned to your CRM account. Active automations were paused; unclaimed scheduled work was cancelled.',
+    already_assigned: 'This request already has a handoff task. No duplicate task was created.',
+    closed: 'Handoff closed. Cancelled automation work was not resumed.',
+    unavailable: 'The action could not be completed safely. Confirm the migration and exact CRM identity evidence before retrying.',
+    invalid: 'Invalid handoff request. Nothing was changed.',
+    disabled: 'Handoff task actions are disabled in this environment.',
+  };
+  const notice = typeof query.status === 'string' ? notices[query.status] : null;
   return (
     <main className="mx-auto max-w-5xl space-y-5 pb-10">
       <header>
@@ -30,6 +50,12 @@ export default async function WhatsAppHumanReviewQueuePage() {
         </div>
       </header>
 
+      {notice ? (
+        <p role="status" className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
+          {notice}
+        </p>
+      ) : null}
+
       <section className="rounded-2xl border border-slate-200 bg-white p-5">
         <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
           Evidence: {queue.status.replaceAll('_', ' ')}
@@ -39,6 +65,13 @@ export default async function WhatsAppHumanReviewQueuePage() {
           business sender account, customer identity and existing CRM message
           must all agree before a lead link is shown.
         </p>
+        {queue.status === 'ready' && !queue.actionsEnabled ? (
+          <p className="mt-3 text-sm text-slate-500">
+            Human handoff task actions are OFF. Candidate review is read-only.
+            The existing CRM messaging, suppression and approval controls remain authoritative.
+          </p>
+        ) : null}
+
         {queue.status === 'disabled' ? (
           <p role="status" className="mt-4 text-sm text-amber-800">
             The inbound shadow is OFF. Enable only in an authorized staging
@@ -89,12 +122,46 @@ export default async function WhatsAppHumanReviewQueuePage() {
                         </td>
                         <td className="px-3 py-3">
                           {row.match === 'verified_identity' && row.leadId ? (
-                            <Link
-                              href={`/leads/${encodeURIComponent(row.leadId)}`}
-                              className="font-semibold text-violet-700 underline underline-offset-2"
-                            >
-                              Review lead
-                            </Link>
+                            <div className="flex flex-col items-start gap-2">
+                              <Link
+                                href={`/leads/${encodeURIComponent(row.leadId)}`}
+                                className="font-semibold text-violet-700 underline underline-offset-2"
+                              >
+                                Review lead
+                              </Link>
+                              {row.handoff ? (
+                                <>
+                                  <span className="text-xs text-slate-500">
+                                    Handoff {row.handoff.status} · task recorded
+                                  </span>
+                                  {queue.actionsEnabled && row.handoff.status === 'open' ? (
+                                    <div className="flex flex-wrap gap-2">
+                                      <form action={closeDeskcommHumanReviewAction}>
+                                        <input type="hidden" name="handoff_id" value={row.handoff.id} />
+                                        <input type="hidden" name="resolution" value="resolved_by_staff" />
+                                        <button type="submit" className="rounded-lg border border-slate-300 px-2 py-1 text-xs font-semibold">
+                                          Resolve and close
+                                        </button>
+                                      </form>
+                                      <form action={closeDeskcommHumanReviewAction}>
+                                        <input type="hidden" name="handoff_id" value={row.handoff.id} />
+                                        <input type="hidden" name="resolution" value="dismissed_after_review" />
+                                        <button type="submit" className="rounded-lg border border-slate-300 px-2 py-1 text-xs">
+                                          Dismiss
+                                        </button>
+                                      </form>
+                                    </div>
+                                  ) : null}
+                                </>
+                              ) : queue.actionsEnabled && row.kind === 'human_request' && row.rawEventId ? (
+                                <form action={claimDeskcommHumanReviewAction}>
+                                  <input type="hidden" name="raw_event_id" value={row.rawEventId} />
+                                  <button type="submit" className="rounded-lg border border-slate-300 px-2 py-1 text-xs font-semibold">
+                                    Assign review to me
+                                  </button>
+                                </form>
+                              ) : null}
+                            </div>
                           ) : (
                             <span className="text-slate-500">Use existing inbox reconciliation</span>
                           )}
@@ -112,9 +179,12 @@ export default async function WhatsAppHumanReviewQueuePage() {
             )}
             <p className="mt-4 text-xs leading-5 text-slate-500">
               Displays at most the 40 most recent candidates; the total count
-              covers the bounded 7-day snapshot only. Reviewing does not
-              update suppression, assign a task, silence AI, claim a queue job
-              or send a WhatsApp message.
+              covers the bounded 7-day snapshot only. Reviewing is read-only.
+              With the separate action flag enabled, an explicit administrator
+              click can create one assigned human-review task and pause the
+              lead's current automation enrollments. This does not alter consent,
+              cancel an already-claimed provider send, or send a WhatsApp message.
+              Closing a handoff never replays cancelled jobs or restarts AI.
             </p>
           </>
         )}
