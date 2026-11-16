@@ -1,7 +1,9 @@
 # SalsysOS WhatsApp / Deskcomm — isolated staging acceptance
 
 **Status: NOT executed against a live Meta test number.** This is an
-operator-assisted test plan. PR #718 is draft; production and recovery rehearsal
+operator-assisted test plan. PR #718 is merged and the code is deployed with
+handoff actions OFF; the new database handoff migration has **not** been applied
+to production. Production and recovery rehearsal
 are not substitute staging targets. Do not turn on production sends or this
 feature until an independently approved, isolated staging organization,
 Supabase project, Meta test sender, app secret, and reviewer are available.
@@ -41,7 +43,7 @@ Supabase project, Meta test sender, app secret, and reviewer are available.
 | W8 | Retry claim and open twice concurrently | Exactly one handoff, task and alert; same original identifiers returned |
 | W9 | Activate handoff when an audit is already `sending` | Refusal with `whatsapp_provider_send_in_flight`; no new task; operator reconciliation needed |
 | W10 | Transition a Meta send to `sending` after active handoff | Database trigger blocks standard and broadcast claims before network request |
-| W11 | Intentionally sever the **test Meta transport** after request dispatch and before response | Audit retained in `sending`; `provider_response.transport_outcome.status=unknown`; retry blocked pending independent proof; do not assert message was unsent |
+| W11 | Intentionally sever the **test Meta transport** after request dispatch and before response | Audit retained in `sending`; `provider_response.transport_outcome.status=unknown`; review-only `/automation/whatsapp/uncertain-sends` displays the exact tenant-scoped audit within 30 days; retry blocked pending independent proof; do not assert message was unsent |
 | W12 | Attempt to change unknown-outcome audit to failed/ready | Trigger blocks unsafe retry transition |
 | W13 | Resolve assigned task, then explicitly release the hold | Closure preserves hold; release permits only future workflow evaluation, never replays cancelled jobs |
 | W14 | Disable the pilot after creating a hold | New actions vanish; existing hold remains protected and visible for controlled resolution |
@@ -66,6 +68,13 @@ provider message ID and authentic signed delivery receipts. If acceptance is
 verified, use the existing provider-acceptance reconciliation controls to
 attach the provider ID and canonical message without another send. If no
 positive rejection/acceptance proof exists, keep the audit in investigation.
+
+The operator-only `/automation/whatsapp/uncertain-sends` page lists up to
+50 oldest matching Meta send audits from the last 30 days, with a lead link
+and the last recorded audit time. This is a **read-only, bounded view**, not
+an exact count, a provider-status verification, a production migration
+check, a replay facility, or evidence of successful reconciliation. A
+failure to read the audit table must be shown as unavailable, never as zero.
 
 The handoff opening RPC refuses the lead while an audit is in `sending`.
 Do not change `sending` to `failed` as a shortcut. This deliberately favors
