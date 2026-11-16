@@ -16,9 +16,10 @@ test('missing, negative or non-finite counts are treated as zero', () => {
   assert.deepEqual(groups, { new: 0, contacted: 4, high_intent: 7, payment_pending: 0, enrolled: 0 });
 });
 
-test('both Home pipeline cards use the one grouping', () => {
+test('Home pipeline uses the one grouping and no ad-hoc stage sums', () => {
   const page = fs.readFileSync('app/home/page.tsx', 'utf8');
-  assert.equal((page.match(/groupHomePipelineStages\(counts\)/g) || []).length, 2);
+  assert.equal((page.match(/groupHomePipelineStages\(counts\)/g) || []).length, 1);
+  assert.ok(page.includes('<PipelineHealthPanel groups={stageGroups} />'));
   assert.ok(!page.includes('{label:"Contacted",value:counts.contacted}'));
   assert.ok(!page.includes('counts.contacted + counts.engaged'));
 });
