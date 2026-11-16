@@ -29,6 +29,7 @@ const otherOrg = '11000000-0000-4000-8000-000000000002';
 const actor = '22000000-0000-4000-8000-000000000001';
 const assignee = '22000000-0000-4000-8000-000000000002';
 const otherOwner = '22000000-0000-4000-8000-000000000003';
+const nonOwnerMember = '22000000-0000-4000-8000-000000000004';
 const lead = '33000000-0000-4000-8000-000000000001';
 const conversation = '44000000-0000-4000-8000-000000000001';
 const event = '55000000-0000-4000-8000-000000000001';
@@ -71,6 +72,7 @@ $$;
 
 create table public.leads (
   id uuid primary key,organization_id uuid not null,
+  owner_user_id uuid,
   next_followup_at timestamptz
 );
 create table public.conversations (
@@ -178,16 +180,18 @@ async function fixture(run) {
     // deliberately executes a local-only synthetic seed as one simple batch.
     await observer.query(`
       insert into public.organizations(id) values ('${org}'),('${otherOrg}');
-      insert into public.profiles(id) values ('${actor}'),('${assignee}'),('${otherOwner}');
+      insert into public.profiles(id) values ('${actor}'),('${assignee}'),('${otherOwner}'),('${nonOwnerMember}');
       insert into public.organization_members(organization_id,user_id,role,active)
       values ('${org}','${actor}','owner',true),
              ('${org}','${assignee}','member',true),
+             ('${org}','${nonOwnerMember}','member',true),
              ('${otherOrg}','${otherOwner}','owner',true);
       insert into public.organization_workspaces(organization_id,workspace_code,enabled)
       values ('${org}','sales',true),('${otherOrg}','sales',true);
       insert into public.workspace_memberships(organization_id,workspace_code,user_id,role,active)
-      values ('${org}','sales','${assignee}','member',true);
-      insert into public.leads(id,organization_id) values('${lead}','${org}');
+      values ('${org}','sales','${assignee}','member',true),
+             ('${org}','sales','${nonOwnerMember}','member',true);
+      insert into public.leads(id,organization_id,owner_user_id) values('${lead}','${org}','${assignee}');
       insert into public.conversations(id,organization_id,lead_id,channel,external_account_id,external_conversation_id)
       values ('${conversation}','${org}','${lead}','whatsapp','meta-phone-a','919999123456');
       insert into public.messages(organization_id,lead_id,conversation_id,external_message_id,direction)
@@ -329,6 +333,7 @@ test('cross tenant, unsigned/STOP, unassigned staff and mismatched sender all fa
   await assert.rejects(open(c,{organizationId:otherOrg}),/owners\/admins/);
   await assert.rejects(open(c,{eventId:eventStop}),/Verified human-request/);
   await assert.rejects(open(c,{assignedTo:otherOwner}),/active Sales workspace member/);
+  await assert.rejects(open(c,{assignedTo:nonOwnerMember}),/does not have access to this lead/);
 
   await f.observer.query('update public.raw_events set source_subject_id=$1 where id=$2',['wrong-sender',event]);
   await assert.rejects(open(c),/no rows|more than one row|Exact inbound/i);
