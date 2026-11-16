@@ -209,6 +209,45 @@ before insert or update of status,lead_id,organization_id
   on public.automation_enrollments
 for each row execute function public.guard_human_handoff_enrollment_v1();
 
+-- A network timeout after dispatch is ambiguous, never a confirmed
+-- provider failure. Keep a stored 'outcome unknown' marker sticky until
+-- an independently verified provider-accepted reconciliation is committed.
+-- This also blocks a direct admin update to 'failed' that could bypass the
+-- normal retry RPC's requirement for a failed audit.
+create or replace function public.guard_whatsapp_unknown_transport_retry_v1()
+returns trigger
+language plpgsql
+security definer
+set search_path = public,auth,pg_temp
+as $function$
+begin
+  if old.channel = 'whatsapp'
+     and old.provider = 'meta_cloud_api'
+     and old.provider_response #>> '{transport_outcome,status}' = 'unknown'
+  then
+    if new.status in ('ready','failed','blocked')
+      or (new.status = 'sent' and (
+        new.provider_message_id is null
+        or new.customer_message_sent is not true
+      ))
+      or (
+        new.provider_response #>> '{transport_outcome,status}' is distinct from 'unknown'
+        and new.status <> 'sent'
+      )
+    then
+      raise exception 'Unknown Meta send outcome requires verified provider acceptance reconciliation; do not retry';
+    end if;
+  end if;
+  return new;
+end;
+$function$;
+
+drop trigger if exists guard_whatsapp_unknown_transport_retry_v1
+  on public.automation_provider_send_audits;
+create trigger guard_whatsapp_unknown_transport_retry_v1
+before update on public.automation_provider_send_audits
+for each row execute function public.guard_whatsapp_unknown_transport_retry_v1();
+
 -- Provider-send fence for BOTH Smart Triggers and broadcast claims. Both
 -- existing claim RPCs transition automation_provider_send_audits to 'sending'.
 -- The trigger runs inside their database transaction, before provider access.
@@ -662,6 +701,8 @@ $function$;
 
 -- These are internal trigger helpers, never browser-callable RPCs.
 revoke all on function public.guard_whatsapp_handoff_provider_send_v1()
+  from public,anon,authenticated;
+revoke all on function public.guard_whatsapp_unknown_transport_retry_v1()
   from public,anon,authenticated;
 revoke all on function public.guard_human_handoff_enrollment_v1()
   from public,anon,authenticated;
