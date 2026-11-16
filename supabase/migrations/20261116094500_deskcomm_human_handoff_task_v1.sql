@@ -433,6 +433,32 @@ begin
   -- STRICT rejects missing or ambiguous joins. Never pick an arbitrary
   -- CRM identity from duplicate provider linkage.
 
+  -- Assigned staff must be able to read the customer conversation. Regular
+  -- Sales members may only access leads they already own. Assignment is NOT
+  -- an implicit change to leads.owner_user_id or broader CRM access policies.
+  if not exists (
+    select 1
+    from public.organization_members om
+    join public.leads l
+      on l.organization_id = om.organization_id
+     and l.id = v_lead_id
+    left join public.workspace_memberships wm
+      on wm.organization_id = om.organization_id
+     and wm.workspace_code = 'sales'
+     and wm.user_id = om.user_id
+     and wm.active is true
+    where om.organization_id = p_organization_id
+      and om.user_id = v_assignee
+      and om.active is true
+      and (
+        om.role in ('owner','admin')
+        or wm.role = 'manager'
+        or (wm.role = 'member' and l.owner_user_id = v_assignee)
+      )
+  ) then
+    raise exception 'Assignee does not have access to this lead; assign the lead owner first';
+  end if;
+
   -- Serialize new enrollments for the same tenant/lead against this hold.
   perform pg_advisory_xact_lock(hashtextextended(
     'whatsapp-human-handoff:' || p_organization_id::text || ':' || v_lead_id::text,0
