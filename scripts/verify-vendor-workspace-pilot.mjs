@@ -11,6 +11,9 @@ const config = file("lib/integrations/vendor-workspaces.ts");
 const notice = file("components/vendor-workspace-notice.tsx");
 const health = file("lib/integrations/vendor-workspace-health.ts");
 const diagnosticsPage = file("app/settings/vendor-workspaces/page.tsx");
+const openSeoMcp = file("lib/integrations/openseo-mcp-projects.ts");
+const openSeoPage = file("app/seo/open-seo/page.tsx");
+const openSeoParser = file("lib/integrations/openseo-mcp-response.ts");
 const seo = file("app/seo/layout.tsx");
 const whatsapp = file("app/automation/whatsapp/layout.tsx");
 const env = file(".env.example");
@@ -35,6 +38,16 @@ for (const marker of [
 }
 
 assert.match(env, /SALSYS_VENDOR_WORKSPACE_PREVIEW=false/);
+assert.ok(env.includes("SALSYS_OPENSEO_SALSYS_ORG_ID="));
+assert.ok(env.includes("SALSYS_OPENSEO_API_KEY="));
+assert.ok(openSeoMcp.includes('name: "list_projects"'));
+assert.ok(openSeoMcp.includes('mappedTenant !== organizationId'));
+assert.ok(openSeoMcp.includes('method: "tools/call"'));
+assert.ok(openSeoMcp.includes('redirect: "manual"'));
+assert.ok(openSeoMcp.includes('AbortSignal.timeout(8000)'));
+assert.ok(openSeoPage.includes("await requireAdminWorkspaceAccess()"));
+assert.ok(openSeoParser.includes("structured.projects"));
+assert.ok(!openSeoMcp.includes("tools/list") && !openSeoMcp.includes("executePreparedWhatsAppProviderSend"));
 assert.match(notice, /if \(!preview\.previewEnabled\) return null/);
 assert.match(notice, /rel="noopener noreferrer"/);
 assert.match(notice, /not yet connected/);
