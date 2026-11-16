@@ -92,17 +92,21 @@ export default async function ConversationsPage({
         ? "Team inbox"
         : "My workspace";
 
+  // The conversations page RPC carries no phone column, so contact details
+  // come from the authorized, PII-aware contacts RPC (masked values are hidden).
+  const selectedContacts = selected && !mock
+    ? await resolveConversationContacts(selected.id)
+    : null;
+  const selectedPhone = mock ? selected?.phone : selectedContacts?.phone ?? undefined;
   const hasTelephoneContact =
     selectedId && selected
       ? mock
         ? Boolean(selected.phone)
-        : await resolveTelephoneCapability(selectedId)
+        : Boolean(selectedPhone) && await resolveTelephoneCapability(selectedId)
       : false;
 
   const selectedAttribution = selected ? await getLead(selected.id) : null;
-  const selectedEmail = selected && !mock
-    ? await resolveConversationEmail(selected.id)
-    : null;
+  const selectedEmail = selectedContacts?.email ?? null;
   const conversationStatus = selectedSummary?.resolved ? "Done"
     : selectedSummary?.needsReply ? "Needs reply"
     : selectedSummary?.needsFirstContact ? "First contact"
@@ -315,7 +319,7 @@ export default async function ConversationsPage({
                 "Choose an approved template to continue."
               }
               mode="followup"
-              phone={selected.phone}
+              phone={selectedPhone}
             />
           ) : (
             <div className="p-4 text-[12px] text-copy-muted">
@@ -369,19 +373,20 @@ export default async function ConversationsPage({
             <ArrowUpRight size={16}/>
           </Link>
         </div>
-        {hasTelephoneContact && selected.phone ?
-          <a className="ibx-v2-profile-phone" href={`tel:${selected.phone.replace(/[^0-9+]/g,"")}`}>
-            <Phone size={13}/> {selected.phone}
+        {hasTelephoneContact && selectedPhone ?
+          <a className="ibx-v2-profile-phone" href={`tel:${selectedPhone.replace(/[^0-9+]/g,"")}`}>
+            <Phone size={13}/> {selectedPhone}
           </a> :
           <span className="ibx-v2-profile-no-phone">Phone contact unavailable</span>}
       </section>
-      <InboxLeadOverview leadId={selected.id} stage={selected.stage}
+      {/* key: remount per lead so the stage/owner selects never keep the previous conversation's value */}
+      <InboxLeadOverview key={selected.id} leadId={selected.id} stage={selected.stage}
         ownerUserId={selected.ownerUserId} ownerName={selected.ownerName}
         candidates={team.assignmentCandidates} canAssign={team.canManageAssignments}
         mock={mock} channel={selected.currentContactChannel}
         attributionSource={selectedAttribution?.firstTouchSource||"Not verified"} interest={selected.course}
         country={selected.country}
-        lastContacted={selected.lastContactedAt?formatDateTime(selected.lastContactedAt):"Not contacted"}
+        lastContacted={selected.lastContactedAt?formatDateTime(selected.lastContactedAt):"No messages yet"}
         state={conversationStatus}/>
 
       <section id="inbox-next-steps" className="ibx-v2-next-step-card border-b border-line px-3.5 py-4">
@@ -403,7 +408,7 @@ export default async function ConversationsPage({
         </div>
       )}
 
-      <InboxQuickActions phone={selected.phone} canCall={Boolean(hasTelephoneContact)}
+      <InboxQuickActions phone={selectedPhone} canCall={Boolean(hasTelephoneContact)}
         canAssign={team.canManageAssignments} profileHref={`/leads/${selected.id}`}/>
       <details id="inbox-assignment" className="ibx-v2-assignment-card ibx-v2-advanced-panel">
         <summary>Team & ownership <ChevronDown size={14}/></summary>
@@ -515,14 +520,25 @@ export default async function ConversationsPage({
   );
 }
 
-async function resolveConversationEmail(leadId:string):Promise<string|null> {
-  const supabase=await createClient();
-  const {data,error}=await supabase.rpc('get_admissions_lead_contacts_secure',{
-    p_lead_ids:[leadId],
+type ConversationContacts = { email: string | null; phone: string | null };
+
+async function resolveConversationContacts(leadId: string): Promise<ConversationContacts | null> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("get_admissions_lead_contacts_secure", {
+    p_lead_ids: [leadId],
   });
-  if(error||!Array.isArray(data)) return null;
-  const row=data.find(value=>value?.lead_id===leadId) as {email?:string|null}|undefined;
-  return row?.email||null;
+  if (error || !Array.isArray(data)) return null;
+  const row = data.find((value) => value?.lead_id === leadId) as
+    | { email?: string | null; phone?: string | null; whatsapp?: string | null; pii_masked?: boolean | null }
+    | undefined;
+  if (!row) return null;
+  // Masked values are for display policy only; never dial or message them.
+  const usable = (value?: string | null) =>
+    !row.pii_masked && typeof value === "string" && /\d{6,}/.test(value.replace(/\D/g, "")) ? value.trim() : null;
+  return {
+    email: row.email || null,
+    phone: usable(row.whatsapp) ?? usable(row.phone),
+  };
 }
 
 async function resolveTelephoneCapability(leadId: string) {

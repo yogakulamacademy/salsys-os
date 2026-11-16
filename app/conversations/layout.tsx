@@ -95,6 +95,15 @@ export default async function ConversationsLayout({ children }: { children: Reac
         body:has(.inbox-standalone-scope) .legacy-shell-host main {
           background: var(--app-bg);
         }
+        /* The realtime badge and the floating team dock sit bottom-right,
+           exactly over the context panel. Hide the CRM-only badge here and
+           leave room under the last panel card for the dock button. */
+        body:has(.inbox-standalone-scope) .live-refresh-badge {
+          display: none !important;
+        }
+        body:has(.inbox-standalone-scope) .conversation-context-pane {
+          padding-bottom: 88px;
+        }
       `}</style>
     </>
   );

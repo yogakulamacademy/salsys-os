@@ -266,7 +266,7 @@ export function ConversationsSidebar({
       <div className="ibx-v2-sidebar-header shrink-0 border-b border-line px-4 pt-3">
         <h2 className="sr-only">Conversations</h2>
         <div
-          className="ibx-v2-tabs grid grid-cols-4"
+          className="ibx-v2-tabs flex overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden [&>button]:shrink-0 [&>button]:whitespace-nowrap"
           role="tablist"
           aria-label="Conversation filters"
           onKeyDown={handleFilterKeyDown}
