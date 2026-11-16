@@ -61,14 +61,25 @@ test('insights describe volume versus quality only from reconciled source rows',
   assert.deepEqual(insights.map((item) => item.id), ['volume-vs-quality', 'best-source', 'lead-trend']);
   assert.equal(insights[0].title, 'Instagram brings volume, not qualification');
   assert.equal(insights[0].value, '0%');
-  assert.equal(insights[1].title, 'ChatGPT leads qualify best');
-  assert.equal(insights[1].value, '17%');
+  // ChatGPT (1 of 6) is too small to call "best"; Google (4 of 25) is not.
+  assert.equal(insights[1].title, 'Google leads qualify best');
+  assert.equal(insights[1].value, '16%');
   assert.equal(insights[2].value, '-48%');
 
   // No reconciled sources and no baseline: no claims at all.
   assert.deepEqual(buildHomeInsights({ sources: null, currentLeads: 1343, previousLeads: 10 }), []);
   // Sources under the minimum size never become "best".
   assert.deepEqual(buildHomeInsights({ sources: [{ source: 'Tiny', leads: 2, qualified: 2 }], currentLeads: null, previousLeads: null }), []);
+  // Production 30D shape: only Instagram has qualified leads (2 of 1,271). No "best" claim.
+  assert.deepEqual(
+    buildHomeInsights({ sources: [{ source: 'Instagram', leads: 1271, qualified: 2 }, { source: 'Direct', leads: 48, qualified: 0 }], currentLeads: 1347, previousLeads: 10 }),
+    [],
+  );
+  // A tiny rate never earns "qualifies best", even with enough qualified leads.
+  assert.deepEqual(
+    buildHomeInsights({ sources: [{ source: 'Instagram', leads: 1271, qualified: 5 }, { source: 'Direct', leads: 48, qualified: 0 }], currentLeads: null, previousLeads: null }),
+    [],
+  );
   // Malformed rows are ignored rather than trusted.
   assert.deepEqual(buildHomeInsights({ sources: [{ source: 'Bad', leads: 10, qualified: 11 }], currentLeads: null, previousLeads: null }), []);
 });

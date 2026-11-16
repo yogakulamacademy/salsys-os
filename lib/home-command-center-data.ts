@@ -52,6 +52,39 @@ type PaymentRow = {
   currency: string | null;
 };
 
+type SyncSummary = { lastSuccessAt: string | null; latestStatus: string | null };
+
+type ServerClient = Awaited<ReturnType<typeof createClient>>;
+
+/** Latest successful run and latest run status for one ad provider, or null when unreadable or never run. */
+async function latestSyncRuns(
+  supabase: ServerClient,
+  table: "google_ads_sync_runs" | "meta_ads_sync_runs",
+  organizationId: string,
+): Promise<SyncSummary | null> {
+  const [success, latest] = await Promise.all([
+    supabase
+      .from(table)
+      .select("completed_at")
+      .eq("organization_id", organizationId)
+      .eq("status", "success")
+      .not("completed_at", "is", null)
+      .order("completed_at", { ascending: false })
+      .limit(1),
+    supabase
+      .from(table)
+      .select("status")
+      .eq("organization_id", organizationId)
+      .not("completed_at", "is", null)
+      .order("completed_at", { ascending: false })
+      .limit(1),
+  ]);
+  if (success.error || latest.error || !latest.data?.length) return null;
+  const successRow = (success.data ?? [])[0] as { completed_at: string | null } | undefined;
+  const latestRow = latest.data[0] as { status: string | null };
+  return { lastSuccessAt: successRow?.completed_at ?? null, latestStatus: latestRow.status };
+}
+
 const CLOSED_STAGES = new Set(["enrolled", "closed_won", "lost", "duplicate", "unqualified"]);
 
 export async function getHomeCommandCenterSnapshot(): Promise<HomeCommandCenterSnapshot> {
@@ -85,18 +118,8 @@ export async function getHomeCommandCenterSnapshot(): Promise<HomeCommandCenterS
       .select("id,name")
       .eq("organization_id", organizationId)
       .limit(500),
-    supabase
-      .from("google_ads_sync_runs")
-      .select("status,completed_at")
-      .eq("organization_id", organizationId)
-      .order("completed_at", { ascending: false, nullsFirst: false })
-      .limit(20),
-    supabase
-      .from("meta_ads_sync_runs")
-      .select("status,completed_at")
-      .eq("organization_id", organizationId)
-      .order("completed_at", { ascending: false, nullsFirst: false })
-      .limit(20),
+    latestSyncRuns(supabase, "google_ads_sync_runs", organizationId),
+    latestSyncRuns(supabase, "meta_ads_sync_runs", organizationId),
   ]);
 
   const leads = leadResult.error ? null : leadResult.data;
@@ -168,21 +191,12 @@ export async function getHomeCommandCenterSnapshot(): Promise<HomeCommandCenterS
 
   // Report the STALER of the two ad providers: one fresh feed must not hide
   // the other one being weeks old.
-  type SyncRow = { status: string | null; completed_at: string | null };
-  const providers = [googleSync, metaSync]
-    .filter((result) => !result.error && Array.isArray(result.data) && result.data.length > 0)
-    .map((result) => result.data as SyncRow[]);
-  const lastSuccessPerProvider = providers.map((rows) =>
-    rows
-      .filter((row) => row.status === "success" && row.completed_at)
-      .map((row) => row.completed_at as string)
-      .sort()
-      .pop() ?? null,
-  );
-  const adsLastSuccessAt = lastSuccessPerProvider.length && lastSuccessPerProvider.every(Boolean)
-    ? (lastSuccessPerProvider as string[]).sort()[0]
+  const providers = [googleSync, metaSync].filter((sync): sync is SyncSummary => sync != null);
+  const lastSuccesses = providers.map((sync) => sync.lastSuccessAt);
+  const adsLastSuccessAt = lastSuccesses.length && lastSuccesses.every(Boolean)
+    ? (lastSuccesses as string[]).sort()[0]
     : null;
-  const adsLatestFailed = providers.some((rows) => rows.find((row) => row.completed_at)?.status === "failed");
+  const adsLatestFailed = providers.some((sync) => sync.latestStatus === "failed");
 
   return {
     ownership,
