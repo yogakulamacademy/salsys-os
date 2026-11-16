@@ -28,6 +28,14 @@ export function VendorWorkspaceNotice({ kind }: { kind: VendorWorkspace }) {
         >
           Check engine health (read-only)
         </a>
+        {kind === "open-seo" ? (
+          <a
+            className="text-violet-700 underline underline-offset-2"
+            href="/seo/open-seo"
+          >
+            Review live OpenSEO projects
+          </a>
+        ) : null}
         {preview.url ? (
           <a
             className="text-violet-700 underline underline-offset-2"
