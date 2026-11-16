@@ -31,10 +31,14 @@ export async function claimDeskcommHumanReviewAction(form: FormData) {
   if (!ctx) redirect(responseUrl('disabled'));
   const rawEventId = String(form.get('raw_event_id') ?? '').trim();
   if (!UUID.test(rawEventId)) redirect(responseUrl('invalid'));
+  const assigneeValue = String(form.get('assigned_to') ?? '').trim();
+  const assignedTo = assigneeValue || ctx.user.id;
+  if (!UUID.test(assignedTo)) redirect(responseUrl('invalid'));
+
   const { data, error } = await ctx.supabase.rpc('open_verified_whatsapp_human_handoff_v1', {
     p_organization_id: ctx.workspace.organizationId,
     p_raw_event_id: rawEventId,
-    p_assigned_to: ctx.user.id,
+    p_assigned_to: assignedTo,
   });
   const result = data && typeof data === 'object' && !Array.isArray(data)
     ? data as Record<string, unknown> : {};
