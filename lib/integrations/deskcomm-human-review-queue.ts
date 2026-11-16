@@ -8,6 +8,7 @@
 type Json = Record<string, unknown>;
 
 export type DeskcommCandidateSourceRow = {
+  id: unknown;
   external_message_id: unknown;
   source_account_id: unknown;
   source_subject_id: unknown;
@@ -41,12 +42,14 @@ export type DeskcommReviewCandidate = {
   observedAt: string;
   leadId: string | null;
   conversationId: string | null;
+  rawEventId: string | null;
   match: 'verified_identity' | 'needs_identity_review';
 };
 
 type PrivateCandidate = {
   kind: DeskcommReviewCandidate['kind'];
   observedAt: string;
+  rawEventId: string;
   providerMessageId: string;
   senderId: string;
   businessAccountId: string;
@@ -106,15 +109,18 @@ export function collectDeskcommReviewCandidates(
       shadow.intent_candidate === 'human_handoff_candidate' ? 'human_request' :
       shadow.intent_candidate === 'opt_out_candidate' ? 'opt_out' : null;
     if (!kind) continue;
+    const rawEventId = nonblank(row.id, 36);
     const providerMessageId = nonblank(row.external_message_id, 300);
     const senderId = nonblank(row.source_subject_id, 150);
     const businessAccountId = nonblank(row.source_account_id, 150);
-    if (!providerMessageId || !senderId || !businessAccountId || !validIso(row.received_at)) {
+    if (!rawEventId || !/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(rawEventId) ||
+        !providerMessageId || !senderId || !businessAccountId || !validIso(row.received_at)) {
       return null;
     }
     output.push({
       kind,
       observedAt: row.received_at,
+      rawEventId,
       providerMessageId,
       senderId,
       businessAccountId,
@@ -170,6 +176,7 @@ export function reconcileDeskcommHumanReviewQueue(input: {
       observedAt: candidate.observedAt,
       leadId: matched ? link.lead_id : null,
       conversationId: matched ? link.conversation_id : null,
+      rawEventId: matched ? candidate.rawEventId : null,
       match: matched ? 'verified_identity' : 'needs_identity_review',
     };
   });
