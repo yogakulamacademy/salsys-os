@@ -65,8 +65,9 @@ test('Content Brief treats absent keyword evidence as unknown', () => {
   assert.deepEqual(output.evidence.existingPages, []);
 });
 
-function mockGateway({ role = 'owner', paidRows = [], organicRows = [], adsHealth = null, enabled = true, queryError = false } = {}) {
+function mockGateway({ role = 'owner', paidRows = [], organicRows = [], adsHealth = null, enabled = true, queryError = false, revokeAfterFirst = false } = {}) {
   const reads = [];
+  let authorizationChecks = 0;
   const client = {
     from(table) {
       const call = { table, eq: [], filters: [] };
@@ -91,10 +92,13 @@ function mockGateway({ role = 'owner', paidRows = [], organicRows = [], adsHealt
     'server-only': {},
     '@/lib/supabase/server': { createClient: async () => client },
     '@/lib/workspace': {
-      getCurrentWorkspaceContext: async () => ({
-        activeWorkspace: { organizationId: 'org-a', role },
-        activeOrganizationId: 'org-a',
-      }),
+      getCurrentWorkspaceContext: async () => {
+        authorizationChecks++;
+        return {
+          activeWorkspace: { organizationId: 'org-a', role: revokeAfterFirst && authorizationChecks > 1 ? 'employee' : role },
+          activeOrganizationId: 'org-a',
+        };
+      },
     },
     './organic-growth-skills-core': core,
   });
@@ -185,5 +189,20 @@ test('Gateway returns sanitized provider health beside insufficient paid evidenc
     assert.equal(result.sourceReadiness.blockerCode, 'google_cloud_project_test_access');
     assert.equal(result.sourceReadiness.latestDataDate, '2026-10-04');
     assert.doesNotMatch(JSON.stringify(result), /sensitive@example.com/);
+  } finally { f.restore(); }
+});
+
+
+test('Gateway rechecks current tenant role after source reads and refuses revoked access', async () => {
+  const f = mockGateway({
+    revokeAfterFirst: true,
+    organicRows: [{ query: 'yoga course', clicks: 7, impressions: 40, avg_position: 3 }],
+  });
+  try {
+    await assert.rejects(
+      f.run('salsys_seo_vs_ads_evidence_v1', {}),
+      /access changed while reading/,
+    );
+    assert.equal(f.reads.length, 3);
   } finally { f.restore(); }
 });
