@@ -40,7 +40,7 @@ export async function getCurrentDeskcommHumanReviewQueue():
     const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
     const { data: raw, error: rawError } = await admin
       .from('raw_events')
-      .select('external_message_id,source_account_id,source_subject_id,received_at,metadata')
+      .select('id,external_message_id,source_account_id,source_subject_id,received_at,metadata')
       .eq('organization_id', organizationId)
       .eq('source_system', 'whatsapp')
       .eq('ingestion_method', 'whatsapp_webhook')
