@@ -22,7 +22,7 @@ export default async function WhatsAppHumanReviewQueuePage({
     assigned: 'Human review task created and assigned to your CRM account. Active automations were paused; unclaimed scheduled work was cancelled.',
     already_assigned: 'This request already has a handoff task. No duplicate task was created.',
     closed: 'Handoff closed. The AI hold remains until separately released. No cancelled work was resumed.',
-    hold_released: 'The handoff hold was released. Future automation may be evaluated under the normal safety policy; cancelled jobs were not replayed.',
+    hold_released: 'This handoff hold was released. Other active holds and normal messaging safeguards still apply; cancelled jobs were not replayed.',
     unavailable: 'The action could not be completed safely. Confirm the migration and exact CRM identity evidence before retrying.',
     invalid: 'Invalid handoff request. Nothing was changed.',
     disabled: 'Handoff task actions are disabled in this environment.',
@@ -153,7 +153,7 @@ export default async function WhatsAppHumanReviewQueuePage({
                                         type="submit"
                                         className="rounded-lg border border-amber-300 bg-amber-50 px-2 py-1 text-xs font-semibold text-amber-950"
                                       >
-                                        Allow future automations (no replay)
+                                        Release this hold (no replay)
                                       </button>
                                     </form>
                                   ) : null}
