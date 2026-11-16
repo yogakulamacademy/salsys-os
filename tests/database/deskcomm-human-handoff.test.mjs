@@ -195,9 +195,9 @@ async function fixture(run) {
         id,organization_id,source_system,source_event_type,ingestion_method,
         external_message_id,source_account_id,source_subject_id,metadata
       ) values
-      ($1,$3,'whatsapp','message:text','whatsapp_webhook','wamid-unique','meta-phone-a','919999123456',$5),
-      ($2,$3,'whatsapp','message:text','whatsapp_webhook','wamid-stop','meta-phone-a','919999123456',$6)`,
-      [event,eventStop,org,null,JSON.stringify(shadow()),JSON.stringify(shadow('opt_out_candidate'))],
+      ($1,$3,'whatsapp','message:text','whatsapp_webhook','wamid-unique','meta-phone-a','919999123456',$4),
+      ($2,$3,'whatsapp','message:text','whatsapp_webhook','wamid-stop','meta-phone-a','919999123456',$5)`,
+      [event,eventStop,org,JSON.stringify(shadow()),JSON.stringify(shadow('opt_out_candidate'))],
     );
 
     await run({ observer, connect });
