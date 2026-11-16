@@ -70,3 +70,11 @@ Read-only production evidence shows historical `google_ads_search_term_daily` ro
 Official reference: https://developers.google.com/google-ads/api/docs/api-policy/access-levels
 
 Tests also cover the allowlisted blocker code and non-disclosure of raw error strings. Ads Search Console windows remain incomparable until paid source health is restored and date alignment is verified.
+
+## Addendum — Claude client-tool mediation contract
+
+- `lib/ai/organic-growth-claude-tool-bridge.ts`: typed Messages API tool input preparation, strict single-tool parser, allowlisted tool_result builder, second independent kill switch. No direct call to Anthropic has been introduced.
+- `tests/readiness/organic-growth-claude-tool-bridge.test.cjs`: fail-closed and malformed/unauthorized-tool tests.
+- Both `SALSYS_ORGANIC_GROWTH_SKILLS_PILOT=true` and `SALSYS_ORGANIC_GROWTH_CLAUDE_TOOL_BRIDGE_ENABLED=true` are required before an approved application caller could execute the gateway. Both default OFF.
+- Provider key and model configuration are intentionally absent from this contract. No user-facing route or UI was created, and no live Claude API request or paid search API call occurred.
+- Before any API activation: independent review of output validation, token/cost quota, ownership and tenancy at both invocation and result delivery, consent/data minimization, audit logging and human review.
