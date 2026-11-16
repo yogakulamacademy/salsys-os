@@ -14,7 +14,7 @@ Upstream links: https://github.com/every-app/open-seo and https://github.com/mel
 
 ## Current change: operator pilot only (NOT end-to-end)
 
-Files added in this branch implement a **read-only, link-only operator preview**. The preview is disabled by default. There is no data sync, SSO, credential sharing, API client, webhook subscription, external HTTP fetch, messaging send, workflow activation, or migration of tables. The existing SEO and WhatsApp pages and their security boundaries are preserved.
+Files added in this branch implement a **read-only operator preview and explicit health diagnostics**. The preview is disabled by default. Owner/admin visitors can request credential-free GET health probes from SalsysOS to OpenSEO `/api/health` and DeskcommCRM `/api/v1/health`. Requests are time-bounded, do not follow redirects and expose only a coarse status. There is no data sync, SSO, credential sharing, business API client, webhook subscription, messaging send, workflow activation, or migration of tables. The existing SEO and WhatsApp pages and security boundaries remain preserved.
 
 To preview independently deployed vendor applications, set in server environment:
 
@@ -26,7 +26,7 @@ SALSYS_DESKCOMM_URL=https://messaging.example.org
 
 Only owner/admin users see the pilot notice within the relevant existing workspace; managers retain current capabilities without access to these optional links. URLs must use HTTPS in production, with no embedded userinfo, query, or fragment. Non-production localhost HTTP is allowed for developer testing. Do not put API credentials in URLs. Users sign into vendor tools separately.
 
-**Important:** A configured link does not prove vendor deployment, subscription, provider eligibility, Meta approval, tenant mapping, data isolation, operational readiness or delivery success.
+**Important:** A configured link or positive upstream health response does not prove subscription, authorized business API access, provider eligibility, Meta approval, tenant mapping, data isolation, or delivery success. Open `/settings/vendor-workspaces` as an owner/admin for a live read-only health check.
 
 ## Intended target architecture
 
