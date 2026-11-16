@@ -119,6 +119,7 @@ export default async function ConversationsPage({
         courseName: selected.course && selected.course !== "Not selected" ? selected.course : null,
         waitingSince: selectedSummary?.waitingSince ?? null,
         replyWindowOpen: selected.currentContactChannel === "whatsapp" ? Boolean(whatsappWindow?.open) : null,
+        country: selected.country ?? null,
       }).catch(() => null)
     : null;
   const selectedEmail = selectedContacts?.email ?? null;
