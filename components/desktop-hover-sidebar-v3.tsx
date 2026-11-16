@@ -20,6 +20,13 @@ import {
   X,
 } from "lucide-react";
 import { type ComponentType, useEffect, useMemo, useRef, useState } from "react";
+import {
+  buildNavigation,
+  isPathActive,
+  isSectionActive,
+  type NavSection,
+  type NavSectionId,
+} from "@/lib/navigation";
 import { createClient as createBrowserClient } from "@/lib/supabase/browser";
 
 type IconType = ComponentType<{
@@ -28,33 +35,25 @@ type IconType = ComponentType<{
   className?: string;
 }>;
 
-type SectionItem = {
-  label: string;
-  href: string;
-};
+type SectionLink = NavSection & { icon: IconType };
 
-type SectionLink = {
-  id: string;
-  label: string;
-  icon: IconType;
-  href: string;
-  activeHrefs?: string[];
-  items?: SectionItem[];
+// Labels, routes and grouping live in lib/navigation.ts so the sidebar, the
+// page header and workspace search can never disagree. Only icons live here.
+const SECTION_ICONS: Record<NavSectionId, IconType> = {
+  home: Home,
+  inbox: MessageSquareText,
+  crm: UsersRound,
+  marketing: Megaphone,
+  revenue: CircleDollarSign,
+  operations: BookOpen,
+  performance: BarChart3,
+  automation: Workflow,
+  settings: Settings,
 };
 
 type WorkspaceContext = {
   activeWorkspace: { organizationName: string; role: string } | null;
 };
-
-function activePath(pathname: string, href: string) {
-  const cleanHref = href.split("?")[0];
-  if (cleanHref === "/home") return pathname === "/home";
-  if (cleanHref === "/dashboard") return pathname === "/dashboard";
-  if (cleanHref === "/settings") {
-    return pathname === "/settings" || pathname.startsWith("/settings/");
-  }
-  return pathname === cleanHref || pathname.startsWith(`${cleanHref}/`);
-}
 
 function askSalsys() {
   document.dispatchEvent(
@@ -154,164 +153,17 @@ export function DesktopHoverSidebarV3() {
     };
   }, [open]);
 
-  const sections = useMemo<SectionLink[]>(() => {
-    if (employee) {
-      return [
-        {
-          id: "home",
-          label: "Home",
-          icon: Home,
-          href: "/dashboard",
-          items: [{ label: "My work", href: "/dashboard" }],
-        },
-        {
-          id: "inbox",
-          label: "Inbox",
-          icon: MessageSquareText,
-          href: "/conversations",
-        },
-        {
-          id: "crm",
-          label: "CRM",
-          icon: UsersRound,
-          href: "/leads",
-          activeHrefs: ["/pipeline", "/follow-ups", "/customer-360"],
-          items: [
-            { label: "My Leads", href: "/leads" },
-            { label: "My Pipeline", href: "/pipeline" },
-            { label: "Tasks & Follow-ups", href: "/follow-ups" },
-          ],
-        },
-      ];
-    }
-
-    if (!privileged) return [];
-
-    return [
-      {
-        id: "home",
-        label: "Home",
-        icon: Home,
-        href: "/home",
-        items: [{ label: "Command Center", href: "/home" }],
-      },
-      {
-        id: "inbox",
-        label: "Inbox",
-        icon: MessageSquareText,
-        href: "/conversations",
-      },
-      {
-        id: "crm",
-        label: "CRM",
-        icon: UsersRound,
-        href: "/leads",
-        activeHrefs: [
-          "/admissions",
-          "/pipeline",
-          "/follow-ups",
-          "/customer-360",
-          "/data-quality",
-          "/re-engaged",
-        ],
-        items: [
-          { label: "Leads", href: "/leads" },
-          { label: "Admissions", href: "/admissions" },
-          { label: "Tasks & Follow-ups", href: "/follow-ups" },
-          { label: "Re-engaged", href: "/re-engaged" },
-        ],
-      },
-      {
-        id: "marketing",
-        label: "Marketing",
-        icon: Megaphone,
-        href: "/marketing",
-        activeHrefs: [
-          "/campaigns",
-          "/paid-media-leads",
-          "/analytics",
-          "/funnel",
-          "/attribution",
-          "/seo",
-          "/commercial-intelligence",
-        ],
-        items: [
-          { label: "Marketing Workspace", href: "/marketing" },
-          { label: "Acquisition Leads", href: "/paid-media-leads" },
-          { label: "Search Intelligence", href: "/seo" },
-        ],
-      },
-      {
-        id: "revenue",
-        label: "Revenue",
-        icon: CircleDollarSign,
-        href: "/revenue",
-        items: [{ label: "Revenue workspace", href: "/revenue" }],
-      },
-      {
-        id: "operations",
-        label: "Operations",
-        icon: BookOpen,
-        href: "/operations",
-        activeHrefs: ["/availability", "/course-management", "/enrollments"],
-        items: [
-          { label: "Overview", href: "/operations" },
-          { label: "Availability", href: "/availability" },
-          { label: "Programs & Batches", href: "/course-management" },
-          { label: "Enrollments", href: "/enrollments" },
-        ],
-      },
-      {
-        id: "performance",
-        label: "Performance",
-        icon: BarChart3,
-        href: "/performance",
-        activeHrefs: ["/team-performance", "/contact-intelligence", "/team"],
-        items: [
-          { label: "Performance Workspace", href: "/performance" },
-          { label: "Team Directory", href: "/team" },
-        ],
-      },
-      {
-        id: "automation",
-        label: "Automation",
-        icon: Workflow,
-        href: "/automation",
-        items: [{ label: "Workflows", href: "/automation" }],
-      },
-      {
-        id: "settings",
-        label: "Settings",
-        icon: Settings,
-        href: "/settings/overview",
-        activeHrefs: [
-          "/settings",
-          "/settings/integrations",
-          "/settings/team",
-          "/settings/knowledge",
-          "/settings/organizations",
-          "/tracking",
-          "/system-health",
-        ],
-        items: [
-          { label: "Overview", href: "/settings/overview" },
-          ...(admin
-            ? [
-                { label: "Integrations", href: "/settings/integrations" },
-                { label: "Team & Permissions", href: "/settings/team" },
-                { label: "Tracking & Data", href: "/tracking" },
-                { label: "System Health", href: "/system-health" },
-              ]
-            : []),
-          { label: "Settings", href: "/settings" },
-        ],
-      },
-    ];
-  }, [admin, employee, privileged]);
+  const sections = useMemo<SectionLink[]>(
+    () =>
+      buildNavigation({ employee, privileged, admin }).map((section) => ({
+        ...section,
+        icon: SECTION_ICONS[section.id],
+      })),
+    [admin, employee, privileged],
+  );
 
   function isCurrent(section: SectionLink) {
-    if (activePath(pathname, section.href)) return true;
-    return section.activeHrefs?.some((href) => activePath(pathname, href)) ?? false;
+    return isSectionActive(pathname, section);
   }
 
   function closeNav() {
@@ -458,7 +310,7 @@ export function DesktopHoverSidebarV3() {
                       {section.items?.length ? (
                         <div className="mt-1 space-y-0.5 pl-9">
                           {section.items.map((item) => {
-                            const active = activePath(pathname, item.href);
+                            const active = isPathActive(pathname, item.href);
                             return (
                               <Link
                                 key={`${section.id}-${item.href}`}

@@ -7,17 +7,20 @@ const root = path.resolve(__dirname, '../..');
 const read = file => fs.readFileSync(path.join(root, file), 'utf8');
 const primary = read('components/desktop-hover-sidebar-v3.tsx');
 const mainShell = read('components/app-shell.tsx');
+const navigation = read('lib/navigation.ts');
 const crm = read('components/crm/crm-navigation.tsx');
 const inboxLayout = read('app/conversations/layout.tsx');
 const inboxPage = read('app/conversations/page.tsx');
 
 test('Inbox is an independent main-shell destination for admissions and privileged users', () => {
-  assert.equal((primary.match(/id: "inbox"/g) || []).length, 2);
-  assert.equal((primary.match(/label: "Inbox",\s*icon: MessageSquareText,\s*href: "\/conversations"/g) || []).length, 2);
-  assert.ok(primary.includes('href: "/conversations"'));
-  assert.ok(!primary.includes('{ label: "Inbox", href: "/conversations" }'), 'No CRM submenu duplicates');
-  assert.ok(!primary.includes('"/pipeline", "/conversations", "/follow-ups"'), 'CRM no longer claims Inbox route');
-  assert.ok(!/id: "crm"[\s\S]*?activeHrefs: \[[^\]]*"\/conversations"/.test(primary));
+  // Menu data lives in lib/navigation.ts; the sidebar only adds icons.
+  assert.equal((navigation.match(/id: "inbox"/g) || []).length, 2);
+  assert.equal((navigation.match(/id: "inbox",\s*label: "Inbox",\s*href: "\/conversations"/g) || []).length, 2);
+  assert.ok(!navigation.includes('{ label: "Inbox", href: "/conversations" }'), 'No CRM submenu duplicates');
+  assert.ok(!/id: "crm"[\s\S]*?activeHrefs: \[[^\]]*"\/conversations"/.test(navigation), 'CRM no longer claims Inbox route');
+  assert.ok(primary.includes('inbox: MessageSquareText'));
+  assert.ok(primary.includes('buildNavigation({ employee, privileged, admin })'));
+  assert.ok(!primary.includes('href: "/conversations"'), 'Sidebar keeps no private copy of the menu');
   // The main sidebar and mobile drawer are driven from the same section list.
   assert.ok(primary.includes('sections.map((section) => {'));
 });

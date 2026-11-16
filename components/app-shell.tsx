@@ -53,6 +53,12 @@ import { LiveRefresh } from "@/components/live-refresh";
 import { useWhatsAppHandoffAlerts, WhatsAppHandoffAlertsList } from "@/components/whatsapp-handoff-alerts";
 import { BrandMark } from "@/components/brand";
 import { useModalFocus } from "@/components/use-modal-focus";
+import {
+  buildNavigation,
+  listDestinations,
+  resolveLocation,
+  searchDestinations,
+} from "@/lib/navigation";
 import { personInitials } from "@/lib/ui-format";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { createClient as createBrowserClient } from "@/lib/supabase/browser";
@@ -307,11 +313,6 @@ export function AppShell({ children }: { children: ReactNode }) {
     return sections;
   }, [accessResolved, admin, employee, explicitAdmin]);
 
-  const visibleNav = useMemo(
-    () => visibleSections.flatMap((section) => section.items),
-    [visibleSections],
-  );
-
   const routeSection = useMemo(
     () => sectionForPath(pathname, visibleSections),
     [pathname, visibleSections],
@@ -322,19 +323,32 @@ export function AppShell({ children }: { children: ReactNode }) {
     routeSection ??
     visibleSections[0];
 
-  const current = useMemo(
+  // The header, sidebar and workspace search all read lib/navigation.ts, so a
+  // page is named and located the same way everywhere.
+  const navigation = useMemo(
     () =>
-      visibleNav.find((item) => isNavActive(pathname, item.href))?.label ??
-      (employee ? "Admissions workspace" : "SalsysOS"),
-    [pathname, visibleNav, employee],
+      accessResolved
+        ? buildNavigation({ employee, privileged: explicitAdmin, admin })
+        : [],
+    [accessResolved, admin, employee, explicitAdmin],
   );
+
+  const navLocation = useMemo(
+    () => resolveLocation(pathname, navigation),
+    [pathname, navigation],
+  );
+
+  const destinations = useMemo(() => listDestinations(navigation), [navigation]);
+
+  const current =
+    navLocation?.pageLabel ?? (employee ? "Admissions workspace" : "SalsysOS");
 
   const smartCommands = useMemo<SmartCommand[]>(() => {
     const commands: SmartCommand[] = [
       {
         title: "What needs attention today?",
         description: "Open today's replies, overdue follow-ups and hot opportunities.",
-        href: "/dashboard",
+        href: navigation[0]?.href ?? "/dashboard",
         keywords: "today attention priorities tasks replies hot leads",
         icon: Sparkles,
       },
@@ -355,21 +369,21 @@ export function AppShell({ children }: { children: ReactNode }) {
       {
         title: "Why did commercial performance change?",
         description: "Inspect funnel, paid media, attribution and revenue evidence together.",
-        href: "/commercial-intelligence",
+        href: "/marketing",
         keywords: "why performance cac cpl roas revenue funnel intelligence",
         icon: BrainCircuit,
       },
       {
         title: "Find funnel leakage",
         description: "Inspect conversion steps and the largest observed drop-off.",
-        href: "/funnel",
+        href: "/marketing?view=funnel",
         keywords: "funnel conversion drop leak stage journey",
         icon: GitBranch,
       },
       {
         title: "Review attribution gaps",
         description: "Check source coverage and model disagreement before ROI conclusions.",
-        href: "/attribution",
+        href: "/marketing?view=attribution",
         keywords: "attribution source campaign unknown first touch last touch",
         icon: LineChart,
       },
@@ -382,20 +396,40 @@ export function AppShell({ children }: { children: ReactNode }) {
       },
     ];
 
-    return commands.filter((command) =>
-      visibleNav.some((item) => isNavActive(command.href, item.href)),
+    // Only offer a question when the current role can open its destination.
+    return commands.filter(
+      (command) =>
+        resolveLocation(command.href.split("?")[0], navigation) !== null,
     );
-  }, [visibleNav]);
+  }, [navigation]);
 
   const filteredCommands = useMemo(() => {
     const query = commandQuery.trim().toLowerCase();
     if (!query) return smartCommands;
-    return smartCommands.filter((command) =>
+
+    // Real workspace search: every destination this role can open, by its
+    // current name, old names and synonyms, followed by matching questions.
+    const places: SmartCommand[] = searchDestinations(query, destinations).map(
+      (destination) => ({
+        title:
+          destination.label === destination.sectionLabel
+            ? destination.label
+            : `${destination.sectionLabel} · ${destination.label}`,
+        description: destination.description || `Open ${destination.label}.`,
+        href: destination.href,
+        keywords: destination.keywords,
+        icon: Search,
+      }),
+    );
+
+    const questions = smartCommands.filter((command) =>
       `${command.title} ${command.description} ${command.keywords}`
         .toLowerCase()
         .includes(query),
     );
-  }, [commandQuery, smartCommands]);
+
+    return [...places, ...questions];
+  }, [commandQuery, destinations, smartCommands]);
 
   useEffect(() => {
     try {
@@ -798,7 +832,9 @@ export function AppShell({ children }: { children: ReactNode }) {
 
           <div className="hidden min-w-0 md:block">
             <div className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400">
-              {selectedSection?.label ?? "Workspace"}
+              {navLocation && navLocation.sectionLabel !== current
+                ? navLocation.sectionLabel
+                : organizationName}
             </div>
             <div className="truncate text-sm font-bold tracking-[-0.02em] text-slate-900 dark:text-white">
               {current}
@@ -1072,7 +1108,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                     const Icon = command.icon;
                     return (
                       <Link
-                        key={command.title}
+                        key={`${command.href}-${command.title}`}
                         href={command.href}
                         onClick={() => setAskOpen(false)}
                         className="group flex items-center gap-3 rounded-xl px-3 py-3 transition hover:bg-slate-50 dark:hover:bg-slate-900"
@@ -1093,7 +1129,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                 <div className="rounded-xl border border-dashed border-slate-200 px-4 py-8 text-center dark:border-slate-800">
                   <BrainCircuit size={22} className="mx-auto text-slate-300" />
                   <div className="mt-2 text-xs font-bold text-slate-700 dark:text-slate-200">No command matches yet</div>
-                  <div className="mt-1 text-[11px] text-slate-500">Try a workspace name such as Leads, Inbox or Revenue.</div>
+                  <div className="mt-1 text-[11px] text-slate-500">Try a workspace name such as Leads, Enrollments or Revenue.</div>
                 </div>
               )}
             </div>
