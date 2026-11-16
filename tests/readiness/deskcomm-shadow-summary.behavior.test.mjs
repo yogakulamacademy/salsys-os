@@ -46,6 +46,7 @@ test('aggregates only categorical totals and timestamps', () => {
     candidateBatchDates: 1,
     candidateMonths: 1,
     candidateOptOuts: 1,
+    candidateHumanHandoffs: 0,
     lastTaggedAt: time,
   });
   const result = JSON.stringify(summarizeDeskcommInboundShadow(rows));
