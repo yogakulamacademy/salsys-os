@@ -7,6 +7,8 @@ import {
   buildSeoVsAdsEvidence,
   ORGANIC_GROWTH_READ_ONLY_TOOLS,
   primaryTopicTerm,
+  summarizeGoogleAdsSyncHealth,
+  type GoogleAdsSyncHealthRow,
   type OrganicGrowthToolName,
   type OrganicQueryRow,
   type KeywordPageRow,
@@ -99,7 +101,7 @@ export async function runOrganicGrowthReadOnlyTool(
     );
   }
 
-  const [organicResult, paidResult] = await Promise.all([
+  const [organicResult, paidResult, adsHealthResult] = await Promise.all([
     supabase
       .from('v_seo_query_30d')
       .select('query,clicks,impressions,avg_position')
@@ -112,14 +114,27 @@ export async function runOrganicGrowthReadOnlyTool(
       .eq('organization_id', organizationId)
       .order('spend', { ascending: false })
       .limit(1000),
+    supabase
+      .from('v_google_ads_sync_health')
+      .select('last_sync_status,latest_data_date,last_sync_error')
+      .eq('organization_id', organizationId)
+      .maybeSingle(),
   ]);
 
-  if (organicResult.error || paidResult.error) {
+  if (organicResult.error || paidResult.error || adsHealthResult.error) {
     throw new Error('Organic or paid search evidence is unavailable; comparison has not been generated.');
   }
 
-  return buildSeoVsAdsEvidence(
+  const evidence = buildSeoVsAdsEvidence(
     (organicResult.data ?? []) as OrganicQueryRow[],
     (paidResult.data ?? []) as PaidSearchTermRow[],
   );
+  // Raw provider error strings are read only for server-side classification.
+  // Return the allowlisted blocker code, never upstream error text.
+  return {
+    ...evidence,
+    sourceReadiness: summarizeGoogleAdsSyncHealth(
+      (adsHealthResult.data ?? null) as GoogleAdsSyncHealthRow | null,
+    ),
+  };
 }
