@@ -47,6 +47,7 @@ create table public.organization_members (
   organization_id uuid not null,user_id uuid not null,
   role text not null,active boolean not null default true
 );
+grant select on public.profiles,public.organization_members to authenticated;
 create table public.organization_workspaces (
   organization_id uuid not null,workspace_code text not null,
   enabled boolean not null
@@ -113,7 +114,9 @@ create table public.automation_provider_send_audits (
   channel text not null,
   provider text not null,
   status text not null,
-  customer_message_sent boolean not null default false
+  customer_message_sent boolean not null default false,
+  provider_response jsonb not null default '{}'::jsonb,
+  provider_message_id text
 );
 create table public.automation_enrollments (
   id uuid primary key,organization_id uuid not null,
@@ -278,6 +281,13 @@ test('one verified human request creates one assigned task and cancels unclaimed
   assert.equal(retry.created,false);
   assert.equal(retry.task_id,result.task_id);
   assert.equal((await f.observer.query('select count(*)::int as n from public.tasks')).rows[0].n,1);
+  const assignedNotifications = await f.observer.query(
+    'select id,recipient_user_id,lead_id,notification_kind from public.whatsapp_handoff_staff_notifications',
+  );
+  assert.equal(assignedNotifications.rows.length,1);
+  assert.equal(assignedNotifications.rows[0].recipient_user_id,assignee);
+  assert.equal(assignedNotifications.rows[0].lead_id,lead);
+  assert.equal(assignedNotifications.rows[0].notification_kind,'human_review_assigned');
 
   const closed=await close(c,result.handoff_id);
   assert.equal(closed.automation_resumed,false);
@@ -487,3 +497,49 @@ test('an in-flight claim and handoff serialize under the same advisory lock',asy
   await reviewer.query('commit');
   assert.equal((await f.observer.query('select count(*)::int as n from public.tasks')).rows[0].n,0);
 }));
+
+
+test('staff alerts are recipient-only, readable once and never duplicate on retry',async()=>fixture(async f=>{
+  await f.observer.query(
+    'insert into public.whatsapp_handoff_pilot_controls(organization_id,actions_enabled) values($1,true)',
+    [org],
+  );
+  const owner=await f.connect();
+  const opened=await open(owner);
+  assert.equal(opened.created,true);
+  assert.equal((await open(owner)).created,false);
+  const rows=await f.observer.query(
+    'select id,organization_id,recipient_user_id,read_at from public.whatsapp_handoff_staff_notifications',
+  );
+  assert.equal(rows.rows.length,1);
+  const notificationId=rows.rows[0].id;
+
+  const staff=await f.connect();
+  const allowed=await authenticatedCall(staff,
+    'select count(*)::integer as result from public.whatsapp_handoff_staff_notifications where organization_id=$1',
+    [org],assignee);
+  assert.equal(allowed,1);
+  const invisible=await authenticatedCall(owner,
+    'select count(*)::integer as result from public.whatsapp_handoff_staff_notifications where organization_id=$1',
+    [org],actor);
+  assert.equal(invisible,0);
+
+  const ack=await authenticatedCall(staff,
+    'select public.acknowledge_whatsapp_handoff_staff_alert_v1($1,$2) as result',
+    [org,notificationId],assignee);
+  assert.equal(ack.ok,true);
+  assert.equal(ack.acknowledged,true);
+
+  const wrongRecipient=await authenticatedCall(owner,
+    'select public.acknowledge_whatsapp_handoff_staff_alert_v1($1,$2) as result',
+    [org,notificationId],actor);
+  assert.equal(wrongRecipient.ok,false);
+  const wrongOrg=await authenticatedCall(staff,
+    'select public.acknowledge_whatsapp_handoff_staff_alert_v1($1,$2) as result',
+    [otherOrg,notificationId],assignee).then(x=>({value:x}),error=>({error}));
+  assert.ok(wrongOrg.error);
+  assert.equal(
+    (await f.observer.query('select count(*)::integer as n from public.whatsapp_handoff_staff_notifications where read_at is not null')).rows[0].n,
+    1,
+  );
+});
