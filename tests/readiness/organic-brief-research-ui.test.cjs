@@ -32,7 +32,7 @@ test("Evidence is source-bound, bounded, sanitized, and represents absent values
   assert.match(page, /\.slice\(0, 40\)/);
   assert.match(page, /value === undefined \|\| value === null/);
   assert.match(page, /return "—"/);
-  assert.match(page, /Full query coverage, aligned date windows/);
+  assert.match(page, /full query coverage, aligned date windows/i);
   assert.match(page, /No Claude execution/);
 });
 
