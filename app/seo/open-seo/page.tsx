@@ -48,6 +48,7 @@ export default async function OpenSeoProjectsPage() {
                   <th className="px-3 py-3">Project</th>
                   <th className="px-3 py-3">Domain</th>
                   <th className="px-3 py-3">Market</th>
+                  <th className="px-3 py-3">Rank tracking</th>
                 </tr>
               </thead>
               <tbody>
@@ -57,6 +58,14 @@ export default async function OpenSeoProjectsPage() {
                     <td className="px-3 py-3 text-slate-600">{project.domain || "—"}</td>
                     <td className="px-3 py-3 text-slate-600">
                       {project.locationCode} / {project.languageCode || "Unknown"}
+                    </td>
+                    <td className="px-3 py-3">
+                      <Link
+                        href={`/seo/open-seo/rank-trackers?projectId=${encodeURIComponent(project.id)}`}
+                        className="font-semibold text-violet-700 underline underline-offset-2"
+                      >
+                        View saved trackers
+                      </Link>
                     </td>
                   </tr>
                 ))}
