@@ -15,14 +15,21 @@ SalsysOS content-gap and Search Console data. This is not Claude-generated copy.
 - Existing Content Brief card in `/seo/intelligence` links to this route.
 - Server-rendered, accessible topic selection through `?topic=<bounded id>`.
 - Show content-gap type, observed GSC clicks/impressions, page coverage counts,
-  top observed queries (max 8), source date and model-supplied recommendation
+  top observed queries (max 8), explicit unverified source freshness and model-supplied recommendation
   when safe to display.
 - Desktop/mobile SalsysOS theme; local-only copy action with explicit feedback.
 
 ## Safety / accuracy
 
 - Require privileged active-workspace authentication **before** reading
-  `getSeoWorkspace()`.
+  `getContentBriefResearch(activeWorkspace.organizationId)`.
+- The specialist read path calls provider visibility plus **one** stable tenant-member-checked
+  `get_seo_content_intelligence` RPC. It explicitly checks that the
+  provider's active organization matches the authenticated workspace.
+  The worksheet does not load SEO experiments, optimizations, revenue,
+  AEO, GEO or the general SEO workspace.
+- Source freshness and reporting-window alignment are **not available** from
+  this lightweight read; they are marked unverified, not invented.
 - Select topic **only** from currently loaded tenant-scoped data; no arbitrary
   `topic` parameter can force another tenant's query.
 - Filter contact-like search query strings through the existing safeOrganicQuery
@@ -39,7 +46,7 @@ SalsysOS content-gap and Search Console data. This is not Claude-generated copy.
 ## Verification/acceptance
 
 - [ ] Current-head CI (incl. isolated DB fixtures, readiness suite, typecheck,
-      app build, synthetic UI loopback).
+      app build and focused synthetic Playwright UI tests with mobile screenshots).
 - [ ] Current-head CodeQL.
 - [ ] Independent review for tenant/role behavior, copy limits, UI accuracy.
 - [ ] Authorized owner/admin/manager browser acceptance on mobile/desktop.
