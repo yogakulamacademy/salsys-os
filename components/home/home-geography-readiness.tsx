@@ -1,33 +1,35 @@
 import Link from "next/link";
+import Image from "next/image";
 import { ArrowRight, Globe2, LockKeyhole } from "lucide-react";
 
 import type { HomeGeographyCoverage } from "@/lib/home-geography-coverage";
 
 /**
- * Decorative, disabled map silhouette. This is deliberately not a geographic
- * plot: a populated free-text country field is not a validated country.
- * A real map requires validation + independently reviewed data coverage.
+ * Geographically accurate shoreline backdrop derived from GSHHG coastlines,
+ * locally stored at /world-coastlines.svg. This is NOT a lead distribution:
+ * free-text country-field coverage is not verified geographic evidence.
+ * Projection is equirectangular, with original aspect ratio preserved.
  */
 function LockedWorldMap() {
   return (
-    <div data-testid="home-world-map-disabled" data-map-state="locked" className="relative flex min-h-36 items-center justify-center overflow-hidden rounded-xl bg-violet-50/50 p-2 dark:bg-violet-950/20">
-      <svg aria-hidden="true" focusable="false" viewBox="0 0 800 350" className="absolute inset-0 h-full w-full fill-violet-200/75 dark:fill-violet-700/35" preserveAspectRatio="xMidYMid meet">
-        <path d="M60 89 95 62 142 54 167 65 200 61 221 76 241 85 228 110 205 117 199 139 178 151 169 174 145 183 133 205 116 203 111 179 91 162 74 155 63 132 41 124 44 103Z" />
-        <path d="M133 49 151 27 174 20 206 29 226 44 214 58 178 64Z" />
-        <path d="M198 204 220 214 235 244 251 265 245 287 234 317 218 338 208 322 203 297 184 275 172 249 179 225Z" />
-        <path d="M347 99 362 84 384 78 396 89 408 83 428 95 427 111 413 122 404 139 388 142 378 128 361 130Z" />
-        <path d="M360 147 394 137 418 157 433 190 424 217 407 241 392 277 378 278 369 248 353 225 344 190Z" />
-        <path d="M408 80 439 58 474 59 489 39 533 46 557 37 599 49 626 41 665 58 698 79 715 98 692 115 664 119 653 141 631 148 611 134 585 154 556 143 530 164 509 150 496 165 464 153 452 137 425 136 416 115Z" />
-        <path d="M527 173 541 179 558 203 550 224 537 207Z M576 181 595 196 607 224 595 236 583 217Z" />
-        <path d="M657 231 684 220 708 232 729 250 721 270 697 276 677 270 663 285 648 269Z" />
-        <path d="M742 265 755 281 751 306 743 316 735 295Z M278 52 295 44 311 52 307 70 290 78Z" />
-      </svg>
-      <div className="relative z-10 flex max-w-[260px] flex-col items-center rounded-xl border border-line bg-surface/95 px-4 py-3 text-center shadow-sm">
-        <span className="grid h-8 w-8 place-items-center rounded-full bg-violet-100 text-brand-700 dark:bg-violet-900/50 dark:text-violet-200">
-          <LockKeyhole size={16} aria-hidden="true" />
-        </span>
-        <p className="mt-2 text-xs font-semibold text-copy-strong">Map unavailable</p>
-        <p className="mt-1 text-[11px] leading-4 text-copy-muted">Disabled until validated country coverage is sufficient</p>
+    <div data-testid="home-world-map-disabled" data-map-state="locked" className="home-geography-map relative flex w-full min-w-0 flex-col justify-center overflow-hidden rounded-xl border border-violet-100 bg-violet-50/30 p-2 dark:border-violet-900/40 dark:bg-violet-950/20">
+      <div className="relative h-[150px] w-full min-w-0 sm:h-[174px] lg:h-[188px]">
+        <Image
+          src="/world-coastlines.svg"
+          alt=""
+          fill
+          unoptimized
+          sizes="(max-width: 900px) 90vw, 50vw"
+          className="object-contain"
+          aria-hidden="true"
+        />
+      </div>
+      <div className="relative z-10 mt-1 flex min-w-0 flex-col items-center justify-center gap-1 px-1 text-center">
+        <div className="flex items-center justify-center gap-1.5">
+          <LockKeyhole size={13} aria-hidden="true" className="shrink-0 text-brand-700" />
+          <p className="text-[11px] font-semibold text-copy-strong">Map unavailable</p>
+        </div>
+        <p className="max-w-full text-[10px] leading-4 text-copy-muted">Country-level plotting awaits validated location data</p>
       </div>
     </div>
   );
@@ -72,7 +74,7 @@ export function HomeGeographyReadiness({
         </Link>
       </div>
 
-      <div className="mt-3 grid min-w-0 gap-3 min-[900px]:grid-cols-[minmax(125px,0.78fr)_minmax(0,1.22fr)] min-[900px]:items-center">
+      <div className="mt-3 grid min-w-0 gap-3 min-[900px]:grid-cols-[minmax(205px,0.72fr)_minmax(0,1.28fr)] min-[900px]:items-center">
         <div className="min-w-0">
           {cohort === null ? (
             <div data-evidence-state="unavailable">

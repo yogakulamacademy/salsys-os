@@ -321,3 +321,39 @@ test('Command Center uses reference 1024px geometry without changing the violet 
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(1024);
   await page.screenshot({ animations: 'disabled', fullPage: true, path: 'test-results/home-reference-1024.png' });
 });
+
+test('KPI evidence is not clipped and accurate coastline map retains proportions at desktop widths', async ({ page }) => {
+  for (const width of [1024, 1920]) {
+    await page.setViewportSize({ width, height: 1100 });
+    await page.goto('/home');
+    const cards = page.locator('section[aria-label="Business pulse"] .command-kpi > *');
+    await expect(cards).toHaveCount(4);
+    for (const card of await cards.all()) {
+      const geometry = await card.evaluate(node => {
+        const rect = node.getBoundingClientRect();
+        const children = [...node.querySelectorAll(':scope > div')].filter(el => getComputedStyle(el).position !== 'absolute');
+        return { height: rect.height, maxBottom: Math.max(...children.map(el => el.getBoundingClientRect().bottom), rect.top), bottom: rect.bottom, cssHeight: getComputedStyle(node).height, overflow: getComputedStyle(node).overflow };
+      });
+      expect(geometry.height).toBeGreaterThan(115);
+      expect(geometry.maxBottom).toBeLessThanOrEqual(geometry.bottom + 1);
+    }
+    const map = page.getByTestId('home-world-map-disabled');
+    await expect(map).toHaveAttribute('data-map-state','locked');
+    const geo = await map.evaluate(node => {
+      const image = node.querySelector('img');
+      const rect = node.getBoundingClientRect();
+      return { width: rect.width, height: rect.height, src: image?.getAttribute('src'), fit: image ? getComputedStyle(image).objectFit : null };
+    });
+    expect(geo.width).toBeGreaterThan(200);
+    expect(geo.height).toBeGreaterThan(190);
+    expect(geo.src).toContain('/world-coastlines.svg');
+    expect(geo.fit).toBe('contain');
+    const response = await page.request.get('/world-coastlines.svg');
+    expect(response.status()).toBe(200);
+    const mapSvg = await response.text();
+    expect(mapSvg).toContain('viewBox="0 0 720 290"');
+    expect(mapSvg).toContain('GSHHG');
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+    await page.screenshot({ animations: 'disabled', fullPage: true, path: `test-results/home-accurate-map-${width}.png` });
+  }
+});
