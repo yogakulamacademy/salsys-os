@@ -24,6 +24,8 @@ import { AILeadInsightPanel } from "@/components/ai-lead-insight-panel";
 import { InboxQuickActions } from "@/components/inbox-quick-actions";
 import { InboxHeaderActions } from "@/components/inbox-header-actions";
 import { InboxLeadOverview } from "@/components/inbox-lead-overview";
+import { InboxOfferCard } from "@/components/inbox-offer-card";
+import { getLeadOfferSuggestion } from "@/lib/offer-suggestion-data";
 import { ConversationReadMarker } from "@/components/conversation-read-marker";
 import { ConversationSafeComposer } from "@/components/conversation-safe-composer";
 import { ConversationTeamControls } from "@/components/conversation-team-controls";
@@ -106,6 +108,19 @@ export default async function ConversationsPage({
       : false;
 
   const selectedAttribution = selected ? await getLead(selected.id) : null;
+
+  // AI offer (behind AI_OFFERS_ENABLED): read-only suggestion; a person approves before anything is sent.
+  const offerSuggestion = selected && !mock && process.env.AI_OFFERS_ENABLED === "true"
+    ? await getLeadOfferSuggestion({
+        leadId: selected.id,
+        messages: selected.lastMessages.map((m) => ({ direction: m.direction, body: m.body, timestamp: m.timestamp })),
+        channel: selected.currentContactChannel,
+        interestedCourseId: selected.interestedCourseId ?? null,
+        courseName: selected.course && selected.course !== "Not selected" ? selected.course : null,
+        waitingSince: selectedSummary?.waitingSince ?? null,
+        replyWindowOpen: selected.currentContactChannel === "whatsapp" ? Boolean(whatsappWindow?.open) : null,
+      }).catch(() => null)
+    : null;
   const selectedEmail = selectedContacts?.email ?? null;
   const conversationStatus = selectedSummary?.resolved ? "Done"
     : selectedSummary?.needsReply ? "Needs reply"
@@ -401,6 +416,12 @@ export default async function ConversationsPage({
         />
       </section>
 
+
+      {offerSuggestion ? (
+        <InboxOfferCard key={`offer-${selected.id}`} leadId={selected.id}
+          firstName={selected.name.split(" ")[0] ?? ""} channel={selected.currentContactChannel}
+          suggestion={offerSuggestion} canManage={team.canManageAssignments}/>
+      ) : null}
 
       {!mock && process.env.AI_LEAD_INSIGHTS_ENABLED === "true" && process.env.AI_LEAD_INSIGHTS_UI_ENABLED === "true" && (
         <div className="border-b border-line px-3.5 py-3">
