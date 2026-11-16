@@ -74,6 +74,91 @@ using (
   )
 );
 
+-- One durable, tenant-scoped in-app alert per handoff assignment.
+-- Never notify customers or send WhatsApp messages as a side effect.
+create table if not exists public.whatsapp_handoff_staff_notifications (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete restrict,
+  handoff_id uuid not null references public.whatsapp_human_handoffs(id) on delete restrict,
+  task_id uuid not null references public.tasks(id) on delete restrict,
+  lead_id uuid not null references public.leads(id) on delete restrict,
+  recipient_user_id uuid not null references public.profiles(id) on delete restrict,
+  notification_kind text not null default 'human_review_assigned'
+    check (notification_kind = 'human_review_assigned'),
+  created_at timestamptz not null default now(),
+  read_at timestamptz,
+  constraint whatsapp_handoff_staff_notification_unique
+    unique (organization_id,handoff_id,recipient_user_id,notification_kind)
+);
+
+create index if not exists whatsapp_handoff_staff_notifications_recipient_idx
+on public.whatsapp_handoff_staff_notifications
+  (organization_id,recipient_user_id,created_at desc);
+
+alter table public.whatsapp_handoff_staff_notifications enable row level security;
+revoke all on public.whatsapp_handoff_staff_notifications from public,anon,authenticated;
+grant select on public.whatsapp_handoff_staff_notifications to authenticated;
+grant all on public.whatsapp_handoff_staff_notifications to service_role;
+
+drop policy if exists whatsapp_handoff_staff_notifications_recipient_read
+  on public.whatsapp_handoff_staff_notifications;
+create policy whatsapp_handoff_staff_notifications_recipient_read
+on public.whatsapp_handoff_staff_notifications
+for select to authenticated
+using (
+  recipient_user_id = (select auth.uid())
+  and exists (
+    select 1 from public.organization_members om
+    join public.profiles p on p.id = om.user_id
+    where om.organization_id = whatsapp_handoff_staff_notifications.organization_id
+      and om.user_id = (select auth.uid())
+      and om.active is true
+      and p.active is true
+  )
+);
+
+-- Marking read is intentionally an RPC, not a user-writable table policy.
+-- This prevents users from changing notification recipients or task lineage.
+create or replace function public.acknowledge_whatsapp_handoff_staff_alert_v1(
+  p_organization_id uuid,
+  p_notification_id uuid
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public,auth,pg_temp
+as $function$
+declare
+  v_actor uuid := auth.uid();
+begin
+  if v_actor is null or p_organization_id is null or p_notification_id is null then
+    raise exception 'Authenticated organization and notification are required';
+  end if;
+  if not exists (
+    select 1 from public.organization_members om
+    join public.profiles p on p.id = om.user_id
+    where om.organization_id = p_organization_id
+      and om.user_id = v_actor and om.active is true and p.active is true
+  ) then
+    raise exception 'Current organization membership is required';
+  end if;
+  update public.whatsapp_handoff_staff_notifications
+  set read_at = coalesce(read_at,now())
+  where id = p_notification_id
+    and organization_id = p_organization_id
+    and recipient_user_id = v_actor;
+  if not found then
+    return jsonb_build_object('ok',false,'reason','notification_not_accessible');
+  end if;
+  return jsonb_build_object('ok',true,'acknowledged',true);
+end;
+$function$;
+
+revoke all on function public.acknowledge_whatsapp_handoff_staff_alert_v1(uuid,uuid)
+  from public,anon;
+grant execute on function public.acknowledge_whatsapp_handoff_staff_alert_v1(uuid,uuid)
+  to authenticated;
+
 -- Advisory lock serializes a new enrollment with the staff handoff on the
 -- same (tenant,lead) before either transaction sees the other committed row.
 -- This prevents a subsequent smart trigger from restarting automation while
@@ -383,6 +468,14 @@ begin
   update public.whatsapp_human_handoffs
   set task_id = v_task_id
   where id = v_handoff_id and organization_id = p_organization_id;
+
+  -- An assigned employee sees this in their in-app notification feed.
+  -- Same transaction + unique source claim means no duplicated alerts.
+  insert into public.whatsapp_handoff_staff_notifications (
+    organization_id,handoff_id,task_id,lead_id,recipient_user_id
+  ) values (
+    p_organization_id,v_handoff_id,v_task_id,v_lead_id,v_assignee
+  );
 
   -- Do NOT overwrite an existing earlier follow-up deadline.
   update public.leads
