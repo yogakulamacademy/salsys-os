@@ -68,7 +68,7 @@ test('Content Brief treats absent keyword evidence as unknown', () => {
 function mockGateway({
   role = 'owner', paidRows = [], organicRows = [], adsHealth = null,
   gscLatestDate = '2026-11-13', pageRows = [],
-  enabled = true, queryError = false, revokeAfterFirst = false,
+  enabled = true, queryError = false, revokeAfterFirst = false, switchTenantAfterFirst = false,
 } = {}) {
   const reads = [];
   let authorizationChecks = 0;
@@ -119,9 +119,10 @@ function mockGateway({
     '@/lib/workspace': {
       getCurrentWorkspaceContext: async () => {
         authorizationChecks++;
+        const organizationId = switchTenantAfterFirst && authorizationChecks > 1 ? 'org-b' : 'org-a';
         return {
-          activeWorkspace: { organizationId: 'org-a', role: revokeAfterFirst && authorizationChecks > 1 ? 'employee' : role },
-          activeOrganizationId: 'org-a',
+          activeWorkspace: { organizationId, role: revokeAfterFirst && authorizationChecks > 1 ? 'employee' : role },
+          activeOrganizationId: organizationId,
         };
       },
     },
@@ -347,4 +348,21 @@ test('External AI evidence omits contact-like queries and strips URL search para
   assert.equal(paid.overlap.length, 1);
   assert.equal(paid.overlap[0].query, 'prenatal yoga');
   assert.doesNotMatch(JSON.stringify({ brief, paid }), /user@example\.com|session_secret|private-value/);
+});
+
+
+test('Gateway discards analytics evidence when active tenant switches during reads', async () => {
+  const f = mockGateway({
+    switchTenantAfterFirst: true,
+    organicRows: [{ query: 'prenatal yoga', clicks: 12, impressions: 140, avg_position: 4 }],
+  });
+  try {
+    await assert.rejects(
+      f.run('salsys_seo_vs_ads_evidence_v1', {}),
+      /access changed while reading/,
+    );
+    for (const read of f.reads) {
+      assert.deepEqual(read.eq, [['organization_id', 'org-a']]);
+    }
+  } finally { f.restore(); }
 });
