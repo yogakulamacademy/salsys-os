@@ -3,7 +3,6 @@ import 'server-only';
 import { requireAdminWorkspaceAccess } from '@/lib/route-access';
 import { createAdminClient } from '@/lib/supabase/admin';
 
-const LOOKBACK_DAYS = 30;
 const MAX_ROWS = 50;
 
 type AuditRecord = {
@@ -24,7 +23,6 @@ export type UnknownWhatsAppSend = {
 export type UnknownWhatsAppSendReview = {
   status: 'ready' | 'unavailable';
   checkedAt: string;
-  lookbackDays: number;
   hasMore: boolean;
   rows: UnknownWhatsAppSend[];
 };
@@ -33,6 +31,7 @@ export type UnknownWhatsAppSendReview = {
  * An operator-only, strictly read-only investigation queue. It never marks
  * provider attempts failed, never declares an SMS/WhatsApp message unsent,
  * never infers an exact total, and cannot re-arm any delivery.
+ * An unresolved audit must remain discoverable regardless of age.
  */
 export async function getUnknownWhatsAppSendReview(): Promise<UnknownWhatsAppSendReview> {
   // Authorize BEFORE obtaining a service-role client or accessing tenant data.
@@ -41,12 +40,10 @@ export async function getUnknownWhatsAppSendReview(): Promise<UnknownWhatsAppSen
   const base: UnknownWhatsAppSendReview = {
     status: 'unavailable',
     checkedAt,
-    lookbackDays: LOOKBACK_DAYS,
     hasMore: false,
     rows: [],
   };
 
-  const since = new Date(Date.now() - LOOKBACK_DAYS * 24 * 60 * 60 * 1000).toISOString();
 
   try {
     const admin = createAdminClient();
@@ -60,7 +57,6 @@ export async function getUnknownWhatsAppSendReview(): Promise<UnknownWhatsAppSen
       .contains('provider_response', {
         transport_outcome: { status: 'unknown' },
       })
-      .gte('created_at', since)
       .order('created_at', { ascending: true })
       .limit(MAX_ROWS + 1);
 
