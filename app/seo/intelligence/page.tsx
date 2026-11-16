@@ -111,8 +111,8 @@ function Workflows({ hasEvidence }: { hasEvidence: boolean }) {
             Review observed topics and existing pages. Automated Claude brief generation
             is not connected to this interface yet.
           </p>
-          <Link href="/seo/content-opportunities" className={styles.sectionLink}>
-            {hasEvidence ? "Review topic evidence" : "Check topic coverage"}
+          <Link href="/seo/intelligence/content-brief" className={styles.sectionLink}>
+            {hasEvidence ? "Open research worksheet" : "Check topic coverage"}
             <ArrowRight size={14} aria-hidden />
           </Link>
         </article>
