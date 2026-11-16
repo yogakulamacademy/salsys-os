@@ -62,3 +62,11 @@ Run full repository CI and CodeQL in the isolated PR branch.
 5. Perform signed-in cross-tenant staging acceptance only after staging hold is lifted.
 
 No production changes are authorized or claimed in this POC.
+
+## 2026-11-16 addendum — definitive external Ads blocker
+
+Read-only production evidence shows historical `google_ads_search_term_daily` rows (625, latest 2026-10-04), 40 failed Google Ads sync runs, last successful sync 2026-10-07, and 34 failures classified by Google as `CLOUD_PROJECT_NOT_APPROVED_FOR_PRODUCTION`. The Google integration connection remains recorded as connected; its production API Cloud project access must be upgraded to Explorer or higher. This is an external authorization gate, not reason to rotate credentials or rebuild ingestion. Existing SalsysOS operational readiness already categorizes the blocker; this POC adds a sanitized provider-health indicator to its SEO vs Ads evidence output, not a new health subsystem. Never return raw errors to Claude. No sync retry or production mutation was executed.
+
+Official reference: https://developers.google.com/google-ads/api/docs/api-policy/access-levels
+
+Tests also cover the allowlisted blocker code and non-disclosure of raw error strings. Ads Search Console windows remain incomparable until paid source health is restored and date alignment is verified.
