@@ -32,3 +32,7 @@ This skill is a draft and is not yet wired into the production Claude API or Co-
 ## Provider readiness
 
 Review the returned `sourceReadiness` field before any paid/organic comparison. When `blockerCode` is `google_cloud_project_test_access`, state that Google Cloud project production API approval is required (Explorer or higher). Never forward raw Google Ads errors, account IDs, or credentials. If paid rows are absent, do not present stale historic rows as current. Do not retry or update provider configurations from this skill.
+
+## Evidence completeness gate
+
+Do not present overlap or paid-only candidates unless sourceCoverage.comparisonReadiness is review_candidates_only. In blocked_incomplete_or_stale status, report only the sanitized blocker code, last known data dates, coverage counts, and recommended verification. A source-quality gate is not evidence of money saved; keep estimated savings unknown. Even healthy results have periodAlignmentVerified=false until an aligned-date comparison is separately validated.
