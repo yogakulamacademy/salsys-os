@@ -4,6 +4,7 @@ import { getCurrentDeskcommHumanReviewQueue } from '@/lib/integrations/deskcomm-
 import {
   claimDeskcommHumanReviewAction,
   closeDeskcommHumanReviewAction,
+  releaseDeskcommHumanReviewHoldAction,
 } from '@/app/automation/whatsapp/human-review/actions';
 
 export const dynamic = 'force-dynamic';
@@ -20,7 +21,8 @@ export default async function WhatsAppHumanReviewQueuePage({
   const notices: Record<string, string> = {
     assigned: 'Human review task created and assigned to your CRM account. Active automations were paused; unclaimed scheduled work was cancelled.',
     already_assigned: 'This request already has a handoff task. No duplicate task was created.',
-    closed: 'Handoff closed. Cancelled automation work was not resumed.',
+    closed: 'Handoff closed. The AI hold remains until separately released. No cancelled work was resumed.',
+    hold_released: 'The handoff hold was released. Future automation may be evaluated under the normal safety policy; cancelled jobs were not replayed.',
     unavailable: 'The action could not be completed safely. Confirm the migration and exact CRM identity evidence before retrying.',
     invalid: 'Invalid handoff request. Nothing was changed.',
     disabled: 'Handoff task actions are disabled in this environment.',
@@ -134,6 +136,27 @@ export default async function WhatsAppHumanReviewQueuePage({
                                   <span className="text-xs text-slate-500">
                                     Handoff {row.handoff.status} · task recorded
                                   </span>
+                                  {row.handoff.aiHoldActive ? (
+                                    <span className="text-xs font-medium text-amber-800">
+                                      Automation hold active
+                                    </span>
+                                  ) : (
+                                    <span className="text-xs text-slate-600">
+                                      Hold released · no job replay
+                                    </span>
+                                  )}
+                                  {queue.actionsEnabled && row.handoff.status === 'closed' &&
+                                    row.handoff.aiHoldActive ? (
+                                    <form action={releaseDeskcommHumanReviewHoldAction}>
+                                      <input type="hidden" name="handoff_id" value={row.handoff.id} />
+                                      <button
+                                        type="submit"
+                                        className="rounded-lg border border-amber-300 bg-amber-50 px-2 py-1 text-xs font-semibold text-amber-950"
+                                      >
+                                        Allow future automations (no replay)
+                                      </button>
+                                    </form>
+                                  ) : null}
                                   {queue.actionsEnabled && row.handoff.status === 'open' ? (
                                     <div className="flex flex-wrap gap-2">
                                       <form action={closeDeskcommHumanReviewAction}>
@@ -184,7 +207,9 @@ export default async function WhatsAppHumanReviewQueuePage({
               click can create one assigned human-review task and pause the
               lead's current automation enrollments. This does not alter consent,
               cancel an already-claimed provider send, or send a WhatsApp message.
-              Closing a handoff never replays cancelled jobs or restarts AI.
+              Closing a handoff keeps its automation hold in place until
+              an authorized administrator separately allows future automation.
+              Cancelled jobs are never replayed by this interface.
             </p>
           </>
         )}
