@@ -20,11 +20,16 @@ assert.ok(actions.includes("process.env.SALSYS_DESKCOMM_INBOUND_SHADOW !== 'true
 assert.ok(actions.includes('await requireAdminWorkspaceAccess()'));
 assert.ok(actions.includes("await ctx.supabase.rpc('open_verified_whatsapp_human_handoff_v1'"));
 assert.ok(actions.includes("await ctx.supabase.rpc('close_verified_whatsapp_human_handoff_v1'"));
+assert.ok(actions.includes("'release_verified_whatsapp_handoff_ai_hold_v1'"));
 assert.ok(actions.includes('p_organization_id: ctx.workspace.organizationId'));
 assert.ok(actions.includes('p_assigned_to: ctx.user.id'));
 assert.ok(!actions.includes('createAdminClient'), 'actions must execute with session auth for auth.uid()');
 assert.ok(!actions.includes('executePreparedWhatsAppProviderSend'));
 
+assert.ok(sql.includes('create table if not exists public.whatsapp_handoff_pilot_controls'));
+assert.ok(sql.includes('actions_enabled boolean not null default false'));
+assert.ok(sql.includes('grant all on public.whatsapp_handoff_pilot_controls to service_role'));
+assert.ok(sql.includes("raise exception 'WhatsApp human handoff task actions are disabled for this organization'"));
 assert.ok(sql.includes('create table if not exists public.whatsapp_human_handoffs'));
 assert.ok(sql.includes('constraint whatsapp_human_handoffs_unique_source unique (organization_id,raw_event_id)'));
 assert.ok(sql.includes('foreign key (organization_id,raw_event_id)'));
@@ -43,12 +48,17 @@ assert.ok(sql.includes("ow.workspace_code = 'sales'"));
 assert.ok(sql.includes("wm.active is true"));
 assert.ok(sql.includes('insert into public.tasks ('));
 assert.ok(sql.includes("'human_review'"));
+assert.ok(sql.includes('guard_human_handoff_enrollment_v1'));
+assert.ok(sql.includes("and h.ai_hold_active is true"));
+assert.ok(sql.includes('pg_advisory_xact_lock(hashtextextended('));
 assert.ok(sql.includes("set status = 'paused'"));
 assert.ok(sql.includes("set status = 'cancelled',cancelled_at = now()"));
 assert.ok(sql.includes("where organization_id = p_organization_id"));
 assert.ok(sql.includes("and status = 'scheduled'"));
 assert.ok(sql.includes("and status = 'waiting'"));
 assert.ok(sql.includes("if v_handoff.status = 'closed'"));
+assert.ok(sql.includes('release_verified_whatsapp_handoff_ai_hold_v1'));
+assert.ok(sql.includes('ai_hold_released_at = now()'));
 assert.ok(sql.includes("'automation_resumed',false"));
 assert.ok(sql.includes("'customer_message_sent',false"));
 assert.ok(sql.includes('revoke all on public.whatsapp_human_handoffs from public,anon,authenticated'));
@@ -58,10 +68,13 @@ assert.ok(sql.includes('revoke all on function public.close_verified_whatsapp_hu
 
 assert.ok(page.includes('claimDeskcommHumanReviewAction'));
 assert.ok(page.includes('closeDeskcommHumanReviewAction'));
+assert.ok(page.includes('releaseDeskcommHumanReviewHoldAction'));
 assert.ok(page.includes("row.kind === 'human_request'"));
 assert.ok(page.includes('queue.actionsEnabled'));
 assert.ok(queue.includes('raw.length > 1000'));
 assert.ok(queue.includes("process.env.SALSYS_DESKCOMM_HANDOFF_ACTIONS === 'true'"));
+assert.ok(queue.includes(".from('whatsapp_handoff_pilot_controls')"));
+assert.ok(queue.includes('pilot?.actions_enabled === true'));
 assert.ok(queue.includes(".from('whatsapp_human_handoffs')"));
 assert.ok(queue.includes(".eq('organization_id', organizationId)"));
 assert.ok(matching.includes("conversation.external_account_id === candidate.businessAccountId"));
