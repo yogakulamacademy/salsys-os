@@ -462,7 +462,7 @@ begin
   if v_handoff.ai_hold_active is false then
     return jsonb_build_object(
       'ok',true,'changed',false,'handoff_id',v_handoff.id,
-      'future_automation_allowed',true,'jobs_replayed',false,
+      'handoff_hold_released',true,'jobs_replayed',false,
       'automation_resumed',false,'customer_message_sent',false
     );
   end if;
@@ -479,7 +479,7 @@ begin
 
   return jsonb_build_object(
     'ok',true,'changed',true,'handoff_id',v_handoff.id,
-    'future_automation_allowed',true,'jobs_replayed',false,
+    'handoff_hold_released',true,'jobs_replayed',false,
     'automation_resumed',false,'customer_message_sent',false
   );
 end;
