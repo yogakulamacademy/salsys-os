@@ -143,7 +143,7 @@ begin
 
   -- Canonical CRM message linkage can be delayed; refuse to create a
   -- handoff until the CRM has persisted its matching inbound message.
-  select l.lead_id,l.conversation_id into v_lead_id,v_conversation_id
+  select l.lead_id,l.conversation_id into strict v_lead_id,v_conversation_id
   from public.whatsapp_crm_message_links l
   join public.messages m
     on m.organization_id = l.organization_id
@@ -164,9 +164,8 @@ begin
   where l.organization_id = p_organization_id
     and l.external_message_id = v_raw.external_message_id;
 
-  if not found then
-    raise exception 'Exact inbound message/tenant/account/sender identity is not reconciled';
-  end if;
+  -- STRICT rejects missing or ambiguous joins. Never pick an arbitrary
+  -- CRM identity from duplicate provider linkage.
 
   -- Atomic idempotency. The unique (organization,raw_event) claim serializes
   -- concurrent admin actions without duplicating tasks or pausing again.
@@ -283,7 +282,7 @@ begin
   if not public.has_organization_role(p_organization_id,array['owner','admin']::text[]) then
     raise exception 'Only owners/admins can close human handoffs';
   end if;
-  if p_resolution not in ('resolved_by_staff','dismissed_after_review') then
+  if p_resolution is null or p_resolution not in ('resolved_by_staff','dismissed_after_review') then
     raise exception 'Invalid human handoff resolution';
   end if;
 
@@ -320,6 +319,19 @@ begin
     and id = v_handoff.task_id
     and lead_id = v_handoff.lead_id
     and status in ('open','snoozed');
+
+  -- Keep the canonical due-date summary consistent with the task lifecycle.
+  update public.leads l
+  set next_followup_at = (
+    select min(t.due_at)
+    from public.tasks t
+    where t.organization_id = p_organization_id
+      and t.lead_id = v_handoff.lead_id
+      and t.status in ('open','snoozed')
+      and t.due_at is not null
+  )
+  where l.id = v_handoff.lead_id
+    and l.organization_id = p_organization_id;
 
   -- DO NOT resume paused enrollments or cancelled jobs on task closure.
   return jsonb_build_object(
