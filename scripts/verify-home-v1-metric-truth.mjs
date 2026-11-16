@@ -23,8 +23,9 @@ expect(
   "Historical qualification requires reconciliation with the selected acquisition cohort and stage history coverage.",
 );
 expect(
-  home.includes('evidenceState={historicalQualification ? "derived" : "unknown"}') &&
-    home.includes('evidenceState={pipelineTruth ?') &&
+  home.includes('value={qualifiedLeads == null ? "—" : qualifiedLeads.toLocaleString("en-IN")}') &&
+    home.includes('? { text: "History unavailable", tone: "warn" }') &&
+    home.includes('const pipelineChip: Chip = !pipelineTruth\n    ? { text: "Unavailable", tone: "warn" }') &&
     reader.includes("qualificationResponse.error") &&
     reader.includes("pipelineResponse.error"),
   "Missing or malformed metrics must fail closed to unknown rather than fall back to a misleading calculation.",

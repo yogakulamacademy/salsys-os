@@ -39,18 +39,15 @@ test('Home has exactly four metric headlines, and opens source detail in the sel
   await page.goto('/home?period=30d');
   const pulse = page.locator('section[aria-label="Business pulse"]');
   await expect(pulse).toBeVisible();
-  for (const label of ['Leads', 'Qualified leads', 'Open pipeline value', 'Recorded collections']) {
+  for (const label of ['Leads', 'Qualified', 'Pipeline value', 'Recorded collections']) {
     await expect(pulse.getByText(label, { exact: true })).toBeVisible();
   }
+  await expect(pulse.locator(':scope > button')).toHaveCount(4);
   await expect(pulse.getByText('Needs reply', { exact: true })).toHaveCount(0);
-  await expect(pulse.getByText('Open pipeline value', { exact: true })).toBeVisible();
-  const performance = page.getByRole('region', { name: 'Conversion and collections' });
-  await expect(performance.getByRole('heading', { name: 'Qualification milestones', exact: true })).toBeVisible();
-  await expect(performance.getByRole('heading', { name: 'Recorded collections trend', exact: true })).toBeVisible();
-  await expect(performance.getByText('Qualification history unavailable', { exact: true })).toBeVisible();
-  await expect(performance.locator('[data-empty-variant="revenue"]')).toHaveAttribute('data-evidence-state', 'unavailable');
+  // Missing evidence stays unknown: no invented values, and the reason is visible.
+  await expect(pulse.getByText('History unavailable', { exact: true })).toBeVisible();
+  await expect(pulse.getByText('Evidence unavailable', { exact: true }).first()).toBeVisible();
 
-  await expect(page.getByText('UTC reporting days', { exact: true })).toBeVisible();
   const coverage = page.getByTestId('home-reporting-coverage');
   await expect(coverage).toBeVisible();
   await expect(coverage.getByText('0 of 5 reporting indicators available')).toBeVisible();
@@ -62,29 +59,20 @@ test('Home has exactly four metric headlines, and opens source detail in the sel
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(coverage.getByText('Reporting days use UTC.', { exact: false })).toBeVisible();
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
-  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
-  const shortcuts = page.getByRole('navigation', { name: 'Home section shortcuts' });
-  await expect(shortcuts).toBeVisible();
-  await expect(shortcuts.getByRole('link', { name: 'Work queue' })).toHaveAttribute('href', '#home-action-queue');
-  await expect(shortcuts.getByRole('link', { name: 'Conversion' })).toHaveAttribute('href', '#home-conversion');
-  await expect(shortcuts.getByRole('link', { name: 'Business breakdown' })).toHaveAttribute('href', '#home-business-breakdown');
-  await shortcuts.getByRole('link', { name: 'Work queue' }).click();
-  await expect(page).toHaveURL(/#home-action-queue$/);
-  await expect(page.locator('#home-action-queue')).toBeVisible();
+  await page.setViewportSize({ width: 1440, height: 1000 });
 
+  const quality = page.getByRole('region', { name: 'Lead quality by source' });
+  await expect(quality.getByText('Qualification history by source is unavailable for this period.')).toBeVisible();
 
+  const locations = page.getByRole('region', { name: 'Top locations' });
+  await expect(locations).toBeVisible();
+  await expect(locations.getByText('No recognised lead locations yet.')).toBeVisible();
+  await locations.getByRole('button', { name: 'Map', exact: true }).click();
+  await expect(locations.getByRole('button', { name: 'Map', exact: true })).toHaveAttribute('aria-pressed', 'true');
 
-  const geography = page.getByRole('region', { name: 'Geographic data readiness' });
-  await expect(geography).toBeVisible();
-  await expect(geography.getByText('Geographic coverage unavailable', { exact: true })).toBeVisible();
-  await expect(geography.getByTestId('home-world-map-disabled')).toHaveAttribute('data-map-state', 'locked');
-  await expect(geography.getByText('Map unavailable', { exact: true })).toBeVisible();
-  await geography.getByText('Why is the map locked?').click();
-  await expect(geography.getByText('No world-map distribution or location-based demand claims', { exact: false })).toBeVisible();
-  const conversion = page.getByRole('region', { name: 'Conversion and collections' });
-  await expect(conversion.getByRole('heading', { name: 'Pipeline health' })).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Pipeline health' })).toBeVisible();
 
-  const detail = page.getByRole('link', { name: 'Analyze sources', exact: true });
+  const detail = page.getByRole('region', { name: 'Lead sources' }).getByRole('link', { name: /Analyze/ });
   await expect(detail).toHaveAttribute('href', /\/home\/sources\?period=30d/);
   await detail.click();
   await expect(page).toHaveURL(/\/home\/sources\?period=30d/);

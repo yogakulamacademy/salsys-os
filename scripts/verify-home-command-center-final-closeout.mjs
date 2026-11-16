@@ -51,9 +51,10 @@ expect(
   "Home must not silently substitute current/all-time snapshot values into selected-period KPIs.",
 );
 expect(
-  homePage.includes('label="Enrolled leads"') &&
-    homePage.includes("not the authoritative operational Enrollment-record count"),
-  "CRM enrolled-stage evidence must be labeled distinctly from operational Enrollment records.",
+  !homePage.includes('label="Enrolled leads"') &&
+    !homePage.includes('label="Enrollments"') &&
+    homePage.includes("marked enrolled · 0 payments confirmed"),
+  "CRM enrolled-stage evidence must be labeled distinctly from operational Enrollment records (Home shows it only as a 'marked enrolled' stage count beside confirmed payments).",
 );
 expect(
   periodData.includes('.eq("to_stage", "enrolled")') &&
@@ -61,27 +62,29 @@ expect(
   "The enrolled-lead period metric must remain grounded in unique CRM stage-history evidence.",
 );
 expect(
-  homePage.includes("Selected-period payment evidence is unavailable") &&
-    homePage.includes("Current snapshot revenue has not been substituted"),
-  "Revenue trend must disclose unavailable period evidence without snapshot substitution.",
+  homePage.includes("const collectedValue = periodPrimaryRevenue") &&
+    homePage.includes('const collectionsChip: Chip = !periodAnalytics.available.revenue\n    ? { text: "Evidence unavailable", tone: "warn" }') &&
+    !homePage.includes("primaryRevenue.collected"),
+  "Revenue must disclose unavailable period evidence without snapshot substitution.",
 );
 expect(
-  homePage.includes("Current all-time source totals have not been substituted"),
+  homePage.includes("const acquisitionSources: DashboardPeriodSource[] = periodAnalytics.available.leads") &&
+    homePage.includes("const donutRows = [...acquisitionSources]") &&
+    homePage.includes("No source evidence for this period."),
   "Acquisition quality must not silently replace unavailable period data with all-time sources.",
 );
 expect(
   homePage.includes('label="Recorded collections"') &&
-    homePage.includes('label="Open pipeline value"') &&
-    homePage.includes('label="Recorded collections · period"') &&
-    homePage.includes('label="Eligible open value · now"') &&
-    homePage.includes("Recorded collections are CRM ledger entries pending external settlement reconciliation.") &&
+    homePage.includes('label="Pipeline value"') &&
+    homePage.includes("As of now: positive potential values on open leads") &&
+    homePage.includes("Not yet reconciled to bank or payment-provider settlement.") &&
+    homePage.includes("valued · now") &&
     !homePage.includes('label="Current weighted value"'),
   "Home must distinguish unverified period ledger activity from current, explicitly valued open opportunities.",
 );
 expect(
-  homePage.includes("batch.capacity != null && batch.capacity > 0") &&
-    homePage.includes('"Capacity not set"'),
-  "Home must keep missing/non-positive batch capacity unknown.",
+  !homePage.includes("batch.capacity") && !homePage.includes("seats_remaining"),
+  "Home must not present batch capacity; capacity (and its unknown state) lives in Operations.",
 );
 
 expect(

@@ -1,37 +1,53 @@
 import Link from "next/link";
 import {
-  ArrowRight,
+  BookOpen,
   CalendarDays,
   CircleDollarSign,
   Clock3,
   CreditCard,
-  Inbox,
-  MessageSquareText,
-  Sparkles,
   GitBranch,
-  Zap,
+  HeartPulse,
+  Inbox,
+  Lightbulb,
+  ListTodo,
+  Megaphone,
+  MessageSquareText,
+  Plus,
+  Rocket,
+  Target,
+  TriangleAlert,
   UserRoundCheck,
+  UserRoundX,
   Users,
+  Zap,
   type LucideIcon,
 } from "lucide-react";
 
-import { DecisionMetricCard } from "@/components/intelligence/decision-metric-card";
-import { LeadActivityChart } from "@/components/home/lead-activity-chart";
-import { QualificationCohortPanel } from "@/components/home/qualification-cohort-panel";
-import { HomeGeographyReadiness } from "@/components/home/home-geography-readiness";
-import { HomeReportingCoverage, type HomeReportingEvidence } from "@/components/home/home-reporting-coverage";
+import { KpiCard } from "@/components/home/command-center/kpi-card";
+import { LeadActivityPanel } from "@/components/home/command-center/lead-activity-panel";
+import { LocationsPanel } from "@/components/home/command-center/locations-panel";
+import { BarRow, Panel, ToneChip } from "@/components/home/command-center/panel";
+import { PipelineHealthPanel } from "@/components/home/command-center/pipeline-health-panel";
+import { SourceQualityPanel } from "@/components/home/command-center/source-quality-panel";
 import { HomeEmptyState } from "@/components/home/home-empty-state";
+import { HomeReportingCoverage, type HomeReportingEvidence } from "@/components/home/home-reporting-coverage";
 import { isMockMode } from "@/lib/data";
 import { getHomeV1MetricTruth, type HomeV1MetricTruth } from "@/lib/home-v1-metric-truth";
-import { percentageWidth, sourceLabel } from "@/lib/ui-format";
 import { buildHomeSourceSignals, reconcileHomeSourceQualification } from "@/lib/home-source-intelligence";
 import { buildHomeNextActions, type HomeNextAction, type HomeActionId } from "@/lib/home-next-actions";
-import { calculateHomeReplyWaitingBreakdown } from "@/lib/home-reply-waiting";
+import { groupHomePipelineStages } from "@/lib/home-stage-groups";
 import {
-  getDashboardSnapshot,
-  type DashboardBatchDemand,
-  type DashboardSnapshot,
-} from "@/lib/dashboard-data";
+  buildHomeInsights,
+  changeChip,
+  percentOf,
+  type Chip,
+  type ChipTone,
+} from "@/lib/home-command-center";
+import {
+  getHomeCommandCenterSnapshot,
+  type HomeCommandCenterSnapshot,
+} from "@/lib/home-command-center-data";
+import { getDashboardSnapshot } from "@/lib/dashboard-data";
 import {
   getDashboardPeriodAnalytics,
   resolveDashboardPeriod,
@@ -56,19 +72,29 @@ const actionIcons: Record<HomeActionId, LucideIcon> = {
   "missing-valuation": CircleDollarSign,
 };
 
-type ChangeSignal = {
+type QueueRow = {
+  id: string;
   label: string;
-  value: string;
-  detail: string;
-  tone: "positive" | "negative" | "neutral" | "attention";
+  hint: string;
+  count: number;
+  href: string;
+  icon: LucideIcon;
+  tone: "critical" | "warning" | "info";
+  provisional?: boolean;
+  reason?: string;
 };
+
+type HealthItem = { label: string; note: string; state: "ok" | "warn" | "bad" };
+
+const DONUT_COLORS = ["#5743c5", "#8b7be0", "#b3a7ef", "#d6cff7", "#e9e5fb"];
+const ADS_STALE_DAYS = 3;
 
 export default async function HomePage({ searchParams }: HomePageProps) {
   const query = await searchParams;
   const mock = isMockMode();
   const periodFallback = resolveDashboardPeriod(query);
 
-  const [snapshot, periodAnalytics, metricTruth] = await Promise.all([
+  const [snapshot, periodAnalytics, metricTruth, extras] = await Promise.all([
     getDashboardSnapshot(),
     mock
       ? Promise.resolve<DashboardPeriodAnalytics>({
@@ -93,6 +119,15 @@ export default async function HomePage({ searchParams }: HomePageProps) {
     mock
       ? Promise.resolve<HomeV1MetricTruth>({ qualification: null, pipeline: null })
       : getHomeV1MetricTruth(periodFallback),
+    mock
+      ? Promise.resolve<HomeCommandCenterSnapshot>({
+          ownership: null,
+          payments: null,
+          courses: null,
+          locations: null,
+          freshness: { adsLastSuccessAt: null, adsLatestFailed: false, instagramAppRepliesCaptured: false },
+        })
+      : getHomeCommandCenterSnapshot(),
   ]);
 
   const {
@@ -157,9 +192,6 @@ export default async function HomePage({ searchParams }: HomePageProps) {
   const qualifiedRate = historicalQualification && historicalQualification.cohortLeads > 0
     ? Math.round((historicalQualification.qualifiedLeads / historicalQualification.cohortLeads) * 1000) / 10
     : null;
-  const enrolledLeads = periodAnalytics.available.enrollments
-    ? periodAnalytics.enrollments.current
-    : null;
 
   const collectedValue = periodPrimaryRevenue
     ? formatMoney(periodPrimaryRevenue.current, periodPrimaryRevenue.currency)
@@ -172,13 +204,6 @@ export default async function HomePage({ searchParams }: HomePageProps) {
     paymentPending: metrics.paymentPending,
     missingOpportunityValue: unvaluedCurrentOpen,
   }).map((item) => ({ ...item, icon: actionIcons[item.id] }));
-  const changeSignals = buildChangeSignals(periodAnalytics, metrics.waitingOverHour);
-  const executiveBrief = buildExecutiveBrief({
-    analytics: periodAnalytics,
-    sources: validatedSourceQuality ?? [],
-    attention: activeAttention,
-    qualifiedRate,
-  });
   const sourceDetailParams = new URLSearchParams(
     periodAnalytics.period.preset === "custom"
       ? {
@@ -189,8 +214,6 @@ export default async function HomePage({ searchParams }: HomePageProps) {
       : { period: periodAnalytics.period.preset },
   );
   const sourceDetailHref = "/home/sources?" + sourceDetailParams.toString();
-  const visibleUpcomingBatches = upcomingBatches.slice(0, 3);
-  const maxUpcomingDemand = Math.max(1, ...visibleUpcomingBatches.map((batch) => batch.activeDemand));
   const reportingEvidence: HomeReportingEvidence[] = [
     { id: "lead-acquisition", label: "Lead acquisition", available: periodAnalytics.available.leads, basis: "Period event" },
     { id: "qualification-cohort", label: "Qualification milestones", available: historicalQualification != null, basis: "Period cohort" },
@@ -199,441 +222,488 @@ export default async function HomePage({ searchParams }: HomePageProps) {
     { id: "open-valuation", label: "Open opportunity values", available: pipelineTruth != null, basis: "Current snapshot" },
   ];
 
+  const leadChip: Chip = periodAnalytics.available.leads
+    ? changeChip(periodAnalytics.leads.current, periodAnalytics.leads.previous)
+    : { text: "Evidence unavailable", tone: "warn" };
+  const qualifiedChip: Chip = qualifiedRate == null
+    ? { text: "History unavailable", tone: "warn" }
+    : { text: `${qualifiedRate}% of leads`, tone: qualifiedLeads ? "flat" : "warn" };
+  const pipelineChip: Chip = !pipelineTruth
+    ? { text: "Unavailable", tone: "warn" }
+    : { text: `${pipelineTruth.valuedCount.toLocaleString("en-IN")} of ${pipelineTruth.eligibleCount.toLocaleString("en-IN")} valued · now`, tone: pipelineTruth.valuedCount === pipelineTruth.eligibleCount ? "flat" : "warn" };
+  const pendingPayments = extras.payments?.pending ?? [];
+  const pendingCount = pendingPayments.reduce((sum, row) => sum + row.count, 0);
+  const collectionsChip: Chip = !periodAnalytics.available.revenue
+    ? { text: "Evidence unavailable", tone: "warn" }
+    : pendingCount
+      ? { text: `${pendingCount} pending · unreconciled`, tone: "warn" }
+      : { text: "Ledger · unreconciled", tone: "flat" };
+
+  const replyProvisional = !extras.freshness.instagramAppRepliesCaptured;
+  const queue: QueueRow[] = [
+    ...(extras.ownership && extras.ownership.unassignedOpen > 0
+      ? [{
+          id: "unassigned",
+          label: "Assign owners",
+          hint: "Open leads · no owner recorded",
+          reason: "Nobody is accountable for following these leads up.",
+          count: extras.ownership.unassignedOpen,
+          href: "/leads?view=unassigned",
+          icon: UserRoundX,
+          tone: "critical" as const,
+        }]
+      : []),
+    ...activeAttention.map((item) => ({
+      id: item.id,
+      label: item.label,
+      // Reason and evidence stay visible (no hover needed); the reply count is
+      // marked provisional while replies sent from the Instagram app are not captured.
+      hint: item.id === "reply-queue" && replyProvisional
+        ? "Provisional · Instagram app replies not captured"
+        : `${item.timing} · ${item.evidence}`,
+      reason: item.reason,
+      count: item.value,
+      href: item.href,
+      icon: item.icon,
+      tone: item.tone,
+      provisional: item.id === "reply-queue" && replyProvisional,
+    })),
+  ].slice(0, 5);
+
+  const stageGroups = groupHomePipelineStages(counts);
+  const insights = [
+    ...buildHomeInsights({
+      sources: validatedSourceQuality,
+      currentLeads: periodAnalytics.available.leads ? periodAnalytics.leads.current : null,
+      previousLeads: periodAnalytics.available.leads ? periodAnalytics.leads.previous : null,
+    }),
+    ...sourceSignals.map((signal, index) => ({
+      id: `signal-${index}`,
+      title: signal.title,
+      detail: signal.detail,
+      value: "",
+      tone: "warn" as ChipTone,
+      href: signal.href,
+    })),
+  ].slice(0, 3);
+
+  const donutTotal = acquisitionSources.reduce((sum, row) => sum + row.leads, 0);
+  const donutRows = [...acquisitionSources].sort((a, b) => b.leads - a.leads);
+  const donutTop = donutRows.slice(0, 4);
+  const donutOther = donutRows.slice(4).reduce((sum, row) => sum + row.leads, 0);
+  const donutSegments = [
+    ...donutTop.map((row) => ({ label: row.source, leads: row.leads })),
+    ...(donutOther ? [{ label: "Other", leads: donutOther }] : []),
+  ];
+
+  const courseRows = extras.courses?.rows.slice(0, 5) ?? [];
+  const courseMax = Math.max(1, ...courseRows.map((row) => row.leads));
+
+  const adsAgeDays = extras.freshness.adsLastSuccessAt
+    ? Math.floor((Date.now() - new Date(extras.freshness.adsLastSuccessAt).getTime()) / 86_400_000)
+    : null;
+  const health: HealthItem[] = [
+    { label: "Leads & stages", note: periodAnalytics.available.leads ? "Live" : "Unavailable", state: periodAnalytics.available.leads ? "ok" : "bad" },
+    { label: "Qualification history", note: historicalQualification ? "Live" : "Unavailable", state: historicalQualification ? "ok" : "warn" },
+    { label: "Follow-ups", note: "Live", state: "ok" },
+    {
+      label: "Payments",
+      note: !extras.payments ? "Unavailable" : extras.payments.paidCount === 0 ? "0 confirmed" : "Unreconciled",
+      state: !extras.payments ? "bad" : "warn",
+    },
+    {
+      label: "Opportunity values",
+      note: pipelineTruth ? percentOf(pipelineTruth.valuedCount, pipelineTruth.eligibleCount) : "Unavailable",
+      state: pipelineTruth && pipelineTruth.eligibleCount > 0 && pipelineTruth.valuedCount / pipelineTruth.eligibleCount >= 0.8 ? "ok" : "warn",
+    },
+    {
+      label: "Location",
+      note: extras.locations ? percentOf(extras.locations.filled, extras.locations.total) : "Unavailable",
+      state: extras.locations && extras.locations.total > 0 && extras.locations.filled / extras.locations.total >= 0.5 ? "ok" : "warn",
+    },
+    { label: "Instagram app replies", note: replyProvisional ? "Not captured" : "Live", state: replyProvisional ? "bad" : "ok" },
+    {
+      label: "Google & Meta ads",
+      note: adsAgeDays == null ? "Never synced" : adsAgeDays === 0 ? (extras.freshness.adsLatestFailed ? "Today · last run failed" : "Today") : `${adsAgeDays}d old`,
+      state: adsAgeDays != null && adsAgeDays <= ADS_STALE_DAYS && !extras.freshness.adsLatestFailed ? "ok" : "bad",
+    },
+  ];
+  const healthOk = health.filter((item) => item.state === "ok").length;
+  const markedEnrolledUnpaid = extras.payments && extras.payments.paidCount === 0 ? counts.enrolled ?? 0 : 0;
+  const periodSeries = periodAnalytics.leadSeries.map((point) => ({
+    label: formatShortDate(point.date),
+    current: point.current,
+    previous: point.previous,
+  }));
+
   return (
-    <div className="command-center-v2 w-full min-w-0 space-y-3 pb-7">
-      <header className="flex flex-col gap-3 min-[900px]:flex-row min-[900px]:items-center min-[900px]:justify-between">
+    <div className="command-center-v3 w-full min-w-0 space-y-4 pb-7">
+      <header className="flex flex-wrap items-center justify-between gap-3">
         <div className="min-w-0">
-          <h1 className="text-[28px] font-bold tracking-[-0.045em] text-copy-strong">Command Center</h1>
-          <p className="mt-1 text-[13px] leading-5 text-copy-muted">Real-time performance and growth</p>
+          <h1 className="text-[28px] font-extrabold tracking-[-0.03em] text-copy-strong">Command Center</h1>
+          <p className="mt-0.5 text-sm text-copy-muted">
+            {totalLeads == null ? "—" : totalLeads.toLocaleString("en-IN")} leads · {qualifiedLeads == null ? "—" : qualifiedLeads.toLocaleString("en-IN")} qualified · {collectedValue === "—" ? "no payments recorded" : `${collectedValue} recorded`}
+          </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <PeriodPresets selected={periodAnalytics.period.preset} />
-          <span className="hidden text-[11px] text-copy-subtle sm:inline" title="Date boundaries currently use UTC, not the organization's business timezone.">UTC reporting days</span>
-          <details className="relative group">
-            <summary className="inline-flex h-10 cursor-pointer list-none items-center gap-2 rounded-ui border border-line bg-surface px-3 text-xs font-medium text-copy-muted hover:border-line-strong">
-              <CalendarDays size={14} className="text-brand-700" />
-              <span className="max-w-[170px] truncate">{periodAnalytics.period.label}</span>
+          <details className="group relative">
+            <summary className="inline-flex h-11 cursor-pointer list-none items-center gap-2 rounded-xl border border-line bg-surface px-3.5 text-[13px] font-semibold text-copy-strong hover:border-line-strong" title="UTC reporting days">
+              <CalendarDays size={16} className="text-brand-700" />
+              <span className="max-w-[190px] truncate">{periodAnalytics.period.label}</span>
             </summary>
             <div className="absolute right-0 z-30 mt-2 w-[min(310px,calc(100vw-40px))] rounded-card border border-line bg-surface p-4 shadow-panel">
               <form action="/home" method="get" className="space-y-3">
                 <input type="hidden" name="period" value="custom" />
                 <DateField id="dashboard-from" name="from" label="From" defaultValue={periodAnalytics.period.startDate} />
                 <DateField id="dashboard-to" name="to" label="To" defaultValue={periodAnalytics.period.endDate} />
-                <p className="text-[11px] leading-5 text-copy-subtle">Custom ranges are capped at 366 days. Comparisons use the previous equal-length period when available.</p>
+                <p className="text-[11px] leading-5 text-copy-subtle">UTC reporting days · up to 366 days.</p>
                 <button type="submit" className="h-10 w-full rounded-ui bg-brand-700 px-4 text-xs font-semibold text-white hover:bg-brand-800">Apply date range</button>
               </form>
             </div>
           </details>
-          <Link href="/marketing" className="inline-flex h-10 items-center gap-2 rounded-ui border border-line bg-surface px-3 text-xs font-semibold text-copy-strong shadow-sm hover:border-brand-600 hover:text-brand-700"><Sparkles size={15} className="text-brand-700" />Explore intelligence</Link>
         </div>
       </header>
 
-      <section aria-label="Business pulse" className="grid grid-cols-2 gap-2 sm:gap-3 min-[900px]:grid-cols-4">
-        <div className="command-kpi min-w-0">
-          <DecisionMetricCard
-            compact
-            icon={<Users size={17} />}
-            label="Leads"
-            value={totalLeads == null ? "—" : totalLeads.toLocaleString("en-IN")}
-            detail="Created in the selected period"
-            delta={periodAnalytics.available.leads ? periodAnalytics.leads.changePercent : undefined}
-            deltaDirection="neutral"
-            trend={periodAnalytics.leadSeries.map((point) => point.current)}
-            comparisonLabel="vs previous comparable period"
-            href="/leads"
-            evidenceLabel={periodAnalytics.available.leads ? "CRM lead evidence" : "Evidence unavailable"}
-            definition="Leads created in the selected period. Missing period evidence stays unknown rather than substituting current snapshot totals."
-          />
-        </div>
-        <div className="command-kpi min-w-0">
-          <DecisionMetricCard
-            compact
-            icon={<UserRoundCheck size={17} />}
-            label="Qualified leads"
-            value={qualifiedLeads == null ? "—" : qualifiedLeads.toLocaleString("en-IN")}
-            detail={qualifiedLeads == null ? "Period-end qualification evidence unavailable" : qualifiedRate == null ? "No qualifying leads in the cohort" : qualifiedRate + "% reached a qualification milestone by period end"}
-            href="/leads"
-            evidenceLabel={historicalQualification ? "Qualification-stage history" : "Evidence unavailable"}
-            evidenceState={historicalQualification ? "derived" : "unknown"}
-            definition="New leads in the selected acquisition cohort that reached qualified, high intent, payment pending, or enrolled by the selected period-end cutoff. Counts qualifying milestones, not their present-day stage. Requires complete recorded stage history."
-          />
-        </div>
-        <div className="command-kpi min-w-0">
-          <DecisionMetricCard
-            compact
-            icon={<GitBranch size={17} />}
-            label="Open pipeline value"
-            value={openPipelineValue}
-            detail={openPipelineDetail}
-            statusLabel="As of now"
-            href="/revenue"
-            evidenceLabel={pipelineTruth ? "Open-lead valuation evidence" : "Evidence unavailable"}
-            evidenceState={pipelineTruth ? (pipelineTruth.eligibleCount === pipelineTruth.valuedCount ? "derived" : "partial") : "unknown"}
-            definition="Sum of positive explicit potential values for currently open, nonarchived sales leads in new, contacted, engaged, qualified, high-intent, or payment-pending stages. Values require an explicit currency; multi-currency amounts are never merged. Missing values are excluded, disclosed in coverage, and must not be interpreted as zero potential. As-of-now, not period-based."
-          />
-        </div>
-        <div className="command-kpi min-w-0">
-          <DecisionMetricCard
-            compact
-            icon={<CreditCard size={17} />}
-            label="Recorded collections"
-            value={collectedValue}
-            detail={!periodAnalytics.available.revenue ? "Selected-period payment evidence unavailable" : periodPrimaryRevenue ? periodPrimaryRevenue.currency + " net paid in CRM ledger · settlement review pending" : "No paid ledger entries · reconciliation pending"}
-            delta={periodPrimaryRevenue?.changePercent}
-            deltaDirection="higher_is_better"
-            comparisonLabel="vs previous comparable period"
-            href="/revenue"
-            evidenceLabel={periodAnalytics.available.revenue ? "Recorded payment ledger · unverified" : "Evidence unavailable"}
-            evidenceState="partial"
-            definition="Net paid-status payment records less refund records in the selected period and displayed currency. The CRM ledger has not been reconciled to external settlement evidence; do not treat this as independently verified total business collections."
-          />
-        </div>
+      <section aria-label="Business pulse" className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 min-[1100px]:grid-cols-4">
+        <KpiCard
+          icon={<Users size={18} />}
+          label="Leads"
+          value={totalLeads == null ? "—" : totalLeads.toLocaleString("en-IN")}
+          chip={leadChip}
+          trend={periodAnalytics.available.leads ? periodAnalytics.leadSeries.map((point) => point.current) : null}
+          href="/leads"
+          evidenceLabel={periodAnalytics.available.leads ? "CRM lead evidence" : "Evidence unavailable"}
+          evidenceState={periodAnalytics.available.leads ? "observed" : "unknown"}
+          definition="Leads created in the selected period. Missing period evidence stays unknown rather than substituting current snapshot totals."
+        />
+        <KpiCard
+          icon={<UserRoundCheck size={18} />}
+          label="Qualified"
+          value={qualifiedLeads == null ? "—" : qualifiedLeads.toLocaleString("en-IN")}
+          chip={qualifiedChip}
+          trend={null}
+          href={sourceDetailHref}
+          muted={qualifiedLeads == null}
+          evidenceLabel={historicalQualification ? "Qualification-stage history" : "Evidence unavailable"}
+          evidenceState={historicalQualification ? "derived" : "unknown"}
+          definition="New leads in the selected period that reached qualified, high intent, payment pending or enrolled by period end, from recorded stage history."
+        />
+        <KpiCard
+          icon={<GitBranch size={18} />}
+          label="Pipeline value"
+          value={openPipelineValue}
+          chip={pipelineChip}
+          trend={null}
+          href="/revenue/valuation"
+          muted={openPipelineValue === "—"}
+          emptyText="Not valued yet"
+          evidenceLabel={pipelineTruth ? "Open-lead valuation evidence" : "Evidence unavailable"}
+          evidenceState={pipelineTruth ? (pipelineTruth.eligibleCount === pipelineTruth.valuedCount ? "derived" : "partial") : "unknown"}
+          definition="As of now: positive potential values on open leads, one currency at a time. Not revenue; does not change with the period filter."
+        />
+        <KpiCard
+          icon={<CreditCard size={18} />}
+          label="Recorded collections"
+          value={collectedValue}
+          chip={collectionsChip}
+          trend={null}
+          href="/revenue"
+          muted={collectedValue === "—"}
+          emptyText="None confirmed"
+          evidenceLabel={periodAnalytics.available.revenue ? "Recorded payment ledger · unverified" : "Evidence unavailable"}
+          evidenceState="partial"
+          definition="Paid minus refunded CRM payment records in the selected period. Not yet reconciled to bank or payment-provider settlement."
+        />
       </section>
 
-      <details className="rounded-lg px-1 text-[11px] text-copy-subtle">
-        <summary className="w-fit cursor-pointer text-brand-700">Metric definitions and reporting scope</summary>
-        <p className="mt-2 max-w-4xl leading-5">
-          Leads and recorded collections refer to the selected UTC period. Qualified leads reached a recorded milestone by period end.
-          Open pipeline is a current-state estimate and does not change with the period filter.
-        </p>
-      </details>
+      <div className="flex flex-wrap gap-3.5">
+        <LeadActivityPanel
+          points={periodSeries}
+          total={totalLeads}
+          previousTotal={periodAnalytics.available.leads ? periodAnalytics.leads.previous : null}
+          chip={leadChip}
+          periodLabel={periodAnalytics.period.label}
+          available={periodAnalytics.available.leads}
+        />
 
-      <nav aria-label="Home section shortcuts" className="flex flex-wrap gap-2 min-[900px]:hidden">
-        {[
-          { href: "#home-action-queue", label: "Work queue" },
-          { href: "#home-conversion", label: "Conversion" },
-          { href: "#home-business-breakdown", label: "Business breakdown" },
-        ].map((shortcut) => (
-          <Link
-            key={shortcut.href}
-            href={shortcut.href}
-            className="inline-flex min-h-10 items-center rounded-ui border border-line bg-surface px-3 py-2 text-xs font-semibold text-copy-strong transition hover:border-brand-300 hover:text-brand-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-700"
-          >
-            {shortcut.label}
-          </Link>
-        ))}
-      </nav>
-
-      <section aria-label="Performance and work queue" className="grid min-w-0 gap-3 min-[900px]:grid-cols-[minmax(0,1.28fr)_minmax(300px,1fr)]">
-        <section className="min-w-0 overflow-hidden rounded-2xl border border-line bg-surface">
-          <SectionHeader eyebrow="" title="Lead activity" actionHref="/leads" actionLabel="Open leads" />
-          <div className="px-4 pb-3 pt-1 sm:px-5">
-            <LeadActivityChart
-              points={periodAnalytics.leadSeries}
-              available={periodAnalytics.available.leads}
-              currentTotal={totalLeads}
-              previousTotal={periodAnalytics.available.leads ? periodAnalytics.leads.previous : null}
-              periodLabel={periodAnalytics.period.label}
+        <Panel id="home-action-queue" icon={<Zap size={19} />} title="Action queue" action={{ href: "/follow-ups", label: "Work queue" }} className="flex-[1_1_340px]">
+          {queue.length ? (
+            <ul className="flex flex-col">
+              {queue.map((item) => (
+                <AttentionRow key={item.id} item={item} />
+              ))}
+            </ul>
+          ) : (
+            <HomeEmptyState
+              variant="queue"
+              compact
+              unavailable={mock}
+              title={mock ? "Queue evidence unavailable" : "Nothing waiting"}
+              description={mock ? "Queue counts cannot be verified in this environment." : "No overdue work is recorded."}
             />
-            <details className="mt-2 border-t border-line pt-2">
-              <summary className="cursor-pointer text-[11px] font-medium text-brand-700">Financial context</summary>
-              <div className="mt-3 grid gap-3 sm:grid-cols-3">
-                <SnapshotMetric label="Enrolled leads" value={enrolledLeads == null ? "—" : enrolledLeads.toLocaleString("en-IN")} />
-                <SnapshotMetric label="Active pipeline · now" value={metrics.activePipeline.toLocaleString("en-IN")} />
-                <SnapshotMetric label="High intent · now" value={metrics.highIntent.toLocaleString("en-IN")} />
-              </div>
-              <p className="mt-2 text-[11px] text-copy-subtle">Enrolled leads reflect CRM stage-history entries in the period, not the authoritative operational Enrollment-record count.</p>
-              <div className="mt-3">
-              <div className="mt-3 grid gap-4 rounded-xl bg-surface-muted p-3 sm:grid-cols-2">
-                <SnapshotMetric label="Recorded collections · period" value={collectedValue} change={periodPrimaryRevenue?.changePercent ?? null} />
-                <SnapshotMetric label="Eligible open value · now" value={openPipelineValue} />
-              </div>
-              <p className="mt-2 text-[11px] leading-5 text-copy-subtle">
-                Current snapshot revenue has not been substituted into the selected reporting period.
-                Recorded collections are CRM ledger entries pending external settlement reconciliation.
-                Open pipeline values are current commercial estimates, not recognized revenue.
-              </p>
-              </div>
-            </details>
+          )}
+        </Panel>
+      </div>
+
+      <div className="flex flex-wrap gap-3.5">
+        <PipelineHealthPanel groups={stageGroups} />
+        <SourceQualityPanel
+          rows={validatedSourceQuality ? validatedSourceQuality.map((row) => ({ source: row.source, leads: row.leads, qualified: row.qualified })) : null}
+          href={sourceDetailHref}
+        />
+        <Panel id="home-money" icon={<CircleDollarSign size={19} />} title="Money" action={{ href: "/revenue", label: "Revenue" }} className="flex-[1_1_320px]">
+          <div className="grid grid-cols-2 gap-2.5">
+            <div className="flex flex-col gap-1 rounded-[14px] bg-brand-50 p-3.5">
+              <span className="text-xs font-semibold text-copy-muted">Recorded</span>
+              <span className="text-2xl font-extrabold tabular-nums text-copy-strong">{collectedValue}</span>
+              <span className="text-xs text-copy-muted">{extras.payments ? `${extras.payments.paidCount} paid` : "—"}</span>
+            </div>
+            <div className="flex flex-col gap-1 rounded-[14px] bg-amber-50 p-3.5">
+              <span className="text-xs font-semibold text-amber-800">Pending</span>
+              <span className="text-2xl font-extrabold tabular-nums text-copy-strong">{extras.payments ? pendingCount.toLocaleString("en-IN") : "—"}</span>
+              <span className="text-xs text-amber-800">payment links</span>
+            </div>
           </div>
-        </section>
-        <section id="home-action-queue" className="min-w-0 scroll-mt-24 overflow-hidden rounded-2xl border border-line bg-surface">
-          <SectionHeader eyebrow="" title="Action queue" actionHref="/conversations" actionLabel="Work queue" />
-          {activeAttention.length ? (
-            <div className="home-queue-evidence mx-4 mt-1 rounded-lg border border-brand-100 bg-brand-50 px-3 py-2 text-[11px] leading-4">
-              <p className="font-semibold text-brand-700">{activeAttention[0].value.toLocaleString("en-IN")} · {recommendedActionTitle(activeAttention[0])}</p>
-              <p className="mt-1 text-copy-muted">{activeAttention[0].reason}</p>
-              <p className="mt-0.5 text-copy-subtle">{activeAttention[0].evidence} · {activeAttention[0].timing}</p>
+          {pendingPayments.length ? (
+            <div className="flex flex-col gap-2">
+              {pendingPayments.slice(0, 3).map((row) => (
+                <div key={row.currency} className="grid grid-cols-[48px_minmax(0,1fr)_96px] items-center gap-2.5 text-[13px]">
+                  <span className="font-semibold text-copy-strong">{row.currency}</span>
+                  <span className="block h-2 overflow-hidden rounded-full bg-amber-50">
+                    <span className="block h-full rounded-full bg-amber-400" style={{ width: `${Math.max(4, (row.count / Math.max(1, pendingCount)) * 100)}%` }} />
+                  </span>
+                  <span className="text-right font-bold tabular-nums text-copy-strong">{formatMoney(row.amount, row.currency)}</span>
+                </div>
+              ))}
             </div>
           ) : null}
-          {metrics.needsReply > 0 ? (
-            <details className="mx-4 mt-1 text-xs">
-              <summary className="cursor-pointer font-medium text-brand-700">Reply waiting-time breakdown</summary>
-              <ReplyPressure total={metrics.needsReply} overHour={metrics.waitingOverHour} />
-            </details>
+          {markedEnrolledUnpaid > 0 ? (
+            <p className="flex items-center gap-2 rounded-xl bg-rose-50 px-3 py-2.5 text-[13px] font-semibold text-rose-700">
+              <TriangleAlert size={16} aria-hidden="true" />
+              {markedEnrolledUnpaid} marked enrolled · 0 payments confirmed
+            </p>
           ) : null}
-          <div className="home-action-list space-y-0 px-3 pb-3 pt-1 sm:px-4">
-            {activeAttention.length ? activeAttention.map((item) => <AttentionRow key={item.id} item={item} />) : <HomeEmptyState variant="queue" compact title={mock ? "Queue evidence unavailable" : "No recorded action backlog"} description={mock ? "Current conversation and follow-up evidence cannot be verified in this environment." : "No current reply, overdue follow-up, first-touch, payment-stage, or valuation actions were returned by the CRM snapshot."} unavailable={mock} />}
+        </Panel>
+      </div>
+
+      <div className="flex flex-wrap gap-3.5">
+        <Panel id="home-sources" icon={<Target size={19} />} title="Lead sources" action={{ href: sourceDetailHref, label: "Analyze" }} className="flex-[1_1_320px]">
+          {donutTotal > 0 ? (
+            <div className="flex items-center gap-4">
+              <SourceDonut segments={donutSegments} total={donutTotal} />
+              <ul className="flex min-w-0 flex-1 flex-col gap-2">
+                {donutSegments.map((segment, index) => (
+                  <li key={segment.label} className="grid grid-cols-[12px_minmax(0,1fr)_52px] items-center gap-2 text-[13px]">
+                    <span className="h-2.5 w-2.5 rounded-full" style={{ background: DONUT_COLORS[index] }} aria-hidden="true" />
+                    <span className="truncate text-copy-strong">{segment.label}</span>
+                    <span className="text-right font-bold tabular-nums text-copy-strong">{percentOf(segment.leads, donutTotal, 1)}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : (
+            <HomeEmptyState
+              variant="sources"
+              compact
+              unavailable={!periodAnalytics.available.leads}
+              title="No source evidence for this period."
+              description="All-time totals are never substituted."
+            />
+          )}
+        </Panel>
+
+        <Panel
+          id="home-courses"
+          icon={<BookOpen size={19} />}
+          title="Course demand"
+          badge={extras.courses ? { text: `${percentOf(extras.courses.tagged, extras.courses.totalLeads)} tagged`, tone: "warn" } : null}
+          action={{ href: "/course-management", label: "Programs" }}
+          className="flex-[1_1_320px]"
+        >
+          {courseRows.length ? (
+            <div className="flex flex-col gap-3">
+              {courseRows.map((row) => (
+                <BarRow key={row.name} label={row.name} value={row.leads} max={courseMax} />
+              ))}
+            </div>
+          ) : (
+            <p className="rounded-xl bg-brand-50 px-3 py-6 text-center text-[13px] text-copy-muted">No course interest recorded yet.</p>
+          )}
+        </Panel>
+
+        <LocationsPanel breakdown={extras.locations} />
+      </div>
+
+      <div className="flex flex-wrap gap-3.5">
+        <Panel id="home-insights" icon={<Lightbulb size={19} />} title="Insights" className="flex-[1_1_320px]">
+          {insights.length ? (
+            <ul className="flex flex-col">
+              {insights.map((insight) => (
+                <li key={insight.id}>
+                  <Link href={insight.href} className="flex flex-col gap-0.5 border-b border-line py-2.5 last:border-b-0 hover:bg-surface-soft">
+                    <span className="flex items-baseline justify-between gap-2">
+                      <span className="text-sm font-bold text-copy-strong">{insight.title}</span>
+                      <span className={`text-sm font-extrabold tabular-nums ${INSIGHT_TONES[insight.tone]}`}>{insight.value}</span>
+                    </span>
+                    <span className="line-clamp-2 text-xs text-copy-muted">{insight.detail}</span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="rounded-xl bg-brand-50 px-3 py-6 text-center text-[13px] text-copy-muted">Not enough evidence for insights yet.</p>
+          )}
+        </Panel>
+
+        <Panel id="home-data-health" icon={<HeartPulse size={19} />} title="Data health" action={{ href: "/system-health", label: "Details" }} className="flex-[1_1_320px]">
+          <div className="flex items-center gap-4">
+            <ScoreRing value={healthOk} total={health.length} />
+            <ul className="flex min-w-0 flex-1 flex-col gap-1.5">
+              {health.map((item) => (
+                <li key={item.label} className="flex items-center gap-2 text-[13px]">
+                  <span className={`h-2 w-2 shrink-0 rounded-full ${HEALTH_DOTS[item.state]}`} aria-hidden="true" />
+                  <span className="min-w-0 flex-1 truncate text-copy-strong">{item.label}</span>
+                  <span className="text-xs text-copy-muted">{item.note}</span>
+                </li>
+              ))}
+            </ul>
           </div>
-        </section>
-      </section>
+        </Panel>
 
-      <section id="home-conversion" aria-label="Conversion and collections" className="min-w-0 scroll-mt-24 space-y-3">
-        <div className="grid min-w-0 gap-3 min-[900px]:grid-cols-3">
-          <section className="min-w-0 overflow-hidden rounded-2xl border border-line bg-surface">
-            <SectionHeader eyebrow="Current CRM stage distribution" title="Pipeline health" actionHref="/admissions?view=pipeline" actionLabel="Open pipeline" />
-            <div className="px-4 pb-4 pt-1">
-              <PipelineSnapshot active={metrics.activePipeline} highIntent={metrics.highIntent} payment={metrics.paymentPending} enrolled={counts.enrolled ?? 0} counts={counts} />
-            </div>
-          </section>
-          <section className="min-w-0 overflow-hidden rounded-2xl border border-line bg-surface">
-            <SectionHeader eyebrow="Selected acquisition cohort" title="Qualification" actionHref={sourceDetailHref} actionLabel="Inspect" />
-            <div className="home-qualification-card flex min-h-[170px] items-center justify-center gap-3 px-3 pb-4 pt-1 sm:gap-5 sm:px-4">
-              <div className="relative grid h-28 w-28 shrink-0 place-items-center rounded-full" style={{background: qualifiedRate == null ? "conic-gradient(#e9e3fb 0 100%)" : `conic-gradient(#5a19d8 0 ${qualifiedRate}%, #e9e3fb ${qualifiedRate}% 100%)`}}>
-                <div className="grid h-20 w-20 place-content-center rounded-full bg-surface text-center">
-                  <span className="text-[23px] font-bold text-copy-strong">{qualifiedRate == null ? "—" : qualifiedRate.toFixed(1) + "%"}</span>
-                  <span className="text-[10px] text-copy-muted">Qualified</span>
-                </div>
-              </div>
-              <div className="min-w-0 space-y-3 text-xs">
-                <div><p className="text-xl font-bold text-copy-strong">{qualifiedLeads == null ? "—" : qualifiedLeads.toLocaleString("en-IN")}</p><p className="text-copy-muted">Qualified by period end</p></div>
-                <div className="border-t border-line pt-2"><p className="text-xl font-bold text-copy-strong">{totalLeads == null || qualifiedLeads == null ? "—" : (totalLeads-qualifiedLeads).toLocaleString("en-IN")}</p><p className="text-copy-muted">Without milestone</p></div>
-              </div>
-            </div>
-          </section>
-          <section className="min-w-0 overflow-hidden rounded-2xl border border-line bg-surface">
-            <SectionHeader eyebrow="Current opportunity valuation" title="Opportunity pipeline" actionHref="/revenue/valuation" actionLabel="Review values" />
-            <div className="space-y-3 px-4 pb-4 pt-1">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <p className="text-2xl font-bold tracking-tight text-copy-strong">{openPipelineValue}</p>
-                <span className="rounded-full bg-brand-50 px-2 py-1 text-[10px] font-semibold text-brand-700">{pipelineTruth ? valuationCoverage == null ? "Coverage unknown" : valuationCoverage.toFixed(1) + "% valued" : "Valuation unavailable"}</span>
-              </div>
-              <div className="home-stage-strip grid grid-cols-4 gap-1 text-center">
-                {[
-                  {label:"New",value:counts.new},
-                  {label:"Contacted",value:counts.contacted},
-                  {label:"Qualified",value:counts.qualified},
-                  {label:"Enrolled",value:counts.enrolled ?? 0},
-                ].map((step) => <div key={step.label} className="min-w-0 rounded-lg bg-brand-50 px-1 py-3 text-brand-900"><p className="text-[10px] font-semibold">{step.label}</p><p className="mt-2 text-[15px] font-bold tabular-nums">{step.value.toLocaleString("en-IN")}</p></div>)}
-              </div>
-              <p className="text-[10px] leading-4 text-copy-subtle">Current independent stage counts, not a sequential conversion funnel. Missing or mixed-currency values are excluded.</p>
-            </div>
-          </section>
-        </div>
-
-        <div id="home-business-breakdown" aria-label="Business breakdown" className="grid min-w-0 scroll-mt-24 gap-3 min-[900px]:grid-cols-[0.96fr_1.56fr]">
-          <section className="min-w-0 overflow-hidden rounded-2xl border border-line bg-surface">
-            <SectionHeader eyebrow="Acquisition · period" title="Lead sources" actionHref={sourceDetailHref} actionLabel="Analyze sources" />
-            <div className="p-3 sm:p-4">
-              {acquisitionSources.length ? (
-                <div className="grid items-center gap-3 min-[420px]:grid-cols-[115px_minmax(0,1fr)]">
-                  <SourceMixRing sources={acquisitionSources} total={totalLeads} />
-                  <div className="min-w-0">
-                    {acquisitionSources.slice(0, 4).map((source) => (
-                      <SourceRow key={source.source} source={validatedSourceQuality?.find((item) => item.source === source.source) ?? source} qualificationAvailable={validatedSourceQuality != null} periodTotal={totalLeads} href={sourceDetailHref} />
-                    ))}
-                  </div>
-                </div>
-              ) : (
-                <HomeEmptyState variant="sources" compact unavailable={!periodAnalytics.available.leads} title={periodAnalytics.available.leads ? "No source activity yet" : "Source data unavailable"} description={periodAnalytics.available.leads ? "No acquisition data is recorded for this period yet." : "Selected-period acquisition evidence is unavailable. Current all-time source totals have not been substituted."} />
-              )}
-              {sourceSignals.length > 0 ? <details className="mt-2 text-[11px] text-copy-muted"><summary className="cursor-pointer font-semibold text-brand-700">Inspect {sourceSignals.length} source insight{sourceSignals.length === 1 ? "" : "s"}</summary><div className="mt-2 space-y-2">{sourceSignals.map(signal=><p key={signal.title}><strong>{signal.title}:</strong> {signal.detail}</p>)}</div></details> : null}
-            </div>
-          </section>
-          <section className="min-w-0 overflow-hidden rounded-2xl border border-line bg-surface">
-            <SectionHeader eyebrow="Acquisition cohort · period" title="Qualification milestones" actionHref={sourceDetailHref} actionLabel="Inspect cohort" />
-            <QualificationCohortPanel total={totalLeads} qualified={qualifiedLeads} periodLabel={periodAnalytics.period.label} href={sourceDetailHref} />
-          </section>
-        </div>
-
-        <div className="grid min-w-0 gap-3 min-[900px]:grid-cols-[0.9fr_1.5fr]">
-          <section className="min-w-0 overflow-hidden rounded-2xl border border-line bg-surface">
-            <SectionHeader eyebrow="CRM ledger · period" title="Recorded collections trend" actionHref="/revenue" actionLabel="Review ledger" />
-            <div className="p-4">
-              <RevenueTrend points={periodAnalytics.revenueSeries} currency={periodAnalytics.primaryCurrency} available={periodAnalytics.available.revenue} />
-              {periodAnalytics.available.revenue && periodAnalytics.revenue.length > 1 ? (
-                <p className="mt-2 text-[11px] text-copy-subtle">This trend uses {periodAnalytics.primaryCurrency ?? "one currency"} only; other currency ledgers are excluded without approved FX evidence.</p>
-              ) : null}
-            </div>
-          </section>
-          <HomeGeographyReadiness coverage={periodAnalytics.geography} periodLabel={periodAnalytics.period.label} />
-        </div>
-
-        <div className="grid min-w-0 gap-3 min-[900px]:grid-cols-[0.9fr_1.5fr]">
-          <section className="min-w-0 overflow-hidden rounded-2xl border border-line bg-surface">
-            <SectionHeader eyebrow="Operations · current" title="Upcoming batch demand" actionHref="/course-management" actionLabel="See batches" />
-            <div className="p-3 sm:p-4">
-              {visibleUpcomingBatches.length ? visibleUpcomingBatches.map((batch) => <BatchCard key={batch.id} batch={batch} maxDemand={maxUpcomingDemand} />) : <HomeEmptyState variant="batches" compact title="No upcoming batches" description="No future-start batches are currently available in this workspace." action={{ href: "/course-management", label: "View courses" }} />}
-              <p className="mt-2 text-[10px] leading-4 text-copy-subtle">Course-level collections require verified payment-to-enrollment links; demand indicators may overlap.</p>
-            </div>
-          </section>
-          <section className="min-w-0 overflow-hidden rounded-2xl border border-line bg-surface">
-            <div className="px-4 pb-1 pt-4"><h2 className="text-sm font-bold text-copy-strong">Trends &amp; momentum</h2><p className="mt-1 text-[11px] text-copy-subtle">Recorded comparable changes only</p></div>
-            <div className="grid grid-cols-1 gap-3 p-4 min-[640px]:grid-cols-3">
-              <div className="rounded-xl bg-brand-50 p-3"><p className="text-[11px] text-copy-muted">Lead momentum</p><p className="mt-2 text-xl font-bold text-brand-700">{changeSignals[0].value}</p><p className="mt-1 text-[10px] text-copy-muted">{changeSignals[0].detail}</p></div>
-              <div className="rounded-xl bg-brand-50 p-3"><p className="text-[11px] text-copy-muted">Qualification rate</p><p className="mt-2 text-xl font-bold text-brand-700">{qualifiedRate == null ? "—" : qualifiedRate.toFixed(1) + "%"}</p><p className="mt-1 text-[10px] text-copy-muted">Recorded cohort milestone share</p></div>
-              <div className="rounded-xl bg-brand-50 p-3"><p className="text-[11px] text-copy-muted">Valuation coverage</p><p className="mt-2 text-xl font-bold text-brand-700">{valuationCoverage == null ? "—" : valuationCoverage.toFixed(1) + "%"}</p><p className="mt-1 text-[10px] text-copy-muted">Open opportunities with recorded values</p></div>
-            </div>
-          </section>
-        </div>
-      </section>
-
-      <section aria-label="Daily workspace" className="grid min-w-0 gap-3 min-[900px]:grid-cols-3">
-        <section className="min-w-0 rounded-2xl border border-line bg-surface p-4 sm:p-5">
-          <h2 className="text-sm font-semibold text-copy-strong">Operational insights</h2>
-          <p className="mt-1 text-xs leading-5 text-copy-muted">Evidence from your CRM, not a predicted outcome.</p>
-          <div className="mt-4 space-y-2">
-            {changeSignals.slice(0, 2).map((signal) => <ChangeSignalCard key={signal.label} signal={signal} />)}
-          </div>
-          <p className="mt-3 text-[11px] leading-5 text-copy-subtle">{executiveBrief.summary}</p>
-        </section>
-        <section className="min-w-0 rounded-2xl border border-line bg-surface p-4 sm:p-5">
-          <h2 className="text-sm font-semibold text-copy-strong">System health</h2>
-          <p className="mt-1 text-xs leading-5 text-copy-muted">Provider status and sync freshness are checked in the live health monitor.</p>
-          <div className="mt-4">
-            <HomeEmptyState variant="status" compact unavailable title="Status not loaded here" description="Open System Health for verified connection conditions." />
-          </div>
-          <Link href="/system-health" className="mt-4 inline-flex items-center gap-1.5 text-xs font-semibold text-brand-700 dark:text-brand-300">
-            View system health <ArrowRight size={13} />
-          </Link>
-        </section>
-        <section className="min-w-0 rounded-2xl border border-line bg-surface p-4 sm:p-5">
-          <h2 className="text-sm font-semibold text-copy-strong">Quick actions</h2>
-          <p className="mt-1 text-xs leading-5 text-copy-muted">Open the workspace you need.</p>
-          <div className="home-quick-actions mt-3 grid grid-cols-3 gap-2">
-            {[
-              { href: "/conversations", label: "Conversations" },
-              { href: "/leads", label: "Leads" },
-              { href: "/campaigns", label: "Campaigns" },
-            ].map((action) => (
-              <Link key={action.href} href={action.href} className="flex min-h-20 flex-col items-center justify-center gap-2 rounded-xl border border-line bg-brand-50 px-2 text-center text-xs font-semibold text-brand-700 transition hover:border-brand-300 hover:bg-brand-100">
-                {action.label === "Conversations" ? <MessageSquareText size={23} aria-hidden="true" /> : action.label === "Leads" ? <Users size={23} aria-hidden="true" /> : <GitBranch size={23} aria-hidden="true" />}
-                <span className="truncate">{action.label}</span><ArrowRight size={13} className="shrink-0 self-end" />
+        <Panel id="home-quick-actions" icon={<Rocket size={19} />} title="Quick actions" className="flex-[1_1_320px]">
+          <div className="grid grid-cols-3 gap-2.5">
+            {QUICK_ACTIONS.map((action) => (
+              <Link
+                key={action.href}
+                href={action.href}
+                className="flex min-h-[84px] flex-col items-center justify-center gap-2 rounded-[14px] border border-brand-50 bg-surface-soft px-1.5 py-2.5 text-center hover:border-brand-100 hover:bg-brand-50"
+              >
+                <action.icon size={20} className="text-brand-700" aria-hidden="true" />
+                <span className="text-xs font-semibold text-copy-strong">{action.label}</span>
               </Link>
             ))}
           </div>
-        </section>
-      </section>
+        </Panel>
+      </div>
 
       <HomeReportingCoverage items={reportingEvidence} />
     </div>
   );
 }
 
-function ChangeSignalCard({ signal }: { signal: ChangeSignal }) {
-  const signalTone =
-    signal.tone === "attention" ? "text-amber-700 dark:text-amber-300" :
-    signal.tone === "positive" ? "text-emerald-700 dark:text-emerald-300" :
-    signal.tone === "negative" ? "text-rose-700 dark:text-rose-300" : "text-copy-strong";
-
-  return (
-    <div className="flex items-start justify-between gap-3 border-b border-line/70 pb-2.5 last:border-b-0">
-      <div className="min-w-0">
-        <p className="text-xs font-medium text-copy-strong">{signal.label}</p>
-        <p className="mt-0.5 text-[11px] leading-4 text-copy-muted">{signal.detail}</p>
-      </div>
-      <span className={"shrink-0 text-xs font-semibold tabular-nums " + signalTone}>{signal.value}</span>
-    </div>
-  );
-}
-
-function AttentionRow({ item }: { item: AttentionItem }) {
+function AttentionRow({ item }: { item: QueueRow }) {
   const Icon = item.icon;
-  const tone = item.tone === "critical" ? "text-rose-600" :
-    item.tone === "warning" ? "text-amber-600" : "text-brand-700";
-
   return (
-    <Link
-      href={item.href}
-      className="group flex items-center gap-3 rounded-xl px-2.5 py-3 transition hover:bg-surface-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-700"
-      title={item.reason + " · " + item.evidence}
-    >
-      <span className={"grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-surface-muted " + tone}>
-        <Icon size={16} />
-      </span>
-      <span className="min-w-0 flex-1">
-        <span className="block text-xs font-semibold text-copy-strong">{recommendedActionTitle(item)}</span>
-        <span className="mt-1 block text-[11px] leading-4 text-copy-muted">{item.reason}</span>
-        <span className="mt-0.5 block text-[10px] leading-4 text-copy-subtle">{item.priority} · {item.evidence}</span>
-      </span>
-      <span className="shrink-0 rounded-lg bg-surface-muted px-2 py-1 text-xs font-semibold tabular-nums text-copy-strong">
-        {item.value.toLocaleString("en-IN")}
-      </span>
-      <ArrowRight size={13} className="shrink-0 text-copy-subtle group-hover:text-brand-700" />
-    </Link>
+    <li>
+      <Link
+        href={item.href}
+        title={item.reason}
+        className="flex min-h-[52px] items-center gap-3 border-b border-line py-1.5 hover:bg-surface-soft"
+      >
+        <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-[10px] ${QUEUE_TONES[item.provisional ? "info" : item.tone]}`} aria-hidden="true">
+          <Icon size={17} />
+        </span>
+        <span className="flex min-w-0 flex-1 flex-col">
+          <span className="truncate text-sm font-semibold text-copy-strong">{item.label}</span>
+          <span className="text-xs leading-4 text-copy-muted">{item.hint}</span>
+        </span>
+        <span className={`rounded-lg bg-brand-50 px-2.5 py-1 text-[13px] font-extrabold tabular-nums ${item.provisional ? "text-copy-subtle" : "text-copy-strong"}`}>
+          {item.count.toLocaleString("en-IN")}
+        </span>
+      </Link>
+    </li>
   );
 }
 
-function ReplyPressure({ total, overHour }: { total: number; overHour: number }) {
-  const breakdown = calculateHomeReplyWaitingBreakdown(total, overHour);
-  if (!breakdown) {
-    return (
-      <div data-testid="home-reply-pressure" data-evidence-state="unavailable" className="mx-4 mt-2 rounded-xl border border-line bg-surface-muted px-3 py-3 sm:mx-5">
-        <p className="text-xs font-semibold text-copy-strong">Reply waiting-time breakdown unavailable</p>
-        <p className="mt-1 text-[11px] leading-5 text-copy-muted">
-          The recorded waiting-time count is missing or inconsistent with the reply queue. No waiting percentage can be verified.
-        </p>
-        <Link href="/conversations" className="mt-3 inline-flex items-center gap-1 text-[11px] font-semibold text-brand-700 dark:text-brand-300">
-          Work reply queue <ArrowRight size={12} />
-        </Link>
-      </div>
-    );
-  }
-  const { older, recent, percentOverHour: share } = breakdown;
+const QUEUE_TONES: Record<QueueRow["tone"], string> = {
+  critical: "bg-rose-50 text-rose-700",
+  warning: "bg-amber-50 text-amber-800",
+  info: "bg-brand-50 text-brand-700",
+};
 
+const INSIGHT_TONES: Record<ChipTone, string> = {
+  up: "text-emerald-700",
+  down: "text-rose-700",
+  warn: "text-amber-800",
+  flat: "text-copy-muted",
+};
+
+const HEALTH_DOTS: Record<HealthItem["state"], string> = {
+  ok: "bg-emerald-500",
+  warn: "bg-amber-500",
+  bad: "bg-rose-500",
+};
+
+const QUICK_ACTIONS: { href: string; label: string; icon: LucideIcon }[] = [
+  { href: "/conversations", label: "Inbox", icon: MessageSquareText },
+  { href: "/leads/new", label: "Add lead", icon: Plus },
+  { href: "/follow-ups", label: "Follow-ups", icon: ListTodo },
+  { href: "/revenue", label: "Revenue", icon: CreditCard },
+  { href: "/course-management", label: "Batches", icon: CalendarDays },
+  { href: "/marketing", label: "Marketing", icon: Megaphone },
+];
+
+function SourceDonut({ segments, total }: { segments: { label: string; leads: number }[]; total: number }) {
+  const radius = 48;
+  const circumference = 2 * Math.PI * radius;
+  let offset = 0;
   return (
-    <div data-testid="home-reply-pressure" data-evidence-state="available" className="mx-4 mt-2 rounded-xl border border-line bg-surface-muted px-3 py-3 sm:mx-5">
-      <div className="flex items-center justify-between gap-3 text-xs">
-        <span className="font-medium text-copy-strong">Reply waiting time</span>
-        <span className="font-semibold tabular-nums text-copy-strong">{share.toFixed(0)}% over 1h</span>
+    <div className="relative h-32 w-32 shrink-0">
+      <svg width="128" height="128" viewBox="0 0 128 128" role="img" aria-label={segments.map((segment) => `${segment.label} ${segment.leads}`).join(", ")}>
+        <circle cx="64" cy="64" r={radius} fill="none" strokeWidth="16" className="stroke-brand-50" />
+        {segments.map((segment, index) => {
+          const length = (segment.leads / total) * circumference;
+          const circle = (
+            <circle
+              key={segment.label}
+              cx="64"
+              cy="64"
+              r={radius}
+              fill="none"
+              strokeWidth="16"
+              stroke={DONUT_COLORS[index]}
+              strokeDasharray={`${length.toFixed(2)} ${(circumference - length + 0.01).toFixed(2)}`}
+              strokeDashoffset={(-offset).toFixed(2)}
+              transform="rotate(-90 64 64)"
+            />
+          );
+          offset += length;
+          return circle;
+        })}
+      </svg>
+      <div className="absolute inset-0 grid place-content-center text-center">
+        <span className="text-xl font-extrabold tabular-nums text-copy-strong">{total.toLocaleString("en-IN")}</span>
+        <span className="text-[11px] text-copy-muted">leads</span>
       </div>
-      <div
-        role="img"
-        aria-label={older + " conversations waiting over an hour, " + recent + " waiting up to an hour"}
-        className="mt-3 flex h-2.5 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700"
-      >
-        <div className="h-full bg-amber-500 dark:bg-amber-400" style={{ width: percentageWidth(share) + "%" }} />
-        <div className="h-full bg-brand-700/70" style={{ width: percentageWidth(100 - share) + "%" }} />
-      </div>
-      <div className="mt-2.5 flex flex-wrap justify-between gap-x-3 gap-y-1 text-[11px] text-copy-muted">
-        <span><span className="mr-1 inline-block h-2 w-2 rounded-full bg-amber-500" /> Over 1h · {older.toLocaleString("en-IN")}</span>
-        <span><span className="mr-1 inline-block h-2 w-2 rounded-full bg-brand-700" /> Up to 1h · {recent.toLocaleString("en-IN")}</span>
-      </div>
-      <Link href="/conversations" className="mt-3 inline-flex items-center gap-1 text-[11px] font-semibold text-brand-700 dark:text-brand-300">
-        Work reply queue <ArrowRight size={12} />
-      </Link>
     </div>
   );
 }
 
-function PipelineSnapshot({
-  active, highIntent, payment, enrolled, counts,
-}: {
-  active: number;
-  highIntent: number;
-  payment: number;
-  enrolled: number;
-  counts: DashboardSnapshot["counts"];
-}) {
-  const rows = [
-    { label: "New", value: counts.new },
-    { label: "Contacted", value: counts.contacted + counts.engaged },
-    { label: "High intent", value: counts.qualified + counts.high_intent },
-    { label: "Payment pending", value: counts.payment_pending },
-    { label: "Enrolled", value: counts.enrolled ?? 0 },
-  ];
-  const max = Math.max(1, ...rows.map((row) => row.value));
+function ScoreRing({ value, total }: { value: number; total: number }) {
+  const radius = 44;
+  const circumference = 2 * Math.PI * radius;
+  const share = total > 0 ? value / total : 0;
   return (
-    <div data-testid="home-pipeline-stage-mix" className="space-y-2">
-      <div className="flex items-baseline justify-between gap-2">
-        <span className="text-xl font-bold tabular-nums text-copy-strong">{active.toLocaleString("en-IN")}</span>
-        <span className="text-[10px] text-copy-muted">Current active pipeline</span>
+    <div className="relative h-[108px] w-[108px] shrink-0">
+      <svg width="108" height="108" viewBox="0 0 108 108" aria-hidden="true">
+        <circle cx="54" cy="54" r={radius} fill="none" strokeWidth="12" className="stroke-brand-50" />
+        <circle
+          cx="54"
+          cy="54"
+          r={radius}
+          fill="none"
+          strokeWidth="12"
+          strokeLinecap="round"
+          className="stroke-brand-700"
+          strokeDasharray={`${(share * circumference).toFixed(2)} ${circumference.toFixed(2)}`}
+          transform="rotate(-90 54 54)"
+        />
+      </svg>
+      <div className="absolute inset-0 grid place-content-center text-center">
+        <span className="text-xl font-extrabold tabular-nums text-copy-strong">{value}/{total}</span>
+        <span className="text-[11px] text-copy-muted">reliable</span>
       </div>
-      {rows.map((row) => (
-        <div key={row.label} className="grid grid-cols-[84px_minmax(0,1fr)_38px] items-center gap-2 text-[10px]">
-          <span className="truncate font-semibold text-copy-strong">{row.label}</span>
-          <div className="h-[7px] overflow-hidden rounded-full bg-brand-100" role="progressbar" aria-label={row.label + " relative stage count"} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(row.value / max * 100)}>
-            <div className="h-full rounded-full bg-brand-700" style={{width: percentageWidth(row.value / max * 100) + "%"}} />
-          </div>
-          <span className="text-right font-bold tabular-nums text-copy-strong">{row.value.toLocaleString("en-IN")}</span>
-        </div>
-      ))}
-      <details className="border-t border-line pt-2 text-[10px] text-copy-subtle">
-        <summary className="cursor-pointer font-semibold text-brand-700">Detailed stage counts</summary>
-        <p className="mt-2 leading-4">
-          Current CRM stage indicators, not a sequential conversion funnel. "High intent" combines qualified and high-intent stages. Payment pending: {payment.toLocaleString("en-IN")}; enrolled: {enrolled.toLocaleString("en-IN")}; high intent: {highIntent.toLocaleString("en-IN")}.
-        </p>
-      </details>
     </div>
   );
 }
@@ -699,406 +769,6 @@ function PeriodPresets({
   );
 }
 
-function SectionHeader({
-  eyebrow, title, actionHref, actionLabel,
-}: {
-  eyebrow: string;
-  title: string;
-  actionHref: string;
-  actionLabel: string;
-}) {
-  return (
-    <div className="flex items-start justify-between gap-2 px-4 pb-2 pt-4 sm:px-5 sm:pt-5">
-      <div className="min-w-0">
-        <h2 className="text-sm font-semibold tracking-[-0.01em] text-copy-strong">{title}</h2>
-        <p className="mt-1 text-[11px] leading-4 text-copy-subtle">{eyebrow}</p>
-      </div>
-      <Link href={actionHref} className="inline-flex shrink-0 items-center gap-1 py-1 text-[11px] font-medium text-brand-700 hover:text-brand-800 dark:text-brand-300">
-        {actionLabel}<ArrowRight size={12} />
-      </Link>
-    </div>
-  );
-}
-
-function SnapshotMetric({
-  label,
-  value,
-  change,
-}: {
-  label: string;
-  value: string;
-  change?: number | null;
-}) {
-  return (
-    <div className="min-w-0">
-      <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-copy-subtle">
-        {label}
-      </div>
-      <div className="mt-1 truncate text-xl font-semibold tracking-[-0.035em] text-copy-strong">
-        {value}
-      </div>
-      {change !== undefined ? (
-        <div className="mt-1">
-          <TrendPill value={change ?? null} compact />
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
-function RevenueTrend({
-  points, currency, available,
-}: {
-  points: DashboardPeriodAnalytics["revenueSeries"];
-  currency: string | null;
-  available: boolean;
-}) {
-  if (!available) {
-    return (
-      <div className="mt-4">
-        <HomeEmptyState
-          variant="revenue"
-          compact
-          unavailable
-          title="Revenue evidence unavailable"
-          description="Selected-period payment evidence is unavailable. Current snapshot revenue has not been substituted into this period trend."
-        />
-      </div>
-    );
-  }
-  if (!points.length || !currency) {
-    return (
-      <div className="mt-4">
-        <HomeEmptyState
-          variant="revenue"
-          compact
-          title="No paid ledger activity yet"
-          description="The recorded trend will appear when paid-status transactions exist in the selected period. Independent settlement evidence is not yet available."
-          action={{ href: "/revenue", label: "Open revenue" }}
-        />
-      </div>
-    );
-  }
-  let running = 0;
-  const cumulative = points.map(point => ({ ...point, cumulative: (running += point.value) }));
-  const min = Math.min(0, ...cumulative.map(point => point.cumulative));
-  const max = Math.max(0, ...cumulative.map(point => point.cumulative));
-  const range = Math.max(1, max - min);
-  const width = 560;
-  const height = 140;
-  const y = (value: number) => 12 + (max - value) / range * (height - 24);
-  const coords = cumulative.map((point, i) => ({
-    x: 7 + i / Math.max(1, cumulative.length - 1) * (width - 14),
-    y: y(point.cumulative),
-  }));
-  const path = coords.map((point, i) => (i === 0 ? "M" : "L") + " " + point.x.toFixed(2) + " " + point.y.toFixed(2)).join(" ");
-
-  return (
-    <div className="mt-3">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <p className="text-[11px] text-copy-muted">Cumulative recorded net payments · {currency}</p>
-          <p className="mt-1 text-[22px] font-semibold tracking-[-0.03em] text-copy-strong">{formatMoney(running, currency)}</p>
-        </div>
-        <span className="text-[11px] text-copy-subtle">CRM ledger · refunds netted where recorded</span>
-      </div>
-      <svg className="mt-4 block h-[150px] w-full overflow-visible text-brand-700 dark:text-brand-300" viewBox="0 0 560 140" preserveAspectRatio="none" role="img" aria-label={"Cumulative recorded net payments " + currency + " for the selected period; settlement unverified"}>
-        <title>Cumulative recorded net payments {currency} for the selected period, settlement unverified</title>
-        {[0, 0.5, 1].map((p, index) => (
-          <line key={index} x1="7" x2="553" y1={12 + p * 116} y2={12 + p * 116} stroke="currentColor" strokeOpacity="0.09" strokeWidth="1" />
-        ))}
-        <line x1="7" x2="553" y1={y(0)} y2={y(0)} stroke="currentColor" strokeOpacity="0.18" strokeDasharray="3 4" />
-        <path d={path} fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
-        {coords.length > 0 ? <circle cx={coords[coords.length - 1].x} cy={coords[coords.length - 1].y} r="4" fill="currentColor" /> : null}
-      </svg>
-      <div className="mt-1 flex justify-between gap-3 text-[11px] text-copy-subtle">
-        <span>{formatShortDate(points[0]?.date)}</span><span>{formatShortDate(points[points.length - 1]?.date)}</span>
-      </div>
-    </div>
-  );
-}
-
-/** Visual emphasis for the dominant source, without hiding the other sources. */
-function SourceMixRing({ sources, total }: { sources: DashboardPeriodSource[]; total: number | null }) {
-  if (total == null || total <= 0 || !sources.length) return null;
-  const records = sources.filter((row) => Number.isSafeInteger(row.leads) && row.leads >= 0);
-  if (records.reduce((sum,row) => sum + row.leads, 0) > total) return null;
-  const palette = ["#5216D3", "#8D52EB", "#AE84F4", "#D4BFF9"];
-  const circumference = 2 * Math.PI * 43;
-  let offset = 0;
-  const segments = records.slice(0, 4).map((row, index) => {
-    const length = circumference * (row.leads / total);
-    const segment = { key: row.source, label: sourceLabel(row.source), offset, length, color: palette[index] };
-    offset += length;
-    return segment;
-  });
-  return (
-    <div
-      data-testid="home-source-mix-ring"
-      role="img"
-      aria-label={"Recorded source distribution for " + total.toLocaleString("en-IN") + " selected-period leads"}
-      className="relative mx-auto grid h-28 w-28 shrink-0 place-items-center"
-    >
-      <svg viewBox="0 0 120 120" className="absolute inset-0 h-full w-full -rotate-90" aria-hidden="true" focusable="false">
-        <circle cx="60" cy="60" r="43" stroke="#eae1fa" strokeWidth="12" fill="none" />
-        {segments.map((segment) => (
-          <circle key={segment.key} cx="60" cy="60" r="43" stroke={segment.color} strokeWidth="12" fill="none" strokeDasharray={segment.length + " " + (circumference - segment.length)} strokeDashoffset={-segment.offset}>
-            <title>{segment.label}</title>
-          </circle>
-        ))}
-      </svg>
-      <div className="relative z-10 text-center">
-        <p className="text-[21px] font-bold tabular-nums tracking-tight text-copy-strong">{total.toLocaleString("en-IN")}</p>
-        <p className="text-[10px] text-copy-muted">Leads</p>
-      </div>
-    </div>
-  );
-}
-
-function SourceRow({ source, periodTotal, href = "/home/sources", qualificationAvailable = false }: { source: DashboardPeriodSource; periodTotal: number | null; href?: string; qualificationAvailable?: boolean }) {
-  const share = periodTotal != null && periodTotal > 0 ? (source.leads / periodTotal) * 100 : null;
-  const displaySource = sourceLabel(source.source);
-  return (
-    <Link href={href} className="group block rounded-xl px-2 py-2.5 transition hover:bg-surface-muted">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <span className="block truncate text-xs font-medium text-copy-strong" title={"CRM source: " + source.source}>{displaySource}</span>
-          <span className="mt-0.5 block text-[11px] text-copy-subtle">{qualificationAvailable ? source.qualified.toLocaleString("en-IN") + " qualified by period end" : "Qualification evidence unavailable"}</span>
-        </div>
-        <span className="shrink-0 text-right text-xs font-semibold tabular-nums text-copy-strong">
-          {source.leads.toLocaleString("en-IN")}
-          <span className="ml-2 font-normal text-copy-subtle">{share == null ? "—" : share.toFixed(1) + "%"}</span>
-        </span>
-      </div>
-      <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-surface-muted">
-        <div role="progressbar" aria-label={displaySource + " share of selected-period leads"} aria-valuenow={share == null ? undefined : Math.round(share * 10) / 10} aria-valuemin={0} aria-valuemax={100} className="h-full rounded-full bg-brand-700" style={{ width: percentageWidth(share) + "%" }} />
-      </div>
-    </Link>
-  );
-}
-
-function BatchCard({ batch, maxDemand }: { batch: DashboardBatchDemand; maxDemand: number }) {
-  const capacityKnown = batch.capacity != null && batch.capacity > 0;
-  const capacityText = !capacityKnown
-    ? "Capacity not set"
-    : batch.seatsRemaining != null
-      ? String(batch.seatsRemaining) + " seats left"
-      : String(batch.capacity) + " capacity";
-
-  const indicators = [
-    { label: "High intent", value: batch.hotDemand },
-    { label: "Payment stage", value: batch.paymentPending },
-    { label: "Enrolled stage", value: batch.enrolled },
-  ].filter((indicator) => indicator.value > 0);
-  const comparisonShare = Math.max(0, Math.min(100, (batch.activeDemand / maxDemand) * 100));
-
-  return (
-    <Link
-      href="/course-management"
-      className="group block rounded-xl px-2 py-3 transition hover:bg-surface-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-700"
-    >
-      <div className="flex items-start justify-between gap-3">
-        <span className="min-w-0">
-          <span className="block line-clamp-1 text-xs font-semibold text-copy-strong">{batch.courseName}</span>
-          <span className="mt-0.5 block text-[11px] leading-4 text-copy-subtle">
-            {batch.batchCode} · {batch.startDate ? formatDate(batch.startDate) : "Date not set"} · {batch.location}
-          </span>
-          <span className="mt-1 block text-[10px] text-copy-subtle">{capacityText}</span>
-        </span>
-        <span className="shrink-0 text-right">
-          <span className="block text-[17px] font-semibold tabular-nums text-copy-strong">{batch.activeDemand.toLocaleString("en-IN")}</span>
-          <span className="block text-[10px] text-copy-subtle">active leads</span>
-        </span>
-      </div>
-      <div
-        role="progressbar"
-        aria-label={batch.courseName + " relative active lead demand among displayed upcoming batches"}
-        aria-valuenow={Math.round(comparisonShare)}
-        aria-valuemin={0}
-        aria-valuemax={100}
-        className="mt-2.5 h-1.5 overflow-hidden rounded-full bg-surface-muted"
-      >
-        <div className="h-full rounded-full bg-brand-700" style={{ width: comparisonShare + "%" }} />
-      </div>
-      {indicators.length > 0 ? (
-        <div className="mt-2 flex flex-wrap gap-1.5 text-[10px] text-copy-muted">
-          {indicators.map((indicator) => (
-            <span key={indicator.label} className="rounded-md border border-line px-1.5 py-1">
-              {indicator.label} · <span className="font-semibold tabular-nums text-copy-strong">{indicator.value.toLocaleString("en-IN")}</span>
-            </span>
-          ))}
-        </div>
-      ) : (
-        <p className="mt-2 text-[10px] text-copy-subtle">No advanced-stage demand recorded for this batch.</p>
-      )}
-    </Link>
-  );
-}
-
-function TrendPill({
-  value,
-  compact = false,
-}: {
-  value: number | null;
-  compact?: boolean;
-}) {
-  if (value == null) {
-    return (
-      <span
-        className={`${compact ? "text-[9px]" : "text-[10px]"} font-semibold text-copy-subtle`}
-      >
-        No baseline
-      </span>
-    );
-  }
-
-  const positive = value > 0;
-  const negative = value < 0;
-  const tone = positive
-    ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300"
-    : negative
-      ? "bg-rose-50 text-rose-700 dark:bg-rose-950/30 dark:text-rose-300"
-      : "bg-surface-muted text-copy-muted";
-
-  return (
-    <span
-      className={`inline-flex items-center rounded-full ${
-        compact ? "px-1.5 py-0.5 text-[9px]" : "px-2 py-1 text-[10px]"
-      } font-semibold ${tone}`}
-    >
-      {positive ? "↑ " : negative ? "↓ " : ""}
-      {value > 0 ? "+" : ""}
-      {value.toLocaleString("en-IN", { maximumFractionDigits: 1 })}%
-    </span>
-  );
-}
-
-function buildChangeSignals(
-  analytics: DashboardPeriodAnalytics,
-  waitingOverHour: number,
-): ChangeSignal[] {
-  const leadAvailable = analytics.available.leads;
-  const enrollmentAvailable = analytics.available.enrollments;
-  const leadDelta = leadAvailable ? analytics.leads.changePercent : null;
-  const enrollmentDelta = enrollmentAvailable
-    ? analytics.enrollments.changePercent
-    : null;
-
-  return [
-    {
-      label: "Lead momentum",
-      value:
-        !leadAvailable || leadDelta == null
-          ? "—"
-          : `${leadDelta > 0 ? "+" : ""}${leadDelta.toFixed(1)}%`,
-      detail: !leadAvailable
-        ? "Selected-period lead evidence unavailable"
-        : leadDelta == null
-          ? "No comparable lead baseline"
-          : `${analytics.leads.current.toLocaleString("en-IN")} leads vs ${analytics.leads.previous.toLocaleString("en-IN")} prior`,
-      tone: "neutral",
-    },
-    {
-      label: "Enrolled-lead movement",
-      value:
-        !enrollmentAvailable || enrollmentDelta == null
-          ? "—"
-          : `${enrollmentDelta > 0 ? "+" : ""}${enrollmentDelta.toFixed(1)}%`,
-      detail: !enrollmentAvailable
-        ? "Selected-period stage-history evidence unavailable"
-        : enrollmentDelta == null
-          ? "No comparable enrolled-lead baseline"
-          : `${analytics.enrollments.current.toLocaleString("en-IN")} leads entered enrolled stage in scope`,
-      tone:
-        !enrollmentAvailable || enrollmentDelta == null
-          ? "neutral"
-          : enrollmentDelta >= 0
-            ? "positive"
-            : "negative",
-    },
-    {
-      label: "Reply SLA pressure",
-      value: waitingOverHour.toLocaleString("en-IN"),
-      detail:
-        waitingOverHour > 0
-          ? "conversations waiting more than one hour"
-          : "no conversations beyond one hour",
-      tone: waitingOverHour > 0 ? "attention" : "positive",
-    },
-  ];
-}
-
-function buildExecutiveBrief({
-  analytics,
-  sources,
-  attention,
-  qualifiedRate,
-}: {
-  analytics: DashboardPeriodAnalytics;
-  sources: DashboardPeriodSource[];
-  attention: AttentionItem[];
-  qualifiedRate: number | null;
-}) {
-  const strongestSource = [...sources]
-    .filter((source) => source.leads > 0)
-    .sort(
-      (a, b) =>
-        b.qualified - a.qualified ||
-        (b.conversionRate ?? 0) - (a.conversionRate ?? 0),
-    )[0];
-  const topAttention = attention[0];
-  const leadChange = analytics.available.leads
-    ? analytics.leads.changePercent
-    : null;
-  const attentionPhrases: Record<string, string> = {
-    "Needs reply": topAttention?.value === 1 ? "conversation is waiting for a reply" : "conversations are waiting for a reply",
-    "Overdue follow-ups": topAttention?.value === 1 ? "follow-up is overdue" : "follow-ups are overdue",
-    "First touch needed": topAttention?.value === 1 ? "lead needs a first contact" : "leads need a first contact",
-    "Payment pending": topAttention?.value === 1 ? "opportunity needs payment follow-up" : "opportunities need payment follow-up",
-    "Missing opportunity values": topAttention?.value === 1 ? "open lead needs valuation" : "open leads need valuation",
-  };
-  const title = topAttention
-    ? `${topAttention.value.toLocaleString("en-IN")} ${attentionPhrases[topAttention.label] ?? "items need attention"}.`
-    : leadChange != null && leadChange > 0
-      ? `Lead volume is up ${leadChange.toFixed(1)}% with no urgent action backlog.`
-      : "The workspace has no urgent operational backlog right now.";
-
-  const parts: string[] = [];
-  if (leadChange != null) {
-    parts.push(
-      `Lead volume is ${leadChange >= 0 ? "up" : "down"} ${Math.abs(leadChange).toFixed(1)}% versus the previous comparable period.`,
-    );
-  }
-  if (qualifiedRate != null) {
-    parts.push(`${qualifiedRate}% of new leads reached a recorded qualification milestone by period end.`);
-  }
-  if (strongestSource) {
-    parts.push(
-      `${pretty(strongestSource.source)} contributed the most documented qualification milestones among sources in the selected lead cohort.`,
-    );
-  }
-  if (topAttention) parts.push(`${topAttention.detail}.`);
-
-  return {
-    title,
-    summary:
-      parts.join(" ") ||
-      "SalsysOS will summarize movement, quality and action pressure as comparable CRM evidence becomes available.",
-  };
-}
-
-function recommendedActionTitle(item: AttentionItem) {
-  if (item.label === "Needs reply") return "Clear the reply backlog";
-  if (item.label === "Overdue follow-ups") return "Complete overdue follow-ups";
-  if (item.label === "First touch needed") {
-    return "Assign and contact new opportunities";
-  }
-  if (item.label === "Payment pending") {
-    return "Review payment-pending opportunities";
-  }
-  return item.label;
-}
-
 function pickPeriodRevenue(
   analytics: DashboardPeriodAnalytics,
   fallbackCurrency: string | null,
@@ -1131,23 +801,6 @@ function formatMoney(value: number, currency: string) {
   } catch {
     return `${code} ${Number(value || 0).toLocaleString("en-IN")}`;
   }
-}
-
-function pretty(value: string) {
-  return value
-    .replaceAll("_", " ")
-    .replace(/\b\w/g, (letter) => letter.toUpperCase());
-}
-
-function formatDate(value: string) {
-  const date = new Date(value);
-  return Number.isNaN(date.getTime())
-    ? value
-    : new Intl.DateTimeFormat("en-IN", {
-        day: "numeric",
-        month: "short",
-        year: "numeric",
-      }).format(date);
 }
 
 function formatShortDate(value: string | undefined) {

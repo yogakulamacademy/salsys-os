@@ -1,0 +1,83 @@
+/* Organic Intelligence — OpenSEO-inspired focus, native SalsysOS design tokens.
+   No third-party UI runtime, CSS reset or brand assets are imported. */
+.workspace{display:grid;gap:20px;min-width:0;color:var(--app-text-strong)}
+.header{display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:18px}
+.eyebrow{font-size:11px;letter-spacing:.12em;text-transform:uppercase;font-weight:700;color:var(--app-brand-700)}
+.heading{font-size:clamp(25px,2.8vw,34px);font-weight:680;letter-spacing:-.045em;line-height:1.14;margin:7px 0 8px}
+.description{max-width:620px;font-size:13px;line-height:1.65;color:var(--app-text-muted)}
+.headerActions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding-top:7px}
+.actionLink,.secondaryLink{display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:36px;padding:8px 13px;text-decoration:none;border:1px solid var(--app-border);border-radius:9px;background:var(--app-surface);font-size:12px;font-weight:650;color:var(--app-text-strong);white-space:nowrap}
+.actionLink:hover,.secondaryLink:hover{border-color:var(--app-brand-700);color:var(--app-brand-700);background:var(--app-brand-50)}
+.actionLinkPrimary{border-color:var(--app-brand-700);background:var(--app-brand-700);color:#fff}
+.actionLinkPrimary:hover{background:var(--app-brand-800);color:#fff}
+.metaLine{display:flex;flex-wrap:wrap;align-items:center;gap:9px;font-size:11px;color:var(--app-text-muted)}
+.metaChip{display:inline-flex;align-items:center;gap:6px;padding:6px 9px;border:1px solid var(--app-border);border-radius:99px;background:var(--app-surface)}
+.liveDot{width:7px;height:7px;border-radius:50%;background:var(--app-success)}
+.warningDot{background:var(--app-warning)}
+.panel{background:var(--app-surface);border:1px solid var(--app-border);border-radius:14px;box-shadow:var(--shadow-xs);min-width:0}
+.summaryGrid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.summaryCard{padding:18px 19px;min-width:0}
+.summaryCardTop{display:flex;align-items:center;justify-content:space-between;gap:6px;color:var(--app-text-muted);font-size:11px;font-weight:600}
+.metricIcon{color:var(--app-brand-700);background:var(--app-brand-50);border-radius:9px;display:grid;place-items:center;width:30px;height:30px;flex:none}
+.summaryValue{display:block;font-size:27px;line-height:1.25;letter-spacing:-.055em;font-weight:660;color:var(--app-text-strong);margin:14px 0 4px;font-variant-numeric:tabular-nums}
+.summaryNote{font-size:11px;line-height:1.4;color:var(--app-text-muted)}
+.contentGrid{display:grid;grid-template-columns:minmax(0,1.75fr) minmax(270px,.9fr);gap:16px;align-items:start}
+.mainStack,.sideStack{display:grid;gap:16px;min-width:0}
+.sectionHeader{padding:19px 20px 15px;display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+.sectionTitle{font-size:15px;font-weight:680;letter-spacing:-.02em;margin:0}
+.sectionDescription{color:var(--app-text-muted);font-size:11px;line-height:1.6;margin-top:4px}
+.sectionLink{display:inline-flex;align-items:center;gap:4px;color:var(--app-brand-700);font-size:11px;font-weight:700;text-decoration:none;white-space:nowrap}
+.sectionLink:hover{text-decoration:underline;text-underline-offset:3px}
+.trendWrap{padding:10px 20px 22px}
+.trendBars{display:flex;align-items:flex-end;gap:7px;height:148px;border-bottom:1px solid var(--app-border);padding-top:7px}
+.trendCol{display:flex;align-items:flex-end;justify-content:center;height:100%;flex:1;min-width:0}
+.trendBar{display:block;width:100%;max-width:36px;min-height:3px;border-radius:5px 5px 0 0;background:linear-gradient(180deg,var(--app-brand-600),var(--app-brand-100))}
+.trendAxis{display:flex;align-items:center;justify-content:space-between;margin-top:9px;color:var(--app-text-subtle);font-size:10px}
+.empty{margin:0;padding:26px 20px;color:var(--app-text-muted);font-size:12px;line-height:1.65}
+.tabs{display:flex;align-items:center;gap:5px;flex-wrap:wrap;padding:0 20px 13px}
+.tab{padding:7px 12px;border-radius:8px;border:1px solid transparent;color:var(--app-text-muted);font-size:11px;font-weight:650;text-decoration:none}
+.tab:hover{color:var(--app-brand-700);background:var(--app-brand-50)}
+.tabActive{color:var(--app-brand-700);border-color:var(--app-brand-100);background:var(--app-brand-50)}
+.tableScroll{overflow-x:auto}
+.dataTable{border-collapse:collapse;min-width:620px;width:100%;text-align:left;font-size:12px}
+.dataTable thead{background:var(--app-surface-soft)}
+.dataTable th{padding:11px 17px;border-top:1px solid var(--app-border);border-bottom:1px solid var(--app-border);font-size:10px;letter-spacing:.055em;text-transform:uppercase;font-weight:700;color:var(--app-text-muted)}
+.dataTable th:first-child{padding-left:20px}
+.dataTable td{padding:13px 17px;vertical-align:top;border-bottom:1px solid var(--app-border);color:var(--app-text)}
+.dataTable td:first-child{padding-left:20px}
+.dataTable tbody tr:last-child td{border-bottom:0}
+.dataTable tbody tr:hover{background:var(--app-surface-soft)}
+.dataTable .numeric{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+.keywordName{font-size:12px;font-weight:650;line-height:1.5;color:var(--app-text-strong);overflow-wrap:anywhere}
+.keywordDetail{font-size:10px;color:var(--app-text-muted);display:block;margin-top:5px;max-width:350px;line-height:1.5;overflow-wrap:anywhere}
+.sourceLabel{font-size:10px;white-space:nowrap;color:var(--app-text-muted)}
+.panelFooter{border-top:1px solid var(--app-border);padding:12px 20px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;font-size:11px;color:var(--app-text-muted)}
+.workflowGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;padding:0 20px 19px}
+.workflow{display:flex;flex-direction:column;gap:10px;border:1px solid var(--app-border);border-radius:12px;padding:16px;background:var(--app-surface-soft);min-width:0}
+.workflowTop{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.workflowIcon{width:35px;height:35px;display:grid;place-items:center;border-radius:10px;color:var(--app-brand-700);background:var(--app-brand-50)}
+.workflowTitle{font-size:13px;font-weight:690;color:var(--app-text-strong);margin:0}
+.workflowDescription{font-size:11px;line-height:1.6;color:var(--app-text-muted);margin:0;flex:1}
+.status{display:inline-flex;align-items:center;gap:5px;max-width:100%;padding:5px 8px;border-radius:6px;background:var(--app-brand-50);color:var(--app-brand-700);font-size:10px;line-height:1.25;font-weight:680}
+.statusMuted{background:var(--app-surface-muted);color:var(--app-text-muted)}
+.statusWarn{background:var(--app-warning-soft);color:var(--app-warning)}
+.sideBody{padding:0 20px 20px}
+.signalRow{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:13px 0;border-bottom:1px solid var(--app-border)}
+.signalRow:last-child{border-bottom:0}
+.signalLabel{font-size:11px;color:var(--app-text-muted);font-weight:600}
+.signalValue{font-size:16px;color:var(--app-text-strong);font-weight:670;letter-spacing:-.03em;font-variant-numeric:tabular-nums}
+.signalSub{display:block;color:var(--app-text-subtle);font-size:10px;margin-top:4px}
+.callout{padding:14px 15px;border:1px solid var(--app-border);background:var(--app-surface-soft);border-radius:9px;font-size:11px;line-height:1.65;color:var(--app-text-muted)}
+.calloutStrong{font-weight:680;color:var(--app-text-strong)}
+.linkList{display:grid;gap:0;padding:0 6px 8px}
+.linkRow{display:flex;align-items:center;justify-content:space-between;gap:10px;text-decoration:none;color:var(--app-text-strong);font-size:12px;font-weight:620;padding:13px 14px;border-bottom:1px solid var(--app-border);border-radius:6px}
+.linkRow:last-child{border-bottom:0}
+.linkRow:hover{color:var(--app-brand-700);background:var(--app-brand-50)}
+.linkRow small{font-size:10px;color:var(--app-text-muted);font-weight:450}
+.linkLeft{display:flex;align-items:center;gap:9px;min-width:0}
+.linkLeft svg{color:var(--app-brand-700);flex-shrink:0}
+.reviewNotice{display:flex;align-items:flex-start;gap:9px;padding:13px 15px;border:1px solid var(--app-border);border-radius:11px;background:var(--app-surface);font-size:11px;line-height:1.6;color:var(--app-text-muted)}
+.reviewNotice svg{flex-shrink:0;color:var(--app-brand-700);margin-top:1px}
+@media(max-width:1280px){.summaryGrid{grid-template-columns:repeat(2,minmax(0,1fr))}.contentGrid{grid-template-columns:minmax(0,1.5fr) minmax(240px,.9fr)}}
+@media(max-width:980px){.contentGrid{grid-template-columns:1fr}.sideStack{grid-template-columns:repeat(2,minmax(0,1fr))}.sideStack .panel:last-child{grid-column:1 / -1}}
+@media(max-width:650px){.summaryGrid,.sideStack,.workflowGrid{grid-template-columns:1fr}.summaryValue{font-size:24px}.headerActions{width:100%}.headerActions a{flex:1}.sectionHeader{padding:17px 15px 12px}.trendWrap{padding:10px 15px 18px}.tabs{padding-left:15px;padding-right:15px}.panelFooter{padding:12px 15px}.sideBody{padding:0 15px 17px}.workflowGrid{padding:0 15px 15px}.heading{font-size:27px}.dataTable th,.dataTable td{padding:11px 12px}.dataTable td:first-child,.dataTable th:first-child{padding-left:15px}}

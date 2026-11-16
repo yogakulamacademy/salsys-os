@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import Link from "next/link";
 
 import {
   Activity,
@@ -327,6 +328,23 @@ export default async function SeoPage() {
         title="SEO"
         description="Google Search Console performance, organic-search opportunities, CRM leads, enrollments and revenue."
       />
+
+      <section aria-label="Organic Intelligence workspace"
+        className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-violet-200 bg-violet-50/60 px-4 py-3 dark:border-violet-900 dark:bg-violet-950/20">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-slate-100">
+            <Sparkles size={15} aria-hidden className="text-violet-600" />
+            Organic Intelligence Workspace
+          </div>
+          <p className="mt-1 text-xs leading-5 text-slate-600 dark:text-slate-300">
+            Explore Search Console, content gaps, AEO readiness and research workflows in one place.
+          </p>
+        </div>
+        <Link href="/seo/intelligence"
+          className="inline-flex min-h-9 items-center justify-center rounded-lg bg-violet-700 px-3 py-2 text-xs font-semibold text-white hover:bg-violet-800">
+          Open Intelligence
+        </Link>
+      </section>
 
       {workspace.warning && (
         <div className="seo-warning mt-4 rounded-xl border border-amber-100 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-700">

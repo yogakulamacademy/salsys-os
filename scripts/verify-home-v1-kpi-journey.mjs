@@ -20,14 +20,14 @@ const pulseEnd = pulseStart >= 0 ? home.indexOf("</section>", pulseStart) : -1;
 const pulse = pulseEnd > pulseStart ? home.slice(pulseStart, pulseEnd) : "";
 const labels = [...pulse.matchAll(/\slabel="([^"]+)"/g)].map((match) => match[1]);
 assert(
-  labels.join("|") === "Leads|Qualified leads|Open pipeline value|Recorded collections",
+  labels.join("|") === "Leads|Qualified|Pipeline value|Recorded collections",
   "The executive KPI order must be Leads, Qualified, Open Pipeline, Recorded Collections.",
 );
 assert(
   !pulse.includes('label="Needs reply"') &&
     nextActions.includes('label: "Needs reply"') &&
     home.includes("buildHomeNextActions({") &&
-    home.includes("const topAttention = attention[0];"),
+    home.includes("...activeAttention.map((item) => ({"),
   "Needs reply must stay in the operational attention queue, not the KPI row.",
 );
 assert(
@@ -36,19 +36,21 @@ assert(
   "The open pipeline KPI must use a single identifiable currency; mixed currencies must not be summed.",
 );
 assert(
-  pulse.includes('statusLabel="As of now"') &&
-    home.includes("Open pipeline is a current-state estimate and does not change with the period filter."),
+  pulse.includes("As of now: positive potential values on open leads") &&
+    pulse.includes("does not change with the period filter") &&
+    home.includes("valued · now"),
   "Pipeline must be clearly marked as an as-of-now snapshot.",
 );
 assert(
   home.includes("historicalQualification?.qualifiedLeads") &&
-    home.includes("reached a recorded milestone by period end") &&
+    home.includes("by period end, from recorded stage history") &&
     !home.includes("qualified leads use current stages for that lead cohort"),
   "Qualification must use historical milestone results and avoid a current-stage narrative.",
 );
 assert(
-  home.includes("reconciliation pending") &&
-    home.includes("Recorded payment ledger · unverified"),
+  home.includes("Not yet reconciled to bank or payment-provider settlement.") &&
+    home.includes("pending · unreconciled") &&
+    home.includes("Ledger · unreconciled"),
   "Collections must communicate the reconciliation limitation.",
 );
 assert(
@@ -72,10 +74,9 @@ assert(
 );
 
 assert(
-  home.includes("{activeAttention[0].reason}") &&
-    home.includes("{activeAttention[0].evidence} · {activeAttention[0].timing}") &&
-    home.includes("{item.reason}</span>") &&
-    home.includes("{item.priority} · {item.evidence}</span>"),
+  home.includes("`${item.timing} · ${item.evidence}`") &&
+    home.includes('<span className="text-xs leading-4 text-copy-muted">{item.hint}</span>') &&
+    !home.includes('truncate text-xs text-copy-muted">{item.hint}'),
   "Home operational next actions must display their reason and source evidence without requiring hover.",
 );
 
