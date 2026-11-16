@@ -178,12 +178,32 @@ export default async function WhatsAppHumanReviewQueuePage({
                                   ) : null}
                                 </>
                               ) : queue.actionsEnabled && row.kind === 'human_request' && row.rawEventId ? (
-                                <form action={claimDeskcommHumanReviewAction}>
-                                  <input type="hidden" name="raw_event_id" value={row.rawEventId} />
-                                  <button type="submit" className="rounded-lg border border-slate-300 px-2 py-1 text-xs font-semibold">
-                                    Assign review to me
-                                  </button>
-                                </form>
+                                queue.assignees.length > 0 ? (
+                                  <form action={claimDeskcommHumanReviewAction} className="flex flex-wrap items-center gap-2">
+                                    <input type="hidden" name="raw_event_id" value={row.rawEventId} />
+                                    <label className="text-xs font-semibold text-slate-600" htmlFor={`assignee-${i}`}>
+                                      Assign to
+                                    </label>
+                                    <select
+                                      name="assigned_to"
+                                      id={`assignee-${i}`}
+                                      required
+                                      className="max-w-[200px] rounded-lg border border-slate-300 bg-white px-2 py-1 text-xs"
+                                      defaultValue={queue.assignees[0]?.id}
+                                    >
+                                      {queue.assignees.map((staff) => (
+                                        <option key={staff.id} value={staff.id}>
+                                          {staff.name} · {staff.role}
+                                        </option>
+                                      ))}
+                                    </select>
+                                    <button type="submit" className="rounded-lg border border-slate-300 px-2 py-1 text-xs font-semibold">
+                                      Create staff task
+                                    </button>
+                                  </form>
+                                ) : (
+                                  <span className="text-xs text-amber-700">No eligible Sales staff available</span>
+                                )
                               ) : null}
                             </div>
                           ) : (
