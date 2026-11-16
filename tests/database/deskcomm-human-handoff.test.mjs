@@ -547,7 +547,7 @@ test('staff alerts are recipient-only, readable once and never duplicate on retr
     (await f.observer.query('select count(*)::integer as n from public.whatsapp_handoff_staff_notifications where read_at is not null')).rows[0].n,
     1,
   );
-});
+}));
 
 test('a dispatched Meta timeout stays non-retryable until verified acceptance evidence exists',async()=>fixture(async f=>{
   const audit=randomUUID();
@@ -601,4 +601,4 @@ test('a dispatched Meta timeout stays non-retryable until verified acceptance ev
   );
   assert.equal(after.rows[0].status,'sent');
   assert.equal(after.rows[0].provider_message_id,'wamid-provider-accepted');
-});
+}));
