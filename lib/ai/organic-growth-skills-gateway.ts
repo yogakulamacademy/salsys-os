@@ -65,6 +65,19 @@ export async function runOrganicGrowthReadOnlyTool(
 
   const organizationId = active.organizationId;
 
+  // A user can lose access while an expensive analytics read is in flight.
+  // Re-resolve the current workspace before returning ANY result to the caller.
+  async function assertAccessStillActive() {
+    const current = await getCurrentWorkspaceContext(supabase);
+    const currentActive = current.activeWorkspace;
+    if (!currentActive ||
+        current.activeOrganizationId !== organizationId ||
+        currentActive.organizationId !== organizationId ||
+        !['owner', 'admin'].includes(currentActive.role)) {
+      throw new Error('Organic Growth access changed while reading; no evidence was returned.');
+    }
+  }
+
   if (toolName === 'salsys_content_brief_evidence_v1') {
     const topic = (input.topic as string).trim();
     const term = primaryTopicTerm(topic);
@@ -94,6 +107,7 @@ export async function runOrganicGrowthReadOnlyTool(
       throw new Error('Search evidence is currently unavailable; no content brief has been generated.');
     }
 
+    await assertAccessStillActive();
     return buildContentBriefEvidence(
       topic,
       (queriesResult.data ?? []) as OrganicQueryRow[],
@@ -129,6 +143,7 @@ export async function runOrganicGrowthReadOnlyTool(
     (organicResult.data ?? []) as OrganicQueryRow[],
     (paidResult.data ?? []) as PaidSearchTermRow[],
   );
+  await assertAccessStillActive();
   // Raw provider error strings are read only for server-side classification.
   // Return the allowlisted blocker code, never upstream error text.
   return {
