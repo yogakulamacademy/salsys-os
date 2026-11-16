@@ -48,6 +48,15 @@ assert.ok(sql.includes("ow.workspace_code = 'sales'"));
 assert.ok(sql.includes("wm.active is true"));
 assert.ok(sql.includes('insert into public.tasks ('));
 assert.ok(sql.includes("'human_review'"));
+assert.ok(sql.includes('guard_whatsapp_handoff_provider_send_v1'));
+assert.ok(sql.includes('before insert or update of status on public.automation_provider_send_audits'));
+assert.ok(sql.includes("new.status <> 'sending'"));
+assert.ok(sql.includes("new.channel <> 'whatsapp'"));
+assert.ok(sql.includes("new.provider <> 'meta_cloud_api'"));
+assert.ok(sql.includes("'whatsapp_provider_send_in_flight'"));
+assert.ok(sql.includes("a.status = 'sending'"));
+assert.ok(sql.includes("raise exception 'WhatsApp provider send is blocked by an active human handoff'"));
+assert.ok(sql.includes('revoke all on function public.guard_whatsapp_handoff_provider_send_v1()'));
 assert.ok(sql.includes('guard_human_handoff_enrollment_v1'));
 assert.ok(sql.includes("and h.ai_hold_active is true"));
 assert.ok(sql.includes('pg_advisory_xact_lock(hashtextextended('));
@@ -68,6 +77,8 @@ assert.ok(sql.includes('revoke all on function public.close_verified_whatsapp_hu
 
 assert.ok(page.includes('claimDeskcommHumanReviewAction'));
 assert.ok(page.includes('closeDeskcommHumanReviewAction'));
+assert.ok(actions.includes("result.reason === 'whatsapp_provider_send_in_flight'"));
+assert.ok(page.includes('send_in_flight:'));
 assert.ok(page.includes('releaseDeskcommHumanReviewHoldAction'));
 assert.ok(page.includes("row.kind === 'human_request'"));
 assert.ok(page.includes('queue.actionsEnabled'));
