@@ -15,7 +15,8 @@ export type ShadowIntent =
   | 'none'
   | 'batch_information_request'
   | 'preferred_month_candidate'
-  | 'opt_out_candidate';
+  | 'opt_out_candidate'
+  | 'human_handoff_candidate';
 
 export type ShadowEventFamily =
   | 'inbound_message'
@@ -85,7 +86,22 @@ export function classifyDeskcommReplyCandidate(body: unknown): {
   month: string | null;
 } {
   const normalized = text(body).replace(/\s+/g, ' ').toLowerCase();
-  if (!normalized || normalized.length > 48) return { intent: 'none', month: null };
+  if (!normalized || normalized.length > 180) return { intent: 'none', month: null };
+
+  // Deskcomm's explicit-human-request approach is adapted conservatively.
+  // Do NOT treat a numbered business auto-reply menu (or a quoted example)
+  // as the customer explicitly requesting a human. Never silently transfer.
+  const raw = text(body);
+  const numberedItems = raw.match(/(?:^|\\n)\\s*\\d{1,2}\\s*[.)-]\\s*[^\\n]+/g) ?? [];
+  const menuLike = numberedItems.length >= 2 ||
+    /(?:choose|select|press|reply|type)\\s+(?:the\\s+)?(?:number|option|digit)/i.test(raw);
+  const wantsHuman = /^(?:(?:hello|hi|hey)[,!\\s]+)?(?:(?:please|kindly)\\s+)?(?:i\\s+(?:want|need|would\\s+like)\\s+to\\s+|(?:can|could|may)\\s+i\\s+)(?:speak|talk|chat)\\s+(?:to|with)\\s+(?:(?:a|an|the|real)\\s+)?(?:human|person|agent|representative|staff(?:\\s+member)?|someone\\s+from\\s+(?:your|the)\\s+team)\\??[!.]?$/i.test(normalized) ||
+    /^(?:please\\s+)?(?:connect|transfer|pass|put)\\s+me\\s+(?:through\\s+)?(?:to|with)\\s+(?:(?:a|an|the|real)\\s+)?(?:human|person|agent|representative|staff(?:\\s+member)?|someone\\s+from\\s+(?:your|the)\\s+team)\\??[!.]?$/i.test(normalized) ||
+    /^(?:human|real\\s+person|live\\s+agent|human\\s+agent)\\s*(?:please|needed)?[!.]?$/i.test(normalized);
+
+  if (!menuLike && wantsHuman) {
+    return { intent: 'human_handoff_candidate', month: null };
+  }
 
   if (/^(stop|stop all|unsubscribe|opt out)$/i.test(normalized)) {
     return { intent: 'opt_out_candidate', month: null };
