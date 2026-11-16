@@ -1,0 +1,76 @@
+#!/usr/bin/env node
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+
+const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), 'utf8');
+const env = read('.env.example');
+const sql = read('supabase/migrations/20261116094500_deskcomm_human_handoff_task_v1.sql');
+const actions = read('app/automation/whatsapp/human-review/actions.ts');
+const page = read('app/automation/whatsapp/human-review/page.tsx');
+const queue = read('lib/integrations/deskcomm-human-review-data.ts');
+const matching = read('lib/integrations/deskcomm-human-review-queue.ts');
+const scheduler = read('lib/automation/runtime-scheduler.ts');
+const worker = read('lib/automation/runtime-worker.ts');
+const provider = read('lib/integrations/whatsapp-provider-send.ts');
+
+assert.match(env, /^SALSYS_DESKCOMM_HANDOFF_ACTIONS=false$/m);
+assert.match(env, /^SALSYS_DESKCOMM_INBOUND_SHADOW=false$/m);
+assert.ok(actions.includes("process.env.SALSYS_DESKCOMM_HANDOFF_ACTIONS !== 'true'"));
+assert.ok(actions.includes("process.env.SALSYS_DESKCOMM_INBOUND_SHADOW !== 'true'"));
+assert.ok(actions.includes('await requireAdminWorkspaceAccess()'));
+assert.ok(actions.includes("await ctx.supabase.rpc('open_verified_whatsapp_human_handoff_v1'"));
+assert.ok(actions.includes("await ctx.supabase.rpc('close_verified_whatsapp_human_handoff_v1'"));
+assert.ok(actions.includes('p_organization_id: ctx.workspace.organizationId'));
+assert.ok(actions.includes('p_assigned_to: ctx.user.id'));
+assert.ok(!actions.includes('createAdminClient'), 'actions must execute with session auth for auth.uid()');
+assert.ok(!actions.includes('executePreparedWhatsAppProviderSend'));
+
+assert.ok(sql.includes('create table if not exists public.whatsapp_human_handoffs'));
+assert.ok(sql.includes('constraint whatsapp_human_handoffs_unique_source unique (organization_id,raw_event_id)'));
+assert.ok(sql.includes('foreign key (organization_id,raw_event_id)'));
+assert.ok(sql.includes('on conflict (organization_id,raw_event_id) do nothing'));
+assert.ok(sql.includes('into strict v_lead_id,v_conversation_id'));
+assert.ok(sql.includes("v_raw.metadata #>> '{deskcomm_inbound_shadow,intent_candidate}' is distinct from 'human_handoff_candidate'"));
+assert.ok(sql.includes('m.direction = \'inbound\''));
+assert.ok(sql.includes('c.external_account_id = v_raw.source_account_id'));
+assert.ok(sql.includes('c.external_conversation_id = v_raw.source_subject_id'));
+assert.ok(sql.includes('lead.organization_id = l.organization_id'));
+assert.ok(sql.includes('public.has_organization_role('));
+assert.ok(sql.includes("array['owner','admin']::text[]"));
+assert.ok(sql.includes('om.active is true'));
+assert.ok(sql.includes('p.active is true'));
+assert.ok(sql.includes("ow.workspace_code = 'sales'"));
+assert.ok(sql.includes("wm.active is true"));
+assert.ok(sql.includes('insert into public.tasks ('));
+assert.ok(sql.includes("'human_review'"));
+assert.ok(sql.includes("set status = 'paused'"));
+assert.ok(sql.includes("set status = 'cancelled',cancelled_at = now()"));
+assert.ok(sql.includes("where organization_id = p_organization_id"));
+assert.ok(sql.includes("and status = 'scheduled'"));
+assert.ok(sql.includes("and status = 'waiting'"));
+assert.ok(sql.includes("if v_handoff.status = 'closed'"));
+assert.ok(sql.includes("'automation_resumed',false"));
+assert.ok(sql.includes("'customer_message_sent',false"));
+assert.ok(sql.includes('revoke all on public.whatsapp_human_handoffs from public,anon,authenticated'));
+assert.ok(sql.includes('alter table public.whatsapp_human_handoffs enable row level security'));
+assert.ok(sql.includes('revoke all on function public.open_verified_whatsapp_human_handoff_v1'));
+assert.ok(sql.includes('revoke all on function public.close_verified_whatsapp_human_handoff_v1'));
+
+assert.ok(page.includes('claimDeskcommHumanReviewAction'));
+assert.ok(page.includes('closeDeskcommHumanReviewAction'));
+assert.ok(page.includes("row.kind === 'human_request'"));
+assert.ok(page.includes('queue.actionsEnabled'));
+assert.ok(queue.includes('raw.length > 1000'));
+assert.ok(queue.includes("process.env.SALSYS_DESKCOMM_HANDOFF_ACTIONS === 'true'"));
+assert.ok(queue.includes(".from('whatsapp_human_handoffs')"));
+assert.ok(queue.includes(".eq('organization_id', organizationId)"));
+assert.ok(matching.includes("conversation.external_account_id === candidate.businessAccountId"));
+assert.ok(matching.includes("conversation.external_conversation_id === candidate.senderId"));
+assert.ok(worker.includes("enrollment.status !== 'active'"));
+assert.ok(scheduler.includes(".eq('status', 'scheduled')"));
+assert.ok(provider.includes("'claim_whatsapp_provider_send_v2'"));
+
+assert.ok(!sql.includes('whatsapp_access_token'));
+assert.ok(!sql.includes('pg_sleep('));
+assert.ok(!actions.includes("fetch("));
+console.log('[deskcomm-handoff] PASS: manual owner/admin action, exact identity, atomic dedupe/task/pause, no send or auto-resume');
