@@ -163,7 +163,7 @@ assert.ok(unknownPage.includes('review.hasMore'));
 assert.ok(unknownPage.includes('all available audit history'));
 assert.ok(unknownPage.includes('className="select-all">{row.auditId}</code>'));
 assert.ok(unknownPage.includes('No matching outcome-unknown audits were found in retained audit history'));
-assert.ok(unknownPage.includes('This does not prove all historic or external provider sends succeeded'));
+assert.ok(unknownPage.includes('This does not prove all external provider sends succeeded'));
 assert.ok(unknownPage.includes('This page cannot send messages'));
 assert.ok(page.includes('href="/automation/whatsapp/uncertain-sends"'));
 assert.ok(whatsappOperations.includes('href="/automation/whatsapp/uncertain-sends"'));
