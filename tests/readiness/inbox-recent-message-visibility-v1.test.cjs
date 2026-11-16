@@ -3,11 +3,14 @@ const assert = require('node:assert/strict');
 const { readFileSync } = require('node:fs');
 const { load } = require('./helpers.cjs');
 
-function setup() {
+function setup({ v2Missing = false } = {}) {
   const calls = [];
   const session = {
     rpc: async (name, args) => {
       calls.push({name,args});
+      if (v2Missing && name === 'get_current_conversations_page_v2') {
+        return { data: null, error: { code: 'PGRST202', message: 'not found' } };
+      }
       return {
         data: {
           inbox: [],
@@ -24,6 +27,7 @@ function setup() {
   const reader = load('lib/conversations-page-data.ts', {
     'server-only': {},
     '@/lib/supabase/server': { createClient: async () => session },
+    '@/lib/inbox-topics': { INBOX_TOPICS: ['fee', 'dates', 'register', 'accommodation', 'online_offline', 'location', 'certification'] },
   });
   return { reader, calls };
 }
@@ -33,10 +37,29 @@ test('Inbox defaults to latest conversation activity instead of lead creation', 
   const result = await reader.getInboxPage({}, 'team');
   assert.equal(result.sort, 'activity_desc');
   assert.equal(calls.length, 1);
-  assert.equal(calls[0].name, 'get_current_conversations_page_v1');
+  assert.equal(calls[0].name, 'get_current_conversations_page_v2');
+  assert.equal(calls[0].args.p_topic, 'all');
   assert.equal(calls[0].args.p_sort, 'activity_desc');
   assert.equal(calls[0].args.p_page, 1);
   assert.equal(calls[0].args.p_scope, 'team');
+});
+
+test('Inbox falls back to the v1 page reader only when v2 is not deployed', async () => {
+  const {reader,calls} = setup({ v2Missing: true });
+  const result = await reader.getInboxPage({ topic: 'fee' }, 'team');
+  assert.deepEqual(calls.map((c) => c.name), ['get_current_conversations_page_v2', 'get_current_conversations_page_v1']);
+  assert.equal('p_topic' in calls[1].args, false);
+  assert.equal(result.topic, 'all');
+  assert.equal(result.channelCounts, null);
+  assert.equal(result.topicCounts, null);
+});
+
+test('Unknown topics are ignored', async () => {
+  const {reader,calls} = setup();
+  await reader.getInboxPage({ topic: 'drop table' }, 'team');
+  assert.equal(calls[0].args.p_topic, 'all');
+  await reader.getInboxPage({ topic: 'fee' }, 'team');
+  assert.equal(calls[1].args.p_topic, 'fee');
 });
 
 test('Explicit created-date sort is retained and unsupported sort defaults safely', async () => {

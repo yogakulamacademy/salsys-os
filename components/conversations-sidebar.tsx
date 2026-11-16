@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import type { InboxPage } from "@/lib/conversations-page-data";
 import { nextInboxQueueHref, resetInboxQueueHref } from "@/lib/inbox-query-navigation";
+import { CHANNEL_CHIPS, INBOX_TOPICS, INBOX_TOPIC_LABELS } from "@/lib/inbox-topics";
 import { Clock3, Flag, MessageCircle, Search, SlidersHorizontal, UsersRound, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { EmptyState } from "@/components/ui";
@@ -70,7 +71,7 @@ export function ConversationsSidebar({
   const [visibleCount, setVisibleCount] = useState(50);
 
   function setInboxParam(
-    key: "q" | "page" | "sort" | "scope" | "filter" | "priority" | "channel",
+    key: "q" | "page" | "sort" | "scope" | "filter" | "priority" | "channel" | "topic",
     value: string,
     preservePage = false,
   ) {
@@ -344,7 +345,45 @@ export function ConversationsSidebar({
         </div>
       </div>
 
-      <div className="ibx-v2-secondary-filters grid shrink-0 grid-cols-2 gap-2 border-b border-line bg-surface px-4 py-2.5">
+      {pagination?.channelCounts ? (
+        <div role="group" aria-label="Filter by channel" className="ibx-v3-channel-chips flex shrink-0 gap-1.5 overflow-x-auto border-b border-line bg-surface px-4 py-2 [scrollbar-width:none]">
+          {CHANNEL_CHIPS.map((chip) => {
+            const active = channelFilter === chip.value;
+            const count = pagination.channelCounts?.[chip.value] ?? 0;
+            return (
+              <button key={chip.value} type="button" aria-pressed={active} onClick={() => updateChannel(chip.value)}
+                className={`inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-2.5 py-1 text-[11px] font-semibold transition ${active ? "border-brand-600 bg-brand-50 text-brand-700" : "border-line bg-surface text-copy-muted hover:border-brand-300"}`}>
+                <span aria-hidden className="h-1.5 w-1.5 rounded-full" style={{ background: chip.color }} />
+                {chip.label}
+                <span className="tabular-nums opacity-70">{count.toLocaleString("en-IN")}</span>
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
+
+      {pagination?.topicCounts && Object.keys(pagination.topicCounts).length ? (
+        <div className="ibx-v3-topic-chips shrink-0 border-b border-line bg-surface px-4 py-2">
+          <p className="mb-1.5 text-[10.5px] font-semibold uppercase tracking-wide text-copy-subtle">What people are asking</p>
+          <div role="group" aria-label="Filter by question topic" className="flex flex-wrap gap-1.5">
+            {INBOX_TOPICS.filter((key) => (pagination.topicCounts?.[key] ?? 0) > 0)
+              .sort((a, b) => (pagination.topicCounts?.[b] ?? 0) - (pagination.topicCounts?.[a] ?? 0))
+              .map((key) => {
+                const active = pagination.topic === key;
+                return (
+                  <button key={key} type="button" aria-pressed={active}
+                    onClick={() => setInboxParam("topic", active ? "all" : key)}
+                    className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold transition ${active ? "border-brand-600 bg-brand-50 text-brand-700" : "border-line bg-surface text-copy hover:border-brand-300"}`}>
+                    {INBOX_TOPIC_LABELS[key]} · {(pagination.topicCounts?.[key] ?? 0).toLocaleString("en-IN")}
+                  </button>
+                );
+              })}
+          </div>
+        </div>
+      ) : null}
+
+      <div className={`ibx-v2-secondary-filters grid shrink-0 ${pagination?.channelCounts ? "grid-cols-1" : "grid-cols-2"} gap-2 border-b border-line bg-surface px-4 py-2.5`}>
+        {pagination?.channelCounts ? null : (
         <label className="min-w-0">
           <span className="mb-1 block text-xs font-medium text-copy-muted">Channel</span>
           <select
@@ -358,6 +397,7 @@ export function ConversationsSidebar({
             <option value="whatsapp">WhatsApp</option>
           </select>
         </label>
+        )}
         <label className="min-w-0">
           <span className="mb-1 block text-xs font-medium text-copy-muted">Owner</span>
           <select aria-label="Owner" value={scope} onChange={(event) => updateScope(event.target.value as ScopeFilter)}

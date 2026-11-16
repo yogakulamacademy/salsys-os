@@ -59,6 +59,7 @@ export default async function ConversationsPage({
     filter?: string;
     channel?: string;
     priority?: string;
+    topic?: string;
   }>;
 }) {
   const query = await searchParams;
