@@ -104,7 +104,7 @@
     "test:home-geography-coverage": "node --experimental-strip-types --test tests/readiness/home-geography-coverage.behavior.test.mjs",
     "verify:vendor-workspace-pilot": "node scripts/verify-vendor-workspace-pilot.mjs",
     "test:openseo-mcp-projects": "node --experimental-strip-types --test tests/readiness/openseo-mcp-projects.behavior.test.mjs",
-    "test:deskcomm-inbound-shadow": "node --experimental-strip-types --test tests/readiness/deskcomm-inbound-shadow.behavior.test.mjs tests/readiness/deskcomm-shadow-summary.behavior.test.mjs",
+    "test:deskcomm-inbound-shadow": "node --experimental-strip-types --test tests/readiness/deskcomm-inbound-shadow.behavior.test.mjs tests/readiness/deskcomm-shadow-summary.behavior.test.mjs tests/readiness/deskcomm-human-review-queue.behavior.test.mjs",
     "verify:deskcomm-inbound-shadow": "node scripts/verify-deskcomm-inbound-shadow.mjs"
   },
   "dependencies": {
