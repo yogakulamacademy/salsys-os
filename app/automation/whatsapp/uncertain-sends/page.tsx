@@ -43,7 +43,7 @@ export default async function WhatsAppUncertainSendReviewPage() {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-              Investigation queue · last {review.lookbackDays} days
+              Investigation queue · all available audit history
             </div>
             <div className="mt-1 text-xs text-slate-500">
               Observed {utc(review.checkedAt)} · oldest unresolved first
@@ -61,14 +61,14 @@ export default async function WhatsAppUncertainSendReviewPage() {
           </p>
         ) : review.rows.length === 0 ? (
           <p role="status" className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
-            No matching outcome-unknown audits were found in this 30-day view.
-            This does not prove all historic or external provider sends succeeded.
+            No matching outcome-unknown audits were found in retained audit history.
+            This does not prove all external provider sends succeeded or that no older audit evidence was deleted.
           </p>
         ) : (
           <>
             {review.hasMore ? (
               <p role="status" className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
-                More than 50 matching audits exist within the lookback.
+                More than 50 matching audits exist in retained history.
                 The list is bounded; investigate the oldest items first.
                 This is not an exact total.
               </p>
@@ -86,8 +86,8 @@ export default async function WhatsAppUncertainSendReviewPage() {
                 <tbody>
                   {review.rows.map((row) => (
                     <tr key={row.auditId} className="border-b border-slate-100 last:border-0">
-                      <td className="px-3 py-3 font-mono text-xs text-slate-700" title={row.auditId}>
-                        {row.auditId.slice(0, 8)}
+                      <td className="max-w-[220px] break-all px-3 py-3 font-mono text-xs text-slate-700">
+                        <code className="select-all">{row.auditId}</code>
                       </td>
                       <td className="px-3 py-3 text-xs text-slate-600">{utc(row.createdAt)}</td>
                       <td className="px-3 py-3 text-xs text-slate-600">{utc(row.updatedAt)}</td>
@@ -114,7 +114,8 @@ export default async function WhatsAppUncertainSendReviewPage() {
           <li>Escalate ambiguous attempts for a reviewed reconciliation; never convert an unknown outcome to failed/ready just to retry it.</li>
         </ol>
         <p className="mt-3 text-xs text-amber-800">
-          Read-only view: does not prove the database retry-blocking migration is installed.
+          Read-only view: bounded to 50 shown audits and the retention of available evidence.
+          It does not prove the database retry-blocking migration is installed.
           The Meta staging acceptance and operator approval gates remain open.
         </p>
       </section>
