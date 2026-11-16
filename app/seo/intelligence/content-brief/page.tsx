@@ -5,7 +5,8 @@ import {
 } from "lucide-react";
 
 import { safeOrganicQuery } from "@/lib/ai/organic-growth-skills-core";
-import { getSeoWorkspace, type ContentGapRow } from "@/lib/seo-data";
+import type { ContentGapRow } from "@/lib/seo-data";
+import { getContentBriefResearch } from "@/lib/seo-content-brief-research";
 import { requirePrivilegedWorkspaceAccess } from "@/lib/route-access";
 import { CopyResearchEvidence } from "@/components/seo/copy-research-evidence";
 import core from "../intelligence.module.css";
@@ -31,15 +32,6 @@ function position(value: number | string | null | undefined): string {
 
 function safeLabel(value: unknown): string | null {
   return safeOrganicQuery(value);
-}
-
-function dateLabel(value: string | null | undefined): string {
-  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return "Not verified";
-  const date = new Date(value + "T00:00:00Z");
-  if (Number.isNaN(date.getTime())) return "Not verified";
-  return new Intl.DateTimeFormat("en", {
-    day: "numeric", month: "short", year: "numeric", timeZone: "UTC",
-  }).format(date);
 }
 
 function makeTopics(rows: ContentGapRow[]): Topic[] {
@@ -102,18 +94,18 @@ export default async function ContentBriefResearchPage({
 }: {
   searchParams: Promise<{ topic?: string }>;
 }) {
-  await requirePrivilegedWorkspaceAccess();
+  const activeWorkspace = await requirePrivilegedWorkspaceAccess();
   const params = await searchParams;
   const selectedId = typeof params.topic === "string" &&
     /^[a-zA-Z0-9_-]{1,128}$/.test(params.topic) ? params.topic : null;
-  const workspace = await getSeoWorkspace();
-  const topics = makeTopics(workspace.contentGaps);
+  const research = await getContentBriefResearch(activeWorkspace.organizationId);
+  const topics = makeTopics(research.contentGaps);
   const selected = params.topic === undefined
     ? topics[0] ?? null
     : topics.find((topic) => topic.id === selectedId) ?? null;
   const queries = selected ? observedQueries(selected.source) : [];
   const reviewNote = selected ? safeLabel(selected.source.recommendation) : null;
-  const sourceDate = dateLabel(workspace.health.latest_gsc_date);
+  const sourceDate = "Not independently verified in this worksheet";
   const outline = selected
     ? researchOutline(selected, queries, sourceDate, reviewNote)
     : "";
@@ -150,10 +142,9 @@ export default async function ContentBriefResearchPage({
           <BookOpenText size={13} aria-hidden /> {topics.length} loaded eligible topics
         </span>
       </div>
-      {workspace.warning || workspace.contentWarning ? (
+      {research.contentWarning ? (
         <div role="status" className={styles.note}>
-          <strong>Source limitation. </strong>
-          {workspace.warning || workspace.contentWarning}
+          <strong>Source limitation. </strong>{research.contentWarning}
         </div>
       ) : null}
       <div className={styles.layout}>
@@ -294,7 +285,7 @@ export default async function ContentBriefResearchPage({
               </section>
               <div className={styles.note}>
                 <strong>Evidence limitations. </strong>
-                Source date: {sourceDate}. These are currently loaded model rows;
+                Source freshness: {sourceDate}. These are currently loaded model rows;
                 full query coverage, aligned date windows, and current SERP positions
                 have not been independently verified. Missing evidence is not zero.
               </div>
