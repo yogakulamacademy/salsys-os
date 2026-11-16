@@ -25,6 +25,8 @@ import { InboxQuickActions } from "@/components/inbox-quick-actions";
 import { InboxHeaderActions } from "@/components/inbox-header-actions";
 import { InboxLeadOverview } from "@/components/inbox-lead-overview";
 import { InboxOfferCard } from "@/components/inbox-offer-card";
+import { InboxLeadIntelligence } from "@/components/inbox-lead-intelligence";
+import { buildLeadIntelligence } from "@/lib/lead-intelligence";
 import { getLeadOfferSuggestion } from "@/lib/offer-suggestion-data";
 import { ConversationReadMarker } from "@/components/conversation-read-marker";
 import { ConversationSafeComposer } from "@/components/conversation-safe-composer";
@@ -122,6 +124,21 @@ export default async function ConversationsPage({
         replyWindowOpen: selected.currentContactChannel === "whatsapp" ? Boolean(whatsappWindow?.open) : null,
         country: selected.country ?? null,
       }).catch(() => null)
+    : null;
+  // Lead intelligence: where the lead stands + what has happened (read-only, no AI call).
+  const leadIntel = selected
+    ? buildLeadIntelligence({
+        stage: selected.stage,
+        messages: selected.lastMessages,
+        touchpoints: selectedAttribution?.touchpoints ?? [],
+        course: selected.course,
+        ownerName: selected.ownerName,
+        createdAt: selected.createdAt,
+        originLabel: selected.leadCreationChannel ? selected.leadCreationChannel.replaceAll("_", " ") : null,
+        waitingSince: selectedSummary?.waitingSince ?? null,
+        needsReply: Boolean(selectedSummary?.needsReply),
+        needsFirstContact: Boolean(selectedSummary?.needsFirstContact),
+      })
     : null;
   const selectedEmail = selectedContacts?.email ?? null;
   const conversationStatus = selectedSummary?.resolved ? "Done"
@@ -393,6 +410,7 @@ export default async function ConversationsPage({
           </a> :
           <span className="ibx-v2-profile-no-phone">Phone contact unavailable</span>}
       </section>
+      {leadIntel ? <InboxLeadIntelligence intel={leadIntel} /> : null}
       {/* key: remount per lead so the stage/owner selects never keep the previous conversation's value */}
       <InboxLeadOverview key={selected.id} leadId={selected.id} stage={selected.stage}
         ownerUserId={selected.ownerUserId} ownerName={selected.ownerName}
