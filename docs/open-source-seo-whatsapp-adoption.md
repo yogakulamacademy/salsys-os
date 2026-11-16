@@ -112,3 +112,88 @@ Run `npm run test:openseo-mcp-projects` for deterministic JSON/SSE parser tests.
 OpenSEO uses a separate Vite/Cloudflare-centric application and database/runtime model; SalsysOS is Next.js with Supabase. DeskcommCRM is itself a full Next.js/Supabase CRM with a different schema and security contract. Combining their entire app folders and migrations would collide on routes, auth, tenant IDs, background workers, and provider message ownership. Their README feature claims are useful for discovery, not proof of production readiness for this SalsysOS installation.
 
 This branch intentionally makes **no claim** to complete the end-to-end migration. It creates a safe reviewable foundation for the next branch: first actual SEO data adapter, then messaging event adapter, with independent tests and credential provisioning.
+
+
+## WhatsApp Phase B: Deskcomm-inspired inbound channel shadow (draft PR #718)
+
+DeskcommCRM's `lib/channels/inbound.ts` and `lib/channels/arquivo-de-webhook.ts`
+separate channel-specific signature verification, session identity, durable
+receipts and later processing. SalsysOS already has all three core primitives
+for the official Meta Cloud API: HMAC verification against the **raw bytes**,
+active phone-number-to-organization lookup, then tenant-scoped durable
+`whatsapp_webhook_events` / `raw_events` with idempotent retry.
+
+**Implemented now: an optional, read-only channel classification projector,**
+rather than replacing either working processor. The new
+`lib/integrations/deskcomm-inbound-shadow.ts` accepts the existing provider
+receipt only after verification and tenant binding, then derives a categorical,
+PII-free, versioned `deskcomm_inbound_shadow` metadata object. The existing
+`ingest_raw_event` RPC writes the tag only for newly inserted canonical events
+while the flag is enabled; already-archived immutable events are not backfilled.
+No extra database table or sending provider is introduced.
+
+Set on the SalsysOS **server only** to opt into a staging pilot:
+
+```env
+SALSYS_DESKCOMM_INBOUND_SHADOW=true
+```
+
+Default is `false`. Turning it back off stops future classifications; existing
+immutable raw-event evidence remains. The existing signed Meta webhook still
+processes synchronously and returns the same response contract. No ack-before-
+commit, automatic replay, CRM message write, agent response, consent mutation,
+reassignment or Meta/WAHA API request is caused by the shadow.
+
+### Reply-candidate behavior
+
+- Exact `DATES` text produces `batch_information_request` candidate.
+- An exact English month name/abbreviation with optional four-digit year produces
+  `preferred_month_candidate`. Context may be ambiguous (especially `May`).
+- Exact `STOP`, `STOP ALL`, `UNSUBSCRIBE` or `OPT OUT` produces
+  `opt_out_candidate`.
+- Unknown, malformed, unsupported, unsigned or unmapped events cannot produce
+  an actionable candidate.
+
+These are **candidates, not verified customer intents**. They do not update the
+lead's preferred month, consent state, template selection, follow-up schedule
+or AI autonomy policy. The existing CRM opt-out safeguards remain authoritative.
+The shadow stores no raw message text, sender phone number or provider message ID;
+the canonical raw event continues to retain its previously accepted provider
+evidence under existing access controls.
+
+### Owner/admin-only operator visibility
+
+Open `/automation/whatsapp/inbound-shadow` from WhatsApp operations. The page
+re-authenticates and checks the active owner/admin role before creating a
+service-role client. It reads only `metadata, received_at` from the current
+tenant's `raw_events` with source=`whatsapp`, method=`whatsapp_webhook`,
+received during the past 7 days. **A strict 1,000-row maximum** prevents an
+incomplete sample from being labeled exhaustive. Missing/malformed rows, DB
+errors and overflow return unavailable instead of invented success. Only
+aggregate counts and the most recent tagged timestamp reach the page.
+
+The view distinguishes tagged vs untagged records, signed event-family
+observations, incomplete evidence and DATES/MONTH/STOP candidates. A lack of
+tagged rows does **not** mean the provider failed to deliver messages. Multiple
+webhook receipts and canonical raw-event dual-write errors may affect observed
+coverage, and no existing history is repaired by this feature.
+
+### Verification and next production gates
+
+- `npm run test:deskcomm-inbound-shadow`: pure typed behavior and privacy tests.
+- `npm run verify:deskcomm-inbound-shadow`: structural runtime integration
+  assertions, including OFF default, verified-before-derive order, no send/replay,
+  owner/admin access and bounded aggregate reads.
+- `npm run build`: TypeScript/build plus both test suites in CI.
+- Staging acceptance: test signed/unsigned webhooks with a dedicated Meta test
+  number, duplicate receipts, unsupported event types, two tenant mappings,
+  conditional opt-out candidates and a STOP response. Independently verify that
+  only the existing webhook processor decides CRM writes and delivery acknowledgments.
+- **Not yet integrated**: Deskcomm job queue, AI handoff, live reply intent
+  confirmation, DATES/MONTH_TEXT enrollment logic, retry arbitration, multi-number
+  sender lease and automatic WhatsApp messaging. These require separate design,
+  staging evidence and an explicit deployment/cutover decision.
+
+Do **not** copy the WAHA Plus QR sender or assume its anti-ban pacing makes
+unapproved bulk WhatsApp messages permissible. Meta Cloud API is still the only
+selected production sender.
