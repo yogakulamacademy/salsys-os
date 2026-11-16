@@ -543,3 +543,57 @@ test('staff alerts are recipient-only, readable once and never duplicate on retr
     1,
   );
 });
+
+test('a dispatched Meta timeout stays non-retryable until verified acceptance evidence exists',async()=>fixture(async f=>{
+  const audit=randomUUID();
+  await f.observer.query(
+    'insert into public.automation_provider_send_audits(id,organization_id,lead_id,channel,provider,status,provider_response) values($1,$2,$3,$4,$5,$6,$7)',
+    [audit,org,lead,'whatsapp','meta_cloud_api','sending',
+      JSON.stringify({transport_outcome:{status:'unknown',retry_safe:false}})],
+  );
+  await assert.rejects(
+    f.observer.query(
+      'update public.automation_provider_send_audits set status=$1 where id=$2',
+      ['failed',audit],
+    ),
+    /Unknown Meta send outcome requires verified provider acceptance/,
+  );
+  await assert.rejects(
+    f.observer.query(
+      'update public.automation_provider_send_audits set status=$1 where id=$2',
+      ['ready',audit],
+    ),
+    /Unknown Meta send outcome requires verified provider acceptance/,
+  );
+  await assert.rejects(
+    f.observer.query(
+      'update public.automation_provider_send_audits set status=$1,provider_response=$2 where id=$3',
+      ['sending',JSON.stringify({}),audit],
+    ),
+    /Unknown Meta send outcome requires verified provider acceptance/,
+  );
+  await assert.rejects(
+    f.observer.query(
+      'update public.automation_provider_send_audits set status=$1 where id=$2',
+      ['sent',audit],
+    ),
+    /Unknown Meta send outcome requires verified provider acceptance/,
+  );
+  const before=await f.observer.query(
+    'select status,customer_message_sent from public.automation_provider_send_audits where id=$1',
+    [audit],
+  );
+  assert.deepEqual(before.rows[0],{status:'sending',customer_message_sent:false});
+  // A verified provider acceptance, with a provider message ID, can be
+  // reconciled without ever replaying the outbound request.
+  await f.observer.query(
+    'update public.automation_provider_send_audits set status=$1,customer_message_sent=true,provider_message_id=$2 where id=$3',
+    ['sent','wamid-provider-accepted',audit],
+  );
+  const after=await f.observer.query(
+    'select status,provider_message_id from public.automation_provider_send_audits where id=$1',
+    [audit],
+  );
+  assert.equal(after.rows[0].status,'sent');
+  assert.equal(after.rows[0].provider_message_id,'wamid-provider-accepted');
+});
