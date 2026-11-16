@@ -154,7 +154,8 @@ assert.ok(unknownRead.includes(".gte('created_at', since)"));
 assert.ok(unknownRead.includes(".limit(MAX_ROWS + 1)"));
 assert.ok(unknownRead.includes('if (error || !Array.isArray(data)) return base'));
 assert.ok(unknownRead.includes('hasMore: data.length > MAX_ROWS'));
-assert.ok(!/\\.(insert|update|upsert|delete|rpc)\\(/.test(unknownRead));
+assert.ok(!['.insert(', '.update(', '.upsert(', '.delete(', '.rpc('].some((verb) => unknownRead.includes(verb)));
+
 assert.ok(unknownPage.includes("getUnknownWhatsAppSendReview()"));
 assert.ok(unknownPage.includes("review.status !== 'ready'"));
 assert.ok(unknownPage.includes('review.hasMore'));
@@ -162,6 +163,7 @@ assert.ok(unknownPage.includes('This does not prove all historic or external pro
 assert.ok(unknownPage.includes('This page cannot send messages'));
 assert.ok(page.includes('href="/automation/whatsapp/uncertain-sends"'));
 assert.ok(whatsappOperations.includes('href="/automation/whatsapp/uncertain-sends"'));
-assert.ok(!/\\b(form|action)=/.test(unknownPage));
+assert.ok(!unknownPage.includes('<form'));
+assert.ok(!unknownPage.includes('action='));
 
 console.log('[deskcomm-handoff] PASS: manual owner/admin action, exact identity, atomic dedupe/task/pause, no send or auto-resume');
