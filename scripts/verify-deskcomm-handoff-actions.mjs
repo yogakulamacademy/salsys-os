@@ -25,7 +25,9 @@ assert.ok(actions.includes("await ctx.supabase.rpc('open_verified_whatsapp_human
 assert.ok(actions.includes("await ctx.supabase.rpc('close_verified_whatsapp_human_handoff_v1'"));
 assert.ok(actions.includes("'release_verified_whatsapp_handoff_ai_hold_v1'"));
 assert.ok(actions.includes('p_organization_id: ctx.workspace.organizationId'));
-assert.ok(actions.includes('p_assigned_to: ctx.user.id'));
+assert.ok(actions.includes('p_assigned_to: assignedTo'));
+assert.ok(actions.includes("const assignedTo = assigneeValue || ctx.user.id"));
+assert.ok(actions.includes('if (!UUID.test(assignedTo))'));
 assert.ok(!actions.includes('createAdminClient'), 'actions must execute with session auth for auth.uid()');
 assert.ok(!actions.includes('executePreparedWhatsAppProviderSend'));
 
