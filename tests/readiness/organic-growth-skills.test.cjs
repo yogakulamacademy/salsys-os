@@ -65,7 +65,7 @@ test('Content Brief treats absent keyword evidence as unknown', () => {
   assert.deepEqual(output.evidence.existingPages, []);
 });
 
-function mockGateway({ role = 'owner', paidRows = [], organicRows = [], enabled = true, queryError = false } = {}) {
+function mockGateway({ role = 'owner', paidRows = [], organicRows = [], adsHealth = null, enabled = true, queryError = false } = {}) {
   const reads = [];
   const client = {
     from(table) {
@@ -76,6 +76,9 @@ function mockGateway({ role = 'owner', paidRows = [], organicRows = [], enabled 
         eq(col, value) { call.eq.push([col, value]); return builder; },
         ilike(col, value) { call.filters.push([col, value]); return builder; },
         order() { return builder; },
+        maybeSingle() {
+          return Promise.resolve({ data: adsHealth, error: queryError ? { message: 'synthetic error' } : null });
+        },
         limit() {
           const rows = table === 'v_seo_query_30d' ? organicRows : paidRows;
           return Promise.resolve({ data: rows, error: queryError ? { message: 'synthetic error' } : null });
@@ -129,7 +132,7 @@ test('Gateway only reads canonical organization-scoped views', async () => {
     const output = await f.run('salsys_seo_vs_ads_evidence_v1', {});
     assert.equal(output.status, 'insufficient_paid_evidence');
     assert.deepEqual(f.reads.map(x => x.table).sort(), [
-      'v_google_ads_search_term_30d', 'v_seo_query_30d',
+      'v_google_ads_search_term_30d', 'v_google_ads_sync_health', 'v_seo_query_30d',
     ]);
     for (const read of f.reads) assert.deepEqual(read.eq, [['organization_id', 'org-a']]);
   } finally { f.restore(); }
@@ -141,5 +144,46 @@ test('Gateway refuses arbitrary tool parameters and fails closed on data errors'
     await assert.rejects(f.run('salsys_seo_vs_ads_evidence_v1', { organization_id: 'org-b' }), /does not accept/);
     assert.equal(f.reads.length, 0);
     await assert.rejects(f.run('salsys_seo_vs_ads_evidence_v1', {}), /unavailable/);
+  } finally { f.restore(); }
+});
+
+
+test('Ads sync health reports known Cloud-project access blocker without leaking raw error', () => {
+  const health = core.summarizeGoogleAdsSyncHealth({
+    last_sync_status: 'failed',
+    latest_data_date: '2026-10-04',
+    last_sync_error: 'sensitive-contact@example.com: CLOUD_PROJECT_NOT_APPROVED_FOR_PRODUCTION token=private-test-value',
+  });
+  assert.equal(health.status, 'configuration_blocked');
+  assert.equal(health.blockerCode, 'google_cloud_project_test_access');
+  assert.equal(health.latestDataDate, '2026-10-04');
+  assert.match(health.operatorNextStep, /Explorer/);
+  assert.doesNotMatch(JSON.stringify(health), /sensitive-contact|private-test-value|token=/);
+});
+
+test('Ads sync health preserves failure without echoing unknown provider messages', () => {
+  const health = core.summarizeGoogleAdsSyncHealth({
+    last_sync_status: 'failed', latest_data_date: null, last_sync_error: 'private-provider-error',
+  });
+  assert.equal(health.status, 'sync_failed');
+  assert.equal(health.blockerCode, 'google_ads_sync_failure');
+  assert.doesNotMatch(JSON.stringify(health), /private-provider-error/);
+});
+
+test('Gateway returns sanitized provider health beside insufficient paid evidence', async () => {
+  const f = mockGateway({
+    organicRows: [{ query: 'yoga class', clicks: 3, impressions: 30, avg_position: 5 }],
+    adsHealth: {
+      last_sync_status: 'failed',
+      latest_data_date: '2026-10-04',
+      last_sync_error: 'sensitive@example.com CLOUD_PROJECT_NOT_APPROVED_FOR_PRODUCTION',
+    },
+  });
+  try {
+    const result = await f.run('salsys_seo_vs_ads_evidence_v1', {});
+    assert.equal(result.status, 'insufficient_paid_evidence');
+    assert.equal(result.sourceReadiness.blockerCode, 'google_cloud_project_test_access');
+    assert.equal(result.sourceReadiness.latestDataDate, '2026-10-04');
+    assert.doesNotMatch(JSON.stringify(result), /sensitive@example.com/);
   } finally { f.restore(); }
 });
