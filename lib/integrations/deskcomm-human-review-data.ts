@@ -33,13 +33,13 @@ export async function getCurrentDeskcommHumanReviewQueue():
   Promise<DeskcommHumanReviewQueueReadiness> {
   const active = await requireAdminWorkspaceAccess();
   const checkedAt = new Date().toISOString();
-  const actionsEnabled =
+  const actionsRequested =
     process.env.SALSYS_DESKCOMM_HANDOFF_ACTIONS === 'true' &&
     process.env.SALSYS_DESKCOMM_INBOUND_SHADOW === 'true';
   const base = {
     checkedAt,
     lookbackDays: 7 as const,
-    actionsEnabled,
+    actionsEnabled: false,
     displayedCount: 0,
     rows: [] as DeskcommReviewActionRow[],
   };
@@ -51,6 +51,21 @@ export async function getCurrentDeskcommHumanReviewQueue():
   try {
     const admin = createAdminClient();
     const organizationId = active.organizationId;
+
+    // UI and database must both approve this organization. A missing config
+    // row never enables a task; DB errors fail closed before showing buttons.
+    if (actionsRequested) {
+      const { data: pilot, error: pilotError } = await admin
+        .from('whatsapp_handoff_pilot_controls')
+        .select('actions_enabled')
+        .eq('organization_id', organizationId)
+        .maybeSingle();
+      if (pilotError) {
+        return { ...base, status: 'unavailable', candidateCount: null };
+      }
+      base.actionsEnabled = pilot?.actions_enabled === true;
+    }
+
     const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
     const { data: raw, error: rawError } = await admin
       .from('raw_events')
@@ -151,7 +166,7 @@ export async function getCurrentDeskcommHumanReviewQueue():
     });
 
     let handoffs = new Map<string, DeskcommReviewActionRow['handoff']>();
-    if (actionsEnabled) {
+    if (base.actionsEnabled) {
       // The handoff table exists only after the separately reviewed migration.
       // If that prerequisite is missing, fail closed rather than presenting
       // a button that could create duplicate or untracked work.
