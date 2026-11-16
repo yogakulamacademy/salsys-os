@@ -124,6 +124,68 @@ before insert or update of status,lead_id,organization_id
   on public.automation_enrollments
 for each row execute function public.guard_human_handoff_enrollment_v1();
 
+-- Provider-send fence for BOTH Smart Triggers and broadcast claims. Both
+-- existing claim RPCs transition automation_provider_send_audits to 'sending'.
+-- The trigger runs inside their database transaction, before provider access.
+-- Serialize this transition with opening a human handoff using the SAME
+-- per-tenant/lead advisory lock. Default-OFF tenants are unaffected.
+create or replace function public.guard_whatsapp_handoff_provider_send_v1()
+returns trigger
+language plpgsql
+security definer
+set search_path = public,auth,pg_temp
+as $function$
+begin
+  if new.status <> 'sending'
+    or new.channel <> 'whatsapp'
+    or new.provider <> 'meta_cloud_api'
+    or new.lead_id is null
+  then
+    return new;
+  end if;
+
+  if TG_OP = 'UPDATE' then
+    if old.status = 'sending' then
+      return new;
+    end if;
+  end if;
+
+  if not exists (
+    select 1 from public.whatsapp_handoff_pilot_controls p
+    where p.organization_id = new.organization_id
+      and p.actions_enabled is true
+  ) and not exists (
+    select 1 from public.whatsapp_human_handoffs h
+    where h.organization_id = new.organization_id
+      and h.lead_id = new.lead_id
+      and h.ai_hold_active is true
+  ) then
+    return new;
+  end if;
+
+  perform pg_advisory_xact_lock(hashtextextended(
+    'whatsapp-human-handoff:' || new.organization_id::text || ':' || new.lead_id::text,0
+  ));
+
+  if exists (
+    select 1 from public.whatsapp_human_handoffs h
+    where h.organization_id = new.organization_id
+      and h.lead_id = new.lead_id
+      and h.ai_hold_active is true
+  ) then
+    raise exception 'WhatsApp provider send is blocked by an active human handoff';
+  end if;
+
+  return new;
+end;
+$function$;
+
+drop trigger if exists guard_whatsapp_handoff_provider_send_v1
+  on public.automation_provider_send_audits;
+create trigger guard_whatsapp_handoff_provider_send_v1
+before insert or update of status on public.automation_provider_send_audits
+for each row execute function public.guard_whatsapp_handoff_provider_send_v1();
+
 create or replace function public.open_verified_whatsapp_human_handoff_v1(
   p_organization_id uuid,
   p_raw_event_id uuid,
@@ -251,6 +313,26 @@ begin
   perform pg_advisory_xact_lock(hashtextextended(
     'whatsapp-human-handoff:' || p_organization_id::text || ':' || v_lead_id::text,0
   ));
+
+  -- A worker may have claimed the audit before the human clicked.
+  -- Provider requests in flight cannot be recalled, so refuse to open the
+  -- handoff until the existing provider audit is conclusively settled.
+  -- This is deliberately conservative: stale 'sending' audits require
+  -- manual investigation rather than allowing a potentially late message.
+  if exists (
+    select 1
+    from public.automation_provider_send_audits a
+    where a.organization_id = p_organization_id
+      and a.lead_id = v_lead_id
+      and a.channel = 'whatsapp'
+      and a.provider = 'meta_cloud_api'
+      and a.status = 'sending'
+  ) then
+    return jsonb_build_object(
+      'ok',false,'created',false,'reason','whatsapp_provider_send_in_flight',
+      'customer_message_sent',false
+    );
+  end if;
 
   -- Atomic idempotency. The unique (organization,raw_event) claim serializes
   -- concurrent admin actions without duplicating tasks or pausing again.
@@ -484,6 +566,12 @@ begin
   );
 end;
 $function$;
+
+-- These are internal trigger helpers, never browser-callable RPCs.
+revoke all on function public.guard_whatsapp_handoff_provider_send_v1()
+  from public,anon,authenticated;
+revoke all on function public.guard_human_handoff_enrollment_v1()
+  from public,anon,authenticated;
 
 revoke all on function public.open_verified_whatsapp_human_handoff_v1(uuid,uuid,uuid) from public,anon;
 revoke all on function public.close_verified_whatsapp_human_handoff_v1(uuid,uuid,text) from public,anon;
