@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { createAdminClient } from "@/lib/supabase/admin";
+import { normalizeLeadPhone } from "@/lib/phone-normalization";
 import {
   isTrackingOriginAllowed,
   trackingCorsHeaders,
@@ -291,6 +292,13 @@ export async function POST(request: NextRequest) {
       p_session_touch: payload.sessionTouch ?? {},
       p_metadata: {
         ...(payload.metadata ?? {}),
+        // Server-to-server capture: the request IP is the website server's,
+        // not the visitor's, so only the form country and timezone are used.
+        // The number as typed stays in p_phone (de-duplication matches on it).
+        phone_normalization: normalizeLeadPhone(payload.phone, {
+          formCountry: payload.country,
+          timezone: payload.timezone,
+        }),
         request_user_agent: request.headers.get("user-agent"),
         capture_auth_mode: hasSalsysCredential
           ? "salsys_api_key"

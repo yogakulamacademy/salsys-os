@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 import { createAdminClient } from '@/lib/supabase/admin';
+import { normalizeLeadPhone } from '@/lib/phone-normalization';
 import {
   consumeTrackingRateLimit,
   corsHeadersForTrackingOrigin,
@@ -386,6 +387,15 @@ export async function POST(request: NextRequest) {
       payload.courseCode,
     );
 
+    // Browser submissions come straight from the visitor, so the edge IP
+    // country is the visitor's. The number as typed stays in p_phone (lead
+    // de-duplication matches on it); the E.164 form is recorded alongside.
+    const phoneNormalization = normalizeLeadPhone(payload.phone, {
+      formCountry: payload.country,
+      ipCountry: request.headers.get('x-vercel-ip-country'),
+      timezone: payload.timezone,
+    });
+
     const { data, error } = await admin.rpc(
       'ingest_website_lead_for_organization',
       {
@@ -423,6 +433,7 @@ export async function POST(request: NextRequest) {
           course_capture_value: courseResolution.raw,
           course_resolved_code: courseResolution.code,
           course_resolution: courseResolution.matchedBy,
+          phone_normalization: phoneNormalization,
         },
       },
     );
