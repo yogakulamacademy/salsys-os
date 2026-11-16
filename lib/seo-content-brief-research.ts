@@ -59,8 +59,7 @@ export async function getContentBriefResearch(
   const contentGaps: ContentGapRow[] = gaps.slice(0, 200)
     .filter((row): row is ContentGapRow =>
       row !== null && typeof row === "object" &&
-      typeof row.topic_id === "string" && typeof row.topic_name === "string" &&
-      Array.isArray(row.top_queries));
+      typeof row.topic_id === "string" && typeof row.topic_name === "string");
 
   return {
     contentGaps,
