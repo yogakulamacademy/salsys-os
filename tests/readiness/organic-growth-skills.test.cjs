@@ -321,3 +321,28 @@ test('Content brief reports when matching query/page evidence was truncated', as
     assert.equal(result.sourceCoverage.sourceCompletenessVerified, false);
   } finally { f.restore(); }
 });
+
+
+test('External AI evidence omits contact-like queries and strips URL search parameters', () => {
+  const brief = core.buildContentBriefEvidence('prenatal yoga', [
+    { query: 'prenatal yoga legitimate', clicks: 8, impressions: 60, avg_position: 7 },
+    { query: 'prenatal yoga contact user@example.com', clicks: 4, impressions: 20, avg_position: 9 },
+    { query: 'prenatal yoga contact +919876543210', clicks: 4, impressions: 20, avg_position: 9 },
+  ], [{
+    query: 'prenatal yoga courses', leader_page: 'https://example.com/prenatal?session_secret=private-value#details',
+    clicks: 6, impressions: 50, avg_position: 9,
+  }]);
+  assert.equal(brief.evidence.searchQueries.length, 1);
+  assert.equal(brief.evidence.existingPages[0].page, 'https://example.com/prenatal');
+
+  const paid = core.buildSeoVsAdsEvidence([
+    { query: 'prenatal yoga contact user@example.com', clicks: 2, impressions: 50, avg_position: 4 },
+    { query: 'prenatal yoga', clicks: 8, impressions: 100, avg_position: 3 },
+  ], [
+    { search_term: 'prenatal yoga contact user@example.com', currency_code: 'INR', spend: 20, clicks: 1 },
+    { search_term: 'prenatal yoga', currency_code: 'INR', spend: 100, clicks: 4 },
+  ]);
+  assert.equal(paid.overlap.length, 1);
+  assert.equal(paid.overlap[0].query, 'prenatal yoga');
+  assert.doesNotMatch(JSON.stringify({ brief, paid }), /user@example\.com|session_secret|private-value/);
+});
