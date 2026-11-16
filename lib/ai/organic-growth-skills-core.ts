@@ -24,6 +24,53 @@ export type PaidSearchTermRow = {
   campaign_id: string | null;
 };
 
+export type GoogleAdsSyncHealthRow = {
+  last_sync_status: string | null;
+  latest_data_date: string | null;
+  last_sync_error: string | null;
+};
+
+/**
+ * Map provider health to a small allowlisted result. NEVER forward raw
+ * Google Ads error bodies, account identifiers or tokens to an AI model.
+ */
+export function summarizeGoogleAdsSyncHealth(row: GoogleAdsSyncHealthRow | null) {
+  const rawStatus = String(row?.last_sync_status ?? '').trim().toLowerCase();
+  const syncStatus =
+    rawStatus === 'success' || rawStatus === 'failed' || rawStatus === 'running'
+      ? rawStatus : 'unknown';
+  const rawDate = String(row?.latest_data_date ?? '').trim();
+  const latestDataDate = /^\d{4}-\d{2}-\d{2}$/.test(rawDate) ? rawDate : null;
+  const cloudAccessBlocked =
+    syncStatus === 'failed' &&
+    String(row?.last_sync_error ?? '').includes('CLOUD_PROJECT_NOT_APPROVED_FOR_PRODUCTION');
+
+  const blockerCode = cloudAccessBlocked
+    ? 'google_cloud_project_test_access'
+    : syncStatus === 'failed'
+      ? 'google_ads_sync_failure'
+      : syncStatus === 'unknown'
+        ? 'google_ads_sync_unverified'
+        : null;
+
+  return {
+    status: cloudAccessBlocked ? 'configuration_blocked'
+      : syncStatus === 'failed' ? 'sync_failed'
+        : syncStatus === 'success' ? 'last_sync_succeeded'
+          : 'unverified',
+    blockerCode,
+    syncStatus,
+    latestDataDate,
+    operatorNextStep: cloudAccessBlocked
+      ? 'Apply for production Google Ads API access for the OAuth Cloud project (Explorer or higher), then verify a successful sync.'
+      : syncStatus === 'failed'
+        ? 'Investigate Google Ads sync health before using comparison findings.'
+        : syncStatus === 'unknown'
+          ? 'Verify connected Google Ads account, permissions and recent sync history.'
+          : 'Confirm that paid search-term data is fresh and covers the intended comparison period.',
+  };
+}
+
 export type KeywordPageRow = {
   query: string;
   leader_page: string | null;
