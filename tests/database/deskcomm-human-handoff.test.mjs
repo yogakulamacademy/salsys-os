@@ -273,11 +273,35 @@ test('one verified human request creates one assigned task and cancels unclaimed
   const closed=await close(c,result.handoff_id);
   assert.equal(closed.automation_resumed,false);
   assert.equal((await f.observer.query('select status from public.tasks')).rows[0].status,'completed');
+  assert.equal((await f.observer.query('select ai_hold_active from public.whatsapp_human_handoffs')).rows[0].ai_hold_active,true);
+  await assert.rejects(
+    f.observer.query('insert into public.automation_enrollments(id,organization_id,lead_id,status) values($1,$2,$3,$4)',
+      [randomUUID(),org,lead,'active']),
+    /held for human review/,
+  );
   assert.equal((await f.observer.query('select next_followup_at from public.leads')).rows[0].next_followup_at,null);
   assert.equal((await f.observer.query('select status from public.automation_enrollments')).rows[0].status,'paused');
   assert.equal((await f.observer.query('select status from public.automation_scheduled_jobs')).rows[0].status,'cancelled');
   const closedAgain=await close(c,result.handoff_id);
   assert.equal(closedAgain.changed,false);
+
+  // Releasing is a second operator action, never an implicit effect of closing.
+  const released=await authenticatedCall(c,
+    'select public.release_verified_whatsapp_handoff_ai_hold_v1($1,$2) as result',
+    [org,result.handoff_id]);
+  assert.equal(released.ok,true);
+  assert.equal(released.jobs_replayed,false);
+  assert.equal(released.automation_resumed,false);
+  assert.equal((await f.observer.query('select ai_hold_active from public.whatsapp_human_handoffs')).rows[0].ai_hold_active,false);
+  const releaseAgain=await authenticatedCall(c,
+    'select public.release_verified_whatsapp_handoff_ai_hold_v1($1,$2) as result',
+    [org,result.handoff_id]);
+  assert.equal(releaseAgain.changed,false);
+  await f.observer.query(
+    'insert into public.automation_enrollments(id,organization_id,lead_id,status) values($1,$2,$3,$4)',
+    [randomUUID(),org,lead,'active'],
+  );
+  assert.equal((await f.observer.query('select count(*)::int as n from public.automation_enrollments where status=$1',['active'])).rows[0].n,1);
 }));
 
 test('cross tenant, unsigned/STOP, unassigned staff and mismatched sender all fail closed',async()=>fixture(async f=>{
