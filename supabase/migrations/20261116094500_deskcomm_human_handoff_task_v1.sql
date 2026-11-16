@@ -6,6 +6,19 @@ begin;
 -- happen inside one PostgreSQL transaction. Production rollout is controlled
 -- independently by server-side SALSYS_DESKCOMM_HANDOFF_ACTIONS (default false).
 
+-- A second, database-enforced kill switch protects direct PostgREST/RPC callers
+-- even if they bypass the Next.js UI/server feature flag. No tenant has a row
+-- or is enabled by migration. Only service_role can provision a staging pilot.
+create table if not exists public.whatsapp_handoff_pilot_controls (
+  organization_id uuid primary key references public.organizations(id) on delete cascade,
+  actions_enabled boolean not null default false,
+  updated_at timestamptz not null default now()
+);
+
+alter table public.whatsapp_handoff_pilot_controls enable row level security;
+revoke all on public.whatsapp_handoff_pilot_controls from public,anon,authenticated;
+grant all on public.whatsapp_handoff_pilot_controls to service_role;
+
 create table if not exists public.whatsapp_human_handoffs (
   id uuid primary key default gen_random_uuid(),
   organization_id uuid not null references public.organizations(id) on delete restrict,
@@ -83,6 +96,14 @@ begin
     p_organization_id,array['owner','admin']::text[]
   ) then
     raise exception 'Only active organization owners/admins can open human handoffs';
+  end if;
+
+  if not exists (
+    select 1 from public.whatsapp_handoff_pilot_controls c
+    where c.organization_id = p_organization_id
+      and c.actions_enabled is true
+  ) then
+    raise exception 'WhatsApp human handoff task actions are disabled for this organization';
   end if;
 
   if v_assignee is null or not exists (
