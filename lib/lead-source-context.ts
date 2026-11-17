@@ -93,6 +93,7 @@ const COURSE_HINTS: Array<[RegExp, string[]]> = [
   [/85[- ]?hour|prenatal|postnatal|pregnan|garbh/i, ["85H-PRENATAL", "ONLINE-PRENATAL"]],
   [/kundalini|tantra/i, ["100H-KUNDALINI"]],
   [/500[- ]?(hour|hr|h)\b/i, ["500H-YTT"]],
+  [/online.*300|300.*online/i, ["ONLINE-300H"]],
   [/300[- ]?(hour|hr|h)\b/i, ["300H-YTT"]],
   [/online.*200|200.*online|certified international yoga instructor/i, ["ONLINE-200H"]],
   [/200[- ]?(hour|hr|h)\b|24 days|yoga teacher training|ytt\b/i, ["200H-YTT"]],
@@ -151,4 +152,27 @@ export function describeSource(ctx: LeadSourceContext): string | null {
       : `Latest message: ${what} that we cannot see.`);
   }
   return parts.length ? parts.join(" ") : null;
+}
+
+export type CourseFactsSource = "lead" | "message" | "shared_post" | "ad";
+
+/**
+ * Which course's batches a draft should use. The course set on the lead wins;
+ * otherwise the course named in the lead's latest message, then the post they
+ * shared, then the ad they replied to. Null when nothing points to a course.
+ */
+export function inferCourseForFacts(input: {
+  interestedCourseId: string | null;
+  latestMessage: string | null;
+  sharedCourseId: string | null;
+  adCourseId: string | null;
+  courses: CourseRef[];
+}): { courseId: string; source: CourseFactsSource } | null {
+  const known = new Set(input.courses.map((c) => c.id).filter((id): id is string => Boolean(id)));
+  if (input.interestedCourseId) return { courseId: input.interestedCourseId, source: "lead" };
+  const fromMessage = courseFromText(input.latestMessage, input.courses);
+  if (fromMessage?.id) return { courseId: fromMessage.id, source: "message" };
+  if (input.sharedCourseId && known.has(input.sharedCourseId)) return { courseId: input.sharedCourseId, source: "shared_post" };
+  if (input.adCourseId && known.has(input.adCourseId)) return { courseId: input.adCourseId, source: "ad" };
+  return null;
 }
