@@ -52,5 +52,5 @@ test('card shows score, confidence label, reasons and next step', () => {
   const card = readFileSync(new URL('../../components/inbox-lead-intelligence.tsx', import.meta.url), 'utf8');
   for (const s of ['likely to pay in 30 days', 'Why this score', 'Next step', 'score.confidenceLabel']) assert.ok(card.includes(s), s);
   const page = readFileSync(new URL('../../app/conversations/page.tsx', import.meta.url), 'utf8');
-  assert.match(page, /<InboxLeadIntelligence intel=\{leadIntel\} score=\{leadScore\} \/>/);
+  assert.match(page, /<InboxLeadIntelligence intel=\{leadIntel\} score=\{leadScore\}/);
 });

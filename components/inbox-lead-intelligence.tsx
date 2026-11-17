@@ -1,5 +1,6 @@
 import type { Health, IntentLevel, LeadIntelligence, TimelineTone } from "@/lib/lead-intelligence";
 import type { LeadScore } from "@/lib/lead-score";
+import type { LeadSourceContext } from "@/lib/lead-source-context";
 
 const BAND_STYLE: Record<LeadScore["band"], { ring: string; text: string }> = {
   hot: { ring: "#12703f", text: "text-emerald-700" },
@@ -36,7 +37,7 @@ const DOT: Record<TimelineTone, string> = {
 };
 
 /** Where the lead stands and what has happened. Read-only; built on the server. */
-export function InboxLeadIntelligence({ intel, score }: { intel: LeadIntelligence; score?: LeadScore | null }) {
+export function InboxLeadIntelligence({ intel, score, source }: { intel: LeadIntelligence; score?: LeadScore | null; source?: LeadSourceContext | null }) {
   const { journey, stats } = intel;
   return (
     <section aria-label="Lead intelligence" className="ibx-lead-intel border-b border-line px-3.5 py-4">
@@ -47,6 +48,27 @@ export function InboxLeadIntelligence({ intel, score }: { intel: LeadIntelligenc
         </div>
 
         <p className="mt-2 text-[13px] font-semibold leading-snug text-copy-strong">{intel.summary}</p>
+
+        {source?.ad || source?.latestShare ? (
+          <div className="ibx-lead-source mt-2 space-y-1 rounded-lg border border-line bg-surface px-2.5 py-2 text-[11px]">
+            {source.ad ? (
+              <p title={source.ad.adId ? `Ad ID ${source.ad.adId}` : undefined}>
+                <span className="font-bold text-copy-muted">From ad: </span>
+                <span className="text-copy-strong">{source.ad.title}</span>
+                {source.ad.course ? <span className="text-brand-700"> · {source.ad.course.name}</span> : null}
+              </p>
+            ) : null}
+            {source.latestShare ? (
+              <p>
+                <span className="font-bold text-copy-muted">{source.latestShare.kind === "story_reply" ? "Replied to a story: " : "Shared: "}</span>
+                {source.latestShare.readable
+                  ? <span className="text-copy-strong">{(source.latestShare.caption ?? "").slice(0, 90)}{(source.latestShare.caption ?? "").length > 90 ? "…" : ""}</span>
+                  : <span className="text-amber-800">a post we can&apos;t see; open it in Instagram</span>}
+                {source.latestShare.course ? <span className="text-brand-700"> · {source.latestShare.course.name}</span> : null}
+              </p>
+            ) : null}
+          </div>
+        ) : null}
 
         {score ? (
           <div className="ibx-lead-score mt-3 rounded-lg border border-line bg-surface p-2.5">

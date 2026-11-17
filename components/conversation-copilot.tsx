@@ -76,7 +76,7 @@ export function ConversationCopilot({
       if (!response.ok) {
         setResult(null);
         setAssetSuggestions([]);
-        setError(response.error);
+        setError(response.error.replace(/^SHARE_UNREADABLE:\s*/, ""));
         return;
       }
 

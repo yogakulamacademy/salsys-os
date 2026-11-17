@@ -30,6 +30,7 @@ import { InboxOfferCard } from "@/components/inbox-offer-card";
 import { InboxLeadIntelligence } from "@/components/inbox-lead-intelligence";
 import { InboxShadowDraft } from "@/components/inbox-shadow-draft";
 import { getShadowSummary } from "@/lib/autopilot-shadow-data";
+import { getLeadSourceForInbox } from "@/lib/lead-source-context-data";
 import { InboxHeaderOwner } from "@/components/inbox-header-owner";
 import { InboxSnoozedBanner } from "@/components/inbox-snoozed-banner";
 import { buildLeadIntelligence, readSignals } from "@/lib/lead-intelligence";
@@ -146,6 +147,10 @@ export default async function ConversationsPage({
         needsReply: Boolean(selectedSummary?.needsReply),
         needsFirstContact: Boolean(selectedSummary?.needsFirstContact),
       })
+    : null;
+  // Which Instagram ad the lead came from / what their latest message shares.
+  const leadSource = selected && !mock && selected.currentContactChannel === "instagram"
+    ? await getLeadSourceForInbox(selected.id, organizationId).catch(() => null)
     : null;
   // Lead score, conversion confidence and next step (Sales AI Job 3).
   const scoreContext = selected && !mock
@@ -473,7 +478,7 @@ export default async function ConversationsPage({
           </a> :
           <span className="ibx-v2-profile-no-phone">Phone contact unavailable</span>}
       </section>
-      {leadIntel ? <InboxLeadIntelligence intel={leadIntel} score={leadScore} /> : null}
+      {leadIntel ? <InboxLeadIntelligence intel={leadIntel} score={leadScore} source={leadSource} /> : null}
       {/* key: remount per lead so the stage/owner selects never keep the previous conversation's value */}
       <InboxLeadOverview key={selected.id} leadId={selected.id} stage={selected.stage}
         ownerUserId={selected.ownerUserId} ownerName={selected.ownerName}

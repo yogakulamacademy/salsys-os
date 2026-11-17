@@ -14,7 +14,8 @@ export type ShadowStopReason =
   | "router_human_only"
   | "no_knowledge"
   | "topic_not_allowed"
-  | "non_text";
+  | "non_text"
+  | "no_context";
 
 export const STOP_LABELS: Record<ShadowStopReason, string> = {
   window_closed: "Instagram reply window has closed",
@@ -28,6 +29,7 @@ export const STOP_LABELS: Record<ShadowStopReason, string> = {
   no_knowledge: "No approved knowledge for this",
   topic_not_allowed: "Topic not switched on for Autopilot yet",
   non_text: "Not a text message",
+  no_context: "Lead shared a post we can't see",
 };
 
 // Topics Autopilot may answer by itself in phase 1 (decided: Instagram, 3 topics).
