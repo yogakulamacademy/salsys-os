@@ -27,7 +27,7 @@ forbidText(workflow, '\n  pull_request:', 'automatic pull-request trigger');
 forbidText(workflow, '\n  schedule:', 'automatic schedule trigger');
 
 requireText(workflow, '@playwright/test@1.51.1', 'pinned Playwright runner');
-requireText(workflow, 'https://crm.salsysos.com', 'production base URL');
+requireText(workflow, 'https://salsysos.com', 'production base URL');
 requireText(workflow, '${{ secrets.SALSYSOS_E2E_EMAIL }}', 'dedicated E2E email secret');
 requireText(workflow, '${{ secrets.SALSYSOS_E2E_PASSWORD }}', 'dedicated E2E password secret');
 requireText(workflow, '${{ secrets.SALSYSOS_E2E_ORGANIZATION_ID }}', 'expected E2E organization secret');

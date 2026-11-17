@@ -38,7 +38,7 @@ jobs:
 
       - name: Verify production auth surfaces
         env:
-          SALSYSOS_SMOKE_BASE_URL: https://crm.salsysos.com
+          SALSYSOS_SMOKE_BASE_URL: https://salsysos.com
           SALSYSOS_SMOKE_TIMEOUT_MS: '12000'
           SALSYSOS_SMOKE_ATTEMPTS: '3'
         run: node scripts/verify-production-smoke.mjs

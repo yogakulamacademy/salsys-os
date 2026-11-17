@@ -1,4 +1,4 @@
-const baseUrl = (process.env.SALSYSOS_SMOKE_BASE_URL || 'https://crm.salsysos.com').replace(/\/$/, '');
+const baseUrl = (process.env.SALSYSOS_SMOKE_BASE_URL || 'https://salsysos.com').replace(/\/$/, '');
 const timeoutMs = Number(process.env.SALSYSOS_SMOKE_TIMEOUT_MS || 12000);
 const maxAttempts = Number(process.env.SALSYSOS_SMOKE_ATTEMPTS || 3);
 
