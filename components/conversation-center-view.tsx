@@ -1,6 +1,17 @@
 "use client";
 
-import { Activity, FileText, MessageCircle, RefreshCw, Sparkles } from "lucide-react";
+import { Activity, FileText, MessageCircle, PhoneCall, RefreshCw, Sparkles } from "lucide-react";
+
+import {
+  ACTIVITY_FILTERS,
+  KIND_LABEL,
+  activityKind,
+  activityTitle,
+  isMessageEcho,
+  matchesFilter,
+  type ActivityFilter,
+  type ActivityKind,
+} from "@/lib/inbox-activity";
 import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -46,6 +57,18 @@ type TimelineItem = {
   detail: string;
   timestamp: string;
   meta: string;
+  kind: ActivityKind;
+};
+
+type ServerAction = (formData: FormData) => void | Promise<void>;
+
+const KIND_STYLE: Record<ActivityKind, string> = {
+  message: "bg-brand-50 text-brand-700",
+  contact: "bg-emerald-50 text-emerald-700",
+  note: "bg-amber-50 text-amber-800",
+  followup: "bg-orange-50 text-orange-800",
+  update: "bg-sky-50 text-sky-700",
+  source: "bg-surface-muted text-copy-muted",
 };
 
 type ViewMode = "conversation" | "activity" | "notes";
@@ -59,7 +82,11 @@ export function ConversationCenterView({
   course,
   country,
   stage,
+  teamNames,
+  logAction,
 }: {
+  teamNames?: Record<string, string>;
+  logAction?: ServerAction;
   messages: ConversationMessage[];
   originChannel?: Channel | string;
   originTimestamp?: string;
@@ -77,6 +104,11 @@ export function ConversationCenterView({
   const [activityLoading, setActivityLoading] = useState(false);
   const [activityLoaded, setActivityLoaded] = useState(false);
   const [activityError, setActivityError] = useState<string | null>(null);
+  const [activityFilter, setActivityFilter] = useState<ActivityFilter>("all");
+  const [logOpen, setLogOpen] = useState(false);
+  const [noteDraft, setNoteDraft] = useState("");
+  const [noteSaving, setNoteSaving] = useState(false);
+  const [noteMessage, setNoteMessage] = useState<{ ok: boolean; text: string } | null>(null);
 
   useEffect(() => {
     if (queryLeadId) {
@@ -155,14 +187,14 @@ export function ConversationCenterView({
   }, [resolvedLeadId]);
 
   const activity = useMemo(() => {
-    const rows: TimelineItem[] = crmActivity.map((item) => ({
+    // Interactions on messaging channels repeat chat messages, which are listed below.
+    const rows: TimelineItem[] = crmActivity.filter((item) => !isMessageEcho(item)).map((item) => ({
       id: `crm-${item.id}`,
-      title: item.title || humanize(item.activity_type),
+      title: activityTitle(item),
       detail: item.details || activityDetail(item),
       timestamp: item.occurred_at || item.created_at,
-      meta: [humanize(item.activity_type), item.actor_type ? humanize(item.actor_type) : null]
-        .filter(Boolean)
-        .join(" · "),
+      meta: actorName(item, teamNames),
+      kind: activityKind(item),
     }));
 
     for (const message of messages) {
@@ -178,6 +210,7 @@ export function ConversationCenterView({
           message.direction === "outbound" && message.status
             ? `Admissions · ${humanize(message.status)}`
             : message.sender,
+        kind: "message",
       });
     }
 
@@ -192,13 +225,19 @@ export function ConversationCenterView({
             : "Lead entered the CRM. No additional origin detail is recorded here."),
         timestamp: originTimestamp,
         meta: "CRM origin evidence",
+        kind: "source",
       });
     }
 
     return rows
       .filter((item) => Boolean(item.timestamp))
       .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-  }, [crmActivity, messages, originChannel, originCourse, originDetail, originTimestamp]);
+  }, [crmActivity, messages, originChannel, originCourse, originDetail, originTimestamp, teamNames]);
+
+  const visibleActivity = useMemo(
+    () => activity.filter((item) => matchesFilter(item.kind, activityFilter)),
+    [activity, activityFilter],
+  );
 
   const notes = useMemo(
     () => crmActivity
@@ -207,11 +246,34 @@ export function ConversationCenterView({
         id: item.id,
         body: item.details || activityDetail(item),
         timestamp: item.occurred_at || item.created_at,
-        author: item.actor_type || "Internal",
+        author: actorName(item, teamNames),
       }))
       .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()),
-    [crmActivity],
+    [crmActivity, teamNames],
   );
+
+  async function saveNote() {
+    const value = noteDraft.trim();
+    if (!value || noteSaving || !resolvedLeadId) return;
+    setNoteSaving(true);
+    setNoteMessage(null);
+    try {
+      const response = await fetch(`/api/leads/${encodeURIComponent(resolvedLeadId)}/activity`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type: "internal_note", body: value }),
+      });
+      const result = (await response.json()) as { ok: boolean; error?: string };
+      if (!response.ok || !result.ok) throw new Error(result.error || "Unable to save the note.");
+      setNoteDraft("");
+      setNoteMessage({ ok: true, text: "Note saved. Only your team can see it." });
+      window.dispatchEvent(new CustomEvent("crm:activity-changed", { detail: { leadId: resolvedLeadId } }));
+    } catch (reason) {
+      setNoteMessage({ ok: false, text: reason instanceof Error ? reason.message : "Unable to save the note." });
+    } finally {
+      setNoteSaving(false);
+    }
+  }
 
   const courseSelected = Boolean(course && course !== "Not selected");
 
@@ -258,7 +320,7 @@ export function ConversationCenterView({
           >
             Activity
             <span className="ml-1 rounded bg-surface-muted px-1.5 py-0.5 text-[10px] font-medium text-copy-muted">
-              {activityLoading ? "…" : activity.length}
+              {activityLoading ? "…" : activity.filter((item) => item.kind !== "message").length}
             </span>
           </TabButton>
           <TabButton
@@ -289,7 +351,24 @@ export function ConversationCenterView({
               <FileText size={17} className="mt-0.5 shrink-0 text-brand-700"/>
               <div>
                 <h3 className="text-[13px] font-semibold text-copy-strong">Private team notes</h3>
-                <p className="mt-1 text-[11px] leading-5 text-copy-muted">Notes are CRM-only and are never sent to the customer. To add one, switch the reply composer to Internal note.</p>
+                <p className="mt-1 text-[11px] leading-5 text-copy-muted">Only your team sees these. They are never sent to the customer.</p>
+              </div>
+            </div>
+            <div className="ibx-v3-note-box mb-4 rounded-lg border border-line bg-surface p-3">
+              <label htmlFor="ibx-note-draft" className="sr-only">Add a team note</label>
+              <textarea id="ibx-note-draft" value={noteDraft} maxLength={4000} rows={2}
+                onChange={(event) => setNoteDraft(event.target.value)}
+                onKeyDown={(event) => {
+                  if ((event.ctrlKey || event.metaKey) && event.key === "Enter") { event.preventDefault(); void saveNote(); }
+                }}
+                placeholder="Add a note for the team, e.g. Offers content creation in exchange for part of the fee; manager to decide."
+                className="w-full resize-y rounded-md border border-line bg-surface px-3 py-2 text-[12px] leading-5 text-copy-strong outline-none focus:border-brand-600"/>
+              <div className="mt-2 flex items-center justify-between gap-2">
+                {noteMessage ? (
+                  <span role={noteMessage.ok ? "status" : "alert"} className={`text-[11px] ${noteMessage.ok ? "text-emerald-700" : "text-rose-700"}`}>{noteMessage.text}</span>
+                ) : <span className="text-[11px] text-copy-subtle">Ctrl/⌘ + Enter saves</span>}
+                <button type="button" onClick={() => void saveNote()} disabled={!noteDraft.trim() || noteSaving || !resolvedLeadId}
+                  className="btn-primary h-8 px-3 text-[12px] disabled:opacity-50">{noteSaving ? "Saving…" : "Save note"}</button>
               </div>
             </div>
             {activityLoading ? <p role="status" className="text-[12px] text-copy-muted">Loading internal notes…</p> : null}
@@ -316,6 +395,53 @@ export function ConversationCenterView({
           </div>
         ) : (
           <div className="mx-auto max-w-2xl">
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+              <div role="group" aria-label="Filter activity" className="flex gap-1.5 overflow-x-auto [scrollbar-width:none]">
+                {ACTIVITY_FILTERS.map(([value, label]) => (
+                  <button key={value} type="button" aria-pressed={activityFilter === value}
+                    onClick={() => setActivityFilter(value)}
+                    className={`shrink-0 whitespace-nowrap rounded-full border px-2.5 py-1 text-[11px] font-semibold transition ${activityFilter === value ? "border-brand-600 bg-brand-50 text-brand-700" : "border-line bg-surface text-copy-muted hover:text-copy-strong"}`}>
+                    {label}
+                  </button>
+                ))}
+              </div>
+              {logAction ? (
+                <button type="button" aria-expanded={logOpen} onClick={() => setLogOpen((v) => !v)}
+                  className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-line bg-surface px-2.5 py-1.5 text-[11px] font-semibold text-copy-strong hover:border-brand-600">
+                  <PhoneCall size={13} /> Log a contact
+                </button>
+              ) : null}
+            </div>
+
+            {logOpen && logAction ? (
+              <form action={logAction} className="ibx-v3-log-contact mb-4 grid gap-2 rounded-lg border border-line bg-surface p-3 sm:grid-cols-[120px_130px_minmax(0,1fr)]">
+                <input type="hidden" name="return_to" value="conversations" />
+                <label className="sr-only" htmlFor="ibx-log-channel">How</label>
+                <select id="ibx-log-channel" name="channel" defaultValue="phone" className="input h-9 text-[12px]">
+                  <option value="phone">Phone call</option>
+                  <option value="email">Email</option>
+                  <option value="whatsapp">WhatsApp (outside CRM)</option>
+                  <option value="instagram">Instagram (outside CRM)</option>
+                  <option value="other">In person / other</option>
+                </select>
+                <label className="sr-only" htmlFor="ibx-log-direction">Who reached out</label>
+                <select id="ibx-log-direction" name="direction" defaultValue="outbound" className="input h-9 text-[12px]">
+                  <option value="outbound">We contacted them</option>
+                  <option value="inbound">They contacted us</option>
+                </select>
+                <label className="sr-only" htmlFor="ibx-log-body">What happened</label>
+                <input id="ibx-log-body" name="body" required maxLength={2000} className="input h-9 text-[12px]"
+                  placeholder="What happened? e.g. Discussed March batch, sending brochure" />
+                <div className="flex items-center justify-between gap-2 sm:col-span-3">
+                  <span className="text-[11px] text-copy-subtle">Records it on the lead; nothing is sent.</span>
+                  <div className="flex gap-2">
+                    <button type="button" onClick={() => setLogOpen(false)} className="btn-secondary h-8 px-3 text-[12px]">Cancel</button>
+                    <button type="submit" className="btn-primary h-8 px-3 text-[12px]">Save</button>
+                  </div>
+                </div>
+              </form>
+            ) : null}
+
             {activityLoading ? (
               <div className="mb-4 flex items-center gap-2 rounded-ui border border-line bg-surface px-3 py-2.5 text-[12px] text-copy-muted">
                 <RefreshCw size={13} className="animate-spin text-brand-700" />
@@ -339,11 +465,11 @@ export function ConversationCenterView({
               </div>
             ) : null}
 
-            {activity.length ? (
+            {visibleActivity.length ? (
               <ol className="space-y-0" aria-label="Conversation activity">
-                {activity.map((item, index) => (
+                {visibleActivity.map((item, index) => (
                   <li key={item.id} className="relative flex gap-3 pb-6">
-                    {index < activity.length - 1 ? (
+                    {index < visibleActivity.length - 1 ? (
                       <span
                         className="absolute bottom-0 left-[5px] top-3 w-px bg-line"
                         aria-hidden="true"
@@ -355,7 +481,10 @@ export function ConversationCenterView({
                     />
                     <div className="min-w-0 flex-1 rounded-ui border border-line bg-surface px-3.5 py-3 shadow-[0_1px_2px_rgba(21,62,51,0.03)] sm:px-4 sm:py-3.5">
                       <div className="flex flex-wrap items-start justify-between gap-2">
-                        <div className="text-[13px] font-semibold text-copy-strong">{item.title}</div>
+                        <div className="flex min-w-0 items-center gap-2">
+                          <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold ${KIND_STYLE[item.kind]}`}>{KIND_LABEL[item.kind]}</span>
+                          <span className="text-[13px] font-semibold text-copy-strong">{item.title}</span>
+                        </div>
                         <time className="text-[11px] text-copy-subtle" dateTime={item.timestamp}>
                           {formatDateTime(item.timestamp)}
                         </time>
@@ -373,10 +502,10 @@ export function ConversationCenterView({
                 <div>
                   <Activity size={23} className="mx-auto text-brand-600" />
                   <div className="mt-3 text-[13px] font-semibold text-copy-strong">
-                    No activity recorded
+                    {activity.length ? "Nothing in this filter" : "No activity recorded"}
                   </div>
                   <p className="mt-1 text-[12px] text-copy-muted">
-                    Activity will appear here when authoritative events exist.
+                    {activity.length ? "Try All to see everything for this lead." : "Calls, notes, follow-ups and changes will appear here."}
                   </p>
                 </div>
               </div>
@@ -443,6 +572,14 @@ function activityDetail(item: ActivityRow) {
   if (dueAt) return `Due ${formatDateTime(dueAt)}.`;
 
   return "CRM activity recorded.";
+}
+
+function actorName(item: ActivityRow, teamNames?: Record<string, string>) {
+  if (item.actor_id && teamNames?.[item.actor_id]) return teamNames[item.actor_id];
+  if (item.actor_type === "lead") return "Lead";
+  if (item.actor_type === "automation" || item.actor_type === "system") return "Automatic";
+  if (item.actor_type === "ai") return "AI";
+  return item.actor_type === "human" ? "Team member" : humanize(item.actor_type || "Team");
 }
 
 function humanize(value: string) {

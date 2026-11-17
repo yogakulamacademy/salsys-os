@@ -307,6 +307,8 @@ export default async function ConversationsPage({
         course={selected.course}
         country={selected.country}
         stage={selected.stage}
+        teamNames={Object.fromEntries(team.assignmentCandidates.map((member) => [member.id, member.name]))}
+        logAction={mock ? undefined : interactionAction}
       />
 
       {copilotChannel ? (
