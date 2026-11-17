@@ -119,8 +119,24 @@ export function courseFromText(text: string | null | undefined, courses: CourseR
   return courses.find((c) => c.name.length > 6 && lower.includes(c.name.toLowerCase())) ?? null;
 }
 
+/** Comparable form of a caption: no emoji, punctuation or extra spaces. */
+export function normalizeCaption(text: string): string {
+  return text.toLowerCase().replace(/…|\.{3}/g, " ").replace(/[^\p{L}\p{N}\s]/gu, " ").replace(/\s+/g, " ").trim();
+}
+
+/**
+ * Meta's ad title is the start of the boosted post's caption, cut with "…".
+ * Find that post among our own captions; needs at least 12 matching characters.
+ */
+export function matchCaptionByPrefix(adTitle: string, captions: string[]): string | null {
+  const prefix = normalizeCaption(cleanAdTitle(adTitle));
+  if (prefix.length < 12) return null;
+  const hits = captions.filter((c) => normalizeCaption(c).startsWith(prefix));
+  return hits.length === 1 ? hits[0] : hits.length > 1 ? hits.sort((a, b) => a.length - b.length)[0] : null;
+}
+
 export type LeadSourceContext = {
-  ad: (AdSource & { course: CourseRef | null }) | null;
+  ad: (AdSource & { course: CourseRef | null; caption?: string | null }) | null;
   latestShare: (ShareSource | StoryReplySource) & { course: CourseRef | null; readable: boolean } | null;
 };
 

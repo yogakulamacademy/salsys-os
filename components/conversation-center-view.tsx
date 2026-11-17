@@ -43,6 +43,7 @@ type ActivityRow = {
   metadata: Record<string, unknown> | null;
   occurred_at: string;
   created_at: string;
+  actor_name?: string | null;
 };
 
 type ActivityResponse =
@@ -575,7 +576,12 @@ function activityDetail(item: ActivityRow) {
 }
 
 function actorName(item: ActivityRow, teamNames?: Record<string, string>) {
+  if (item.actor_name) return item.actor_name;
   if (item.actor_id && teamNames?.[item.actor_id]) return teamNames[item.actor_id];
+  // Rows written by the system on a person's behalf (imports, scheduled jobs).
+  if (!item.actor_id || item.actor_id === "service_role" || item.actor_id.startsWith("ai_")) {
+    return item.actor_type === "lead" ? "Lead" : item.actor_type === "ai" ? "AI" : "Automatic";
+  }
   if (item.actor_type === "lead") return "Lead";
   if (item.actor_type === "automation" || item.actor_type === "system") return "Automatic";
   if (item.actor_type === "ai") return "AI";

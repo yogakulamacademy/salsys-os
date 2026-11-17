@@ -65,3 +65,18 @@ test('wiring: copilot uses the source, refuses unreadable shares, never treats c
   const data = readFileSync(new URL('../../lib/lead-source-context-data.ts', import.meta.url), 'utf8');
   assert.match(data, /rpc\("can_access_lead"/);
 });
+
+test('an ad title is matched to our own post by its caption start', async () => {
+  const { matchCaptionByPrefix } = await import('../../lib/lead-source-context.ts');
+  const captions = [
+    'Where the river flows, the mind slows. Join our 200-Hour Yoga Teacher Training in Kerala this January. #yogattc',
+    '✨ Sound Healing Meditation Course in Mysore ✨ Step into the healing world of sound',
+    'Morning practice by the river',
+  ];
+  const full = matchCaptionByPrefix('Instagram post: Where the river flows, the mind..._Group_1', captions);
+  assert.match(full, /200-Hour Yoga Teacher Training in Kerala/);
+  assert.equal(courseFromText(full, COURSES).code, '200H-YTT');
+  assert.match(matchCaptionByPrefix('Instagram post: ✨ Sound Healing Meditation Course..._Group_1shadow', captions), /Mysore/);
+  assert.equal(matchCaptionByPrefix('Instagram post: Morning...', captions), null); // too short to be sure
+  assert.equal(matchCaptionByPrefix('Instagram post: A caption we never posted here...', captions), null);
+});
