@@ -80,3 +80,21 @@ test('an ad title is matched to our own post by its caption start', async () => 
   assert.equal(matchCaptionByPrefix('Instagram post: Morning...', captions), null); // too short to be sure
   assert.equal(matchCaptionByPrefix('Instagram post: A caption we never posted here...', captions), null);
 });
+
+test('drafts use Course Management batches for the lead course, else a course inferred from message, share, then ad', async () => {
+  const { inferCourseForFacts } = await import('../../lib/lead-source-context.ts');
+  const courses = [
+    { id: 'c-face', code: 'FACE-YOGA', name: 'Online Face Yoga TTC' },
+    { id: 'c-pre', code: 'ONLINE-PRENATAL', name: 'Online Prenatal & Postnatal TTC' },
+    { id: 'c-300o', code: 'ONLINE-300H', name: 'Online 300-Hour Yoga Teacher Training' },
+    { id: 'c-200', code: '200H-YTT', name: '200-Hour Yoga Teacher Training' },
+  ];
+  const base = { interestedCourseId: null, latestMessage: 'When does it start?', sharedCourseId: null, adCourseId: null, courses };
+  assert.deepEqual(inferCourseForFacts({ ...base, interestedCourseId: 'c-x' }), { courseId: 'c-x', source: 'lead' });
+  assert.deepEqual(inferCourseForFacts({ ...base, latestMessage: 'face yoga next batch dates?' , adCourseId: 'c-200' }), { courseId: 'c-face', source: 'message' });
+  assert.deepEqual(inferCourseForFacts({ ...base, latestMessage: 'Is the online 300 hour course live?' }), { courseId: 'c-300o', source: 'message' });
+  assert.deepEqual(inferCourseForFacts({ ...base, sharedCourseId: 'c-pre', adCourseId: 'c-200' }), { courseId: 'c-pre', source: 'shared_post' });
+  assert.deepEqual(inferCourseForFacts({ ...base, adCourseId: 'c-200' }), { courseId: 'c-200', source: 'ad' });
+  assert.equal(inferCourseForFacts({ ...base, adCourseId: 'unknown' }), null);
+  assert.equal(inferCourseForFacts(base), null);
+});
