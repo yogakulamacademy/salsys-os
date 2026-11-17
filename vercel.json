@@ -66,6 +66,10 @@
     {
       "path": "/api/analytics/meta-ads/sync",
       "schedule": "15 6 * * *"
+    },
+    {
+      "path": "/api/ai/followup-detection",
+      "schedule": "*/10 * * * *"
     }
   ]
 }
