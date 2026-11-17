@@ -81,7 +81,7 @@ function harness(options = {}) {
     },
   };
   const fn = load('lib/integrations/message-read-activity.ts', {
-    crypto: { default: crypto },
+    crypto: { __esModule: true, default: crypto },
   });
   return { calls, admin, ...fn };
 }

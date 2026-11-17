@@ -151,7 +151,7 @@ function harness(options = {}) {
   };
 
   const route = load('app/api/instagram/webhook/route.ts', {
-    crypto: { default: crypto },
+    crypto: { __esModule: true, default: crypto },
     'next/server': {
       NextResponse: {
         json(data, options = {}) { return { status: options.status ?? 200, data }; },
