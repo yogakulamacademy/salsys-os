@@ -5,6 +5,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { getInstagramRuntimeForOrganization } from "@/lib/integrations/instagram-connection";
 import {
   courseFromText,
+  matchCaptionByPrefix,
   parseInstagramSourceEvent,
   readStoredShareBody,
   type CourseRef,
@@ -35,6 +36,33 @@ async function fetchOwnMediaCaption(organizationId: string, accountId: string, m
     return typeof body.caption === "string" && body.caption.trim() ? body.caption.trim().slice(0, 600) : null;
   } catch {
     return null;
+  }
+}
+
+// Our own recent post captions, cached per account for 30 minutes so opening
+// conversations does not call Instagram every time.
+const OWN_CAPTIONS_TTL_MS = 30 * 60_000;
+const ownCaptionsCache = new Map<string, { at: number; captions: string[] }>();
+
+async function fetchOwnRecentCaptions(organizationId: string, accountId: string): Promise<string[]> {
+  const key = `${organizationId}:${accountId}`;
+  const hit = ownCaptionsCache.get(key);
+  if (hit && Date.now() - hit.at < OWN_CAPTIONS_TTL_MS) return hit.captions;
+  try {
+    const runtime = await getInstagramRuntimeForOrganization(organizationId, accountId);
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), CAPTION_TIMEOUT_MS);
+    const res = await fetch(
+      `https://graph.instagram.com/${apiVersion()}/${encodeURIComponent(runtime.accountId)}/media?fields=caption&limit=100`,
+      { headers: { Authorization: `Bearer ${runtime.accessToken}` }, cache: "no-store", signal: controller.signal },
+    ).finally(() => clearTimeout(timer));
+    if (!res.ok) return hit?.captions ?? [];
+    const body = (await res.json()) as { data?: Array<{ caption?: string }> };
+    const captions = (body.data ?? []).map((m) => (typeof m.caption === "string" ? m.caption.trim() : "")).filter(Boolean);
+    ownCaptionsCache.set(key, { at: Date.now(), captions });
+    return captions;
+  } catch {
+    return hit?.captions ?? [];
   }
 }
 
@@ -78,7 +106,15 @@ export async function getLeadSourceContext(
   for (const m of messages) {
     const parsed = m.external_message_id ? parseInstagramSourceEvent(events.get(m.external_message_id)?.payload) : null;
     if (parsed?.kind === "ad") {
-      ctx.ad = { ...parsed, course: courseFromText(parsed.title, courses) };
+      let course = courseFromText(parsed.title, courses);
+      let caption: string | null = null;
+      // The ad title is cut short; the full post caption usually names the course.
+      const accountId = (events.get(m.external_message_id!)?.payload as { recipient?: { id?: string } } | undefined)?.recipient?.id;
+      if (accountId && parsed.title) {
+        caption = matchCaptionByPrefix(parsed.title, await fetchOwnRecentCaptions(organizationId, accountId));
+        if (caption && !course) course = courseFromText(caption, courses);
+      }
+      ctx.ad = { ...parsed, course, caption: caption ? caption.slice(0, 600) : null };
       break;
     }
   }

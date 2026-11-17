@@ -47,3 +47,12 @@ test('center view: filters, log a contact that returns to Inbox, and an add-note
   const page = readFileSync(new URL('../../app/conversations/page.tsx', import.meta.url), 'utf8');
   assert.match(page, /logAction=\{mock \? undefined : interactionAction\}/);
 });
+
+test('activity shows teammate names, and "Automatic" for system-written rows', () => {
+  const route = readFileSync(new URL('../../app/api/leads/[id]/activity/route.ts', import.meta.url), 'utf8');
+  assert.match(route, /\.from\("profiles"\)\s*\.select\("id, full_name"\)/);
+  assert.match(route, /actor_name: row\.actor_id \? names\.get\(row\.actor_id\) \?\? null : null/);
+  const view = readFileSync(new URL('../../components/conversation-center-view.tsx', import.meta.url), 'utf8');
+  assert.match(view, /if \(item\.actor_name\) return item\.actor_name;/);
+  assert.match(view, /item\.actor_id === "service_role"/);
+});

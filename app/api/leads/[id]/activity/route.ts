@@ -9,6 +9,7 @@ export const dynamic = "force-dynamic";
 
 const privateHeaders = { "Cache-Control": "private, no-store" };
 const MAX_INTERNAL_NOTE_LENGTH = 4000;
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export async function GET(
   _request: Request,
@@ -44,8 +45,31 @@ export async function GET(
       );
     }
 
+    // Show who did it: teammate names for the people behind these rows only.
+    // Names are read with the admin client after the lead access check above.
+    const rows = (data ?? []) as Array<{ actor_type: string | null; actor_id: string | null }>;
+    const ids = [...new Set(rows
+      .filter((row) => row.actor_type === "human" && row.actor_id && UUID_RE.test(row.actor_id))
+      .map((row) => row.actor_id as string))].slice(0, 50);
+    let names = new Map<string, string>();
+    if (ids.length) {
+      const { data: profiles } = await createAdminClient()
+        .from("profiles")
+        .select("id, full_name")
+        .in("id", ids);
+      names = new Map(((profiles ?? []) as Array<{ id: string; full_name: string | null }>)
+        .filter((profile) => profile.full_name?.trim())
+        .map((profile) => [profile.id, (profile.full_name as string).trim()]));
+    }
+
     return NextResponse.json(
-      { ok: true, data: data ?? [] },
+      {
+        ok: true,
+        data: (data ?? []).map((row) => ({
+          ...row,
+          actor_name: row.actor_id ? names.get(row.actor_id) ?? null : null,
+        })),
+      },
       { headers: privateHeaders },
     );
   } catch (error) {

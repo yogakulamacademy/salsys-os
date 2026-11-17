@@ -523,6 +523,7 @@ export async function generateCopilotReplyAction(
           summary: describeSource(sourceContext),
           adTitle: sourceContext.ad?.title ?? null,
           adLikelyCourse: sourceContext.ad?.course?.name ?? null,
+          adPostCaption: sourceContext.ad?.caption ?? null,
           sharedCaption: sourceContext.latestShare?.readable ? sourceContext.latestShare.caption : null,
           sharedLikelyCourse: sourceContext.latestShare?.course?.name ?? null,
         }
