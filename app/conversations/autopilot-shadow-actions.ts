@@ -80,10 +80,15 @@ export async function getShadowDraftAction(leadId: string): Promise<ShadowDraft>
     }
   }
 
-  const decision = shadowDecision({
+  // The lead shared something we cannot see: no draft, a person replies.
+  const unreadable = Boolean(error?.startsWith("SHARE_UNREADABLE"));
+  if (unreadable) error = null;
+
+  const base = shadowDecision({
     latestInbound: latest.body ?? "", latestInboundAt: at, now: new Date(), stage: String(lead.current_stage),
     routerRisk: risk, knowledgeUsed, draft,
   });
+  const decision = unreadable ? { ...base, wouldSend: false, stopReason: "no_context" as const } : base;
 
   const { data: saved, error: saveError } = await supabase.rpc("record_autopilot_shadow_draft_v1", {
     p_lead_id: leadId,

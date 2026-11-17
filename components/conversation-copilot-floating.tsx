@@ -128,7 +128,7 @@ export function ConversationCopilotFloating() {
       if (!response.ok) {
         setResult(null);
         setDraftText("");
-        setError(response.error);
+        setError(response.error.replace(/^SHARE_UNREADABLE:\s*/, ""));
         return;
       }
 
