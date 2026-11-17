@@ -25,6 +25,12 @@ const SOURCE_LABELS: Record<string, string> = {
   other: 'AI suggestion',
 };
 
+/** Show the whole proposal without scrolling (6–28 rows). */
+function textRows(text: string | null) {
+  const lines = (text ?? '').split('\n').reduce((n, line) => n + Math.max(1, Math.ceil(line.length / 110)), 0);
+  return Math.min(28, Math.max(6, lines + 1));
+}
+
 /** Settings → AI Knowledge → Suggested updates. Server component; every change needs an admin click. */
 export function KnowledgeSuggestions({ suggestions, canManage, decidedThisMonth }: {
   suggestions: KnowledgeSuggestion[];
@@ -80,7 +86,7 @@ export function KnowledgeSuggestions({ suggestions, canManage, decidedThisMonth 
               <input type="hidden" name="proposal_id" value={s.id}/>
               {s.kind !== 'retire' ? <label className="kn-field">
                 <span>{s.kind === 'update' ? 'New text' : 'Proposed text'} <small>Edit before approving</small></span>
-                <textarea name="content" rows={6} defaultValue={s.proposed_content ?? ''} minLength={10} maxLength={8000}/>
+                <textarea name="content" rows={textRows(s.proposed_content)} defaultValue={s.proposed_content ?? ''} minLength={10} maxLength={8000}/>
                 {gaps ? <small className="kn-suggestion-gap">Replace every [ADD: …] with the real answer before approving. The AI did not have these facts.</small> : null}
               </label> : <p className="kn-suggestion-retire">Approving archives the current item so AI drafts stop using it.</p>}
               <label className="kn-field"><span>Note <small>Optional</small></span>
