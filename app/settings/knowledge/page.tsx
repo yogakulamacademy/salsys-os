@@ -14,6 +14,7 @@ import { PageHeader } from '@/components/ui';
 import type { ReactNode } from 'react';
 import './knowledge-workspace.css';
 import { KnowledgeRetrievalPreview } from '@/components/knowledge-retrieval-preview';
+import { KnowledgeSuggestions, type KnowledgeSuggestion } from '@/components/knowledge-suggestions';
 import { getSupabasePublicConfig, useMockData } from '@/lib/config';
 import { createClient } from '@/lib/supabase/server';
 import { getCurrentWorkspaceContext } from '@/lib/workspace';
@@ -116,6 +117,8 @@ export default async function KnowledgeSettingsPage({
   let loadError: string | null = null;
   let activeOrganizationId: string | null = null;
   let partial = false;
+  let suggestions: KnowledgeSuggestion[] = [];
+  const decidedThisMonth = { approved: 0, rejected: 0 };
   if (!live) loadError = useMockData ? 'Demo mode: live knowledge has not been loaded.' : 'Configure a live workspace before loading knowledge.';
 
   if (live) {
@@ -157,6 +160,25 @@ export default async function KnowledgeSettingsPage({
           ]);
 
           canManage = manageData === true;
+
+          if (canManage) {
+            const monthStart = new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), 1)).toISOString();
+            const [{ data: pendingRows }, { data: decidedRows }] = await Promise.all([
+              supabase.from('ai_knowledge_proposals')
+                .select('id, kind, title, category, proposed_content, current_excerpt, why, expected_effect, risk, evidence, source, created_at')
+                .eq('organization_id', organizationId).eq('status', 'pending')
+                .order('created_at', { ascending: false }).limit(25),
+              supabase.from('ai_knowledge_proposals')
+                .select('status')
+                .eq('organization_id', organizationId).in('status', ['approved', 'rejected'])
+                .gte('decided_at', monthStart).limit(500),
+            ]);
+            suggestions = (pendingRows ?? []) as KnowledgeSuggestion[];
+            for (const row of decidedRows ?? []) {
+              if (row.status === 'approved') decidedThisMonth.approved += 1;
+              else if (row.status === 'rejected') decidedThisMonth.rejected += 1;
+            }
+          }
 
           if (documentError || sourceError) {
             loadError = documentError?.message || sourceError?.message || 'Unable to load AI knowledge.';
@@ -258,6 +280,8 @@ export default async function KnowledgeSettingsPage({
       <div className="kn-test">
         <KnowledgeRetrievalPreview key={activeOrganizationId ?? 'unavailable'} enabled={live && canManage && !loadError}/>
       </div>
+
+      {canManage && !loadError ? <KnowledgeSuggestions suggestions={suggestions} canManage={canManage} decidedThisMonth={decidedThisMonth}/> : null}
 
       <div className="kn-workspace">
         <section className="kn-panel kn-create" id="knowledge-create" aria-labelledby="kn-create-heading">

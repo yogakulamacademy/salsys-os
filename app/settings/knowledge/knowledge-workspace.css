@@ -130,3 +130,37 @@ html.dark .kn-empty-illustration{background:radial-gradient(circle,#4c3971 10%,#
 @media(max-width:1360px){.kn-overview{grid-template-columns:1fr;}.kn-workspace{grid-template-columns:minmax(280px,.9fr) minmax(0,1.3fr);}}
 @media(max-width:980px){.kn-workspace{grid-template-columns:1fr;}.kn-readiness{min-height:80px;}.kn-stats{grid-template-columns:repeat(2,minmax(0,1fr));}}
 @media(max-width:640px){.kn-test>section{display:block;padding:15px;}.kn-test>section>p{margin:4px 0 10px;}.kn-test>section>form{margin-top:12px;}.kn-stats{gap:9px;}.kn-metric{padding:11px;gap:9px;}.kn-metric-icon{width:36px;height:36px;}.kn-metric strong{font-size:19px;}.kn-readiness{flex-wrap:wrap;}.kn-readiness-state{margin-left:40px;}.kn-create,.kn-library{padding:16px;}.kn-library-filters>label{flex:1 1 100%;}.kn-library-filters>label:not(.kn-filter-search){flex:1 1 135px;}.kn-validity{grid-template-columns:1fr;}.kn-library-empty{min-height:375px;}.kn-create-actions{flex-direction:column;}.kn-create-actions button{width:100%;}}
+
+/* Suggested updates (AI knowledge proposals) */
+.kn-suggestions { display: grid; gap: 14px; }
+.kn-suggestions .kn-heading { align-items: flex-start; }
+.kn-suggestions-run { margin-left: auto; }
+.kn-count { display: inline-flex; align-items: center; justify-content: center; min-width: 22px; height: 22px; padding: 0 6px; margin-left: 6px; border-radius: 999px; background: #5743c5; color: #fff; font-size: 12px; font-weight: 700; vertical-align: middle; }
+.kn-suggestions-empty { color: #64607a; font-size: 14px; margin: 0; }
+.kn-suggestion { border: 1px solid #e6e3f3; border-radius: 14px; padding: 16px; background: #fff; display: grid; gap: 12px; }
+.kn-suggestion[data-kind="update"] { border-left: 4px solid #d97706; }
+.kn-suggestion[data-kind="add"] { border-left: 4px solid #5743c5; }
+.kn-suggestion[data-kind="retire"] { border-left: 4px solid #b91c1c; }
+.kn-suggestion-top { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.kn-suggestion-top h3 { margin: 0; font-size: 16px; font-weight: 700; color: #1f1b2e; }
+.kn-suggestion-kind { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; padding: 3px 8px; border-radius: 6px; background: #efecfb; color: #4733b0; }
+.kn-suggestion-kind[data-kind="update"] { background: #fef3c7; color: #92400e; }
+.kn-suggestion-kind[data-kind="retire"] { background: #fee2e2; color: #991b1b; }
+.kn-suggestion-source { margin-left: auto; font-size: 12px; color: #77728c; }
+.kn-suggestion-why { display: grid; gap: 8px; margin: 0; }
+.kn-suggestion-why div { display: grid; grid-template-columns: 130px 1fr; gap: 10px; }
+.kn-suggestion-why dt { font-size: 12px; font-weight: 700; color: #64607a; text-transform: uppercase; letter-spacing: .03em; padding-top: 2px; }
+.kn-suggestion-why dd { margin: 0; font-size: 14px; color: #2b2740; }
+.kn-suggestion-risk dd { color: #92400e; }
+.kn-suggestion-evidence summary { cursor: pointer; display: inline-flex; gap: 6px; align-items: center; font-size: 13px; color: #4733b0; font-weight: 600; }
+.kn-suggestion-evidence ul { margin: 8px 0 0; padding-left: 18px; font-size: 13px; color: #46415a; display: grid; gap: 4px; }
+.kn-suggestion-current { background: #faf9fd; border-radius: 10px; padding: 10px 12px; }
+.kn-suggestion-current span { font-size: 12px; font-weight: 700; color: #64607a; text-transform: uppercase; }
+.kn-suggestion-current p { margin: 4px 0 0; font-size: 13px; color: #46415a; white-space: pre-wrap; }
+.kn-suggestion-form { display: grid; gap: 10px; }
+.kn-suggestion-gap { color: #b45309; font-weight: 600; }
+.kn-suggestion-retire { font-size: 13px; color: #991b1b; margin: 0; }
+@media (max-width: 640px) {
+  .kn-suggestion-why div { grid-template-columns: 1fr; gap: 2px; }
+  .kn-suggestion-source { margin-left: 0; }
+}
