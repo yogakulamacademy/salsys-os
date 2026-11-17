@@ -17,7 +17,7 @@ function setup(options={}) {
     assert.equal(name,'search_organization_knowledge_v1');assert.equal(args.p_organization_id,'org-a');calls.search.push(args);
     return{data:calls.search.length>1&&options.revoked?[]:Object.hasOwn(options,'matches')?options.matches:[hit()],error:options.retrievalError?{message:'synthetic knowledge outage'}:null};
   }};
-  const action=load('app/conversations/copilot-actions.ts',{'@/lib/supabase/server':{createClient:async()=>userClient},'@/lib/supabase/admin':{createAdminClient(){calls.admin++;return{from:table}}},'@/lib/knowledge-evidence':evidence}).generateCopilotReplyAction;
+  const action=load('app/conversations/copilot-actions.ts',{'@/lib/supabase/server':{createClient:async()=>userClient},'@/lib/supabase/admin':{createAdminClient(){calls.admin++;return{from:table}}},'@/lib/knowledge-evidence':evidence,'@/lib/reply-tone':{REPLY_TONE_GUIDE:'Friendly, semi-casual, professional.'}}).generateCopilotReplyAction;
   return{calls,action,restore:()=>{global.fetch=old}};
 }
 test('denied lead stops before privileged context, retrieval or model calls',async()=>{const f=setup({deny:true});try{assert.equal((await f.action('lead-a')).ok,false);assert.equal(f.calls.admin,0);assert.equal(f.calls.model.length,0);}finally{f.restore()}});
