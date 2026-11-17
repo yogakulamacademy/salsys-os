@@ -115,7 +115,7 @@ test('formatAgo units', () => {
 test('inbox page renders the card from server data only', () => {
   const page = readFileSync(new URL('../../app/conversations/page.tsx', import.meta.url), 'utf8');
   assert.match(page, /buildLeadIntelligence\(/);
-  assert.match(page, /<InboxLeadIntelligence intel=\{leadIntel\} \/>/);
+  assert.match(page, /<InboxLeadIntelligence intel=\{leadIntel\}/);
   const card = readFileSync(new URL('../../components/inbox-lead-intelligence.tsx', import.meta.url), 'utf8');
   assert.doesNotMatch(card, /"use client"/);
 });

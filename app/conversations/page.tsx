@@ -30,7 +30,9 @@ import { InboxOfferCard } from "@/components/inbox-offer-card";
 import { InboxLeadIntelligence } from "@/components/inbox-lead-intelligence";
 import { InboxHeaderOwner } from "@/components/inbox-header-owner";
 import { InboxSnoozedBanner } from "@/components/inbox-snoozed-banner";
-import { buildLeadIntelligence } from "@/lib/lead-intelligence";
+import { buildLeadIntelligence, readSignals } from "@/lib/lead-intelligence";
+import { scoreLead } from "@/lib/lead-score";
+import { getLeadScoreContext } from "@/lib/lead-score-data";
 import { getLeadOfferSuggestion } from "@/lib/offer-suggestion-data";
 import { ConversationReadMarker } from "@/components/conversation-read-marker";
 import { ConversationSafeComposer } from "@/components/conversation-safe-composer";
@@ -142,6 +144,32 @@ export default async function ConversationsPage({
         needsReply: Boolean(selectedSummary?.needsReply),
         needsFirstContact: Boolean(selectedSummary?.needsFirstContact),
       })
+    : null;
+  // Lead score, conversion confidence and next step (Sales AI Job 3).
+  const scoreContext = selected && !mock
+    ? await getLeadScoreContext(selected.id, organizationId).catch(() => null)
+    : null;
+  const leadScore = selected && leadIntel
+    ? (() => {
+        const lastInbound = [...selected.lastMessages].reverse().find((m) => m.direction === "inbound");
+        const lastInboundMs = lastInbound ? Date.parse(lastInbound.timestamp) : NaN;
+        const waitingMs = selectedSummary?.waitingSince ? Date.parse(selectedSummary.waitingSince) : NaN;
+        return scoreLead({
+          stage: selected.stage,
+          signals: readSignals(selected.lastMessages).labels,
+          courseSelected: Boolean(selected.course && selected.course !== "Not selected"),
+          inbound: leadIntel.stats.inbound,
+          outbound: leadIntel.stats.outbound,
+          needsReply: Boolean(selectedSummary?.needsReply || selectedSummary?.needsFirstContact),
+          waitingMinutes: Number.isFinite(waitingMs) ? (Date.now() - waitingMs) / 60_000 : null,
+          daysSinceLastInbound: Number.isFinite(lastInboundMs) ? (Date.now() - lastInboundMs) / 86_400_000 : null,
+          hasOpenFollowup: Boolean(scoreContext?.nextFollowupAt && Date.parse(scoreContext.nextFollowupAt) > Date.now()),
+          engagementScore: scoreContext?.engagementScore ?? null,
+          paymentStarts7d: scoreContext?.paymentStarts7d ?? null,
+          wonLeadsInOrg: scoreContext?.wonLeadsInOrg ?? 0,
+          followupRequested: scoreContext?.followupRequested ?? null,
+        });
+      })()
     : null;
   const isSnoozedNow = Boolean(selected?.snoozedUntil && new Date(selected.snoozedUntil).getTime() > Date.now());
   const selectedEmail = selectedContacts?.email ?? null;
@@ -433,7 +461,7 @@ export default async function ConversationsPage({
           </a> :
           <span className="ibx-v2-profile-no-phone">Phone contact unavailable</span>}
       </section>
-      {leadIntel ? <InboxLeadIntelligence intel={leadIntel} /> : null}
+      {leadIntel ? <InboxLeadIntelligence intel={leadIntel} score={leadScore} /> : null}
       {/* key: remount per lead so the stage/owner selects never keep the previous conversation's value */}
       <InboxLeadOverview key={selected.id} leadId={selected.id} stage={selected.stage}
         ownerUserId={selected.ownerUserId} ownerName={selected.ownerName}

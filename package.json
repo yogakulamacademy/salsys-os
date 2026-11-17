@@ -106,7 +106,7 @@
     "test:home-command-center": "node --experimental-strip-types --test tests/readiness/home-command-center.behavior.test.mjs",
     "test:conversation-learning": "node --experimental-strip-types --test tests/readiness/conversation-learning.behavior.test.mjs tests/readiness/chat-export-import.behavior.test.mjs",
     "test:offer-suggestion": "node --experimental-strip-types --test tests/readiness/offer-suggestion.behavior.test.mjs tests/readiness/website-price-extract.behavior.test.mjs",
-    "test:lead-intelligence": "node --experimental-strip-types --test tests/readiness/lead-intelligence.behavior.test.mjs tests/readiness/inbox-quick-replies.behavior.test.mjs tests/readiness/inbox-activity.behavior.test.mjs tests/readiness/followup-detection.behavior.test.mjs",
+    "test:lead-intelligence": "node --experimental-strip-types --test tests/readiness/lead-intelligence.behavior.test.mjs tests/readiness/lead-score.behavior.test.mjs tests/readiness/inbox-quick-replies.behavior.test.mjs tests/readiness/inbox-activity.behavior.test.mjs tests/readiness/followup-detection.behavior.test.mjs",
     "test:phone-normalization": "node --experimental-strip-types --test tests/readiness/phone-normalization.behavior.test.mjs",
     "test:home-geography-coverage": "node --experimental-strip-types --test tests/readiness/home-geography-coverage.behavior.test.mjs",
     "verify:vendor-workspace-pilot": "node scripts/verify-vendor-workspace-pilot.mjs",
