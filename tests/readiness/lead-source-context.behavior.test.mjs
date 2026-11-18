@@ -81,7 +81,7 @@ test('an ad title is matched to our own post by its caption start', async () => 
   assert.equal(matchCaptionByPrefix('Instagram post: A caption we never posted here...', captions), null);
 });
 
-test('drafts use Course Management batches for the lead course, else a course inferred from message, share, then ad', async () => {
+test('drafts use Course Management batches for the course named in the latest message, else the lead course, share, then ad', async () => {
   const { inferCourseForFacts } = await import('../../lib/lead-source-context.ts');
   const courses = [
     { id: 'c-face', code: 'FACE-YOGA', name: 'Online Face Yoga TTC' },
@@ -91,6 +91,8 @@ test('drafts use Course Management batches for the lead course, else a course in
   ];
   const base = { interestedCourseId: null, latestMessage: 'When does it start?', sharedCourseId: null, adCourseId: null, courses };
   assert.deepEqual(inferCourseForFacts({ ...base, interestedCourseId: 'c-x' }), { courseId: 'c-x', source: 'lead' });
+  assert.deepEqual(inferCourseForFacts({ ...base, interestedCourseId: 'c-x', latestMessage: 'I want details for Online 300 hour YTT' }), { courseId: 'c-300o', source: 'message' });
+  assert.deepEqual(inferCourseForFacts({ ...base, interestedCourseId: 'c-x', latestMessage: 'ok thanks' }), { courseId: 'c-x', source: 'lead' });
   assert.deepEqual(inferCourseForFacts({ ...base, latestMessage: 'face yoga next batch dates?' , adCourseId: 'c-200' }), { courseId: 'c-face', source: 'message' });
   assert.deepEqual(inferCourseForFacts({ ...base, latestMessage: 'Is the online 300 hour course live?' }), { courseId: 'c-300o', source: 'message' });
   assert.deepEqual(inferCourseForFacts({ ...base, sharedCourseId: 'c-pre', adCourseId: 'c-200' }), { courseId: 'c-pre', source: 'shared_post' });
