@@ -28,7 +28,6 @@ import { InboxHeaderActions } from "@/components/inbox-header-actions";
 import { InboxLeadOverview } from "@/components/inbox-lead-overview";
 import { InboxOfferCard } from "@/components/inbox-offer-card";
 import { InboxLeadIntelligence } from "@/components/inbox-lead-intelligence";
-import { getShadowSummary } from "@/lib/autopilot-shadow-data";
 import { getLeadSourceForInbox } from "@/lib/lead-source-context-data";
 import { InboxHeaderOwner } from "@/components/inbox-header-owner";
 import { InboxSnoozedBanner } from "@/components/inbox-snoozed-banner";
@@ -235,9 +234,7 @@ export default async function ConversationsPage({
     ? updateConversationLeadContextWithActivityAction.bind(null, selectedId)
     : undefined;
 
-  const shadowSummary = !mock && process.env.AI_AUTOPILOT_SHADOW_ENABLED === "true"
-    ? await getShadowSummary(organizationId).catch(() => null)
-    : null;
+  const autopilotLive = !mock && process.env.AI_AUTOPILOT_LIVE_ENABLED === "true";
 
   const noticeText = noticeFor(query.notice);
 
@@ -598,13 +595,10 @@ export default async function ConversationsPage({
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          {shadowSummary ? (
-            <span className="rounded-ui border border-line bg-surface px-2.5 py-2 text-[11px] font-semibold text-copy-muted"
-              title="Autopilot shadow mode on Instagram: AI drafts, a person sends. Live Autopilot needs 85% of drafts sent with little or no editing.">
-              AI drafts: {shadowSummary.drafts}
-              {shadowSummary.goodShare != null ? ` · ${Math.round(shadowSummary.goodShare * 100)}% sent as-is or lightly edited (goal 85%)` : " · none sent yet"}
-            </span>
-          ) : null}
+          <span className="rounded-ui border border-line bg-surface px-2.5 py-2 text-[11px] font-semibold text-copy-muted"
+            title="AI Autopilot replies by itself on new Instagram leads when it is confident, and hands the rest to the team.">
+            AI Autopilot: {autopilotLive ? "on (Instagram pilot)" : "off"}
+          </span>
           <Link href="/follow-ups" className="btn-secondary">Follow-ups</Link>
           <span className="rounded-ui border border-line bg-surface px-2.5 py-2 text-[11px] font-semibold text-copy-muted">
             {inboxModeLabel}
