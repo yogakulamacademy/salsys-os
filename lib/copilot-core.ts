@@ -552,7 +552,7 @@ export async function draftCopilotReply({
       // from customer-facing model prompts. The Phase C staff context is separate.
     },
     selectedCourse,
-    // 'lead' = the course set on the lead; otherwise a best guess from the
+    // 'message' = named in the latest message; 'lead' = the course set on the lead; otherwise a best guess from the
     // lead's message, shared post or ad: confirm the course with the lead.
     courseFactsSource,
     upcomingBatches,

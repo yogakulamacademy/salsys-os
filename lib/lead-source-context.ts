@@ -169,9 +169,11 @@ export function inferCourseForFacts(input: {
   courses: CourseRef[];
 }): { courseId: string; source: CourseFactsSource } | null {
   const known = new Set(input.courses.map((c) => c.id).filter((id): id is string => Boolean(id)));
-  if (input.interestedCourseId) return { courseId: input.interestedCourseId, source: "lead" };
+  // The course named in the lead's latest message wins over the course saved on
+  // the lead: people often ask about a different course than the one first set.
   const fromMessage = courseFromText(input.latestMessage, input.courses);
   if (fromMessage?.id) return { courseId: fromMessage.id, source: "message" };
+  if (input.interestedCourseId) return { courseId: input.interestedCourseId, source: "lead" };
   if (input.sharedCourseId && known.has(input.sharedCourseId)) return { courseId: input.sharedCourseId, source: "shared_post" };
   if (input.adCourseId && known.has(input.adCourseId)) return { courseId: input.adCourseId, source: "ad" };
   return null;
