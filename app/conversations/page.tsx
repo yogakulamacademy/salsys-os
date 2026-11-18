@@ -32,6 +32,8 @@ import { getShadowSummary } from "@/lib/autopilot-shadow-data";
 import { getLeadSourceForInbox } from "@/lib/lead-source-context-data";
 import { InboxHeaderOwner } from "@/components/inbox-header-owner";
 import { InboxSnoozedBanner } from "@/components/inbox-snoozed-banner";
+import { InboxAutopilotBar, InboxFollowupDraftCard } from "@/components/inbox-autopilot";
+import { getInboxAutopilot } from "@/lib/autopilot-inbox-data";
 import { buildLeadIntelligence, readSignals } from "@/lib/lead-intelligence";
 import { scoreLead } from "@/lib/lead-score";
 import { getLeadScoreContext } from "@/lib/lead-score-data";
@@ -150,6 +152,10 @@ export default async function ConversationsPage({
   // Which Instagram ad the lead came from / what their latest message shares.
   const leadSource = selected && !mock && selected.currentContactChannel === "instagram"
     ? await getLeadSourceForInbox(selected.id, organizationId).catch(() => null)
+    : null;
+  // AI Autopilot state and any due AI follow-up draft (Sales AI Jobs 2 and 4).
+  const autopilot = selected && !mock && selected.currentContactChannel === "instagram"
+    ? await getInboxAutopilot(selected.id).catch(() => null)
     : null;
   // Lead score, conversion confidence and next step (Sales AI Job 3).
   const scoreContext = selected && !mock
@@ -331,6 +337,9 @@ export default async function ConversationsPage({
       {isSnoozedNow && selected.snoozedUntil ? (
         <InboxSnoozedBanner leadId={selected.id} until={selected.snoozedUntil} />
       ) : null}
+      {autopilot ? (
+        <InboxAutopilotBar key={`ap-${selected.id}`} leadId={selected.id} state={autopilot.state} canHandToAi={selected.currentContactChannel === "instagram"} />
+      ) : null}
 
       <ConversationCenterView
         messages={selected.lastMessages}
@@ -509,6 +518,8 @@ export default async function ConversationsPage({
           <AILeadInsightPanel leadId={selected.id} compact />
         </div>
       )}
+
+      {autopilot?.followup ? <InboxFollowupDraftCard key={`fu-${autopilot.followup.taskId}`} followup={autopilot.followup} /> : null}
 
       <InboxQuickActions key={`qa-${selected.id}`} phone={selectedPhone} canCall={Boolean(hasTelephoneContact)}
         profileHref={`/leads/${selected.id}`} channel={selected.currentContactChannel}

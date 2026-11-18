@@ -135,7 +135,7 @@ test('failed history query fails closed rather than silently returning an empty 
 });
 
 test('customer reply co-pilot must not forward staff summaries or private notes to Claude', () => {
-  const copilot = readFileSync('app/conversations/copilot-actions.ts', 'utf8');
+  const copilot = readFileSync('lib/copilot-core.ts', 'utf8');
   assert.doesNotMatch(copilot, /summary:\s*cleanText\(String\(lead\.summary/);
   assert.doesNotMatch(copilot, /notes:\s*cleanText\(String\(lead\.notes/);
   assert.match(copilot, /Internal lead summaries and private staff notes are deliberately excluded/);

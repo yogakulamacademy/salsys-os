@@ -62,6 +62,7 @@ import {
 import { personInitials } from "@/lib/ui-format";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { createClient as createBrowserClient } from "@/lib/supabase/browser";
+import { AiHandoverAlertsList, useAiHandoverAlerts } from "@/components/ai-handover-alerts";
 
 type IconType = ComponentType<{
   size?: number | string;
@@ -158,6 +159,8 @@ export function AppShell({ children }: { children: ReactNode }) {
   const handoffAlerts = useWhatsAppHandoffAlerts(
     !mock && accessResolved && !!activeWorkspace,
   );
+  const aiAlerts = useAiHandoverAlerts(!mock && accessResolved && !!activeWorkspace);
+  const bellCount = handoffAlerts.count + aiAlerts.length;
 
   const visibleSections = useMemo<NavSection[]>(() => {
     if (!accessResolved) return [];
@@ -884,13 +887,14 @@ export function AppShell({ children }: { children: ReactNode }) {
             <details className="topbar-notification-menu relative">
               <summary aria-label="Open notifications" className="grid h-9 w-9 cursor-pointer list-none place-items-center rounded-lg border border-slate-200 text-slate-500 transition hover:bg-slate-50 hover:text-slate-950 dark:border-slate-800 dark:hover:bg-slate-900 dark:hover:text-white">
                 <Bell size={16} />
-                {handoffAlerts.count > 0 ? (
+                {bellCount > 0 ? (
                   <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-600 px-1 text-[9px] font-bold text-white">
-                    {handoffAlerts.count > 9 ? "9+" : handoffAlerts.count}
+                    {bellCount > 9 ? "9+" : bellCount}
                   </span>
                 ) : null}
               </summary>
               <div className="absolute right-0 mt-2 w-[320px] rounded-2xl border border-slate-200 bg-white p-2 shadow-xl dark:border-slate-800 dark:bg-slate-950">
+                <AiHandoverAlertsList alerts={aiAlerts} />
                 <WhatsAppHandoffAlertsList
                   alerts={handoffAlerts.alerts}
                   enabled={handoffAlerts.enabled}

@@ -74,6 +74,10 @@
     {
       "path": "/api/ai/knowledge-proposals",
       "schedule": "40 2 * * 1"
+    },
+    {
+      "path": "/api/ai/autopilot",
+      "schedule": "*/2 * * * *"
     }
   ]
 }
