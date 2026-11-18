@@ -1,0 +1,32 @@
+name: R2 Consent Operator Tools
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/r2-consent-installation-audit.js'
+      - 'scripts/salsysos-website-consent-fix.py'
+      - 'tests/readiness/r2-consent-installation-audit-v3.test.cjs'
+      - 'tests/readiness/r2-website-consent-fix-v3.test.py'
+      - '.github/workflows/r2-consent-operator-tools.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  static-consent-operator-tests:
+    name: Consent operator tools (offline only)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Browser diagnostic unit tests
+        run: node --test tests/readiness/r2-consent-installation-audit-v3.test.cjs
+      - name: Website-template patch unit tests
+        run: python3 tests/readiness/r2-website-consent-fix-v3.test.py
