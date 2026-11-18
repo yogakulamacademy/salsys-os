@@ -27,7 +27,7 @@ const conversationsSidebar = read('components/conversations-sidebar.tsx');
 const messagingEligibility = read('lib/messaging-eligibility.ts');
 const instagramActions = read('app/conversations/instagram-actions.ts');
 const copilot = read('components/conversation-copilot.tsx');
-const copilotActions = read('app/conversations/copilot-actions.ts');
+const copilotActions = read('app/conversations/copilot-actions.ts') + '\n' + read('lib/copilot-core.ts');
 const followupsData = read('lib/followups-data.ts');
 const followupsPage = read('app/follow-ups/page.tsx');
 

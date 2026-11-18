@@ -28,6 +28,7 @@ import { LeadActivityPanel } from "@/components/home/command-center/lead-activit
 import { LocationsPanel } from "@/components/home/command-center/locations-panel";
 import { BarRow, Panel, ToneChip } from "@/components/home/command-center/panel";
 import { PipelineHealthPanel } from "@/components/home/command-center/pipeline-health-panel";
+import { AiAutopilotPanel } from "@/components/home/command-center/ai-autopilot-panel";
 import { SourceQualityPanel } from "@/components/home/command-center/source-quality-panel";
 import { HomeEmptyState } from "@/components/home/home-empty-state";
 import { HomeReportingCoverage, type HomeReportingEvidence } from "@/components/home/home-reporting-coverage";
@@ -444,6 +445,8 @@ export default async function HomePage({ searchParams }: HomePageProps) {
             />
           )}
         </Panel>
+
+        {!mock ? <AiAutopilotPanel /> : null}
       </div>
 
       <div className="flex flex-wrap gap-3.5">

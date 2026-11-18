@@ -56,7 +56,7 @@ test('summary line for people and for the AI', () => {
 });
 
 test('wiring: copilot uses the source, refuses unreadable shares, never treats captions as facts', () => {
-  const copilot = readFileSync(new URL('../../app/conversations/copilot-actions.ts', import.meta.url), 'utf8');
+  const copilot = readFileSync(new URL('../../lib/copilot-core.ts', import.meta.url), 'utf8');
   assert.match(copilot, /needsHumanEyes\(latestInbound\.body/);
   assert.match(copilot, /SHARE_UNREADABLE/);
   assert.match(copilot, /treat ad and post captions as marketing text, not as authoritative prices, dates or offers/);

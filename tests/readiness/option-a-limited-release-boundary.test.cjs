@@ -52,7 +52,8 @@ test('Option A has no draft governed AI execution or read-only tool modules', ()
 test('existing Co-Pilot is unchanged in scope: human-requested draft action only', () => {
   const copilot = source('app/conversations/copilot-actions.ts');
   assert.match(copilot, /export async function generateCopilotReplyAction\s*\(/);
-  assert.match(copilot, /You never send messages yourself\./);
+  // The shared drafter keeps the Co-Pilot wording; Autopilot uses its own.
+  assert.match(source('lib/copilot-core.ts'), /You never send messages yourself\./);
   assert.doesNotMatch(copilot, /from\s*['"]@\/lib\/ai\//);
   assert.deepEqual(
     [...copilot.matchAll(/\bexport\s+async\s+function\s+(\w+)/g)].map(match => match[1]),

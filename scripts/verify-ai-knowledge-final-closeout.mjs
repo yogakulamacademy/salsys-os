@@ -22,7 +22,9 @@ function expectNotIncludes(source, needle, label) {
 const actions = read('app/settings/knowledge/actions.ts');
 const knowledgePage = read('app/settings/knowledge/page.tsx');
 const settingsLayout = read('app/settings/layout.tsx');
-const copilot = read('app/conversations/copilot-actions.ts');
+// The Co-Pilot action checks access; the shared drafter (lib/copilot-core.ts) builds the prompt.
+const copilotAction = read('app/conversations/copilot-actions.ts');
+const copilot = copilotAction + '\n' + read('lib/copilot-core.ts');
 const lifecycleMigration = read('supabase/migrations/20261101063000_ai_knowledge_final_closeout_v1.sql');
 const retrievalMigration = read('supabase/migrations/20261016182500_fix_organization_knowledge_search_v1.sql');
 const provenanceMigration = read('supabase/migrations/20261103190000_ai_knowledge_provenance_readiness_v2.sql');
@@ -104,7 +106,8 @@ for (const [needle, label] of [
   expectIncludes(retrievalMigration, needle, label);
 }
 
-expectIncludes(copilot, "supabase.rpc(\n      'search_organization_knowledge_v1'", 'Co-Pilot must use the canonical approved-knowledge retrieval RPC');
+expectIncludes(copilot, "knowledgeClient.rpc(\n      'search_organization_knowledge_v1'", 'Co-Pilot must use the canonical approved-knowledge retrieval RPC');
+expectIncludes(copilotAction, "knowledgeClient: supabase", 'Co-Pilot must run approved-knowledge retrieval with the signed-in user client');
 expectNotIncludes(copilot, ".from('knowledge_documents')", 'Co-Pilot must not bypass retrieval rules through direct knowledge-document reads');
 expectNotIncludes(copilot, ".from('knowledge_chunks')", 'Co-Pilot must not bypass retrieval rules through direct knowledge-chunk reads');
 expectIncludes(copilot, 'You draft a message for a human admissions team member to review and send. You never send messages yourself.', 'AI Knowledge closeout must preserve human-reviewed Co-Pilot behavior');
