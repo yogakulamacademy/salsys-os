@@ -28,7 +28,6 @@ import { InboxHeaderActions } from "@/components/inbox-header-actions";
 import { InboxLeadOverview } from "@/components/inbox-lead-overview";
 import { InboxOfferCard } from "@/components/inbox-offer-card";
 import { InboxLeadIntelligence } from "@/components/inbox-lead-intelligence";
-import { InboxShadowDraft } from "@/components/inbox-shadow-draft";
 import { getShadowSummary } from "@/lib/autopilot-shadow-data";
 import { getLeadSourceForInbox } from "@/lib/lead-source-context-data";
 import { InboxHeaderOwner } from "@/components/inbox-header-owner";
@@ -350,11 +349,8 @@ export default async function ConversationsPage({
         logAction={mock ? undefined : interactionAction}
       />
 
-      {/* Autopilot shadow mode (Instagram first): AI drafts, a person sends. */}
-      {!mock && process.env.AI_AUTOPILOT_SHADOW_ENABLED === "true" && copilotChannel === "instagram" && copilotEnabled &&
-        (selectedSummary?.needsReply || selectedSummary?.needsFirstContact) ? (
-        <InboxShadowDraft key={`shadow-${selected.id}`} leadId={selected.id} />
-      ) : null}
+      {/* Shadow drafts no longer run when a conversation is opened (owner request,
+          18 Nov 2026). AI drafts come only from the Draft buttons or Autopilot. */}
 
       {copilotChannel ? (
         <section className="ibx-v2-ai-toolbar" aria-label="AI reply suggestions">
