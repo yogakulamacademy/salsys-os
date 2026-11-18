@@ -39,6 +39,11 @@ const PUBLIC_EXACT_PATHS = new Set([
   "/api/search/index/worker",
   "/api/intelligence/system-snapshot",
   "/api/intelligence/lead-scoring-snapshot",
+  // Cron routes that check CRON_SECRET themselves (Sales AI + Instagram history).
+  "/api/ai/followup-detection",
+  "/api/ai/knowledge-proposals",
+  "/api/ai/autopilot",
+  "/api/instagram/history-sync",
 ]);
 
 const ACTIVE_WORKSPACE_COOKIE = "salsys-active-workspace";
