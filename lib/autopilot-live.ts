@@ -21,6 +21,7 @@ export type HandoverReason =
   | "unsupported_fact"
   | "needs_person"
   | "unreadable_share"
+  | "off_topic_share"
   | "draft_failed"
   | "send_failed"
   | "draft_unsafe";
@@ -34,6 +35,7 @@ export const HANDOVER_LABELS: Record<HandoverReason, string> = {
   unsupported_fact: "Answer needs facts the AI doesn't have",
   needs_person: "AI says a person should answer",
   unreadable_share: "Lead shared a post the AI can't see",
+  off_topic_share: "Lead shared a reel or post not about yoga or our courses",
   draft_failed: "AI couldn't write a reply",
   send_failed: "Instagram didn't accept the AI's reply",
   draft_unsafe: "AI's reply included payment details",

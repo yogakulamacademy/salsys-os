@@ -83,6 +83,26 @@ export function needsHumanEyes(latestBody: string | null | undefined, fetchedCap
   return stored.isShare && !stored.caption && !fetchedCaption;
 }
 
+/** Words that tie a shared post to yoga or to what the academy offers. */
+const YOGA_TOPIC = /\b(yoga\w*|yogi\w*|asanas?|pranayam\w*|meditat\w*|mindful\w*|breathwork|ytt\w*|ttc|teacher training|yogakulam|mysore|rishikesh|kerala|goa|retreats?|sound\s*heal\w*|singing bowls?|prenatal|postnatal|pregnan\w*|garbh\w*|ayurved\w*|mudras?|chakras?|kundalini|surya namaskar|om\b|namaste|wellness|spiritual\w*|face yoga|kids yoga|stretch\w*|flexib\w*)/i;
+
+/**
+ * True when the latest message is only a shared post/reel whose caption we can
+ * read but which has nothing to do with yoga or the courses (a meme, "tag your
+ * bestie"). Autopilot leaves those to the team instead of replying.
+ */
+export function shareIsOffTopic(
+  latestBody: string | null | undefined,
+  share: { caption: string | null; course: CourseRef | null } | null | undefined,
+): boolean {
+  if (!share || share.course) return false;
+  const stored = readStoredShareBody(latestBody);
+  if (!stored.isShare) return false;
+  const caption = (share.caption ?? stored.caption ?? "").trim();
+  if (!caption) return false; // unreadable shares are handled separately
+  return !YOGA_TOPIC.test(caption);
+}
+
 const COURSE_HINTS: Array<[RegExp, string[]]> = [
   [/sound\s*heal\w*.*(master)|master.*sound/i, ["SOUND-MASTER"]],
   [/sound\s*heal\w*.*level\s*2|level\s*2.*sound/i, ["SOUND-L2"]],
