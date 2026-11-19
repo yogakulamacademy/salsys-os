@@ -32,7 +32,8 @@ assert(
 );
 assert(
   pulse.includes('value={openPipelineValue}') &&
-    home.includes("pipelineTruth.currencies.length === 1"),
+    home.includes("pipelineHeadline(pipelineTruth.currencies)") &&
+    !/reduce\(/.test(read("lib/home-data-health.ts").split("export function pipelineHeadline")[1] ?? "reduce("),
   "The open pipeline KPI must use a single identifiable currency; mixed currencies must not be summed.",
 );
 assert(

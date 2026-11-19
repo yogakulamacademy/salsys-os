@@ -37,6 +37,7 @@ import { getHomeV1MetricTruth, type HomeV1MetricTruth } from "@/lib/home-v1-metr
 import { buildHomeSourceSignals, reconcileHomeSourceQualification } from "@/lib/home-source-intelligence";
 import { buildHomeNextActions, type HomeNextAction, type HomeActionId } from "@/lib/home-next-actions";
 import { groupHomePipelineStages } from "@/lib/home-stage-groups";
+import { buildDataHealth, pipelineHeadline, type HealthItem } from "@/lib/home-data-health";
 import {
   buildHomeInsights,
   changeChip,
@@ -85,7 +86,6 @@ type QueueRow = {
   reason?: string;
 };
 
-type HealthItem = { label: string; note: string; state: "ok" | "warn" | "bad" };
 
 const DONUT_COLORS = ["#5743c5", "#8b7be0", "#b3a7ef", "#d6cff7", "#e9e5fb"];
 const ADS_STALE_DAYS = 3;
@@ -126,7 +126,9 @@ export default async function HomePage({ searchParams }: HomePageProps) {
           payments: null,
           courses: null,
           locations: null,
-          freshness: { adsLastSuccessAt: null, adsLatestFailed: false, instagramAppRepliesCaptured: false },
+          openWithoutCourse: null,
+          aiStageMoves24h: null,
+          freshness: { adsLastSuccessAt: null, adsLatestFailed: false, instagramAppRepliesCaptured: false, instagramHistoryReplyAt: null, ads: [] },
         })
       : getHomeCommandCenterSnapshot(),
   ]);
@@ -148,11 +150,11 @@ export default async function HomePage({ searchParams }: HomePageProps) {
   const valuationCoverage = pipelineTruth && pipelineTruth.eligibleCount > 0
     ? Math.round((pipelineTruth.valuedCount / pipelineTruth.eligibleCount) * 1000) / 10
     : null;
-  const openPipelineValue = !pipelineTruth || pipelineTruth.valuedCount === 0
-    ? "—"
-    : pipelineTruth.currencies.length === 1
-      ? formatMoney(pipelineTruth.currencies[0].amount, pipelineTruth.currencies[0].currency)
-      : "—";
+  // Main currency as the headline, other currencies as a short add-on (never summed across currencies).
+  const pipelineHead = pipelineTruth && pipelineTruth.valuedCount > 0
+    ? pipelineHeadline(pipelineTruth.currencies)
+    : { value: "—", extra: null };
+  const openPipelineValue = pipelineHead.value;
   const openPipelineDetail = !pipelineTruth
     ? "Verified opportunity snapshot unavailable"
     : pipelineTruth.currencies.length > 1
@@ -229,9 +231,17 @@ export default async function HomePage({ searchParams }: HomePageProps) {
   const qualifiedChip: Chip = qualifiedRate == null
     ? { text: "History unavailable", tone: "warn" }
     : { text: `${qualifiedRate}% of leads`, tone: qualifiedLeads ? "flat" : "warn" };
+  const withoutCourse = extras.openWithoutCourse;
   const pipelineChip: Chip = !pipelineTruth
     ? { text: "Unavailable", tone: "warn" }
-    : { text: `${pipelineTruth.valuedCount.toLocaleString("en-IN")} of ${pipelineTruth.eligibleCount.toLocaleString("en-IN")} valued · now`, tone: pipelineTruth.valuedCount === pipelineTruth.eligibleCount ? "flat" : "warn" };
+    : {
+        text: [
+          pipelineHead.extra,
+          `${pipelineTruth.valuedCount.toLocaleString("en-IN")} valued · now`,
+          withoutCourse ? `${withoutCourse.toLocaleString("en-IN")} no course yet` : null,
+        ].filter(Boolean).join(" · "),
+        tone: withoutCourse && withoutCourse > pipelineTruth.valuedCount ? "warn" : "flat",
+      };
   const pendingPayments = extras.payments?.pending ?? [];
   const pendingCount = pendingPayments.reduce((sum, row) => sum + row.count, 0);
   const collectionsChip: Chip = !periodAnalytics.available.revenue
@@ -300,35 +310,19 @@ export default async function HomePage({ searchParams }: HomePageProps) {
   const courseRows = extras.courses?.rows.slice(0, 5) ?? [];
   const courseMax = Math.max(1, ...courseRows.map((row) => row.leads));
 
-  const adsAgeDays = extras.freshness.adsLastSuccessAt
-    ? Math.floor((Date.now() - new Date(extras.freshness.adsLastSuccessAt).getTime()) / 86_400_000)
-    : null;
-  const health: HealthItem[] = [
-    { label: "Leads & stages", note: periodAnalytics.available.leads ? "Live" : "Unavailable", state: periodAnalytics.available.leads ? "ok" : "bad" },
-    { label: "Qualification history", note: historicalQualification ? "Live" : "Unavailable", state: historicalQualification ? "ok" : "warn" },
-    { label: "Follow-ups", note: "Live", state: "ok" },
-    {
-      label: "Payments",
-      note: !extras.payments ? "Unavailable" : extras.payments.paidCount === 0 ? "0 confirmed" : "Unreconciled",
-      state: !extras.payments ? "bad" : "warn",
-    },
-    {
-      label: "Opportunity values",
-      note: pipelineTruth ? percentOf(pipelineTruth.valuedCount, pipelineTruth.eligibleCount) : "Unavailable",
-      state: pipelineTruth && pipelineTruth.eligibleCount > 0 && pipelineTruth.valuedCount / pipelineTruth.eligibleCount >= 0.8 ? "ok" : "warn",
-    },
-    {
-      label: "Location",
-      note: extras.locations ? percentOf(extras.locations.filled, extras.locations.total) : "Unavailable",
-      state: extras.locations && extras.locations.total > 0 && extras.locations.filled / extras.locations.total >= 0.5 ? "ok" : "warn",
-    },
-    { label: "Instagram app replies", note: replyProvisional ? "Not captured" : "Live", state: replyProvisional ? "bad" : "ok" },
-    {
-      label: "Google & Meta ads",
-      note: adsAgeDays == null ? "Never synced" : adsAgeDays === 0 ? (extras.freshness.adsLatestFailed ? "Today · last run failed" : "Today") : `${adsAgeDays}d old`,
-      state: adsAgeDays != null && adsAgeDays <= ADS_STALE_DAYS && !extras.freshness.adsLatestFailed ? "ok" : "bad",
-    },
-  ];
+  const health: HealthItem[] = buildDataHealth({
+    now: new Date(),
+    leadsLive: periodAnalytics.available.leads,
+    qualificationLive: historicalQualification != null,
+    payments: extras.payments,
+    valuation: pipelineTruth ? { valued: pipelineTruth.valuedCount, eligible: pipelineTruth.eligibleCount, withoutCourse } : null,
+    locations: extras.locations ? { filled: extras.locations.filled, total: extras.locations.total } : null,
+    replies: { echoLive: extras.freshness.instagramAppRepliesCaptured, historyReplyAt: extras.freshness.instagramHistoryReplyAt },
+    ads: extras.freshness.ads.length
+      ? extras.freshness.ads
+      : extras.freshness.adsLastSuccessAt ? [{ provider: "Google & Meta", lastSuccessAt: extras.freshness.adsLastSuccessAt, latestStatus: extras.freshness.adsLatestFailed ? "failed" : "success" }] : [],
+    adsStaleDays: ADS_STALE_DAYS,
+  });
   const healthOk = health.filter((item) => item.state === "ok").length;
   const markedEnrolledUnpaid = extras.payments && extras.payments.paidCount === 0 ? counts.enrolled ?? 0 : 0;
   const periodSeries = periodAnalytics.leadSeries.map((point) => ({
@@ -398,10 +392,10 @@ export default async function HomePage({ searchParams }: HomePageProps) {
           trend={null}
           href="/revenue/valuation"
           muted={openPipelineValue === "—"}
-          emptyText="Not valued yet"
+          emptyText="No prices yet"
           evidenceLabel={pipelineTruth ? "Open-lead valuation evidence" : "Evidence unavailable"}
           evidenceState={pipelineTruth ? (pipelineTruth.eligibleCount === pipelineTruth.valuedCount ? "derived" : "partial") : "unknown"}
-          definition="As of now: positive potential values on open leads, one currency at a time. Not revenue; does not change with the period filter."
+          definition="As of now: positive potential values on open leads, estimated from the price of the course each lead is interested in (offer price while it runs). The main currency is the headline; other currencies are shown beside it and never added together. Not revenue; does not change with the period filter."
         />
         <KpiCard
           icon={<CreditCard size={18} />}
@@ -450,7 +444,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
       </div>
 
       <div className="flex flex-wrap gap-3.5">
-        <PipelineHealthPanel groups={stageGroups} />
+        <PipelineHealthPanel groups={stageGroups} aiMoves24h={extras.aiStageMoves24h} />
         <SourceQualityPanel
           rows={validatedSourceQuality ? validatedSourceQuality.map((row) => ({ source: row.source, leads: row.leads, qualified: row.qualified })) : null}
           href={sourceDetailHref}
@@ -564,7 +558,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
             <ScoreRing value={healthOk} total={health.length} />
             <ul className="flex min-w-0 flex-1 flex-col gap-1.5">
               {health.map((item) => (
-                <li key={item.label} className="flex items-center gap-2 text-[13px]">
+                <li key={item.label} className="flex items-center gap-2 text-[13px]" title={item.hint}>
                   <span className={`h-2 w-2 shrink-0 rounded-full ${HEALTH_DOTS[item.state]}`} aria-hidden="true" />
                   <span className="min-w-0 flex-1 truncate text-copy-strong">{item.label}</span>
                   <span className="text-xs text-copy-muted">{item.note}</span>
