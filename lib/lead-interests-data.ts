@@ -2,6 +2,7 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { normalizeCountry } from "@/lib/home-command-center";
 import { courseFromText, readStoredShareBody, type CourseRef } from "@/lib/lead-source-context";
 import { getLeadSourceContext } from "@/lib/lead-source-context-data";
 import {
@@ -116,7 +117,7 @@ export async function applyLeadSigns(admin: SupabaseClient, organizationId: stri
 export async function recomputeLead(admin: SupabaseClient, organizationId: string, leadId: string, today: string) {
   const [{ data: rows }, { data: lead }, { data: prices }, { data: phone }, { data: link }] = await Promise.all([
     admin.from("lead_course_interests").select("id, course_id, strength, last_seen_at, status, set_by, location, is_primary").eq("lead_id", leadId),
-    admin.from("leads").select("id, country, geo_country, interested_course_id, potential_value, potential_currency, potential_value_source").eq("id", leadId).maybeSingle(),
+    admin.from("leads").select("id, country, geo_country, interested_course_id, potential_value, potential_currency, potential_value_source, location:metadata->location").eq("id", leadId).maybeSingle(),
     admin.from("course_prices").select("course_id, location, market, currency, room_type, regular_price, offer_price, valid_until").eq("organization_id", organizationId).eq("active", true),
     admin.from("lead_contacts").select("value").eq("lead_id", leadId).in("contact_type", ["phone", "whatsapp"]).limit(1).maybeSingle(),
     admin.from("dm_tracked_links").select("visit_country").eq("lead_id", leadId).not("visit_country", "is", null).limit(1).maybeSingle(),
@@ -127,7 +128,10 @@ export async function recomputeLead(admin: SupabaseClient, organizationId: strin
     regularPrice: p.regular_price == null ? null : Number(p.regular_price), offerPrice: p.offer_price == null ? null : Number(p.offer_price),
     validUntil: p.valid_until ?? null,
   }));
-  const market = marketFor({ country: lead.country, visitCountry: link?.visit_country ?? lead.geo_country, phone: phone?.value });
+  const market = marketFor({
+    country: lead.country ? normalizeCountry(lead.country) ?? lead.country : null, visitCountry: link?.visit_country ?? lead.geo_country, phone: phone?.value,
+    inferredCountry: (lead.location as { country?: string } | null)?.country ?? null,
+  });
   const interestRows: InterestRow[] = rows.map((r) => ({
     courseId: String(r.course_id), strength: Number(r.strength), lastSeenAt: String(r.last_seen_at), status: r.status, setBy: r.set_by,
   }));

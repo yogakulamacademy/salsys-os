@@ -99,7 +99,7 @@ export const COUNTRY_CENTROIDS: Record<string, readonly [number, number]> = {
 };
 
 const COUNTRY_ALIASES: Record<string, string> = {
-  in: "India", ind: "India", india: "India", bharat: "India",
+  in: "India", ind: "India", india: "India", bharat: "India", indian: "India", indis: "India", indai: "India",
   us: "United States", usa: "United States", "u.s.": "United States", "u.s.a.": "United States",
   "united states": "United States", "united states of america": "United States", america: "United States",
   uk: "United Kingdom", gb: "United Kingdom", gbr: "United Kingdom", "united kingdom": "United Kingdom",
@@ -136,7 +136,7 @@ const COUNTRY_ALIASES: Record<string, string> = {
 
 /** Indian states and large cities people type into a "country" field. */
 const INDIA_PLACES = [
-  "kerala", "karnataka", "tamil nadu", "maharashtra", "odisha", "orissa", "goa", "gujarat", "rajasthan",
+  "kerala", "karnataka", "tamil nadu", "tamilnadu", "maharashtra", "odisha", "orissa", "goa", "gujarat", "rajasthan",
   "punjab", "haryana", "delhi", "uttar pradesh", "uttarakhand", "himachal", "bihar", "west bengal",
   "assam", "telangana", "andhra", "madhya pradesh", "jharkhand", "chhattisgarh", "pune", "mumbai",
   "bangalore", "bengaluru", "chennai", "hyderabad", "kolkata", "rishikesh", "mysore", "mysuru",

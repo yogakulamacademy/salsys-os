@@ -11,7 +11,7 @@ export type DataHealthInput = {
   qualificationLive: boolean;
   payments: { paidCount: number; toVerify: number; activeEnrollments: number } | null;
   valuation: { valued: number; eligible: number; withoutCourse: number | null } | null;
-  locations: { filled: number; total: number } | null;
+  locations: { filled: number; total: number; inferred?: number } | null;
   replies: { echoLive: boolean; historyReplyAt: string | null };
   ads: Array<{ provider: string; lastSuccessAt: string | null; latestStatus: string | null }>;
   adsStaleDays: number;
@@ -44,9 +44,10 @@ export function valuationHealth(v: DataHealthInput["valuation"]): HealthItem {
 export function locationHealth(l: DataHealthInput["locations"]): HealthItem {
   if (!l) return { label: "Location", note: "Unavailable", state: "bad" };
   const share = pct(l.filled, l.total);
-  return share >= 50
-    ? { label: "Location", note: `${share}% known`, state: "ok" }
-    : { label: "Location", note: `${share}% known`, state: "warn", hint: "Instagram doesn't share location. Course links sent in DMs record the visitor's country." };
+  const inferredShare = l.inferred ? pct(l.inferred, l.total) : 0;
+  const note = inferredShare ? `${share}% known · ${inferredShare}% from clues` : `${share}% known`;
+  const hint = "Instagram doesn't share location, so it is worked out from phone codes, course-link visits, what the lead wrote and rupee quotes. Leads who only tapped an ad button stay unknown.";
+  return { label: "Location", note, state: share >= 50 ? "ok" : "warn", hint };
 }
 
 export function repliesHealth(r: DataHealthInput["replies"], now: Date): HealthItem {

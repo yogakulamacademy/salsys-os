@@ -74,7 +74,8 @@ export function locationFromText(text: string | null | undefined): string | null
  * said, then the visit country, then the phone number. Unknown leads are valued
  * at the India price and marked as such (owner decision, 19 Nov 2026).
  */
-export function marketFor(input: { country?: string | null; visitCountry?: string | null; phone?: string | null }): "india" | "international" | "unknown" {
+export function marketFor(input: { country?: string | null; visitCountry?: string | null; phone?: string | null; inferredCountry?: string | null }): "india" | "international" | "unknown" {
+  // Callers pass countries already normalised (normalizeCountry), so "Pune" or "Indis" arrive as "India".
   const c = (input.country ?? "").trim().toLowerCase();
   if (c) return c === "india" || c === "in" || c === "bharat" ? "india" : "international";
   const v = (input.visitCountry ?? "").trim().toUpperCase();
@@ -82,6 +83,8 @@ export function marketFor(input: { country?: string | null; visitCountry?: strin
   const p = (input.phone ?? "").replace(/[^\d+]/g, "");
   if (p.startsWith("+91") || /^91\d{10}$/.test(p) || /^[6-9]\d{9}$/.test(p)) return "india";
   if (p.startsWith("+")) return "international";
+  const inferred = (input.inferredCountry ?? "").trim().toLowerCase();
+  if (inferred) return inferred === "india" || inferred === "in" ? "india" : "international";
   return "unknown";
 }
 
