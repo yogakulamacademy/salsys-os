@@ -37,4 +37,5 @@ test('website forms resolve the course from value, page and names', () => {
   assert.match(route, /alias_type', 'page_path'/);
   assert.match(route, /course_name:page_title/);
   assert.match(route, /\\bclass\(es\)\?\\b/);
+  assert.match(route, /general website offer/);
 });

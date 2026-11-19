@@ -267,6 +267,8 @@ async function resolveCourseCode(
     const clean = text ? text.replace(/[-_/]+/g, ' ') : null;
     // Regular classes (e.g. "Online Pregnancy Yoga Classes") are not a teacher training course.
     if (clean && /\bclass(es)?\b/i.test(clean) && !/teacher training|\bttc\b|\byttc?\b/i.test(clean)) continue;
+    // A form's default label ("Yoga Teacher Training Course", "General Website Offer") is not a choice.
+    if (clean && /^\s*(yoga teacher training( course)?|general website offer|yoga course)\s*$/i.test(clean)) continue;
     const hit = courseFromText(clean, list);
     if (hit?.code) return { raw: byValue.raw, code: hit.code, matchedBy: by };
   }
