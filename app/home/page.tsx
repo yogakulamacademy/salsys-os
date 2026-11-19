@@ -37,6 +37,15 @@ import { getHomeV1MetricTruth, type HomeV1MetricTruth } from "@/lib/home-v1-metr
 import { buildHomeSourceSignals, reconcileHomeSourceQualification } from "@/lib/home-source-intelligence";
 import { buildHomeNextActions, type HomeNextAction, type HomeActionId } from "@/lib/home-next-actions";
 import { groupHomePipelineStages } from "@/lib/home-stage-groups";
+import { funnelInsight } from "@/lib/home-story";
+import { getHomeStory } from "@/lib/home-story-data";
+import {
+  GoingColdPanel,
+  HomeLeadsAlert,
+  HomeTodayStrip,
+  MessageHoursPanel,
+  WinBackPanel,
+} from "@/components/home/command-center/story-panels";
 import { buildDataHealth, pipelineHeadline, type HealthItem } from "@/lib/home-data-health";
 import {
   buildHomeInsights,
@@ -95,7 +104,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
   const mock = isMockMode();
   const periodFallback = resolveDashboardPeriod(query);
 
-  const [snapshot, periodAnalytics, metricTruth, extras] = await Promise.all([
+  const [snapshot, periodAnalytics, metricTruth, extras, story] = await Promise.all([
     getDashboardSnapshot(),
     mock
       ? Promise.resolve<DashboardPeriodAnalytics>({
@@ -131,6 +140,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
           freshness: { adsLastSuccessAt: null, adsLatestFailed: false, instagramAppRepliesCaptured: false, instagramHistoryReplyAt: null, ads: [] },
         })
       : getHomeCommandCenterSnapshot(),
+    mock ? Promise.resolve(null) : getHomeStory(),
   ]);
 
   const {
@@ -200,7 +210,8 @@ export default async function HomePage({ searchParams }: HomePageProps) {
     ? formatMoney(periodPrimaryRevenue.current, periodPrimaryRevenue.currency)
     : "—";
   const activeAttention: AttentionItem[] = buildHomeNextActions({
-    needsReply: metrics.needsReply,
+    // Last 7 days only; older unanswered leads are in "Win back".
+    needsReply: story ? story.waitingThisWeek : metrics.needsReply,
     waitingOverHour: metrics.waitingOverHour,
     followupsDue: metrics.followupsDue,
     needsFirstTouch: metrics.needsFirstTouch,
@@ -269,15 +280,17 @@ export default async function HomePage({ searchParams }: HomePageProps) {
       label: item.label,
       // Reason and evidence stay visible (no hover needed); the reply count is
       // marked provisional while replies sent from the Instagram app are not captured.
-      hint: item.id === "reply-queue" && replyProvisional
-        ? "Provisional · Instagram app replies not captured"
-        : `${item.timing} · ${item.evidence}`,
+      hint: item.id === "reply-queue" && story
+        ? "Messaged in the last 7 days · older ones are in Win back"
+        : item.id === "reply-queue" && replyProvisional
+          ? "Provisional · Instagram app replies not captured"
+          : `${item.timing} · ${item.evidence}`,
       reason: item.reason,
       count: item.value,
       href: item.href,
       icon: item.icon,
       tone: item.tone,
-      provisional: item.id === "reply-queue" && replyProvisional,
+      provisional: item.id === "reply-queue" && replyProvisional && !story,
     })),
   ].slice(0, 5);
 
@@ -360,6 +373,8 @@ export default async function HomePage({ searchParams }: HomePageProps) {
         </div>
       </header>
 
+      {story ? <HomeTodayStrip story={story} aiMoves24h={extras.aiStageMoves24h} /> : null}
+
       <section aria-label="Business pulse" className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 min-[1100px]:grid-cols-4">
         <KpiCard
           icon={<Users size={18} />}
@@ -412,6 +427,8 @@ export default async function HomePage({ searchParams }: HomePageProps) {
         />
       </section>
 
+      {story ? <HomeLeadsAlert story={story} adsProblem={health.find((item) => item.label === "Google & Meta ads" && item.state === "bad")?.note ?? null} /> : null}
+
       <div className="flex flex-wrap gap-3.5">
         <LeadActivityPanel
           points={periodSeries}
@@ -444,7 +461,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
       </div>
 
       <div className="flex flex-wrap gap-3.5">
-        <PipelineHealthPanel groups={stageGroups} aiMoves24h={extras.aiStageMoves24h} />
+        <PipelineHealthPanel groups={stageGroups} aiMoves24h={extras.aiStageMoves24h} insight={funnelInsight(stageGroups)} />
         <SourceQualityPanel
           rows={validatedSourceQuality ? validatedSourceQuality.map((row) => ({ source: row.source, leads: row.leads, qualified: row.qualified })) : null}
           href={sourceDetailHref}
@@ -483,6 +500,14 @@ export default async function HomePage({ searchParams }: HomePageProps) {
           ) : null}
         </Panel>
       </div>
+
+      {story ? (
+        <div className="flex flex-wrap gap-3.5">
+          <GoingColdPanel story={story} now={new Date()} />
+          <WinBackPanel story={story} />
+          <MessageHoursPanel story={story} />
+        </div>
+      ) : null}
 
       <div className="flex flex-wrap gap-3.5">
         <Panel id="home-sources" icon={<Target size={19} />} title="Lead sources" action={{ href: sourceDetailHref, label: "Analyze" }} className="flex-[1_1_320px]">
