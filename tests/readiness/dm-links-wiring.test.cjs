@@ -31,3 +31,10 @@ test('tracked links: short domain is routed publicly and the AI gets the link', 
   assert.match(runner, /queueUnopenedLinks\(ctx\)/);
   assert.match(runner, /created_by_id: "dm_link_no_open_v1"/);
 });
+
+test('website forms resolve the course from value, page and names', () => {
+  const route = read('app/api/leads/browser/v1/route.ts');
+  assert.match(route, /alias_type', 'page_path'/);
+  assert.match(route, /course_name:page_title/);
+  assert.match(route, /\\bclass\(es\)\?\\b/);
+});

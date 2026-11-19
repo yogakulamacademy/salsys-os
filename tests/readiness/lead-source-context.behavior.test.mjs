@@ -112,3 +112,22 @@ test('Autopilot leaves shared reels that are not about yoga or the courses to th
   assert.equal(shareIsOffTopic('lol this is so me', { caption: 'Tag your bestie', course: null }), false); // they wrote something
   assert.equal(shareIsOffTopic(reel, null), false);
 });
+
+test('website form course texts map to the right course', async () => {
+  const { courseFromText } = await import('../../lib/lead-source-context.ts');
+  const codes = ['100H-KUNDALINI','100H-YTT','200H-YTT','300H-YTT','500H-YTT','85H-PRENATAL','AYURVEDA-RETREAT','FACE-YOGA','KIDS-YOGA','NUTRITION','ONLINE-200H','ONLINE-300H','ONLINE-PRENATAL','SOUND-L1','SOUND-L2','SOUND-MASTER','YOGA-RETREAT'];
+  const list = codes.map((code) => ({ id: code, code, name: code }));
+  const cases = {
+    '7 Days Program : Ayurveda Retreat In kerala': 'AYURVEDA-RETREAT',
+    'Sound Healing Meditation Teacher Training Level 1 in Mysore': 'SOUND-L1',
+    'Sound Healing Meditation Course Level 2 in Mysore': 'SOUND-L2',
+    'Yoga Retreat In Mysore': 'YOGA-RETREAT',
+    'Online Face Yoga Teacher Training Course': 'FACE-YOGA',
+    '500 Hour Yoga Teacher Training in Kerala': '500H-YTT',
+    'Online 85 hour Prenatal Yoga Teacher Training Course': 'ONLINE-PRENATAL',
+    '100 Hour Yoga Teacher Training Mysore': '100H-YTT',
+    'Online 300 Hour Yoga Teacher Training': 'ONLINE-300H',
+    'Yoga Teacher Training Course': '200H-YTT',
+  };
+  for (const [text, code] of Object.entries(cases)) assert.equal(courseFromText(text, list)?.code, code, text);
+});

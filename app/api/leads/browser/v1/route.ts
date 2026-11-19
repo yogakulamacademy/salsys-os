@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 
 import { createAdminClient } from '@/lib/supabase/admin';
 import { normalizeLeadPhone } from '@/lib/phone-normalization';
+import { courseFromText } from '@/lib/lead-source-context';
 import {
   consumeTrackingRateLimit,
   corsHeadersForTrackingOrigin,
@@ -156,7 +157,7 @@ function normalizeCourseTrackingValue(value: string) {
   return value.trim().toLowerCase().replace(/\s+/g, ' ');
 }
 
-async function resolveCourseCode(
+async function resolveCourseCodeByValue(
   admin: ReturnType<typeof createAdminClient>,
   organizationId: string,
   value: string | null | undefined,
@@ -225,6 +226,51 @@ async function resolveCourseCode(
       ? `course_alias:${stringValue(alias?.alias_type) ?? 'unknown'}`
       : null,
   };
+}
+
+/**
+ * Which course a website form is about. Tries, in order: the form's course
+ * value (code or known alias), the page the form was filled on (page_path
+ * alias), then a best match of the course value or page title against the
+ * business's course names. Returns null rather than guessing wildly.
+ */
+async function resolveCourseCode(
+  admin: ReturnType<typeof createAdminClient>,
+  organizationId: string,
+  value: string | null | undefined,
+  page: { path: string | null; title: string | null },
+) {
+  const byValue = await resolveCourseCodeByValue(admin, organizationId, value);
+  if (byValue.code) return byValue;
+
+  const path = page.path ? page.path.split(/[?#]/)[0].trim().toLowerCase() : null;
+  if (path) {
+    const { data: aliasRows } = await admin
+      .from('course_tracking_aliases')
+      .select('course_id,priority')
+      .eq('organization_id', organizationId)
+      .eq('active', true)
+      .eq('alias_type', 'page_path')
+      .eq('normalized_alias_value', path)
+      .order('priority', { ascending: false })
+      .limit(1);
+    const courseId = stringValue(Array.isArray(aliasRows) ? aliasRows[0]?.course_id : null);
+    if (courseId) {
+      const { data: course } = await admin.from('courses').select('code').eq('organization_id', organizationId).eq('id', courseId).eq('active', true).maybeSingle();
+      if (course?.code) return { raw: byValue.raw, code: String(course.code), matchedBy: 'course_alias:page_path' };
+    }
+  }
+
+  const { data: courses } = await admin.from('courses').select('id,code,name').eq('organization_id', organizationId).eq('active', true).limit(80);
+  const list = (courses ?? []).map((c) => ({ id: String(c.id), code: c.code ? String(c.code) : null, name: String(c.name) }));
+  for (const [text, by] of [[byValue.raw, 'course_name:capture_value'], [page.title, 'course_name:page_title'], [path, 'course_name:page_path']] as const) {
+    const clean = text ? text.replace(/[-_/]+/g, ' ') : null;
+    // Regular classes (e.g. "Online Pregnancy Yoga Classes") are not a teacher training course.
+    if (clean && /\bclass(es)?\b/i.test(clean) && !/teacher training|\bttc\b|\byttc?\b/i.test(clean)) continue;
+    const hit = courseFromText(clean, list);
+    if (hit?.code) return { raw: byValue.raw, code: hit.code, matchedBy: by };
+  }
+  return byValue;
 }
 
 export async function OPTIONS(request: NextRequest) {
@@ -385,6 +431,10 @@ export async function POST(request: NextRequest) {
       admin,
       source.organizationId,
       payload.courseCode,
+      {
+        path: metadataValue(payload.metadata, 'page_path'),
+        title: metadataValue(payload.metadata, 'page_title'),
+      },
     );
 
     // Browser submissions come straight from the visitor, so the edge IP
