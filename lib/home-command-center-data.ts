@@ -5,6 +5,7 @@ import {
   buildLocationBreakdown,
   type LocationBreakdown,
 } from "@/lib/home-command-center";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { requireCurrentOrganizationId } from "@/lib/workspace";
 
@@ -134,9 +135,11 @@ export async function getHomeCommandCenterSnapshot(): Promise<HomeCommandCenterS
       .eq("organization_id", organizationId).in("status", ["pending", "confirmed", "deferred", "completed"]),
     supabase.from("lead_stage_history").select("id, leads!inner(organization_id)", { count: "exact", head: true })
       .eq("leads.organization_id", organizationId).eq("changed_by_id", "ai_stage_v1").gte("changed_at", since24h),
-    supabase.from("messages").select("created_at")
+    // Only a timestamp, for the business the signed-in user was just verified
+    // to belong to. Read with the service client: under per-row message RLS this
+    // lookup takes ~6s and times out on Home.
+    createAdminClient().from("messages").select("created_at")
       .eq("organization_id", organizationId).eq("direction", "outbound").eq("metadata->>source", "instagram_graph_history")
-      // Bounded window keeps this on the created_at index (an unbounded scan times out under RLS).
       .gte("created_at", new Date(Date.now() - 14 * 86_400_000).toISOString())
       .order("created_at", { ascending: false }).limit(1),
   ]);
