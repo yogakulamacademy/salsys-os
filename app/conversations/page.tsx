@@ -34,6 +34,7 @@ import { InboxSnoozedBanner } from "@/components/inbox-snoozed-banner";
 import { InboxAutopilotBar, InboxFollowupDraftCard } from "@/components/inbox-autopilot";
 import { getInboxAutopilot } from "@/lib/autopilot-inbox-data";
 import { InboxCourseLink } from "@/components/inbox-course-link";
+import { InboxCourseInterests, type InboxInterest } from "@/components/inbox-course-interests";
 import { countryName } from "@/lib/dm-links";
 import { getLeadTrackedLink } from "@/lib/dm-links-data";
 import { getOrgSalesAiSettings } from "@/lib/org-sales-ai-settings";
@@ -163,6 +164,25 @@ export default async function ConversationsPage({
   // Tracked course link: opened or not, and the visit country (DM-LINK). RLS-scoped read.
   const courseLink = selected && !mock && selected.currentContactChannel === "instagram"
     ? await createClient().then((client) => getLeadTrackedLink(client, selected.id)).catch(() => null)
+    : null;
+  // Course interests, main course and estimated value (RLS-scoped read).
+  const interestData = selected && !mock
+    ? await createClient().then(async (client) => {
+        const [{ data: rows }, { data: lead }] = await Promise.all([
+          client.from("lead_course_interests").select("course_id, location, sources, is_primary, estimated_value, value_currency, status, strength, last_seen_at, courses(name)")
+            .eq("lead_id", selected.id).neq("status", "dropped").order("is_primary", { ascending: false }).order("strength", { ascending: false }).limit(6),
+          client.from("leads").select("potential_value_source").eq("id", selected.id).maybeSingle(),
+        ]);
+        const interests: InboxInterest[] = (rows ?? []).map((r) => {
+          const course = Array.isArray(r.courses) ? r.courses[0] : r.courses;
+          return { courseId: String(r.course_id), courseName: (course as { name?: string } | null)?.name ?? "Course", location: r.location ?? null,
+            sources: (r.sources as string[]) ?? [], isPrimary: Boolean(r.is_primary),
+            estimatedValue: r.estimated_value == null ? null : Number(r.estimated_value), currency: r.value_currency ?? null };
+        });
+        const src = String(lead?.potential_value_source ?? "");
+        const valueNote = src.includes("market_unknown") ? "Value uses the India price: we don't know yet if this lead is in India." : null;
+        return { interests, valueNote };
+      }).catch(() => null)
     : null;
   // Lead score, conversion confidence and next step (Sales AI Job 3).
   const scoreContext = selected && !mock
@@ -490,6 +510,9 @@ export default async function ConversationsPage({
           </a> :
           <span className="ibx-v2-profile-no-phone">Phone contact unavailable</span>}
       </section>
+      {interestData ? (
+        <InboxCourseInterests key={`int-${selected.id}`} leadId={selected.id} interests={interestData.interests} valueNote={interestData.valueNote} />
+      ) : null}
       {selected.currentContactChannel === "instagram" && !mock ? (
         <InboxCourseLink key={`link-${selected.id}`} leadId={selected.id}
           status={courseLink ? { ...courseLink, visitCountryName: countryName(courseLink.visitCountry) } : null} />
