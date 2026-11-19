@@ -14,10 +14,13 @@
 -- Instalments: the balance is due 7 days after the batch starts.
 
 -- Who may record an enrolment / payment for a lead.
+-- plpgsql (not sql) so the body is checked at call time: can_work_lead is
+-- provisioned outside the migration history and is absent in a clean replay.
 create or replace function app_private.can_record_enrollment_v1(p_lead_id uuid)
-returns boolean language sql stable security definer set search_path = ''
+returns boolean language plpgsql stable security definer set search_path = ''
 as $function$
-  select exists (
+begin
+  return exists (
     select 1 from public.leads l
     where l.id = p_lead_id
       and (
@@ -25,6 +28,7 @@ as $function$
         or (l.owner_user_id = auth.uid() and public.can_work_lead(l.id))
       )
   );
+end;
 $function$;
 revoke all on function app_private.can_record_enrollment_v1(uuid) from public, anon;
 grant execute on function app_private.can_record_enrollment_v1(uuid) to authenticated;
