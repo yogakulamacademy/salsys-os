@@ -136,6 +136,8 @@ export async function getHomeCommandCenterSnapshot(): Promise<HomeCommandCenterS
       .eq("leads.organization_id", organizationId).eq("changed_by_id", "ai_stage_v1").gte("changed_at", since24h),
     supabase.from("messages").select("created_at")
       .eq("organization_id", organizationId).eq("direction", "outbound").eq("metadata->>source", "instagram_graph_history")
+      // Bounded window keeps this on the created_at index (an unbounded scan times out under RLS).
+      .gte("created_at", new Date(Date.now() - 14 * 86_400_000).toISOString())
       .order("created_at", { ascending: false }).limit(1),
   ]);
 
