@@ -107,9 +107,18 @@ export function estimateValue(
   location: string | null,
   market: "india" | "international" | "unknown",
   today: string,
-): { value: number; currency: string; marketUsed: "india" | "international"; assumed: boolean } | null {
-  const wantMarket = market === "unknown" ? "india" : market;
-  const forCourse = prices.filter((p) => p.courseId === courseId && p.market === wantMarket);
+): { value: number; currency: string; marketUsed: "india" | "international"; assumed: boolean; fallback?: boolean } | null {
+  const preferred = market === "unknown" ? "india" : market;
+  let wantMarket: "india" | "international" = preferred;
+  let forCourse = prices.filter((p) => p.courseId === courseId && p.market === wantMarket);
+  // Some courses only have a USD price (no rupee fee was ever set). Value the
+  // lead at that price, in its own currency, rather than leaving it unpriced.
+  let fallback = false;
+  if (!forCourse.length) {
+    wantMarket = preferred === "india" ? "international" : "india";
+    forCourse = prices.filter((p) => p.courseId === courseId && p.market === wantMarket);
+    fallback = true;
+  }
   if (!forCourse.length) return null;
   const atLocation = location ? forCourse.filter((p) => p.location === location || (p.location ?? "").startsWith(`${location}-`)) : [];
   const pool = atLocation.length ? atLocation : forCourse;
@@ -120,7 +129,7 @@ export function estimateValue(
   const offerValid = best.offerPrice != null && (!best.validUntil || best.validUntil >= today);
   const value = offerValid ? best.offerPrice : best.regularPrice ?? best.offerPrice;
   if (value == null) return null;
-  return { value: Number(value), currency: best.currency, marketUsed: wantMarket, assumed: market === "unknown" };
+  return { value: Number(value), currency: best.currency, marketUsed: wantMarket, assumed: market === "unknown", ...(fallback ? { fallback: true } : {}) };
 }
 
 /** Merge a new sign into an existing interest: keep the stronger strength, all sources, latest time. */
