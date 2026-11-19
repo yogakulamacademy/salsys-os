@@ -584,8 +584,8 @@ export default async function HomePage({ searchParams }: HomePageProps) {
               {health.map((item) => (
                 <li key={item.label} className="flex items-center gap-2 text-[13px]" title={item.hint}>
                   <span className={`h-2 w-2 shrink-0 rounded-full ${HEALTH_DOTS[item.state]}`} aria-hidden="true" />
-                  <span className="min-w-0 flex-1 truncate text-copy-strong">{item.label}</span>
-                  <span className="text-xs text-copy-muted">{item.note}</span>
+                  <span className="shrink-0 text-copy-strong">{item.label}</span>
+                  <span className="min-w-0 flex-1 truncate text-right text-xs text-copy-muted">{item.note}</span>
                 </li>
               ))}
             </ul>
