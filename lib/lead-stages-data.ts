@@ -3,6 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { locationFromText } from "@/lib/lead-interests";
 import {
   decideStageMove,
+  isAdStarter,
   parseStageAnswer,
   ruleBasedSignal,
   STAGE_LABEL,
@@ -74,10 +75,14 @@ export async function scanLeadStage(admin: SupabaseClient, leadId: string, mode:
   ]);
   const msgs = ((recent ?? []) as Msg[]).reverse();
   const inbound = msgs.filter((m) => m.direction === "inbound" && m.body?.trim());
-  const hasPlan = inbound.some((m) => PLAN_WORDS.test(m.body ?? "") || locationFromText(m.body) != null);
+  // Only words the lead typed count as a plan: a shared post's caption ("…in
+  // Mysore… November batch") or an ad button ("How do I register for 200-Hour
+  // YTT in Mysore?") is our text, not theirs.
+  const typed = inbound.filter((m) => !isAdStarter(m.body) && !/^(Shared an Instagram|\[Instagram )/i.test(m.body ?? ""));
+  const hasPlan = typed.some((m) => PLAN_WORDS.test(m.body ?? "") || locationFromText(m.body) != null);
 
   const rule = ruleBasedSignal({ inboundCount: inboundCount ?? 0, outboundCount: outboundCount ?? 0, hasMainCourse: Boolean(lead.interested_course_id), hasPlan });
-  const ruleEvidence = rule === "contacted" ? "We messaged them; no reply yet." : rule === "qualified" ? `Main course known and they shared a plan: "${(inbound.find((m) => PLAN_WORDS.test(m.body ?? "") || locationFromText(m.body))?.body ?? "").slice(0, 100)}"` : "";
+  const ruleEvidence = rule === "contacted" ? "We messaged them; no reply yet." : rule === "qualified" ? `Main course known and they shared a plan: "${(typed.find((m) => PLAN_WORDS.test(m.body ?? "") || locationFromText(m.body))?.body ?? "").slice(0, 100)}"` : "";
 
   // Ask the AI only when the lead wrote something since the last scan.
   const lastInboundAt = inbound.at(-1)?.created_at ?? null;

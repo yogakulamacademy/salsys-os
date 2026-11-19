@@ -20,3 +20,9 @@ test('stage automation: moves go through set_lead_stage with history and leave e
   assert.match(data, /if \(mode === "live" && decision\.action === "move"\)/);
   assert.doesNotMatch(data, /closed_won"\s*\}/);
 });
+
+test('stage automation: only typed lead words count as a plan', () => {
+  const data = read('lib/lead-stages-data.ts');
+  assert.match(data, /const typed = inbound\.filter\(\(m\) => !isAdStarter\(m\.body\) && !\/\^\(Shared an Instagram/);
+  assert.match(data, /const hasPlan = typed\.some/);
+});
