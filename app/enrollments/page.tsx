@@ -4,10 +4,23 @@ import { CalendarDays, CircleDollarSign, FileCheck2, PauseCircle, UsersRound, XC
 import { OperationsJourneyBar } from "@/components/operations/operations-journey-bar";
 import { PageHeader } from "@/components/ui";
 import { getEnrollmentsWorkspace, type EnrollmentStatus } from "@/lib/enrollments-data";
+import { PaymentsToVerify } from "@/components/payments-to-verify";
+import { getPaymentsToVerify } from "@/lib/enrollment-panel-data";
+import { requireCurrentOrganizationId } from "@/lib/workspace";
+import { createClient } from "@/lib/supabase/server";
 
 export default async function EnrollmentsPage() {
   const workspace = await getEnrollmentsWorkspace();
   const { rows, summary } = workspace;
+  // Admins see team-logged payments waiting for verification.
+  const verify = await (async () => {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return null;
+    const organizationId = await requireCurrentOrganizationId(supabase, user.id);
+    const { data: isAdmin } = await supabase.rpc("can_manage_organization", { p_organization_id: organizationId });
+    return isAdmin === true ? getPaymentsToVerify(supabase, organizationId) : null;
+  })().catch(() => null);
 
   return (
     <div className="space-y-4">
@@ -33,6 +46,8 @@ export default async function EnrollmentsPage() {
         <Metric label="Deferred" value={summary.deferred} icon={<PauseCircle size={16} />} />
         <Metric label="Cancelled" value={summary.cancelled} icon={<XCircle size={16} />} />
       </section>
+
+      {verify ? <PaymentsToVerify payments={verify} /> : null}
 
       <section className="card-pad overflow-hidden p-0">
         <div className="border-b border-line px-5 py-4">

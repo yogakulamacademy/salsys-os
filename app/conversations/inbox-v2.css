@@ -202,3 +202,6 @@ html.dark .ibx-v2 .conversation-message-outbound,html.dark .ibx-v2 .conversation
 
 /* Course interests card in the customer context panel. */
 .ibx-v2 .ibx-v2-context>.ibx-course-interests{background:var(--ibx-paper)!important;border:1px solid var(--ibx-line)!important;border-radius:13px!important;padding:12px 13px!important;}
+
+/* Enrolment card in the customer context panel. */
+.ibx-v2 .ibx-v2-context>.ibx-enrollment{background:var(--ibx-paper)!important;border:1px solid var(--ibx-line)!important;border-radius:13px!important;padding:12px 13px!important;}

@@ -35,7 +35,7 @@ export async function setLeadInterestAction(leadId: string, courseId: string, ac
   }
   await recomputeLead(admin, organizationId, leadId, now.slice(0, 10));
   await admin.from("activities").insert({
-    lead_id: leadId, activity_type: "course_interest_updated", actor_type: "user", actor_id: user.id,
+    lead_id: leadId, activity_type: "course_interest_updated", actor_type: "human", actor_id: user.id,
     title: action === "make_main" ? "Main course set by the team" : "Course interest removed by the team", details: courseId, metadata: { course_id: courseId, action },
   });
   revalidatePath("/conversations");
