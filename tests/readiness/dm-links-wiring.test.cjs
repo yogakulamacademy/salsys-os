@@ -15,7 +15,7 @@ test('tracked links: migration keeps visit country separate and writes server-on
 
 test('tracked links: short domain is routed publicly and the AI gets the link', () => {
   const mw = read('middleware.ts');
-  assert.match(mw, /go\.yogakulamacademy\.com/);
+  assert.ok(mw.includes('new Set(["go.yogakulamacademy.com"])'));
   assert.match(mw, /url\.pathname = `\/go\/\$\{code\}`/);
   const core = read('lib/copilot-core.ts');
   assert.match(core, /getOrCreateTrackedLink\(admin/);
