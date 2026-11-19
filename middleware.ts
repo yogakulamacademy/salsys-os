@@ -311,8 +311,22 @@ type WorkspaceContextPayload = {
   role?: unknown;
 };
 
+/** Short course links sent in DMs: go.yogakulamacademy.com/<code> (or /go/<code> on our own domain). */
+const TRACKED_LINK_HOSTS = new Set(["go.yogakulamacademy.com"]);
+const TRACKED_LINK_PATH = /^\/go\/[A-Za-z0-9]{8,16}$/;
+
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
+
+  const host = (request.headers.get("host") || "").toLowerCase().split(":")[0];
+  if (TRACKED_LINK_HOSTS.has(host)) {
+    const code = /^\/([A-Za-z0-9]{8,16})\/?$/.exec(pathname)?.[1];
+    if (!code) return NextResponse.redirect("https://www.yogakulamacademy.com/", 302);
+    const url = request.nextUrl.clone();
+    url.pathname = `/go/${code}`;
+    return NextResponse.rewrite(url);
+  }
+  if (TRACKED_LINK_PATH.test(pathname)) return NextResponse.next();
 
   if (isPublicPath(pathname) || isPublicAuthPath(pathname)) {
     // Do not place login/recovery/public ingestion behind auth middleware.

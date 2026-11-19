@@ -2,6 +2,7 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { draftCopilotReply, type CopilotReplyResult } from "@/lib/copilot-core";
+import { noOpenTaskDue, NO_OPEN_AFTER_MS } from "@/lib/dm-links";
 import { getInstagramRuntimeForOrganization } from "@/lib/integrations/instagram-connection";
 import {
   ASSESS_SCHEMA, assessSystemPrompt, assessUserPrompt, CLOSED_STAGES, eligibleNewLead, HANDOVER_LABELS,
@@ -16,6 +17,7 @@ const FOLLOWUP_SOURCE = "ai_followup_detection_v1";
 type Summary = {
   considered: number; sent: number; enrolled: number; handedOver: number; paused: number;
   skipped: number; nudges: number; followupDrafts: number; followupsSent: number; errors: number;
+  linkTasks: number;
 };
 
 type Ctx = { admin: SupabaseClient; now: Date; summary: Summary };
@@ -211,7 +213,7 @@ async function pauseIfTeamReplied(ctx: Ctx, state: { lead_id: string; enrolled_a
 }
 
 export async function runAutopilot(admin: SupabaseClient, now = new Date()): Promise<Summary> {
-  const summary: Summary = { considered: 0, sent: 0, enrolled: 0, handedOver: 0, paused: 0, skipped: 0, nudges: 0, followupDrafts: 0, followupsSent: 0, errors: 0 };
+  const summary: Summary = { considered: 0, sent: 0, enrolled: 0, handedOver: 0, paused: 0, skipped: 0, nudges: 0, followupDrafts: 0, followupsSent: 0, errors: 0, linkTasks: 0 };
   const ctx: Ctx = { admin, now, summary };
   const live = process.env.AI_AUTOPILOT_LIVE_ENABLED === "true";
   const orgFilter = (process.env.AI_AUTOPILOT_ORG_IDS ?? "").split(",").map((s) => s.trim()).filter(Boolean);
@@ -305,6 +307,11 @@ export async function runAutopilot(admin: SupabaseClient, now = new Date()): Pro
       }
     }
   }
+  // DM-LINK: a sent course link that wasn't opened in 12h (and no reply) becomes a team task.
+  try { await queueUnopenedLinks(ctx); } catch (err) {
+    summary.errors += 1;
+    console.error("Unopened link check failed", { error: err instanceof Error ? err.message : "unknown" });
+  }
   return summary;
 }
 
@@ -328,4 +335,51 @@ async function sendFollowup(ctx: Ctx, input: { leadId: string; organizationId: s
   await finishRun(ctx, runId, { ...base, status: "sent", would_send: true, sent_body: draft.draft.slice(0, 4000), provider_message_id: sent.providerMessageId });
   await ctx.admin.from("ai_autopilot_leads").update({ last_ai_message_at: new Date().toISOString() }).eq("lead_id", input.leadId);
   return true;
+}
+
+/**
+ * Leads who were sent their course link 12+ hours ago (within the last week),
+ * haven't opened it and haven't written since: give the team a task to reply
+ * personally. Each link gets one task at most; at most 10 tasks per run.
+ */
+async function queueUnopenedLinks(ctx: Ctx) {
+  const cutoff = new Date(ctx.now.getTime() - NO_OPEN_AFTER_MS).toISOString();
+  const weekAgo = new Date(ctx.now.getTime() - 7 * 24 * 3_600_000).toISOString();
+  const { data: links, error } = await ctx.admin.from("dm_tracked_links")
+    .select("id, organization_id, lead_id, sent_at, courses(name)")
+    .is("first_opened_at", null).is("attention_task_id", null).is("revoked_at", null)
+    .gte("sent_at", weekAgo).lte("sent_at", cutoff).gt("expires_at", ctx.now.toISOString())
+    .order("sent_at", { ascending: true }).limit(100);
+  if (error) throw new Error(error.message);
+  if (!links?.length) return;
+  const { data: leads } = await ctx.admin.from("leads")
+    .select("id, owner_user_id, current_stage, last_inbound_at")
+    .in("id", [...new Set(links.map((l) => String(l.lead_id)))]);
+  const leadById = new Map((leads ?? []).map((l) => [String(l.id), l]));
+  let created = 0;
+  for (const link of links) {
+    if (created >= 10) break;
+    const lead = leadById.get(String(link.lead_id));
+    if (!lead) continue;
+    const due = noOpenTaskDue({
+      sentAt: link.sent_at as string, firstOpenedAt: null, attentionTaskId: null, revokedAt: null,
+      lastInboundAt: (lead.last_inbound_at as string | null) ?? null,
+      leadClosed: CLOSED_STAGES.includes(String(lead.current_stage)), now: ctx.now,
+    });
+    if (!due) continue; // replied or closed: nothing to chase
+    const course = Array.isArray(link.courses) ? link.courses[0] : link.courses;
+    const courseName = (course as { name?: string } | null)?.name ?? "course";
+    const { data: task, error: taskError } = await ctx.admin.from("tasks").insert({
+      organization_id: link.organization_id, lead_id: link.lead_id, task_type: "human_review",
+      title: `Hasn't opened the ${courseName} link: reply personally`.slice(0, 240),
+      description: "The course link was sent 12+ hours ago and hasn't been opened, and the lead hasn't replied since. A personal message may help.",
+      status: "open", due_at: ctx.now.toISOString(), assigned_to: lead.owner_user_id ?? null,
+      created_by_type: "ai", created_by_id: "dm_link_no_open_v1",
+      metadata: { source: "dm_link_no_open_v1", link_id: link.id },
+    }).select("id").maybeSingle();
+    if (taskError || !task?.id) { ctx.summary.errors += 1; continue; }
+    await ctx.admin.from("dm_tracked_links").update({ attention_task_id: task.id }).eq("id", link.id).is("attention_task_id", null);
+    created += 1;
+    ctx.summary.linkTasks += 1;
+  }
 }
