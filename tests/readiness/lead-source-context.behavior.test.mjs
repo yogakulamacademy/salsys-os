@@ -100,3 +100,15 @@ test('drafts use Course Management batches for the course named in the latest me
   assert.equal(inferCourseForFacts({ ...base, adCourseId: 'unknown' }), null);
   assert.equal(inferCourseForFacts(base), null);
 });
+
+test('Autopilot leaves shared reels that are not about yoga or the courses to the team', async () => {
+  const { shareIsOffTopic } = await import('../../lib/lead-source-context.ts');
+  const reel = 'Shared an Instagram reel\nhttps://www.instagram.com/reel/Df4fDUgNMWQ/';
+  assert.equal(shareIsOffTopic(reel, { caption: 'Tagggg yourrr bestie 🥺❤️ No nazar 🧿 ....#besties #trending #instagram', course: null }), true);
+  assert.equal(shareIsOffTopic(reel, { caption: 'Morning yoga flow for beginners 🌞', course: null }), false);
+  assert.equal(shareIsOffTopic(reel, { caption: 'Join our teacher training in Mysore', course: null }), false);
+  assert.equal(shareIsOffTopic(reel, { caption: 'Anything', course: { id: 'c', code: 'FACE-YOGA', name: 'Online Face Yoga TTC' } }), false);
+  assert.equal(shareIsOffTopic(reel, { caption: null, course: null }), false); // unreadable: handled separately
+  assert.equal(shareIsOffTopic('lol this is so me', { caption: 'Tag your bestie', course: null }), false); // they wrote something
+  assert.equal(shareIsOffTopic(reel, null), false);
+});

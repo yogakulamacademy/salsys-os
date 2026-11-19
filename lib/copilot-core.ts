@@ -3,7 +3,7 @@ import 'server-only';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { inspectKnowledgeMatches, knowledgeFingerprint, type KnowledgeEvidence } from '@/lib/knowledge-evidence';
 import { REPLY_TONE_GUIDE } from '@/lib/reply-tone';
-import { describeSource, inferCourseForFacts, needsHumanEyes, type LeadSourceContext } from '@/lib/lead-source-context';
+import { describeSource, inferCourseForFacts, needsHumanEyes, shareIsOffTopic, type LeadSourceContext } from '@/lib/lead-source-context';
 import { getLeadSourceContext } from '@/lib/lead-source-context-data';
 
 type SupportedChannel = 'instagram' | 'whatsapp';
@@ -437,6 +437,11 @@ export async function draftCopilotReply({
     sourceContext = await getLeadSourceContext(admin, organizationId, leadId, (courseRows ?? []) as Array<{ id: string; name: string; code: string | null; category: string | null }>).catch(() => null);
     if (needsHumanEyes(latestInbound.body, sourceContext?.latestShare?.caption ?? null)) {
       return { ok: false, error: 'SHARE_UNREADABLE: The lead shared a post, reel or story we cannot see. Open it in Instagram and reply yourself.' };
+    }
+    // Autopilot does not reply to a shared reel or post that has nothing to do
+    // with yoga or the courses; the team decides how to answer those.
+    if (purpose !== 'copilot' && shareIsOffTopic(latestInbound.body, sourceContext?.latestShare ?? null)) {
+      return { ok: false, error: 'SHARE_OFF_TOPIC: The lead shared a post or reel that is not about yoga or our courses. A person should reply.' };
     }
   }
 

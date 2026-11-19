@@ -57,3 +57,8 @@ test('sends only when confident, supported and no person is needed', () => {
   assert.equal(sendDecision({ assessment: ok, draft: 'Pay via UPI yogakulam@ok', routerRisk: 'low' }).reason, 'draft_unsafe');
   assert.equal(parseAssessment({ confidence: 'high' }), null);
 });
+
+test('off-topic shares have a handover label', async () => {
+  const { HANDOVER_LABELS } = await import('../../lib/autopilot-live.ts');
+  assert.match(HANDOVER_LABELS.off_topic_share, /not about yoga/);
+});

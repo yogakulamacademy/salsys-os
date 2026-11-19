@@ -130,10 +130,17 @@ async function replyToLead(ctx: Ctx, msg: InboundRow, state: { status: string; e
 
   const draft = await draftCopilotReply({ leadId: msg.lead_id, knowledgeClient: ctx.admin, purpose: "autopilot" });
   if (!draft.ok) {
-    const reason: HandoverReason = draft.error.startsWith("SHARE_UNREADABLE") ? "unreadable_share" : "draft_failed";
-    if (enrolled) await handover(ctx, msg.lead_id, reason);
-    await finishRun(ctx, runId, { ...draftFields(draft), status: enrolled ? "handed_over" : "skipped", stop_reason: reason });
-    if (!enrolled) ctx.summary.skipped += 1;
+    const reason: HandoverReason = draft.error.startsWith("SHARE_UNREADABLE") ? "unreadable_share"
+      : draft.error.startsWith("SHARE_OFF_TOPIC") ? "off_topic_share" : "draft_failed";
+    // A share the AI can't or shouldn't answer goes to the team as a task, new leads included.
+    let handed = enrolled;
+    if (!enrolled && !state && (reason === "unreadable_share" || reason === "off_topic_share")) {
+      const { error: enrolError } = await ctx.admin.from("ai_autopilot_leads").insert({ organization_id: msg.organization_id, lead_id: msg.lead_id, enrolled_reason: "pilot_new_lead" });
+      handed = !enrolError;
+    }
+    if (handed) await handover(ctx, msg.lead_id, reason);
+    await finishRun(ctx, runId, { ...draftFields(draft), status: handed ? "handed_over" : "skipped", stop_reason: reason });
+    if (!handed) ctx.summary.skipped += 1;
     return;
   }
 
