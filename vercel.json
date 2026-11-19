@@ -86,6 +86,10 @@
     {
       "path": "/api/leads/interests/scan",
       "schedule": "*/10 * * * *"
+    },
+    {
+      "path": "/api/leads/stages/scan",
+      "schedule": "5-55/10 * * * *"
     }
   ]
 }
