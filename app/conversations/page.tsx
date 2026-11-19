@@ -33,6 +33,9 @@ import { InboxHeaderOwner } from "@/components/inbox-header-owner";
 import { InboxSnoozedBanner } from "@/components/inbox-snoozed-banner";
 import { InboxAutopilotBar, InboxFollowupDraftCard } from "@/components/inbox-autopilot";
 import { getInboxAutopilot } from "@/lib/autopilot-inbox-data";
+import { InboxCourseLink } from "@/components/inbox-course-link";
+import { countryName } from "@/lib/dm-links";
+import { getLeadTrackedLink } from "@/lib/dm-links-data";
 import { buildLeadIntelligence, readSignals } from "@/lib/lead-intelligence";
 import { scoreLead } from "@/lib/lead-score";
 import { getLeadScoreContext } from "@/lib/lead-score-data";
@@ -155,6 +158,10 @@ export default async function ConversationsPage({
   // AI Autopilot state and any due AI follow-up draft (Sales AI Jobs 2 and 4).
   const autopilot = selected && !mock && selected.currentContactChannel === "instagram"
     ? await getInboxAutopilot(selected.id).catch(() => null)
+    : null;
+  // Tracked course link: opened or not, and the visit country (DM-LINK). RLS-scoped read.
+  const courseLink = selected && !mock && selected.currentContactChannel === "instagram"
+    ? await createClient().then((client) => getLeadTrackedLink(client, selected.id)).catch(() => null)
     : null;
   // Lead score, conversion confidence and next step (Sales AI Job 3).
   const scoreContext = selected && !mock
@@ -480,6 +487,10 @@ export default async function ConversationsPage({
           </a> :
           <span className="ibx-v2-profile-no-phone">Phone contact unavailable</span>}
       </section>
+      {selected.currentContactChannel === "instagram" && !mock ? (
+        <InboxCourseLink key={`link-${selected.id}`} leadId={selected.id}
+          status={courseLink ? { ...courseLink, visitCountryName: countryName(courseLink.visitCountry) } : null} />
+      ) : null}
       {leadIntel ? <InboxLeadIntelligence intel={leadIntel} score={leadScore} source={leadSource} /> : null}
       {/* key: remount per lead so the stage/owner selects never keep the previous conversation's value */}
       <InboxLeadOverview key={selected.id} leadId={selected.id} stage={selected.stage}
