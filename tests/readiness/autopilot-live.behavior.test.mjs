@@ -62,3 +62,16 @@ test('off-topic shares have a handover label', async () => {
   const { HANDOVER_LABELS } = await import('../../lib/autopilot-live.ts');
   assert.match(HANDOVER_LABELS.off_topic_share, /not about yoga/);
 });
+
+test('a lead whose course starts within 24 hours goes to the team', async () => {
+  const { batchStartAt, batchStartsSoon, HANDOVER_LABELS } = await import('../../lib/autopilot-live.ts');
+  // 15 Dec 18:00 IST = 15 Dec 12:30 UTC
+  assert.equal(batchStartAt({ startDate: '2026-12-15', startTime: '18:00:00', timezone: 'Asia/Kolkata' }), Date.parse('2026-12-15T12:30:00Z'));
+  assert.equal(batchStartAt({ startDate: '2026-12-15', startTime: null, timezone: null }), Date.parse('2026-12-14T18:30:00Z'));
+  const batch = { startDate: '2026-12-15', startTime: '18:00:00', timezone: 'Asia/Kolkata' };
+  assert.equal(batchStartsSoon(batch, new Date('2026-12-14T13:00:00Z')), true);   // 23.5h before
+  assert.equal(batchStartsSoon(batch, new Date('2026-12-14T12:00:00Z')), false);  // 24.5h before
+  assert.equal(batchStartsSoon(batch, new Date('2026-12-15T14:00:00Z')), true);   // already started today
+  assert.equal(batchStartsSoon(null, new Date()), false);
+  assert.match(HANDOVER_LABELS.batch_starting_soon, /24 hours/);
+});

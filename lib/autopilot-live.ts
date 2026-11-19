@@ -21,6 +21,7 @@ export type HandoverReason =
   | "unsupported_fact"
   | "needs_person"
   | "unreadable_share"
+  | "batch_starting_soon"
   | "off_topic_share"
   | "draft_failed"
   | "send_failed"
@@ -35,6 +36,7 @@ export const HANDOVER_LABELS: Record<HandoverReason, string> = {
   unsupported_fact: "Answer needs facts the AI doesn't have",
   needs_person: "AI says a person should answer",
   unreadable_share: "Lead shared a post the AI can't see",
+  batch_starting_soon: "The batch the lead asked about starts within 24 hours",
   off_topic_share: "Lead shared a reel or post not about yoga or our courses",
   draft_failed: "AI couldn't write a reply",
   send_failed: "Instagram didn't accept the AI's reply",
@@ -149,4 +151,37 @@ export function sendDecision(input: { assessment: Assessment | null; draft: stri
   if (!a.factsSupported) return { send: false, reason: "unsupported_fact", detail: a.reason || HANDOVER_LABELS.unsupported_fact };
   if (a.confidence < CONFIDENCE_MIN) return { send: false, reason: "low_confidence", detail: `${a.reason || HANDOVER_LABELS.low_confidence} (confidence ${Math.round(a.confidence * 100)}%)` };
   return { send: true };
+}
+
+/** Offset (ms) of a time zone from UTC at a given instant, e.g. +5:30 for Asia/Kolkata. */
+function zoneOffsetMs(timeZone: string, at: number): number {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone, hourCycle: "h23", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit",
+  }).formatToParts(new Date(at));
+  const get = (t: string) => Number(parts.find((p) => p.type === t)?.value ?? 0);
+  return Date.UTC(get("year"), get("month") - 1, get("day"), get("hour"), get("minute"), get("second")) - at;
+}
+
+/** When a batch starts, as a UTC timestamp. Missing time = start of that day; missing zone = India. */
+export function batchStartAt(batch: { startDate: string; startTime?: string | null; timezone?: string | null }): number | null {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(batch.startDate)) return null;
+  const time = /^\d{2}:\d{2}/.test(batch.startTime ?? "") ? String(batch.startTime).slice(0, 8).padEnd(8, ":00").slice(0, 8) : "00:00:00";
+  const asUtc = Date.parse(`${batch.startDate}T${time}Z`);
+  if (!Number.isFinite(asUtc)) return null;
+  let zone = batch.timezone || "Asia/Kolkata";
+  try { new Intl.DateTimeFormat("en-US", { timeZone: zone }); } catch { zone = "Asia/Kolkata"; }
+  return asUtc - zoneOffsetMs(zone, asUtc);
+}
+
+/**
+ * The owner's rule: a lead whose course starts within 24 hours (or has just
+ * started) goes to the team, not Autopilot.
+ */
+export function batchStartsSoon(
+  batch: { startDate: string; startTime?: string | null; timezone?: string | null } | null | undefined,
+  now: Date,
+): boolean {
+  if (!batch) return false;
+  const at = batchStartAt(batch);
+  return at !== null && at - now.getTime() < WINDOW_MS;
 }

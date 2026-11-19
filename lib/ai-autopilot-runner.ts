@@ -5,7 +5,7 @@ import { draftCopilotReply, type CopilotReplyResult } from "@/lib/copilot-core";
 import { getInstagramRuntimeForOrganization } from "@/lib/integrations/instagram-connection";
 import {
   ASSESS_SCHEMA, assessSystemPrompt, assessUserPrompt, CLOSED_STAGES, eligibleNewLead, HANDOVER_LABELS,
-  istDayStart, liveHardStop, nudgeDue, parseAssessment, sendDecision, windowOpen,
+  batchStartsSoon, istDayStart, liveHardStop, nudgeDue, parseAssessment, sendDecision, windowOpen,
   type Assessment, type HandoverReason,
 } from "@/lib/autopilot-live";
 
@@ -140,6 +140,20 @@ async function replyToLead(ctx: Ctx, msg: InboundRow, state: { status: string; e
     }
     if (handed) await handover(ctx, msg.lead_id, reason);
     await finishRun(ctx, runId, { ...draftFields(draft), status: handed ? "handed_over" : "skipped", stop_reason: reason });
+    if (!handed) ctx.summary.skipped += 1;
+    return;
+  }
+
+  // Owner's rule: if the course the lead asked about starts within 24 hours, the team takes it.
+  if (batchStartsSoon(draft.facts?.nextBatchStart, ctx.now)) {
+    let handed = enrolled;
+    if (!enrolled && !state) {
+      const { error: enrolError } = await ctx.admin.from("ai_autopilot_leads").insert({ organization_id: msg.organization_id, lead_id: msg.lead_id, enrolled_reason: "pilot_new_lead" });
+      handed = !enrolError;
+    }
+    const startDetail = `${HANDOVER_LABELS.batch_starting_soon}${draft.facts?.courseName ? ` (${draft.facts.courseName}, ${draft.facts?.nextBatchStart?.startDate})` : ""}`;
+    if (handed) await handover(ctx, msg.lead_id, "batch_starting_soon", startDetail);
+    await finishRun(ctx, runId, { ...draftFields(draft), status: handed ? "handed_over" : "skipped", stop_reason: "batch_starting_soon" });
     if (!handed) ctx.summary.skipped += 1;
     return;
   }
