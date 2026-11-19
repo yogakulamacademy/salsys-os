@@ -59,6 +59,8 @@ export type CopilotReplyResult =
         courseFactsSource: string | null;
         courseName: string | null;
         upcomingBatches: number;
+        /** Start of the next upcoming batch for the course (Course Management). */
+        nextBatchStart: { startDate: string; startTime: string | null; timezone: string | null } | null;
         latestInbound: string;
         contextText: string;
       };
@@ -647,6 +649,13 @@ export async function draftCopilotReply({
         courseFactsSource,
         courseName: selectedCourse ? String((selectedCourse as { name?: unknown }).name ?? '') || null : null,
         upcomingBatches: upcomingBatches.length,
+        nextBatchStart: upcomingBatches[0]?.start_date
+          ? {
+              startDate: String(upcomingBatches[0].start_date),
+              startTime: upcomingBatches[0].start_time ? String(upcomingBatches[0].start_time) : null,
+              timezone: upcomingBatches[0].timezone ? String(upcomingBatches[0].timezone) : null,
+            }
+          : null,
         latestInbound: latestInbound.body,
         contextText,
       },
