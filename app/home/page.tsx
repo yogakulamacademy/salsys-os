@@ -373,8 +373,6 @@ export default async function HomePage({ searchParams }: HomePageProps) {
         </div>
       </header>
 
-      {story ? <HomeTodayStrip story={story} aiMoves24h={extras.aiStageMoves24h} /> : null}
-
       <section aria-label="Business pulse" className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 min-[1100px]:grid-cols-4">
         <KpiCard
           icon={<Users size={18} />}
@@ -427,6 +425,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
         />
       </section>
 
+      {story ? <HomeTodayStrip story={story} aiMoves24h={extras.aiStageMoves24h} /> : null}
       {story ? <HomeLeadsAlert story={story} adsProblem={health.find((item) => item.label === "Google & Meta ads" && item.state === "bad")?.note ?? null} /> : null}
 
       <div className="flex flex-wrap gap-3.5">
