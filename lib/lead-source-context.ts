@@ -116,11 +116,13 @@ const COURSE_HINTS: Array<[RegExp, string[]]> = [
   [/online.*300|300.*online/i, ["ONLINE-300H"]],
   [/300[- ]?(hour|hr|h)\b/i, ["300H-YTT"]],
   [/online.*200|200.*online|certified international yoga instructor/i, ["ONLINE-200H"]],
-  [/200[- ]?(hour|hr|h)\b|24 days|yoga teacher training|ytt\b/i, ["200H-YTT"]],
+  [/200[- ]?(hour|hr|h)\b|24 days/i, ["200H-YTT"]],
   [/100[- ]?(hour|hr|h)\b/i, ["100H-YTT"]],
   [/ayurved/i, ["AYURVEDA-RETREAT"]],
   [/nutrition/i, ["NUTRITION"]],
   [/retreat/i, ["YOGA-RETREAT"]],
+  // Generic "yoga teacher training" with no hours named: the flagship 200-hour course.
+  [/yoga teacher training|ytt\b/i, ["200H-YTT"]],
 ];
 
 /** Best course guess from ad or post text. Returns null rather than guessing wildly. */
