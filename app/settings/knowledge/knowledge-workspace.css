@@ -164,3 +164,15 @@ html.dark .kn-empty-illustration{background:radial-gradient(circle,#4c3971 10%,#
   .kn-suggestion-why div { grid-template-columns: 1fr; gap: 2px; }
   .kn-suggestion-source { margin-left: 0; }
 }
+
+/* Full text of a knowledge item, opened on demand (what the AI reads). */
+.kn-document-full{margin-top:8px;}
+.kn-document-full>summary{cursor:pointer;display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:750;color:var(--kn-violet);list-style:none;}
+.kn-document-full>summary::-webkit-details-marker{display:none;}
+.kn-document-full>summary::before{content:"▸";font-size:10px;transition:transform .15s;}
+.kn-document-full[open]>summary::before{transform:rotate(90deg);}
+.kn-document-full[open]>summary{margin-bottom:8px;}
+.kn-document-full[open]+.kn-document-meta{margin-top:10px;}
+.kn-document:has(.kn-document-full[open]) .kn-document-content{display:none;}
+.kn-document-full-text{font-size:12px;line-height:1.65;color:var(--kn-ink, #1d1b2e);white-space:pre-wrap;overflow-wrap:anywhere;
+  background:var(--kn-soft);border:1px solid var(--kn-line);border-radius:10px;padding:12px 14px;max-height:520px;overflow:auto;}

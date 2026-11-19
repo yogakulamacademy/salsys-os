@@ -157,3 +157,20 @@ html.dark .ibx-v2 .conversation-message-outbound,html.dark .ibx-v2 .conversation
   .ibx-v2 .conversation-sidebar .ibx-v2-row{min-height:98px;}
   .ibx-v2 .ibx-v2-tabs button{font-size:10px;}
 }
+
+/* Keep the conversation readable on laptop screens: the thread gets the room,
+   the header and composer stay compact, and the composer never takes over. */
+.ibx-v2 .ibx-v2-chat{container-type:inline-size;container-name:ibxchat;}
+.ibx-v2 .ibx-v2-chat>div:last-child{min-height:0;max-height:46%;overflow-y:auto;}
+.ibx-v2 .ibx-v2-chat .ibx-v2-ai-toolbar{padding:3px 10px;}
+.ibx-v2 .conversation-composer textarea,.ibx-v2 [aria-label="Conversation composer"] textarea{min-height:58px!important;}
+@media (max-height:900px){
+  .ibx-v2 .composer-intro{display:none;}
+  .ibx-v2 .ibx-v2-center-tabs{height:38px;}
+  .ibx-v2 .ibx-v2-center-tabs>button{min-height:38px;}
+}
+@container ibxchat (max-width:1000px){
+  .ibx-v2 .ibx-v2-chat-header{flex-wrap:wrap;row-gap:8px;min-height:0;padding-top:10px!important;padding-bottom:10px!important;}
+  .ibx-v2 .ibx-v2-chat-header>div:first-child{flex:1 1 100%;}
+  .ibx-v2 .ibx-v3-header-buttons{width:100%;flex-wrap:wrap;justify-content:flex-start;margin-left:52px;}
+}

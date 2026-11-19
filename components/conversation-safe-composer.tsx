@@ -258,7 +258,7 @@ export function ConversationSafeComposer({
 
         {mode === "reply" ? (
           <div role="tabpanel" className="p-3">
-            <div className="mb-2 flex items-start justify-between gap-3">
+            <div className="composer-intro mb-2 flex items-start justify-between gap-3">
               <div>
                 <div className="text-[10px] font-semibold text-[#18362D]">
                   {isInstagram ? "Reply on Instagram" : "Prepare a response"}
