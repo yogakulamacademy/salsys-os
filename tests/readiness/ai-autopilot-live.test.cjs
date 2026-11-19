@@ -11,6 +11,10 @@ const action = read('app/conversations/copilot-actions.ts');
 
 test('Autopilot sends nothing unless switched on; cron is secret-protected', () => {
   assert.match(runner, /AI_AUTOPILOT_LIVE_ENABLED === "true"/);
+  // Each business must also switch Autopilot on in its own settings.
+  assert.match(runner, /listAutopilotBusinesses\(admin\)/);
+  assert.match(runner, /q = q\.in\("organization_id", liveOrgs\)/);
+  assert.match(runner, /if \(!businesses\.has\(String\(task\.organization_id\)\)\) continue;/);
   assert.match(runner, /AI_FOLLOWUP_DRAFTS_ENABLED === "true"/);
   assert.match(route, /bearerMatchesAnySecret\(request\.headers\.get\("authorization"\), \[cronSecret\]\)/);
   assert.ok(JSON.parse(read('vercel.json')).crons.some((c) => c.path === '/api/ai/autopilot'));
@@ -25,7 +29,7 @@ test('every send is claimed once, policy-checked, gated and logged as AI', () =>
   assert.match(runner, /ai_generated: true/);
   assert.match(runner, /batchStartsSoon\(draft.facts\?.nextBatchStart/);
   assert.match(runner, /pauseIfTeamReplied/);
-  assert.match(runner, /dailyCap\(\)/);
+  assert.match(runner, /dailyCap\(ctx, msg\.organization_id\)/);
   assert.match(runner, /enrolled_reason: "pilot_new_lead"/);
   assert.doesNotMatch(runner, /payment_link|razorpay|paypal\.com/i);
 });

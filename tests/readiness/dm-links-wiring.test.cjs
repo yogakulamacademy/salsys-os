@@ -15,12 +15,17 @@ test('tracked links: migration keeps visit country separate and writes server-on
 
 test('tracked links: short domain is routed publicly and the AI gets the link', () => {
   const mw = read('middleware.ts');
-  assert.ok(mw.includes('new Set(["go.yogakulamacademy.com"])'));
+  assert.ok(mw.includes('function isCrmHost('));
+  assert.ok(!mw.includes('yogakulamacademy'), 'no business is hardcoded in the middleware');
   assert.match(mw, /url\.pathname = `\/go\/\$\{code\}`/);
+  const route = read('app/go/[code]/route.ts');
+  assert.match(route, /findBusinessByLinkDomain/);
+  assert.match(route, /domainOwner\.organizationId !== String\(link\.organization_id\)/);
+  assert.ok(!route.includes('yogakulamacademy'), 'no business is hardcoded in the link route');
   const core = read('lib/copilot-core.ts');
   assert.match(core, /getOrCreateTrackedLink\(admin/);
   assert.match(core, /trackedCourseLink,/);
-  assert.match(core, /process\.env\.DM_LINKS_ENABLED === 'true'/);
+  assert.match(core, /\.dmLinksEnabled\)/);
   assert.match(core, /Full course details: <trackedCourseLink>/);
   const runner = read('lib/ai-autopilot-runner.ts');
   assert.match(runner, /queueUnopenedLinks\(ctx\)/);

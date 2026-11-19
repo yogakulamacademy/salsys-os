@@ -36,6 +36,7 @@ import { getInboxAutopilot } from "@/lib/autopilot-inbox-data";
 import { InboxCourseLink } from "@/components/inbox-course-link";
 import { countryName } from "@/lib/dm-links";
 import { getLeadTrackedLink } from "@/lib/dm-links-data";
+import { getOrgSalesAiSettings } from "@/lib/org-sales-ai-settings";
 import { buildLeadIntelligence, readSignals } from "@/lib/lead-intelligence";
 import { scoreLead } from "@/lib/lead-score";
 import { getLeadScoreContext } from "@/lib/lead-score-data";
@@ -241,7 +242,9 @@ export default async function ConversationsPage({
     ? updateConversationLeadContextWithActivityAction.bind(null, selectedId)
     : undefined;
 
-  const autopilotLive = !mock && process.env.AI_AUTOPILOT_LIVE_ENABLED === "true";
+  // Autopilot is on when the CRM-wide switch is on and this business has it switched on.
+  const autopilotLive = !mock && process.env.AI_AUTOPILOT_LIVE_ENABLED === "true" && Boolean(organizationId) &&
+    (await createClient().then((client) => getOrgSalesAiSettings(client, String(organizationId))).catch(() => null))?.autopilotEnabled === true;
 
   const noticeText = noticeFor(query.notice);
 
