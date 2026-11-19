@@ -406,7 +406,7 @@ export default async function KnowledgeSettingsPage({
                   {source?.source_uri ? <p className="kn-reference">Reference: {source.source_uri}</p> : null}
                   <p className="kn-updated">Updated {new Date(document.updated_at).toLocaleString('en-IN')}</p>
                   {canManage && document.status !== 'archived' ? <div className="kn-document-actions">
-                    {document.status !== 'approved' ? <form action={approveKnowledgeDocumentAction}>
+                    {document.status === 'draft' || document.status === 'review' || document.status === 'expired' ? <form action={approveKnowledgeDocumentAction}>
                       <input type="hidden" name="document_id" value={document.id}/>
                       <button type="submit" className="kn-primary kn-small"><CheckCircle2 size={14}/> Approve</button>
                     </form> : null}
