@@ -35,6 +35,8 @@ import { InboxAutopilotBar, InboxFollowupDraftCard } from "@/components/inbox-au
 import { getInboxAutopilot } from "@/lib/autopilot-inbox-data";
 import { InboxCourseLink } from "@/components/inbox-course-link";
 import { InboxCourseInterests, type InboxInterest } from "@/components/inbox-course-interests";
+import { InboxEnrollment } from "@/components/inbox-enrollment";
+import { getEnrollmentPanel } from "@/lib/enrollment-panel-data";
 import { countryName } from "@/lib/dm-links";
 import { getLeadTrackedLink } from "@/lib/dm-links-data";
 import { getOrgSalesAiSettings } from "@/lib/org-sales-ai-settings";
@@ -182,6 +184,13 @@ export default async function ConversationsPage({
         const src = String(lead?.potential_value_source ?? "");
         const valueNote = src.includes("market_unknown") ? "Value uses the India price: we don't know yet if this lead is in India." : null;
         return { interests, valueNote };
+      }).catch(() => null)
+    : null;
+  // Enrolment and payments for this lead (RLS-scoped); Mark enrolled for owner/admin.
+  const enrollmentPanel = selected && !mock
+    ? await createClient().then(async (client) => {
+        const { data: { user } } = await client.auth.getUser();
+        return user ? getEnrollmentPanel(client, selected.id, user.id) : null;
       }).catch(() => null)
     : null;
   // Lead score, conversion confidence and next step (Sales AI Job 3).
@@ -513,6 +522,7 @@ export default async function ConversationsPage({
       {interestData ? (
         <InboxCourseInterests key={`int-${selected.id}`} leadId={selected.id} interests={interestData.interests} valueNote={interestData.valueNote} />
       ) : null}
+      {enrollmentPanel ? <InboxEnrollment key={`enr-${selected.id}`} leadId={selected.id} panel={enrollmentPanel} /> : null}
       {selected.currentContactChannel === "instagram" && !mock ? (
         <InboxCourseLink key={`link-${selected.id}`} leadId={selected.id}
           status={courseLink ? { ...courseLink, visitCountryName: countryName(courseLink.visitCountry) } : null} />
