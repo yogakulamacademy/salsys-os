@@ -87,7 +87,9 @@ export function LocationsPanel({ breakdown }: { breakdown: LocationBreakdown | n
                 if (row.lon == null || row.lat == null) return null;
                 const left = ((row.lon + 180) * 2 / MAP_W) * 100;
                 const topPct = ((85 - row.lat) * 2 / MAP_H) * 100;
-                const size = Math.round(12 + Math.sqrt(row.leads) * 4.5);
+                // Area grows with leads, relative to the biggest country, capped so one
+                // dominant country never covers the map.
+                const size = Math.round(10 + 26 * Math.sqrt(row.leads / max));
                 const active = row.name === picked?.name;
                 return (
                   <button
@@ -97,8 +99,8 @@ export function LocationsPanel({ breakdown }: { breakdown: LocationBreakdown | n
                     aria-label={`${row.name}, ${row.leads} leads`}
                     title={`${row.name} · ${row.leads}`}
                     onClick={() => setSelected(row.name)}
-                    className={`absolute -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white transition focus-visible:outline-2 focus-visible:outline-brand-700 ${active ? "bg-brand-800 ring-4 ring-brand-100" : "bg-brand-600/75 hover:bg-brand-700"}`}
-                    style={{ left: `${left}%`, top: `${topPct}%`, width: size, height: size }}
+                    className={`absolute -translate-x-1/2 -translate-y-1/2 aspect-square rounded-full border-2 border-white p-0 transition focus-visible:outline-2 focus-visible:outline-brand-700 ${active ? "bg-brand-800 ring-4 ring-brand-100" : "bg-brand-600/75 hover:bg-brand-700"}`}
+                    style={{ left: `${left}%`, top: `${topPct}%`, width: size, height: size, minWidth: size, minHeight: size, maxHeight: size }}
                   />
                 );
               })}
