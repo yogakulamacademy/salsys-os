@@ -22,6 +22,7 @@ test('every send is claimed once, policy-checked, gated and logged as AI', () =>
   assert.match(runner, /liveHardStop\(msg\.body/);
   assert.match(runner, /sendDecision\(\{ assessment, draft: draft\.draft, routerRisk: draft\.risk \}\)/);
   assert.match(runner, /sender_type: "ai"/);
+  assert.match(runner, /ai_generated: true/);
   assert.match(runner, /pauseIfTeamReplied/);
   assert.match(runner, /dailyCap\(\)/);
   assert.match(runner, /enrolled_reason: "pilot_new_lead"/);

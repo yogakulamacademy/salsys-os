@@ -74,7 +74,7 @@ async function sendInstagram(admin: SupabaseClient, input: { organizationId: str
   if (messageId) {
     await admin.from("messages").update({
       external_message_id: payload.message_id, status: "sent", sent_at: new Date().toISOString(), sender_type: "ai",
-      human_approved: false, metadata: { provider: "instagram", send_mode: "ai_autopilot", autopilot_run_id: input.runId },
+      ai_generated: true, human_approved: false, metadata: { provider: "instagram", send_mode: "ai_autopilot", autopilot_run_id: input.runId },
     }).eq("id", messageId).eq("organization_id", input.organizationId);
     // The shared logger records outbound messages as human; this one was the AI.
     await admin.from("activities").update({ actor_type: "ai", actor_id: "ai_autopilot_v1", title: "AI Autopilot reply" })
