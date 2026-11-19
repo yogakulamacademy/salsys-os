@@ -53,3 +53,13 @@ test('stages: rule signals and combining with the AI', () => {
   assert.equal(strongerSignal('not_now', 'qualified'), 'not_now');
   assert.equal(strongerSignal('none', 'contacted'), 'contacted');
 });
+
+test('stages: ad quick-reply taps are marked so they are not read as intent', async () => {
+  const { isAdStarter, stageUserPrompt, stageSystemPrompt } = await import('../../lib/lead-stages.ts');
+  for (const t of ['What is the course fee?', 'How much does the course cost?', 'How do I register for 200-Hour YTT in Mysore?', 'How do I enroll now?', 'Is there a payment plan?', 'Hello, can I get more info on this?']) assert.equal(isAdStarter(t), true, t);
+  for (const t of ['What is the course fee for the online batch in January?', 'fees?', 'I want to join the December batch, how do I pay?']) assert.equal(isAdStarter(t), false, t);
+  const prompt = stageUserPrompt([{ who: 'lead', text: 'What is the course fee?' }, { who: 'team', text: 'It is ₹30,000.' }, { who: 'lead', text: 'Can I pay in two parts?' }]);
+  assert.match(prompt, /^LEAD \(tapped a ready-made ad question\): What is the course fee\?$/m);
+  assert.match(prompt, /\nLEAD: Can I pay in two parts\?$/m);
+  assert.match(stageSystemPrompt(), /taps alone mean engaged at most/);
+});
