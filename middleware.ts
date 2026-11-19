@@ -311,19 +311,28 @@ type WorkspaceContextPayload = {
   role?: unknown;
 };
 
-/** Short course links sent in DMs: go.yogakulamacademy.com/<code> (or /go/<code> on our own domain). */
-const TRACKED_LINK_HOSTS = new Set(["go.yogakulamacademy.com"]);
-const TRACKED_LINK_PATH = /^\/go\/[A-Za-z0-9]{8,16}$/;
+/**
+ * Short course links sent in DMs. Standard plan: salsysos.com/go/<code>.
+ * Premium: a business's branded domain (e.g. go.theirbrand.com/<code>);
+ * any host that isn't the CRM's own is such a domain. The route checks the
+ * domain belongs to the link's business.
+ */
+const TRACKED_LINK_PATH = /^\/go\/[A-Za-z0-9]{4,16}$/;
+
+function isCrmHost(host: string) {
+  return host === "localhost" || host === "127.0.0.1" || host === "salsysos.com" ||
+    host.endsWith(".salsysos.com") || host.endsWith(".vercel.app");
+}
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   const host = (request.headers.get("host") || "").toLowerCase().split(":")[0];
-  if (TRACKED_LINK_HOSTS.has(host)) {
-    const code = /^\/([A-Za-z0-9]{8,16})\/?$/.exec(pathname)?.[1];
-    if (!code) return NextResponse.redirect("https://www.yogakulamacademy.com/", 302);
+  if (host && !isCrmHost(host)) {
+    const code = /^\/([A-Za-z0-9]{8,16})\/?$/.exec(pathname)?.[1] ?? "home";
     const url = request.nextUrl.clone();
     url.pathname = `/go/${code}`;
+    url.search = "";
     return NextResponse.rewrite(url);
   }
   if (TRACKED_LINK_PATH.test(pathname)) return NextResponse.next();

@@ -3,6 +3,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { draftCopilotReply, type CopilotReplyResult } from "@/lib/copilot-core";
 import { noOpenTaskDue, NO_OPEN_AFTER_MS } from "@/lib/dm-links";
+import { listAutopilotBusinesses, type OrgSalesAiSettings } from "@/lib/org-sales-ai-settings";
 import { getInstagramRuntimeForOrganization } from "@/lib/integrations/instagram-connection";
 import {
   ASSESS_SCHEMA, assessSystemPrompt, assessUserPrompt, CLOSED_STAGES, eligibleNewLead, HANDOVER_LABELS,
@@ -20,11 +21,13 @@ type Summary = {
   linkTasks: number;
 };
 
-type Ctx = { admin: SupabaseClient; now: Date; summary: Summary };
+/** businesses: the businesses with Autopilot switched on, and their settings. */
+type Ctx = { admin: SupabaseClient; now: Date; summary: Summary; businesses: Map<string, OrgSalesAiSettings> };
 
-function dailyCap() {
-  const n = Number(process.env.AI_AUTOPILOT_DAILY_NEW_LEADS ?? "20");
-  return Number.isFinite(n) && n >= 0 ? Math.min(n, 200) : 20;
+/** New leads Autopilot may take per day, set per business. */
+function dailyCap(ctx: Ctx, organizationId: string) {
+  const n = ctx.businesses.get(organizationId)?.autopilotDailyNewLeads ?? 0;
+  return Number.isFinite(n) && n >= 0 ? Math.min(n, 200) : 0;
 }
 
 async function assess(contextText: string, latestInbound: string, draft: string, kind: "reply" | "followup"): Promise<Assessment | null> {
@@ -176,7 +179,7 @@ async function replyToLead(ctx: Ctx, msg: InboundRow, state: { status: string; e
     if (state) { await finishRun(ctx, runId, { ...base, status: "skipped", stop_reason: "not_on_autopilot" }); ctx.summary.skipped += 1; return; }
     const { count } = await ctx.admin.from("ai_autopilot_leads").select("id", { count: "exact", head: true })
       .eq("organization_id", msg.organization_id).eq("enrolled_reason", "pilot_new_lead").gte("enrolled_at", istDayStart(ctx.now).toISOString());
-    if ((count ?? 0) >= dailyCap()) { await finishRun(ctx, runId, { ...base, status: "skipped", stop_reason: "daily_cap" }); ctx.summary.skipped += 1; return; }
+    if ((count ?? 0) >= dailyCap(ctx, msg.organization_id)) { await finishRun(ctx, runId, { ...base, status: "skipped", stop_reason: "daily_cap" }); ctx.summary.skipped += 1; return; }
     const { error: enrolError } = await ctx.admin.from("ai_autopilot_leads").insert({ organization_id: msg.organization_id, lead_id: msg.lead_id, enrolled_reason: "pilot_new_lead" });
     if (enrolError) { await finishRun(ctx, runId, { ...base, status: "skipped", stop_reason: "enrol_failed" }); ctx.summary.errors += 1; return; }
     await ctx.admin.from("activities").insert({ lead_id: msg.lead_id, activity_type: "ai_autopilot_on", actor_type: "ai", actor_id: "ai_autopilot_v1", title: "AI Autopilot took this lead", details: `Confident it can help (${Math.round((assessment?.confidence ?? 0) * 100)}%).`, metadata: {} });
@@ -214,9 +217,13 @@ async function pauseIfTeamReplied(ctx: Ctx, state: { lead_id: string; enrolled_a
 
 export async function runAutopilot(admin: SupabaseClient, now = new Date()): Promise<Summary> {
   const summary: Summary = { considered: 0, sent: 0, enrolled: 0, handedOver: 0, paused: 0, skipped: 0, nudges: 0, followupDrafts: 0, followupsSent: 0, errors: 0, linkTasks: 0 };
-  const ctx: Ctx = { admin, now, summary };
-  const live = process.env.AI_AUTOPILOT_LIVE_ENABLED === "true";
-  const orgFilter = (process.env.AI_AUTOPILOT_ORG_IDS ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+  // AI_AUTOPILOT_LIVE_ENABLED is the master switch for the whole CRM; each
+  // business must also have Autopilot switched on in its own settings.
+  const masterOn = process.env.AI_AUTOPILOT_LIVE_ENABLED === "true";
+  const businesses = masterOn ? await listAutopilotBusinesses(admin) : new Map<string, OrgSalesAiSettings>();
+  const ctx: Ctx = { admin, now, summary, businesses };
+  const live = businesses.size > 0;
+  const liveOrgs = [...businesses.keys()];
   const since = new Date(now.getTime() - 24 * 3_600_000).toISOString();
 
   if (live) {
@@ -224,7 +231,7 @@ export async function runAutopilot(admin: SupabaseClient, now = new Date()): Pro
     let q = admin.from("messages")
       .select("id, lead_id, conversation_id, organization_id, body, created_at, received_at, direction, sender_type, conversations!inner(channel, external_account_id)")
       .eq("conversations.channel", "instagram").gte("created_at", since).order("created_at", { ascending: false }).limit(600);
-    if (orgFilter.length) q = q.in("organization_id", orgFilter);
+    q = q.in("organization_id", liveOrgs);
     const { data: recent, error } = await q;
     if (error) throw new Error(`Recent Instagram messages could not be loaded: ${error.message}`);
     const latestByLead = new Map<string, Record<string, unknown>>();
@@ -243,7 +250,7 @@ export async function runAutopilot(admin: SupabaseClient, now = new Date()): Pro
       if (!state) {
         const { count: humanReplies } = await admin.from("messages").select("id", { count: "exact", head: true })
           .eq("conversation_id", String(m.conversation_id)).eq("direction", "outbound");
-        if (!eligibleNewLead({ leadCreatedAt: String(lead.created_at), stage: String(lead.current_stage), humanRepliesInThread: humanReplies ?? 0, now, pilotStartedAt: process.env.AI_AUTOPILOT_PILOT_START ?? null })) continue;
+        if (!eligibleNewLead({ leadCreatedAt: String(lead.created_at), stage: String(lead.current_stage), humanRepliesInThread: humanReplies ?? 0, now, pilotStartedAt: businesses.get(String(m.organization_id))?.autopilotPilotStart ?? null })) continue;
       }
       const conv = Array.isArray(m.conversations) ? m.conversations[0] : m.conversations;
       handled += 1;
@@ -256,7 +263,7 @@ export async function runAutopilot(admin: SupabaseClient, now = new Date()): Pro
     }
 
     // 2) One nudge for active leads that went quiet after the AI's message (window still open).
-    const { data: actives } = await admin.from("ai_autopilot_leads").select("lead_id, organization_id, last_ai_message_at, followups_sent").eq("status", "active").limit(100);
+    const { data: actives } = await admin.from("ai_autopilot_leads").select("lead_id, organization_id, last_ai_message_at, followups_sent").eq("status", "active").in("organization_id", liveOrgs).limit(100);
     for (const a of actives ?? []) {
       if (summary.nudges >= 3) break;
       const { data: msgs } = await admin.from("messages").select("id, direction, created_at, received_at, metadata, conversation_id, conversations!inner(channel, external_account_id)")
@@ -277,9 +284,8 @@ export async function runAutopilot(admin: SupabaseClient, now = new Date()): Pro
   //    Sent automatically only for Autopilot leads inside Instagram's 24h window;
   //    otherwise the draft waits on the task for one-click send or copy.
   if (process.env.AI_FOLLOWUP_DRAFTS_ENABLED === "true") {
-    let t = admin.from("tasks").select("id, lead_id, organization_id, title, metadata, due_at")
+    const t = admin.from("tasks").select("id, lead_id, organization_id, title, metadata, due_at")
       .eq("created_by_id", FOLLOWUP_SOURCE).eq("status", "open").lte("due_at", now.toISOString()).order("due_at", { ascending: true }).limit(40);
-    if (orgFilter.length) t = t.in("organization_id", orgFilter);
     const { data: due } = await t;
     for (const task of due ?? []) {
       const meta = (task.metadata ?? {}) as Record<string, unknown>;
@@ -292,7 +298,7 @@ export async function runAutopilot(admin: SupabaseClient, now = new Date()): Pro
         continue;
       }
       await admin.from("tasks").update({ metadata: { ...meta, ai_draft: draft.draft.slice(0, 2000), ai_draft_at: new Date().toISOString(), ai_draft_model: draft.model } }).eq("id", task.id);
-      if (!live) continue;
+      if (!businesses.has(String(task.organization_id))) continue; // only businesses with Autopilot on auto-send
       const { data: state } = await admin.from("ai_autopilot_leads").select("status").eq("lead_id", task.lead_id).maybeSingle();
       if (state?.status !== "active") continue;
       const { data: last } = await admin.from("messages").select("id, conversation_id, created_at, received_at, direction, conversations!inner(channel, external_account_id)")

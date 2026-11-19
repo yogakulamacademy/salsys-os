@@ -4,6 +4,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { inspectKnowledgeMatches, knowledgeFingerprint, type KnowledgeEvidence } from '@/lib/knowledge-evidence';
 import { REPLY_TONE_GUIDE } from '@/lib/reply-tone';
 import { getOrCreateTrackedLink } from '@/lib/dm-links-data';
+import { getOrgSalesAiSettings } from '@/lib/org-sales-ai-settings';
 import { describeSource, inferCourseForFacts, needsHumanEyes, shareIsOffTopic, type LeadSourceContext } from '@/lib/lead-source-context';
 import { getLeadSourceContext } from '@/lib/lead-source-context-data';
 
@@ -532,8 +533,8 @@ export async function draftCopilotReply({
 
     // Instagram: a per-lead tracked link to the course page. Opening it tells the
     // team the visit country (DM-LINK). A failure here never blocks the draft.
-    // Switched on with DM_LINKS_ENABLED=true once go.yogakulamacademy.com is live.
-    if (channel === 'instagram' && selectedCourse?.id && process.env.DM_LINKS_ENABLED === 'true') {
+    // Switched on per business (organization_sales_ai_settings.dm_links_enabled).
+    if (channel === 'instagram' && selectedCourse?.id && (await getOrgSalesAiSettings(admin, organizationId)).dmLinksEnabled) {
       trackedCourseLink = await getOrCreateTrackedLink(admin, {
         organizationId,
         leadId,

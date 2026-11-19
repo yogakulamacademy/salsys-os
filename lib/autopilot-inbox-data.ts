@@ -1,6 +1,7 @@
 import "server-only";
 
 import { HANDOVER_LABELS, type HandoverReason } from "@/lib/autopilot-live";
+import { getOrgSalesAiSettings } from "@/lib/org-sales-ai-settings";
 import { createClient } from "@/lib/supabase/server";
 
 export type InboxAutopilotState = {
@@ -23,7 +24,6 @@ export type InboxFollowupDraft = {
 /** Autopilot state and any due AI follow-up draft for the open lead (user-scoped, RLS). */
 export async function getInboxAutopilot(leadId: string): Promise<{ state: InboxAutopilotState; followup: InboxFollowupDraft | null }> {
   const supabase = await createClient();
-  const liveEnabled = process.env.AI_AUTOPILOT_LIVE_ENABLED === "true";
   const [{ data: row }, { data: tasks }, { data: lastInbound }, { data: handle }] = await Promise.all([
     supabase.from("ai_autopilot_leads").select("status, ai_messages_sent, handover_reason, handover_detail").eq("lead_id", leadId).maybeSingle(),
     supabase.from("tasks").select("id, title, due_at, metadata").eq("lead_id", leadId).eq("status", "open")
@@ -31,6 +31,10 @@ export async function getInboxAutopilot(leadId: string): Promise<{ state: InboxA
     supabase.from("messages").select("created_at, received_at").eq("lead_id", leadId).eq("direction", "inbound").order("created_at", { ascending: false }).limit(1).maybeSingle(),
     supabase.from("lead_contacts").select("value").eq("lead_id", leadId).eq("contact_type", "instagram_username").limit(1).maybeSingle(),
   ]);
+  // On when the CRM-wide switch and this lead's business setting are both on.
+  const { data: leadOrg } = await supabase.from("leads").select("organization_id").eq("id", leadId).maybeSingle();
+  const liveEnabled = process.env.AI_AUTOPILOT_LIVE_ENABLED === "true" && Boolean(leadOrg?.organization_id) &&
+    (await getOrgSalesAiSettings(supabase, String(leadOrg?.organization_id))).autopilotEnabled;
   const reason = (row?.handover_reason ?? null) as HandoverReason | null;
   const state: InboxAutopilotState = {
     status: (row?.status as InboxAutopilotState["status"]) ?? "off",

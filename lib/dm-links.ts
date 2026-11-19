@@ -1,14 +1,29 @@
 // Tracked course links for DMs (DM-LINK). Pure helpers, no I/O.
 //
-// A lead gets go.yogakulamacademy.com/<code>. Opening it records the approximate
-// country of the network it was opened from ("visit country") and forwards to the
-// course page. Owner decision (19 Nov 2026): the visit country is shown to the
-// team only; the team decides pricing. It is never nationality or residence.
+// Each business has its own link address:
+//   * Standard plan: https://salsysos.com/go/<code>
+//   * Premium plan with a verified branded domain: https://<their domain>/<code>
+// Opening a link records the approximate country of the network it was opened
+// from ("visit country") and forwards to the business's own course page. The
+// visit country is shown to the team only; the team decides pricing. It is
+// never nationality or residence.
 
-export const TRACKED_LINK_HOST = "go.yogakulamacademy.com";
-export const TRACKED_LINK_FALLBACK = "https://www.yogakulamacademy.com/";
+export const APP_LINK_BASE = "https://salsysos.com/go/";
 /** A sent link that is not opened within this time (and no reply) becomes a team task. */
 export const NO_OPEN_AFTER_MS = 12 * 3_600_000;
+
+/** What a business's links need to know: its website(s) and branded domain. */
+export type OrgLinkSettings = {
+  websiteHosts: string[];
+  linkDomain: string | null;
+  linkDomainVerified: boolean;
+};
+
+/** Hosts that serve the CRM itself; any other host reaching us is a business's branded link domain. */
+export function isAppHost(host: string): boolean {
+  const h = host.toLowerCase().split(":")[0];
+  return h === "localhost" || h === "127.0.0.1" || h === "salsysos.com" || h.endsWith(".salsysos.com") || h.endsWith(".vercel.app");
+}
 
 const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789"; // no 0/O, 1/l/I
 
@@ -21,17 +36,30 @@ export function newLinkCode(length = 10): string {
   return out;
 }
 
-export function trackedLinkUrl(code: string): string {
-  return `https://${TRACKED_LINK_HOST}/${code}`;
+/** The address a lead is sent: the business's verified branded domain, or salsysos.com/go/. */
+export function trackedLinkUrl(code: string, settings?: Pick<OrgLinkSettings, "linkDomain" | "linkDomainVerified"> | null): string {
+  if (settings?.linkDomain && settings.linkDomainVerified) return `https://${settings.linkDomain}/${code}`;
+  return `${APP_LINK_BASE}${code}`;
 }
 
 export function isLinkCode(code: string | null | undefined): code is string {
   return typeof code === "string" && /^[A-Za-z0-9]{8,16}$/.test(code);
 }
 
-/** Only our own course pages may be link destinations. */
-export function isAllowedDestination(url: string | null | undefined): url is string {
-  return typeof url === "string" && /^https:\/\/(www\.)?yogakulamacademy\.com\//.test(url);
+/** A link may only lead to an HTTPS page on the business's own website. */
+export function isAllowedDestination(url: string | null | undefined, websiteHosts: string[]): url is string {
+  if (typeof url !== "string") return false;
+  let parsed: URL;
+  try { parsed = new URL(url); } catch { return false; }
+  if (parsed.protocol !== "https:" || parsed.username || parsed.password || parsed.port) return false;
+  const host = parsed.hostname.toLowerCase();
+  return websiteHosts.some((h) => h.toLowerCase() === host);
+}
+
+/** Where a visitor goes when the link is unknown or not allowed: the business's home page, else SalsysOS. */
+export function fallbackDestination(websiteHosts: string[]): string {
+  const host = websiteHosts.find((h) => /^[a-z0-9.-]+$/i.test(h));
+  return host ? `https://${host.toLowerCase()}/` : "https://salsysos.com/";
 }
 
 /**
@@ -40,13 +68,14 @@ export function isAllowedDestination(url: string | null | undefined): url is str
  */
 export function courseDestination(
   courseMetadata: Record<string, unknown> | null | undefined,
-  preferredLocation?: string | null,
+  preferredLocation: string | null | undefined,
+  websiteHosts: string[],
 ): string | null {
   const md = courseMetadata ?? {};
   const main = typeof md.website_url === "string" ? md.website_url : null;
   const kerala = typeof md.website_url_kerala === "string" ? md.website_url_kerala : null;
-  const pick = /kerala/i.test(preferredLocation ?? "") && isAllowedDestination(kerala) ? kerala : main;
-  return isAllowedDestination(pick) ? pick : null;
+  const pick = /kerala/i.test(preferredLocation ?? "") && isAllowedDestination(kerala, websiteHosts) ? kerala : main;
+  return isAllowedDestination(pick, websiteHosts) ? pick : null;
 }
 
 const PREVIEW_AGENTS =
