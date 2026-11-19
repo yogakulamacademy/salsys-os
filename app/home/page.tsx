@@ -338,11 +338,22 @@ export default async function HomePage({ searchParams }: HomePageProps) {
   });
   const healthOk = health.filter((item) => item.state === "ok").length;
   const markedEnrolledUnpaid = extras.payments && extras.payments.paidCount === 0 ? counts.enrolled ?? 0 : 0;
-  const periodSeries = periodAnalytics.leadSeries.map((point) => ({
-    label: formatShortDate(point.date),
-    current: point.current,
-    previous: point.previous,
-  }));
+  const periodSeries = periodAnalytics.leadSeries.map((point, index, all) => {
+    // A bucket covers one day or several (long periods); the drill-down opens
+    // the lead sources for exactly that span.
+    const next = all[index + 1]?.date;
+    const lastDay = next
+      ? new Date(Date.parse(`${next}T00:00:00Z`) - 86_400_000).toISOString().slice(0, 10)
+      : periodAnalytics.period.endDate;
+    return {
+      label: formatShortDate(point.date),
+      current: point.current,
+      previous: point.previous,
+      range: point.currentRange,
+      previousRange: point.previousRange,
+      href: `/home/sources?period=custom&from=${point.date}&to=${lastDay}`,
+    };
+  });
 
   return (
     <div className="command-center-v3 w-full min-w-0 space-y-4 pb-7">
