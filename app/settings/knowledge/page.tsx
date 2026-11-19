@@ -391,6 +391,12 @@ export default async function KnowledgeSettingsPage({
                     <span className="kn-category">{pretty(document.category)}</span>
                   </div>
                   <p className="kn-document-content">{document.content}</p>
+                  {document.content && document.content.length > 220 ? (
+                    <details className="kn-document-full">
+                      <summary>Preview full text</summary>
+                      <div className="kn-document-full-text">{document.content}</div>
+                    </details>
+                  ) : null}
                   <div className="kn-document-meta">
                     {source ? <span><Link2 size={12}/> Source: {source.name} · {pretty(source.source_type)}{source.status !== 'active' ? ' · ' + pretty(source.status) : ''}</span>
                       : <span className="kn-missing-source">Legacy item · source review needed</span>}

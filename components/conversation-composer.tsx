@@ -611,7 +611,7 @@ export function WhatsAppComposer({
 
         {mode === "reply" ? (
           <div role="tabpanel" className="p-3">
-            <div className="mb-2">
+            <div className="composer-intro mb-2">
               <div className="text-[10px] font-semibold text-[#18362D]">
                 Prepare a WhatsApp response
               </div>
