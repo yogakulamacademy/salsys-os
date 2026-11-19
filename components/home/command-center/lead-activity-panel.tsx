@@ -31,7 +31,8 @@ function path(values: number[], top: number) {
 }
 
 function change(now: number, before: number): { text: string; tone: string } | null {
-  if (before <= 0) return now > 0 ? { text: "new", tone: "text-emerald-700 dark:text-emerald-300" } : null;
+  // Percentages from a tiny base ("▲ 11700%") say nothing; the two counts do.
+  if (before < 5) return null;
   const pct = Math.round(((now - before) / before) * 100);
   if (pct === 0) return { text: "same as before", tone: "text-copy-muted" };
   return pct > 0
