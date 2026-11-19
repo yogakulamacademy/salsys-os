@@ -63,3 +63,9 @@ test('stages: ad quick-reply taps are marked so they are not read as intent', as
   assert.match(prompt, /\nLEAD: Can I pay in two parts\?$/m);
   assert.match(stageSystemPrompt(), /taps alone mean engaged at most/);
 });
+
+test('stages: shared post captions are marked as our text', async () => {
+  const { stageUserPrompt } = await import('../../lib/lead-stages.ts');
+  const p = stageUserPrompt([{ who: 'lead', text: 'Shared an Instagram post\n✨ Sound Healing in Mysore, November batch' }]);
+  assert.match(p, /LEAD \(shared one of our posts; caption not their words\)/);
+});
