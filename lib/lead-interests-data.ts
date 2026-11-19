@@ -151,7 +151,7 @@ export async function recomputeLead(admin: SupabaseClient, organizationId: strin
   // The team's own value always wins; only estimated values are kept up to date.
   const manualValue = lead.potential_value != null && lead.potential_value_source && !String(lead.potential_value_source).startsWith("course_price");
   if (!manualValue) {
-    const source = est ? `course_price:${est.marketUsed}${est.assumed ? ":market_unknown" : ""}` : null;
+    const source = est ? `course_price:${est.marketUsed}${est.assumed ? ":market_unknown" : ""}${est.fallback ? ":no_local_price" : ""}` : null;
     if (Number(lead.potential_value ?? NaN) !== (est?.value ?? NaN) || lead.potential_currency !== (est?.currency ?? null) || lead.potential_value_source !== source) {
       patch.potential_value = est?.value ?? null;
       patch.potential_currency = est?.currency ?? null;

@@ -19,6 +19,9 @@ test('value: offer price if still valid, shared room, right market and location'
   assert.equal(estimateValue(prices, 'cbng', 'bengaluru', 'india', '2026-11-19').value, 85000);  // offer ended: regular price
   assert.equal(estimateValue(prices, 'c200', 'goa', 'india', '2026-11-19').value, 60000);          // no Goa price: any location
   assert.equal(estimateValue(prices, 'nope', null, 'india', '2026-11-19'), null);
+  // No rupee fee for this course: value at its USD price, marked as a fallback.
+  const k = estimateValue([{ courseId: 'ckun', location: 'mysore', market: 'international', currency: 'USD', roomType: 'shared', regularPrice: 750, offerPrice: null, validUntil: null }], 'ckun', 'mysore', 'india', '2026-11-19');
+  assert.deepEqual(k, { value: 750, currency: 'USD', marketUsed: 'international', assumed: false, fallback: true });
 });
 
 test('market: what the lead said, then visit country, then phone', () => {
