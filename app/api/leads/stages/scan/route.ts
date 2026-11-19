@@ -24,6 +24,8 @@ export async function GET(request: NextRequest) {
   const backfill = Math.min(Math.max(Number(request.nextUrl.searchParams.get("backfill") ?? 60) || 60, 0), 150);
   try {
     const summary = await runStageScan(createAdminClient(), mode, new Date(), backfill);
+    // One line per run so the team can review decisions in the Vercel logs (no message text beyond the short evidence).
+    console.log("stage_scan", JSON.stringify(summary));
     return NextResponse.json({ ok: true, ranAt: new Date().toISOString(), ...summary });
   } catch (error) {
     console.error("Stage scan failed", error);
