@@ -199,3 +199,6 @@ html.dark .ibx-v2 .conversation-message-outbound,html.dark .ibx-v2 .conversation
 
 /* Course link card (DM-LINK) in the customer context panel. */
 .ibx-v2 .ibx-v2-context>.ibx-course-link{background:var(--ibx-paper)!important;border:1px solid var(--ibx-line)!important;border-radius:13px!important;padding:12px 13px!important;}
+
+/* Course interests card in the customer context panel. */
+.ibx-v2 .ibx-v2-context>.ibx-course-interests{background:var(--ibx-paper)!important;border:1px solid var(--ibx-line)!important;border-radius:13px!important;padding:12px 13px!important;}
