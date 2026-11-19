@@ -44,6 +44,7 @@ const PUBLIC_EXACT_PATHS = new Set([
   "/api/ai/knowledge-proposals",
   "/api/ai/autopilot",
   "/api/instagram/history-sync",
+  "/api/course-batches/close-started",
 ]);
 
 const ACTIVE_WORKSPACE_COOKIE = "salsys-active-workspace";
