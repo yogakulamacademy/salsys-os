@@ -532,7 +532,8 @@ export async function draftCopilotReply({
 
     // Instagram: a per-lead tracked link to the course page. Opening it tells the
     // team the visit country (DM-LINK). A failure here never blocks the draft.
-    if (channel === 'instagram' && selectedCourse?.id) {
+    // Switched on with DM_LINKS_ENABLED=true once go.yogakulamacademy.com is live.
+    if (channel === 'instagram' && selectedCourse?.id && process.env.DM_LINKS_ENABLED === 'true') {
       trackedCourseLink = await getOrCreateTrackedLink(admin, {
         organizationId,
         leadId,

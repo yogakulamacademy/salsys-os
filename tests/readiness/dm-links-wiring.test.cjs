@@ -20,6 +20,7 @@ test('tracked links: short domain is routed publicly and the AI gets the link', 
   const core = read('lib/copilot-core.ts');
   assert.match(core, /getOrCreateTrackedLink\(admin/);
   assert.match(core, /trackedCourseLink,/);
+  assert.match(core, /process\.env\.DM_LINKS_ENABLED === 'true'/);
   assert.match(core, /Full course details: <trackedCourseLink>/);
   const runner = read('lib/ai-autopilot-runner.ts');
   assert.match(runner, /queueUnopenedLinks\(ctx\)/);
