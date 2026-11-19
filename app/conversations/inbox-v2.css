@@ -174,3 +174,24 @@ html.dark .ibx-v2 .conversation-message-outbound,html.dark .ibx-v2 .conversation
   .ibx-v2 .ibx-v2-chat-header>div:first-child{flex:1 1 100%;}
   .ibx-v2 .ibx-v3-header-buttons{width:100%;flex-wrap:wrap;justify-content:flex-start;margin-left:52px;}
 }
+
+/* Second pass: give the thread most of the column. Compact AI bar, tabs and
+   composer; the reply box starts small and grows with what you type. */
+.ibx-v2 .ibx-v2-chat .ibx-v2-ai-toolbar{padding:4px 10px!important;}
+.ibx-v2 .ibx-v2-ai-actions>*{min-height:30px!important;height:30px!important;padding-top:0!important;padding-bottom:0!important;}
+.ibx-v2 .ibx-v2-chat>div:last-child{max-height:40%;}
+.ibx-v2 form.conversation-composer,.ibx-v2 .conversation-composer{padding:6px 10px!important;}
+.ibx-v2 .conversation-composer [role="tabpanel"],.ibx-v2 [aria-label="Conversation composer"] [role="tabpanel"]{padding:8px 10px!important;}
+.ibx-v2 .conversation-composer textarea,.ibx-v2 [aria-label="Conversation composer"] textarea{
+  field-sizing:content;min-height:44px!important;max-height:150px;height:auto;}
+@media (max-height:900px){
+  .ibx-v2 .composer-hint{display:none;}
+  .ibx-v2 .conversation-composer>div>div:first-child{padding-top:2px!important;}
+  .ibx-v2 .conversation-composer>div>div:first-child>button{height:30px!important;}
+  .ibx-v2 .ibx-v2-center-tabs{height:34px;}
+  .ibx-v2 .ibx-v2-center-tabs>button{min-height:34px;}
+}
+@container ibxchat (max-width:1000px){
+  .ibx-v2 .ibx-v2-chat-header{row-gap:6px;padding-top:8px!important;padding-bottom:8px!important;}
+  .ibx-v2 .ibx-v3-header-buttons :is(a,button,select,summary){min-height:30px!important;height:30px!important;padding-top:0!important;padding-bottom:0!important;}
+}

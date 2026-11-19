@@ -748,8 +748,8 @@ export function WhatsAppComposer({
 
             <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
               <div className="flex flex-wrap items-center gap-3 text-[9px] font-medium text-[#71847A]">
-                <span>Enter adds a new line</span>
-                <span>Ctrl/⌘ + Enter saves draft</span>
+                <span className="composer-hint">Enter adds a new line</span>
+                <span className="composer-hint">Ctrl/⌘ + Enter saves draft</span>
                 <span className={mediaCaptionTooLong ? "text-red-700" : undefined}>
                   {body.length}/{replyLimit}
                 </span>
