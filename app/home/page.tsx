@@ -316,7 +316,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
     qualificationLive: historicalQualification != null,
     payments: extras.payments,
     valuation: pipelineTruth ? { valued: pipelineTruth.valuedCount, eligible: pipelineTruth.eligibleCount, withoutCourse } : null,
-    locations: extras.locations ? { filled: extras.locations.filled, total: extras.locations.total } : null,
+    locations: extras.locations ? { filled: extras.locations.filled, total: extras.locations.total, inferred: extras.locations.inferred } : null,
     replies: { echoLive: extras.freshness.instagramAppRepliesCaptured, historyReplyAt: extras.freshness.instagramHistoryReplyAt },
     ads: extras.freshness.ads.length
       ? extras.freshness.ads

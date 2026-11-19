@@ -30,7 +30,7 @@ export type HomeCommandCenterSnapshot = {
   ownership: { openLeads: number; unassignedOpen: number } | null;
   payments: { pending: PendingPaymentTotal[]; paidCount: number; toVerify: number; activeEnrollments: number } | null;
   courses: { totalLeads: number; tagged: number; rows: CourseDemandRow[] } | null;
-  locations: LocationBreakdown | null;
+  locations: (LocationBreakdown & { inferred: number }) | null;
   /** Open leads whose course is still unknown (they cannot be valued from a price). */
   openWithoutCourse: number | null;
   /** Stage moves the AI made in the last 24 hours. */
@@ -52,6 +52,7 @@ type LeadRow = {
   interested_course_id: string | null;
   country: string | null;
   geo_country: string | null;
+  location: { country?: string; source?: string } | null;
 };
 
 type PaymentRow = {
@@ -108,7 +109,7 @@ export async function getHomeCommandCenterSnapshot(): Promise<HomeCommandCenterS
     fetchCompleteDashboardPeriodRows<LeadRow>(async (from, to) => {
       const { data, error } = await supabase
         .from("leads")
-        .select("status,current_stage,owner_user_id,interested_course_id,country,geo_country")
+        .select("status,current_stage,owner_user_id,interested_course_id,country,geo_country,location:metadata->location")
         .eq("organization_id", organizationId)
         .neq("status", "archived")
         .order("created_at", { ascending: true })
@@ -212,8 +213,13 @@ export async function getHomeCommandCenterSnapshot(): Promise<HomeCommandCenterS
     };
   }
 
+  // Direct location first, then the location worked out from other clues
+  // (phone code, course-link visit, what the lead wrote, rupee quotes).
   const locations = leads
-    ? buildLocationBreakdown(leads.map((lead) => lead.geo_country || lead.country))
+    ? {
+        ...buildLocationBreakdown(leads.map((lead) => lead.geo_country || lead.country || lead.location?.country || null)),
+        inferred: leads.filter((lead) => !lead.geo_country && !lead.country && lead.location?.country).length,
+      }
     : null;
 
   // Report the STALER of the two ad providers: one fresh feed must not hide
