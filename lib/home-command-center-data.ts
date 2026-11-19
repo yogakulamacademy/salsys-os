@@ -27,13 +27,20 @@ export type CourseDemandRow = {
 
 export type HomeCommandCenterSnapshot = {
   ownership: { openLeads: number; unassignedOpen: number } | null;
-  payments: { pending: PendingPaymentTotal[]; paidCount: number } | null;
+  payments: { pending: PendingPaymentTotal[]; paidCount: number; toVerify: number; activeEnrollments: number } | null;
   courses: { totalLeads: number; tagged: number; rows: CourseDemandRow[] } | null;
   locations: LocationBreakdown | null;
+  /** Open leads whose course is still unknown (they cannot be valued from a price). */
+  openWithoutCourse: number | null;
+  /** Stage moves the AI made in the last 24 hours. */
+  aiStageMoves24h: number | null;
   freshness: {
     adsLastSuccessAt: string | null;
     adsLatestFailed: boolean;
     instagramAppRepliesCaptured: boolean;
+    /** Latest team reply picked up from Instagram history sync (replies sent in the Instagram app). */
+    instagramHistoryReplyAt: string | null;
+    ads: { provider: "Google" | "Meta"; lastSuccessAt: string | null; latestStatus: string | null }[];
   };
 };
 
@@ -95,7 +102,8 @@ export async function getHomeCommandCenterSnapshot(): Promise<HomeCommandCenterS
   }
   const organizationId = await requireCurrentOrganizationId(supabase, auth.data.user.id);
 
-  const [leadResult, paymentResult, courseResult, googleSync, metaSync] = await Promise.all([
+  const since24h = new Date(Date.now() - 86_400_000).toISOString();
+  const [leadResult, paymentResult, courseResult, googleSync, metaSync, toVerifyResult, enrollmentResult, aiMovesResult, historyReply] = await Promise.all([
     fetchCompleteDashboardPeriodRows<LeadRow>(async (from, to) => {
       const { data, error } = await supabase
         .from("leads")
@@ -120,6 +128,15 @@ export async function getHomeCommandCenterSnapshot(): Promise<HomeCommandCenterS
       .limit(500),
     latestSyncRuns(supabase, "google_ads_sync_runs", organizationId),
     latestSyncRuns(supabase, "meta_ads_sync_runs", organizationId),
+    supabase.from("payments").select("id", { count: "exact", head: true })
+      .eq("organization_id", organizationId).eq("status", "pending").like("provider", "team_logged:%"),
+    supabase.from("enrollments").select("id", { count: "exact", head: true })
+      .eq("organization_id", organizationId).in("status", ["pending", "confirmed", "deferred", "completed"]),
+    supabase.from("lead_stage_history").select("id, leads!inner(organization_id)", { count: "exact", head: true })
+      .eq("leads.organization_id", organizationId).eq("changed_by_id", "ai_stage_v1").gte("changed_at", since24h),
+    supabase.from("messages").select("created_at")
+      .eq("organization_id", organizationId).eq("direction", "outbound").eq("metadata->>source", "instagram_graph_history")
+      .order("created_at", { ascending: false }).limit(1),
   ]);
 
   const leads = leadResult.error ? null : leadResult.data;
@@ -160,7 +177,12 @@ export async function getHomeCommandCenterSnapshot(): Promise<HomeCommandCenterS
     // Never merge currencies; never show a partial total as complete.
     payments = malformed
       ? null
-      : { pending: [...pending.values()].sort((a, b) => b.count - a.count), paidCount };
+      : {
+        pending: [...pending.values()].sort((a, b) => b.count - a.count),
+        paidCount,
+        toVerify: toVerifyResult.error ? 0 : toVerifyResult.count ?? 0,
+        activeEnrollments: enrollmentResult.error ? 0 : enrollmentResult.count ?? 0,
+      };
   }
 
   let courses: HomeCommandCenterSnapshot["courses"] = null;
@@ -198,15 +220,26 @@ export async function getHomeCommandCenterSnapshot(): Promise<HomeCommandCenterS
     : null;
   const adsLatestFailed = providers.some((sync) => sync.latestStatus === "failed");
 
+  const openWithoutCourse = leads
+    ? leads.filter((lead) => lead.status === "open" && !CLOSED_STAGES.has(String(lead.current_stage ?? "")) && !lead.interested_course_id).length
+    : null;
+
   return {
     ownership,
     payments,
     courses,
     locations,
+    openWithoutCourse,
+    aiStageMoves24h: aiMovesResult.error ? null : aiMovesResult.count ?? 0,
     freshness: {
       adsLastSuccessAt,
       adsLatestFailed,
       instagramAppRepliesCaptured: process.env.INSTAGRAM_OUTBOUND_ECHO_ENABLED === "true",
+      instagramHistoryReplyAt: historyReply.error ? null : ((historyReply.data ?? [])[0] as { created_at?: string } | undefined)?.created_at ?? null,
+      ads: [
+        { provider: "Google" as const, lastSuccessAt: googleSync?.lastSuccessAt ?? null, latestStatus: googleSync?.latestStatus ?? null },
+        { provider: "Meta" as const, lastSuccessAt: metaSync?.lastSuccessAt ?? null, latestStatus: metaSync?.latestStatus ?? null },
+      ],
     },
   };
 }

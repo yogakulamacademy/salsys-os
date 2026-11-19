@@ -2,7 +2,8 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { courseFromText, type CourseRef } from "@/lib/lead-source-context";
+import { courseFromText, readStoredShareBody, type CourseRef } from "@/lib/lead-source-context";
+import { getLeadSourceContext } from "@/lib/lead-source-context-data";
 import {
   choosePrimary, estimateValue, isFeeOrDateQuestion, locationFromText, marketFor, mergeInterest,
   type InterestRow, type InterestSource, type PriceRow,
@@ -52,10 +53,28 @@ export async function collectLeadSigns(admin: SupabaseClient, leadId: string, co
 
   for (const m of inbound ?? []) {
     const body = String(m.body ?? "");
-    if (!body || /^(Shared an Instagram|\[Instagram )/i.test(body)) continue;
+    if (!body) continue;
+    // A shared post or reel of ours names the course in its caption.
+    const share = readStoredShareBody(body);
+    if (share.isShare) {
+      const hit = share.caption ? courseFromText(share.caption, courses) : null;
+      if (hit?.id) signs.push({ courseId: hit.id, source: "shared_post", at: String(m.created_at), location: courseLocation(hit.code, locationFromText(share.caption)) });
+      continue;
+    }
+    if (/^\[Instagram /i.test(body)) continue;
     const hit = courseFromText(body, courses);
     if (!hit?.id) continue;
     signs.push({ courseId: hit.id, source: isFeeOrDateQuestion(body) ? "fee_question" : "message", at: String(m.created_at), location: courseLocation(hit.code, locationFromText(body)) });
+  }
+
+  // The Instagram ad that started the conversation (its title or full caption names the course).
+  if ((inbound ?? []).length) {
+    const ctx = await getLeadSourceContext(admin, String(lead.organization_id), leadId, courses).catch(() => null);
+    const adCourse = ctx?.ad?.course as (CourseRef & { id?: string }) | null | undefined;
+    if (adCourse?.id) {
+      const text = `${ctx?.ad?.title ?? ""} ${ctx?.ad?.caption ?? ""}`;
+      signs.push({ courseId: adCourse.id, source: "ad", at: String((inbound ?? [])[0].created_at), location: courseLocation(adCourse.code, locationFromText(text)) });
+    }
   }
 
   for (const l of links ?? []) {
@@ -153,7 +172,7 @@ export async function runInterestScan(admin: SupabaseClient, now = new Date(), b
     admin.from("messages").select("lead_id").eq("direction", "inbound").gte("created_at", since).limit(500),
     admin.from("lead_ingest_events").select("lead_id").gte("received_at", since).limit(200),
     admin.from("dm_tracked_links").select("lead_id").gte("first_opened_at", since).limit(200),
-    admin.from("leads").select("id").is("metadata->>interests_scanned_at", null).order("created_at", { ascending: false }).limit(backfill),
+    admin.from("leads").select("id").is("metadata->>interests_scanned_v2_at", null).order("created_at", { ascending: false }).limit(backfill),
   ]);
   const ids = [...new Set([...(recentMsgs ?? []), ...(recentForms ?? []), ...(recentLinks ?? []), ...(unscanned ?? []).map((l) => ({ lead_id: l.id }))]
     .map((r) => String(r.lead_id)).filter((id) => id && id !== "null"))];
@@ -171,7 +190,7 @@ export async function runInterestScan(admin: SupabaseClient, now = new Date(), b
       }
       const signs = await collectLeadSigns(admin, leadId, coursesByOrg.get(org)!);
       if (signs.length) await applyLeadSigns(admin, org, leadId, signs, today);
-      await admin.from("leads").update({ metadata: { ...((lead.metadata ?? {}) as Record<string, unknown>), interests_scanned_at: now.toISOString() } }).eq("id", leadId);
+      await admin.from("leads").update({ metadata: { ...((lead.metadata ?? {}) as Record<string, unknown>), interests_scanned_at: now.toISOString(), interests_scanned_v2_at: now.toISOString() } }).eq("id", leadId);
       scanned += 1;
     } catch (err) {
       errors += 1;
