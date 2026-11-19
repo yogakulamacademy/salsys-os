@@ -2,6 +2,7 @@ import Link from "next/link";
 import { ArrowRight, CalendarClock, GitBranch, Sparkles, Target, WalletCards } from "lucide-react";
 
 import { ExecutiveDecisionBrief } from "@/components/marketing/executive-decision-brief";
+import { RevenueCashPanel } from "@/components/revenue-cash-panel";
 import { RevenueInsights } from "@/components/revenue-insights";
 import { Notice, PageHeader } from "@/components/ui";
 import {
@@ -9,6 +10,9 @@ import {
   type RevenueCurrencySummary,
   type RevenueOpportunityRow,
 } from "@/lib/revenue-data";
+import { getCashSummary } from "@/lib/revenue-cash-data";
+import { createClient } from "@/lib/supabase/server";
+import { requireCurrentOrganizationId } from "@/lib/workspace";
 
 type RevenuePageProps = {
   searchParams: Promise<{
@@ -24,9 +28,10 @@ export default async function RevenuePage({ searchParams }: RevenuePageProps) {
   const investigationFrom = query.from?.trim() || "revenue";
   const strictAttributionFocus = Boolean(investigationSource && investigationFrom === "attribution");
   const currentMonth = new Date().toISOString().slice(0, 7);
-  const [workspace, fxRate] = await Promise.all([
+  const [workspace, fxRate, cash] = await Promise.all([
     getRevenueWorkspace(currentMonth),
     getUsdInrRate(),
+    loadCashSummary(),
   ]);
 
   const {
@@ -204,6 +209,8 @@ export default async function RevenuePage({ searchParams }: RevenuePageProps) {
           Forecast readiness is incomplete.
         </Notice>
       ) : null}
+
+      {cash ? <RevenueCashPanel summary={cash} /> : null}
 
       <RevenueInsights
         summaries={totalsByCurrency}
@@ -495,6 +502,19 @@ function normalizeCurrency(value: string | null | undefined) {
 function toNumber(value: number | string | null | undefined) {
   const number = Number(value ?? 0);
   return Number.isFinite(number) ? number : 0;
+}
+
+async function loadCashSummary() {
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return null;
+    const organizationId = await requireCurrentOrganizationId(supabase, user.id);
+    return await getCashSummary(supabase, organizationId);
+  } catch (error) {
+    console.error("Cash summary failed", error instanceof Error ? error.message : error);
+    return null;
+  }
 }
 
 function formatMoney(
