@@ -5,6 +5,7 @@ import {
   parseRecommendationEpisodeSequence,
   type RecommendationLifecycle,
 } from "@/lib/intelligence/recommendation-lifecycle";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentWorkspaceContext } from "@/lib/workspace";
 
@@ -173,7 +174,10 @@ export async function POST(request: NextRequest) {
     const organizationId = activeWorkspace.organizationId;
     const db = supabase as any;
 
-    const { data: candidateData, error: candidateError } = await db
+    // Read-only candidate view for the business the privileged user was just
+    // verified to manage. Under per-row RLS this view timed out (57014) on
+    // every Home load, so it is read with the service client, org-filtered.
+    const { data: candidateData, error: candidateError } = await (createAdminClient() as any)
       .from("v_r10_command_center_recommendation_candidates_v2")
       .select(
         "organization_id,signal_id,lead_id,signal_at,target_rank,baseline_value,priority_score,max_priority_score",

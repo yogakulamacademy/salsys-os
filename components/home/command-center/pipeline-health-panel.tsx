@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Filter, Sparkles } from "lucide-react";
 
 import { Panel } from "@/components/home/command-center/panel";
+import { FunnelInsight } from "@/components/home/command-center/story-panels";
 import { progressedShare, type HomeStageGroup } from "@/lib/home-stage-groups";
 
 const PIPELINE_HREF = "/admissions?view=pipeline";
@@ -23,7 +24,7 @@ function Row({ group, max }: { group: HomeStageGroup; max: number }) {
   );
 }
 
-export function PipelineHealthPanel({ groups, aiMoves24h }: { groups: HomeStageGroup[]; aiMoves24h?: number | null }) {
+export function PipelineHealthPanel({ groups, aiMoves24h, insight }: { groups: HomeStageGroup[]; aiMoves24h?: number | null; insight?: string | null }) {
   const active = groups.filter((g) => !g.parked);
   const parked = groups.filter((g) => g.parked);
   const total = groups.reduce((sum, group) => sum + group.value, 0);
@@ -43,6 +44,7 @@ export function PipelineHealthPanel({ groups, aiMoves24h }: { groups: HomeStageG
         {parked.length ? <div className="my-1 border-t border-dashed border-line" /> : null}
         {parked.map((group) => <Row key={group.id} group={group} max={max} />)}
       </div>
+      <FunnelInsight text={insight ?? null} />
       <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-brand-50 px-3 py-2.5 text-[13px] text-copy-strong">
         <span>
           {share == null ? "No active leads" : <><strong>{share}%</strong> reached Qualified or beyond</>}
