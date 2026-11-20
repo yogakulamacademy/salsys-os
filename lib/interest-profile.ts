@@ -286,3 +286,13 @@ export function suggestNextStep(p: InterestProfile, courseName?: string | null):
   }
   return null;
 }
+
+/** Short, non-identifying summary of interest for the drafting AI: courses and topics only. */
+export function interestNoteFor(p: InterestProfile): string {
+  const parts: string[] = [];
+  if (p.courses.length) parts.push(`Courses of interest: ${p.courses.slice(0, 3).map((c) => c.name).join("; ")}.`);
+  if (p.topics.length) parts.push(`They have asked about: ${p.topics.slice(0, 4).map((t) => t.label.toLowerCase()).join(", ")}.`);
+  if (p.priceViews > 0 || p.highIntentPages > 0) parts.push("Fees and joining details are likely useful.");
+  if (p.returnedAfterDays != null) parts.push("They are considering it again after a gap.");
+  return parts.join(" ");
+}

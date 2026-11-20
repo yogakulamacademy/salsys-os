@@ -101,3 +101,17 @@ test('next step: discount questions always go to a person; price views get dates
   assert.match(suggestNextStep(enrol).action, /finish enrolling/);
   assert.equal(suggestNextStep(buildInterestProfile({ ...base, events: [], messages: [] })), null);
 });
+
+import { interestNoteFor } from '../../lib/interest-profile.ts';
+
+test('the note for the drafting AI names courses and topics, not tracking details', () => {
+  const p = buildInterestProfile({
+    now: NOW, coursePages: [course], sessions: [{ startedAt: at(9) }, { startedAt: at(1) }],
+    events: [{ name: 'web.pricing_viewed', at: at(1), props: { pagePath: '/courses/mysore/100-hour-ytt.php' } }],
+    messages: [{ direction: 'inbound', at: at(2), body: 'Is accommodation included?' }],
+  });
+  const note = interestNoteFor(p);
+  assert.match(note, /100 Hour YTT Mysore/);
+  assert.match(note, /stay/);
+  assert.doesNotMatch(note, /\d+ (visits?|pages?|times|minutes)/i);
+});
