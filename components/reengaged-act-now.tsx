@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { ReengageDraft } from "@/components/reengaged-draft";
 import { suggestNextStep, type InterestProfile } from "@/lib/interest-profile";
 
 export type ActNowLead = {
@@ -121,8 +122,15 @@ export function ActNow({ leads }: { leads: ActNowLead[] }) {
                 </div>
               ) : null}
 
-              <div className="mt-auto flex items-center gap-2">
-                <Link href={`/conversations?lead=${lead.leadId}`} className="btn-primary">Open conversation</Link>
+              <div className="mt-auto flex flex-wrap items-center gap-2">
+                {step?.needsPerson ? (
+                  <Link href={`/conversations?lead=${lead.leadId}`} className="btn-primary">Open conversation</Link>
+                ) : (
+                  <>
+                    <ReengageDraft leadId={lead.leadId} />
+                    <Link href={`/conversations?lead=${lead.leadId}`} className="btn-secondary">Open conversation</Link>
+                  </>
+                )}
                 {lead.personId ? (
                   <Link href={`/customer-360/${lead.personId}?opportunity=${lead.leadId}`} className="btn-secondary">Open profile</Link>
                 ) : (

@@ -54,3 +54,21 @@ test('Re-engaged page shows Act now, coverage and interest, and never offers dis
   const card = read('components/reengaged-act-now.tsx');
   assert.doesNotMatch(card, /payment link|Approve & send/i);
 });
+
+test('re-engage drafts: access checked, nothing sent, no discounts, no tracking talk', () => {
+  const action = read('app/re-engaged/draft-actions.ts');
+  assert.match(action, /can_work_lead/);
+  assert.match(action, /purpose: "reengage"/);
+  assert.doesNotMatch(action, /sendMessage|send_whatsapp|graph\.facebook/i);
+  const core = read('lib/copilot-core.ts');
+  const i = core.indexOf("purpose === 'reengage'\n");
+  const prompt = core.slice(i, i + 1400);
+  assert.match(prompt, /Never say or hint that you saw their website visits/);
+  assert.match(prompt, /Never offer a discount, scholarship or special price, and never include a payment link/);
+  assert.match(core, /const humanReviewed = purpose === 'copilot' \|\| purpose === 'reengage';/);
+  const ui = read('components/reengaged-draft.tsx');
+  assert.match(ui, /salsysos:conversation-draft:v1:\$\{leadId\}:\$\{channel\}/);
+  assert.match(read('components/conversation-safe-composer.tsx'), /salsysos:conversation-draft:v1:\$\{leadId\}:\$\{channel\}/);
+  // Discount or scholarship cards never get an AI draft.
+  assert.match(read('components/reengaged-act-now.tsx'), /step\?\.needsPerson \?/);
+});
