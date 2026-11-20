@@ -519,8 +519,95 @@ export default async function ConversationsPage({
   const context = selected ? (
     <div className="ibx-v2-context ibx-v5-context conversation-context-pane min-h-full">
       {/* Owner-approved combined Inbox design (20 Nov 2026): separate cards, each fact once.
-          Order: Lead intelligence, Course & enrolment, Quick actions with follow-up,
-          the AI offer as one line, What's happened, then lead details and contact. */}
+          Order: the lead's profile (contact, details folded), Lead intelligence, Course &
+          enrolment, Quick actions with follow-up, the AI offer as one line, What's happened. */}
+      {/* Who this is, first (owner request, 20 Nov 2026): contact, then lead details and edit, folded. */}
+      <section className="ibx-v2-profile-card ibx-v5-card ibx-v5-profile" aria-label="Lead profile">
+        <div className="ibx-v2-profile-heading">
+          <div className="ibx-v2-profile-avatar">{initials(selected.name)}</div>
+          <div className="ibx-v2-profile-name">
+            <strong>{selected.name}</strong>
+            <span className="ibx-v3-profile-email">
+              {selectedEmail ? <a href={`mailto:${selectedEmail}`}>{selectedEmail}</a> : "Email not recorded / unavailable"}
+            </span>
+          </div>
+          <Link href={`/leads/${selected.id}`} aria-label="Open customer profile"
+            title="Open customer profile" className="ibx-v2-profile-link">
+            <ArrowUpRight size={16}/>
+          </Link>
+        </div>
+        {hasTelephoneContact && selectedPhone ?
+          <a className="ibx-v2-profile-phone" href={`tel:${selectedPhone.replace(/[^0-9+]/g,"")}`}>
+            <Phone size={13}/> {selectedPhone}
+          </a> :
+          <span className="ibx-v2-profile-no-phone">Phone contact unavailable</span>}
+      {/* Stage, owner, source and country, folded: the header and Lead intelligence already show the rest. */}
+      <details className="ibx-v4-fold ibx-v5-subfold group">
+        <summary className="flex cursor-pointer list-none items-center justify-between text-[13px] font-bold text-copy-strong">Lead details <span className="text-[12px] font-semibold text-copy-muted group-open:hidden">Stage, owner, source, country</span></summary>
+      {/* key: remount per lead so the stage/owner selects never keep the previous conversation's value */}
+      <InboxLeadOverview key={selected.id} leadId={selected.id} stage={selected.stage}
+        ownerUserId={selected.ownerUserId} ownerName={selected.ownerName}
+        candidates={team.assignmentCandidates} canAssign={false}
+        mock={mock} channel={selected.currentContactChannel}
+        attributionSource={selectedAttribution?.firstTouchSource||"Not verified"} interest={selected.course}
+        country={selected.country}
+        lastContacted={selected.lastContactedAt?formatDateTime(selected.lastContactedAt):"No messages yet"}
+        state={conversationStatus}/>
+      </details>
+      {leadContextAction ? (
+        <section className="ibx-v5-subfold-wrap">
+          <details className="ibx-v5-subfold group">
+            <summary className="flex cursor-pointer list-none items-center justify-between text-[13px] font-bold text-copy-strong">
+              Edit lead details
+              <ChevronDown
+                size={14}
+                className="text-copy-subtle transition group-open:rotate-180"
+              />
+            </summary>
+            <div className="ibx-v3-advanced-evidence"><ContextLine label="Lead creation" value={selected.leadCreationChannel.replaceAll("_"," ")}/></div>
+            <form
+              action={leadContextAction}
+              className="space-y-3 border-t border-line p-3"
+            >
+              <label className="block">
+                <span className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.08em] text-copy-muted">
+                  Course
+                </span>
+                <select
+                  className="input"
+                  name="course_id"
+                  defaultValue={selected.interestedCourseId ?? ""}
+                >
+                  <option value="">Not selected</option>
+                  {courses.map((course) => (
+                    <option key={course.id} value={course.id}>
+                      {course.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.08em] text-copy-muted">
+                  Country
+                </span>
+                <input
+                  className="input"
+                  name="country"
+                  defaultValue={selected.country || ""}
+                  placeholder="e.g. Germany"
+                />
+              </label>
+              <button
+                className="btn-primary flex w-full items-center justify-center gap-2"
+                type="submit"
+              >
+                <Save size={13} /> Save details
+              </button>
+            </form>
+          </details>
+        </section>
+      ) : null}
+      </section>
       {leadIntel ? <InboxLeadIntelligence intel={leadIntel} score={leadScore} source={leadSource} withTimeline={false} /> : null}
       {interestData || enrollmentPanel || (selected.currentContactChannel === "instagram" && !mock) ? (
         <section className="ibx-v5-card ibx-v5-course-card" aria-label="Course and enrolment">
@@ -572,92 +659,6 @@ export default async function ConversationsPage({
         </div>
       )}
       {leadIntel ? <InboxLeadTimeline intel={leadIntel} profileHref={`/leads/${selected.id}`} /> : null}
-      {/* Stage, owner, source and country, folded: the header and Lead intelligence already show the rest. */}
-      <details className="ibx-v4-fold ibx-v5-card ibx-v5-fold group">
-        <summary className="flex cursor-pointer list-none items-center justify-between text-[13px] font-bold text-copy-strong">Lead details <span className="text-[12px] font-semibold text-copy-muted group-open:hidden">Stage, owner, source, country</span></summary>
-      {/* key: remount per lead so the stage/owner selects never keep the previous conversation's value */}
-      <InboxLeadOverview key={selected.id} leadId={selected.id} stage={selected.stage}
-        ownerUserId={selected.ownerUserId} ownerName={selected.ownerName}
-        candidates={team.assignmentCandidates} canAssign={false}
-        mock={mock} channel={selected.currentContactChannel}
-        attributionSource={selectedAttribution?.firstTouchSource||"Not verified"} interest={selected.course}
-        country={selected.country}
-        lastContacted={selected.lastContactedAt?formatDateTime(selected.lastContactedAt):"No messages yet"}
-        state={conversationStatus}/>
-      </details>
-      {leadContextAction ? (
-        <section className="ibx-v5-card ibx-v5-fold">
-          <details className="group">
-            <summary className="flex cursor-pointer list-none items-center justify-between px-3 py-3 text-[12px] font-semibold text-copy-muted">
-              Edit lead details
-              <ChevronDown
-                size={14}
-                className="text-copy-subtle transition group-open:rotate-180"
-              />
-            </summary>
-            <div className="ibx-v3-advanced-evidence"><ContextLine label="Lead creation" value={selected.leadCreationChannel.replaceAll("_"," ")}/></div>
-            <form
-              action={leadContextAction}
-              className="space-y-3 border-t border-line p-3"
-            >
-              <label className="block">
-                <span className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.08em] text-copy-muted">
-                  Course
-                </span>
-                <select
-                  className="input"
-                  name="course_id"
-                  defaultValue={selected.interestedCourseId ?? ""}
-                >
-                  <option value="">Not selected</option>
-                  {courses.map((course) => (
-                    <option key={course.id} value={course.id}>
-                      {course.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="block">
-                <span className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.08em] text-copy-muted">
-                  Country
-                </span>
-                <input
-                  className="input"
-                  name="country"
-                  defaultValue={selected.country || ""}
-                  placeholder="e.g. Germany"
-                />
-              </label>
-              <button
-                className="btn-primary flex w-full items-center justify-center gap-2"
-                type="submit"
-              >
-                <Save size={13} /> Save details
-              </button>
-            </form>
-          </details>
-        </section>
-      ) : null}
-      <section className="ibx-v2-profile-card ibx-v5-card">
-        <div className="ibx-v2-profile-heading">
-          <div className="ibx-v2-profile-avatar">{initials(selected.name)}</div>
-          <div className="ibx-v2-profile-name">
-            <strong>{selected.name}</strong>
-            <span className="ibx-v3-profile-email">
-              {selectedEmail ? <a href={`mailto:${selectedEmail}`}>{selectedEmail}</a> : "Email not recorded / unavailable"}
-            </span>
-          </div>
-          <Link href={`/leads/${selected.id}`} aria-label="Open customer profile"
-            title="Open customer profile" className="ibx-v2-profile-link">
-            <ArrowUpRight size={16}/>
-          </Link>
-        </div>
-        {hasTelephoneContact && selectedPhone ?
-          <a className="ibx-v2-profile-phone" href={`tel:${selectedPhone.replace(/[^0-9+]/g,"")}`}>
-            <Phone size={13}/> {selectedPhone}
-          </a> :
-          <span className="ibx-v2-profile-no-phone">Phone contact unavailable</span>}
-      </section>
 
     </div>
   ) : null;

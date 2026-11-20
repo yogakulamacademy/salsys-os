@@ -8,6 +8,7 @@ import { CHANNEL_CHIPS, INBOX_TOPICS, INBOX_TOPIC_LABELS } from "@/lib/inbox-top
 import { Clock3, Search, SlidersHorizontal, UsersRound, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { EmptyState } from "@/components/ui";
+import { DragScrollRow } from "@/components/drag-scroll-row";
 import { personInitials } from "@/lib/ui-format";
 import { WAIT_KIND_LABEL, groupWaiting, type WaitKind } from "@/lib/inbox-waiting";
 import { compactMoney } from "@/lib/home-data-health";
@@ -382,7 +383,7 @@ export function ConversationsSidebar({
       </div>
 
       {pagination?.channelCounts ? (
-        <div role="group" aria-label="Filter by channel" className="ibx-v3-channel-chips flex shrink-0 gap-1.5 overflow-x-auto border-b border-line bg-surface px-4 py-2 [scrollbar-width:none]">
+        <DragScrollRow role="group" aria-label="Filter by channel" className="ibx-v3-channel-chips flex shrink-0 gap-1.5 overflow-x-auto border-b border-line bg-surface px-4 py-2 [scrollbar-width:none]">
           {CHANNEL_CHIPS.map((chip) => {
             const active = channelFilter === chip.value;
             const count = pagination.channelCounts?.[chip.value] ?? 0;
@@ -395,13 +396,13 @@ export function ConversationsSidebar({
               </button>
             );
           })}
-        </div>
+        </DragScrollRow>
       ) : null}
 
       {pagination?.topicCounts && Object.keys(pagination.topicCounts).length ? (
         <div className="ibx-v3-topic-chips shrink-0 border-b border-line bg-surface px-4 py-2">
           <p className="mb-1.5 text-[10.5px] font-semibold uppercase tracking-wide text-copy-subtle">What people are asking</p>
-          <div role="group" aria-label="Filter by question topic" className="flex gap-1.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <DragScrollRow role="group" aria-label="Filter by question topic" className="flex gap-1.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {INBOX_TOPICS.filter((key) => (pagination.topicCounts?.[key] ?? 0) > 0)
               .sort((a, b) => (pagination.topicCounts?.[b] ?? 0) - (pagination.topicCounts?.[a] ?? 0))
               .map((key) => {
@@ -414,7 +415,7 @@ export function ConversationsSidebar({
                   </button>
                 );
               })}
-          </div>
+          </DragScrollRow>
         </div>
       ) : null}
 
@@ -544,8 +545,9 @@ function ConversationRow({
       href={href}
       aria-current={selected ? "page" : undefined}
       data-channel={lead.currentContactChannel}
+      data-unread={lead.unread && !selected ? "true" : undefined}
       className={`ibx-v2-row ibx-v4-row group relative block border-b border-line/70 px-4 py-3 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-700/40 ${
-        selected ? "bg-brand-50" : paid ? "bg-emerald-50/50 hover:bg-emerald-50" : "bg-surface hover:bg-surface-soft"
+        selected ? "bg-brand-50" : lead.unread ? "ibx-unread" : paid ? "bg-emerald-50/50 hover:bg-emerald-50" : "bg-surface hover:bg-surface-soft"
       }`}
     >
       {selected ? (
@@ -565,10 +567,7 @@ function ConversationRow({
           <div className="flex items-center gap-2">
             <div className="min-w-0 flex-1 truncate text-[13.5px] font-semibold text-copy-strong">
               {lead.unread ? (
-                <span
-                  className="mr-1.5 inline-block h-1.5 w-1.5 rounded-full bg-brand-600 align-middle"
-                  aria-label="Unread"
-                />
+                <span className="ibx-unread-dot" aria-label="New message" />
               ) : null}
               {lead.name}
             </div>
@@ -578,14 +577,14 @@ function ConversationRow({
               </span>
             ) : null}
             <div
-              className={`shrink-0 text-[11px] font-semibold ${waitingMs != null && waitingMs > 86_400_000 ? "text-warning" : "text-copy-subtle"}`}
+              className={`shrink-0 text-[11px] font-semibold ${lead.unread ? "ibx-unread-time" : waitingMs != null && waitingMs > 86_400_000 ? "text-warning" : "text-copy-subtle"}`}
               title={waiting ? `Waiting ${waiting} for a reply` : undefined}
             >
               {waiting ?? (lead.lastContactedAt ? formatListTime(lead.lastContactedAt, now) : "New")}
             </div>
           </div>
 
-          <div className={`mt-0.5 truncate text-[12.5px] ${share || !lead.lastText ? "text-copy-muted" : "text-copy-strong"}`}>
+          <div className={`ibx-row-text mt-0.5 truncate text-[12.5px] ${share || !lead.lastText ? "text-copy-muted" : "text-copy-strong"}`}>
             {paid ? <span className="font-semibold text-emerald-700">Says they paid: </span> : null}
             {lead.lastText
               ? share ? lead.lastText : `“${lead.lastText}”`
