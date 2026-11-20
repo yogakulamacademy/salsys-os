@@ -12,6 +12,8 @@ export const BEHAVIOR_EVENTS = [
   { name: "web.faq_expanded", label: "FAQ expanded" },
   { name: "web.brochure_clicked", label: "Brochure clicked" },
   { name: "web.scroll_depth_reached", label: "Scroll threshold" },
+  { name: "web.media_interacted", label: "Video / gallery / photo" },
+  { name: "web.engaged_time", label: "Reading time" },
 ] as const;
 export type BehaviorEvent = (typeof BEHAVIOR_EVENTS)[number]["name"];
 export const DEFAULT_BEHAVIOR_STEPS: BehaviorEvent[] = [
