@@ -178,7 +178,6 @@ export function buildNavigation(access: NavAccess): NavSection[] {
         "/pipeline",
         "/follow-ups",
         "/customer-360",
-        "/data-quality",
         "/re-engaged",
       ],
       items: [
@@ -322,6 +321,7 @@ export function buildNavigation(access: NavAccess): NavSection[] {
         "/settings/organizations",
         "/tracking",
         "/system-health",
+        "/data-quality",
       ],
       items: [
         {
@@ -355,6 +355,12 @@ export function buildNavigation(access: NavAccess): NavSection[] {
                 href: "/system-health",
                 description: "Sync status, failures and data freshness.",
                 keywords: "system health sync failures status freshness",
+              },
+              {
+                label: "Data Quality",
+                href: "/data-quality",
+                description: "Duplicates, missing details and identity merges.",
+                keywords: "data quality duplicates merge identity missing fields clean up",
               },
             ]
           : []),
