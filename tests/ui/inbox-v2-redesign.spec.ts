@@ -17,9 +17,10 @@ test.beforeEach(async({context})=>{
 test('Inbox V2 retains an unselected opening with live filters and empty results',async({page})=>{
   await page.goto('/conversations');
   await expect(page.getByRole('heading',{name:'Inbox',exact:true,includeHidden:true})).toBeAttached();
-  await expect(page.getByText('Select a conversation',{exact:true})).toBeVisible();
+  await expect(page.getByText('Today in your inbox',{exact:true})).toBeVisible();
   const tabs=page.getByRole('tablist',{name:'Conversation filters'});
-  await expect(tabs.getByRole('tab',{name:/Needs reply/})).toBeVisible();
+  await expect(tabs.getByRole('tab',{name:/Waiting/})).toBeVisible();
+  await expect(tabs.getByRole('tab',{name:/Older/})).toBeVisible();
   await expect(tabs.getByRole('tab',{name:/Unread/})).toBeVisible();
   await expect(tabs.getByRole('tab',{name:/Snoozed/})).toBeVisible();
   await page.getByRole('textbox',{name:'Search conversations'}).fill('this-contact-does-not-exist');

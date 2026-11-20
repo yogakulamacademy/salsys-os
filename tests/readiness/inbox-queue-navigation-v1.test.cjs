@@ -59,7 +59,7 @@ test("reset clears all queue and selected detail state", () => {
 
 test("default values canonicalize without reintroducing stale selected lead", () => {
   const values = [
-    ["sort", "created_desc"], ["filter", "all"], ["priority", "all"],
+    ["sort", "created_desc"], ["filter", "waiting"], ["priority", "all"], // Waiting is the default tab
     ["channel", "all"], ["page", "1"],
   ];
   for (const [key, value] of values) {

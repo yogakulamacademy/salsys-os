@@ -5,10 +5,12 @@ import { useRouter, useSearchParams } from "next/navigation";
 import type { InboxPage } from "@/lib/conversations-page-data";
 import { nextInboxQueueHref, resetInboxQueueHref } from "@/lib/inbox-query-navigation";
 import { CHANNEL_CHIPS, INBOX_TOPICS, INBOX_TOPIC_LABELS } from "@/lib/inbox-topics";
-import { Clock3, Flag, MessageCircle, Search, SlidersHorizontal, UsersRound, X } from "lucide-react";
+import { Clock3, Search, SlidersHorizontal, UsersRound, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { EmptyState } from "@/components/ui";
 import { personInitials } from "@/lib/ui-format";
+import { WAIT_KIND_LABEL, groupWaiting, type WaitKind } from "@/lib/inbox-waiting";
+import { compactMoney } from "@/lib/home-data-health";
 
 import type { Channel, LeadStage } from "@/types/crm";
 
@@ -34,9 +36,16 @@ export type ConversationLeadSummary = {
   ownerUserId: string | null;
   ownerName: string | null;
   snoozedUntil: string | null;
+  /** Their last message in plain words (Inbox rows, 20 Nov 2026). */
+  lastText?: string | null;
+  /** What they sent last: says they paid, a question, a message, or a share. */
+  lastKind?: WaitKind;
+  /** Estimated value of the course they want, in its own currency. */
+  value?: number | null;
+  currency?: string | null;
 };
 
-type InboxFilter = "all" | "reply" | "unread" | "snoozed";
+type InboxFilter = "all" | "reply" | "unread" | "snoozed" | "waiting" | "older";
 type ScopeFilter = "mine" | "team" | "unassigned" | `owner:${string}`;
 type PriorityFilter = "all" | ConversationPriority;
 type ChannelFilter = "all" | "website" | "instagram" | "whatsapp";
@@ -62,7 +71,9 @@ export function ConversationsSidebar({
   const [scope, setScope] = useState<ScopeFilter>(
     pagination?.scope ?? (currentUserId && !canManageAssignments ? "mine" : "team"),
   );
-  const [filter, setFilter] = useState<InboxFilter>(pagination?.filter ?? "all");
+  // Live inbox opens on Waiting; demo data (no server paging) keeps All.
+  const defaultFilter: InboxFilter = pagination ? "waiting" : "all";
+  const [filter, setFilter] = useState<InboxFilter>(pagination?.filter ?? defaultFilter);
   const [priorityFilter, setPriorityFilter] = useState<PriorityFilter>(pagination?.priority ?? "all");
   const [channelFilter, setChannelFilter] = useState<ChannelFilter>(pagination?.channel ?? "all");
   const [now, setNow] = useState(0);
@@ -99,7 +110,7 @@ export function ConversationsSidebar({
   function resetFilters() {
     setSearch("");
     setScope(currentUserId && !canManageAssignments ? "mine" : "team");
-    setFilter("all");
+    setFilter(defaultFilter);
     setPriorityFilter("all");
     setChannelFilter("all");
     if (serverMode) {
@@ -207,7 +218,7 @@ export function ConversationsSidebar({
       const snoozed = isSnoozed(lead, now);
       if (filter === "snoozed" && !snoozed) return false;
       if (filter !== "snoozed" && snoozed) return false;
-      if (filter === "reply" && !lead.needsReply && !lead.needsFirstContact) return false;
+      if ((filter === "reply" || filter === "waiting" || filter === "older") && !lead.needsReply && !lead.needsFirstContact) return false;
       if (filter === "unread" && !lead.unread) return false;
       if (priorityFilter !== "all" && lead.priority !== priorityFilter) return false;
       if (channelFilter !== "all" && lead.currentContactChannel !== channelFilter) return false;
@@ -256,7 +267,7 @@ export function ConversationsSidebar({
   const hasFilters = Boolean(
     search ||
       scope !== (currentUserId && !canManageAssignments ? "mine" : "team") ||
-      filter !== "all" ||
+      filter !== defaultFilter ||
       priorityFilter !== "all" ||
       channelFilter !== "all" ||
       Boolean(pagination && (pagination.page > 1 || pagination.sort !== "activity_desc")),
@@ -272,17 +283,20 @@ export function ConversationsSidebar({
           aria-label="Conversation filters"
           onKeyDown={handleFilterKeyDown}
         >
-          <InboxTab active={filter === "all"} onClick={() => updateFilter("all")} count={allScopeCount ?? activeScopedLeads.length}>
-            All
-          </InboxTab>
-          <InboxTab active={filter === "reply"} onClick={() => updateFilter("reply")} count={replyCount}>
-            Needs reply
+          <InboxTab active={filter === "waiting"} onClick={() => updateFilter("waiting")} count={pagination?.counts.waiting ?? replyCount}>
+            Waiting
           </InboxTab>
           <InboxTab active={filter === "unread"} onClick={() => updateFilter("unread")} count={unreadCount}>
             Unread
           </InboxTab>
           <InboxTab active={filter === "snoozed"} onClick={() => updateFilter("snoozed")} count={snoozedCount}>
             Snoozed
+          </InboxTab>
+          <InboxTab active={filter === "older" || filter === "reply"} onClick={() => updateFilter("older")} count={pagination?.counts.older ?? 0}>
+            Older
+          </InboxTab>
+          <InboxTab active={filter === "all"} onClick={() => updateFilter("all")} count={allScopeCount ?? activeScopedLeads.length}>
+            All
           </InboxTab>
         </div>
         <div className="ibx-v2-search-line">
@@ -296,7 +310,7 @@ export function ConversationsSidebar({
             ref={searchRef}
             value={search}
             onChange={(event) => setSearch(event.target.value)}
-            placeholder="Search conversations…"
+            placeholder="Search name, message or course…"
             className="h-10 w-full rounded-ui border border-line bg-surface-soft pl-9 pr-14 text-[13px] text-copy-strong outline-none transition placeholder:text-copy-subtle focus:border-brand-600 focus:bg-surface focus:ring-2 focus:ring-brand-700/10"
           />
           {!search ? (
@@ -432,13 +446,27 @@ export function ConversationsSidebar({
               ) : undefined}
           />
         ) : (
-          (serverMode ? filteredLeads : filteredLeads.slice(0, visibleCount)).map((lead) => {
-            const selected =
+          (() => {
+            const isSelected = (lead: ConversationLeadSummary) =>
               (lead.id === selectedId || Boolean(selectedId && lead.relatedLeadIds?.includes(selectedId))) &&
               (!mobileViewport || explicitLeadId === lead.id || Boolean(explicitLeadId && lead.relatedLeadIds?.includes(explicitLeadId)));
-
-            return <ConversationRow key={lead.personId || lead.id} lead={lead} selected={selected} now={now} href={leadHref(lead.id)} />;
-          })
+            const renderRow = (lead: ConversationLeadSummary) => (
+              <ConversationRow key={lead.personId || lead.id} lead={lead} selected={isSelected(lead)} now={now} href={leadHref(lead.id)} />
+            );
+            const visible = serverMode ? filteredLeads : filteredLeads.slice(0, visibleCount);
+            // This week's waiting chats, grouped by what the person actually sent.
+            if (filter === "waiting") {
+              return groupWaiting(visible.map((lead) => ({ ...lead, kind: (lead.lastKind ?? "message") as WaitKind }))).map((group) => (
+                <section key={group.kind} aria-label={WAIT_KIND_LABEL[group.kind]}>
+                  <h3 className={`ibx-wait-group sticky top-0 z-[1] border-b border-line/70 bg-surface/95 px-4 py-2 text-[11px] font-bold uppercase tracking-wide backdrop-blur ${group.kind === "paid" ? "text-emerald-700" : "text-copy-muted"}`}>
+                    {WAIT_KIND_LABEL[group.kind]} · {group.rows.length.toLocaleString("en-IN")}
+                  </h3>
+                  {group.rows.map(renderRow)}
+                </section>
+              ));
+            }
+            return visible.map(renderRow);
+          })()
         )}
         {!serverMode && filteredLeads.length > visibleCount ? <div className="p-3 text-center"><button type="button" className="btn-secondary w-full" onClick={() => setVisibleCount(count => count + 50)}>Show more conversations</button></div> : null}
       </div>
@@ -478,26 +506,36 @@ function ConversationRow({
   now: number;
   href: string;
 }) {
-  const highPriority = lead.priority === "urgent" || lead.priority === "high";
-  const stage = lead.stage.replaceAll("_", " ");
+  // Owner-approved design (20 Nov 2026): the person's own last words, the
+  // course and its value, and how long they've waited. No "Urgent" or
+  // "Needs reply" chips: the tab and the group already say that.
   const sourceLabel = lead.currentContactChannel.replaceAll("_", " ");
-  const contextPreview =
-    lead.course && lead.course !== "Not selected"
-      ? `Interested in ${lead.course}`
-      : `${sourceLabel} inquiry · Course not selected`;
+  const course = lead.course && lead.course !== "Not selected" ? lead.course : null;
   const snoozed = isSnoozed(lead, now);
-  const waiting = lead.waitingSince && (lead.needsReply || lead.needsFirstContact)
-    ? formatWaitingTime(lead.waitingSince, now)
+  const waitingMs = lead.waitingSince && (lead.needsReply || lead.needsFirstContact)
+    ? (now || Date.now()) - new Date(lead.waitingSince).getTime()
     : null;
+  const waiting = waitingMs != null && lead.waitingSince ? formatWaitingTime(lead.waitingSince, now) : null;
   const otherOpportunities = Math.max(0, (lead.opportunityCount ?? 1) - 1);
+  const paid = lead.lastKind === "paid";
+  const share = lead.lastKind === "share";
+  const notableStage = ["qualified", "high_intent", "payment_pending", "enrolled", "closed_won", "lost", "not_now"].includes(String(lead.stage))
+    ? STAGE_WORDS[String(lead.stage)] ?? null
+    : null;
+  const meta = [
+    course ?? (lead.lastText ? "Course not known yet" : null),
+    lead.value ? compactMoney(lead.value, lead.currency ?? "INR") : null,
+    notableStage,
+  ].filter(Boolean).join(" · ");
+  const channelColor = CHANNEL_CHIPS.find((chip) => chip.value === lead.currentContactChannel)?.color ?? "#6b6880";
 
   return (
     <Link
       href={href}
       aria-current={selected ? "page" : undefined}
       data-channel={lead.currentContactChannel}
-      className={`ibx-v2-row group relative block border-b border-line/70 px-4 py-3.5 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-700/40 ${
-        selected ? "bg-brand-50" : "bg-surface hover:bg-surface-soft"
+      className={`ibx-v2-row group relative block border-b border-line/70 px-4 py-3 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-700/40 ${
+        selected ? "bg-brand-50" : paid ? "bg-emerald-50/50 hover:bg-emerald-50" : "bg-surface hover:bg-surface-soft"
       }`}
     >
       {selected ? (
@@ -507,7 +545,7 @@ function ConversationRow({
       <div className="flex gap-2.5">
         <div
           className={`mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-full text-[11px] font-bold ${
-            selected ? "bg-brand-100 text-brand-700" : "bg-surface-muted text-copy-muted"
+            paid ? "bg-emerald-100 text-emerald-800" : selected ? "bg-brand-100 text-brand-700" : "bg-surface-muted text-copy-muted"
           }`}
         >
           {initials(lead.name)}
@@ -515,7 +553,7 @@ function ConversationRow({
 
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            <div className="min-w-0 flex-1 truncate text-[13px] font-semibold text-copy-strong">
+            <div className="min-w-0 flex-1 truncate text-[13.5px] font-semibold text-copy-strong">
               {lead.unread ? (
                 <span
                   className="mr-1.5 inline-block h-1.5 w-1.5 rounded-full bg-brand-600 align-middle"
@@ -529,65 +567,50 @@ function ConversationRow({
                 +{otherOpportunities} opp
               </span>
             ) : null}
-            {highPriority ? (
-              <Flag
-                size={12}
-                className={lead.priority === "urgent" ? "shrink-0 text-danger" : "shrink-0 text-warning"}
-                aria-label={`${lead.priority} priority`}
-              />
-            ) : null}
-            <div className="shrink-0 text-[10.5px] text-copy-subtle">
-              {lead.lastContactedAt ? formatListTime(lead.lastContactedAt, now) : "New"}
+            <div
+              className={`shrink-0 text-[11px] font-semibold ${waitingMs != null && waitingMs > 86_400_000 ? "text-warning" : "text-copy-subtle"}`}
+              title={waiting ? `Waiting ${waiting} for a reply` : undefined}
+            >
+              {waiting ?? (lead.lastContactedAt ? formatListTime(lead.lastContactedAt, now) : "New")}
             </div>
           </div>
 
-          <div className="mt-1 truncate text-[12px] text-copy-muted">{contextPreview}</div>
-
-          <div className="mt-2 flex min-w-0 items-center gap-1.5">
-            {snoozed ? (
-              <span className="inline-flex items-center gap-1 rounded-md bg-surface-muted px-1.5 py-0.5 text-[10.5px] font-semibold text-copy-muted">
-                <Clock3 size={10} /> {formatSnooze(lead.snoozedUntil)}
-              </span>
-            ) : lead.needsReply ? (
-              <span className="inline-flex items-center gap-1 rounded-md border border-warning/20 bg-warning-soft px-1.5 py-0.5 text-[10.5px] font-semibold text-warning">
-                Needs reply
-              </span>
-            ) : lead.needsFirstContact ? (
-              <span className="rounded-md bg-sky-50 px-1.5 py-0.5 text-[10.5px] font-semibold text-sky-700">
-                First contact
-              </span>
-            ) : lead.resolved ? (
-              <span className="ibx-v2-completed-label">Done</span>
-            ) : (
-              <span className="text-[10.5px] text-copy-subtle">Reviewed</span>
-            )}
-
-            {highPriority && !snoozed ? <span className="ibx-v3-priority-chip">
-              <Flag size={10}/> {lead.priority === "urgent" ? "Urgent" : "High"}
-            </span> : null}
-            {waiting && !snoozed ? (
-              <span className={`text-[10px] font-medium ${lead.priority === "urgent" ? "text-danger" : lead.priority === "high" ? "text-warning" : "text-copy-subtle"}`}>
-                Waiting {waiting}
-              </span>
-            ) : null}
+          <div className={`mt-0.5 truncate text-[12.5px] ${share || !lead.lastText ? "text-copy-muted" : "text-copy-strong"}`}>
+            {paid ? <span className="font-semibold text-emerald-700">Says they paid: </span> : null}
+            {lead.lastText
+              ? share ? lead.lastText : `“${lead.lastText}”`
+              : course ? `Interested in ${course}` : `${sourceLabel} inquiry`}
           </div>
 
-          <div className="mt-2 flex min-w-0 items-center gap-1.5">
-            <span className="max-w-[118px] truncate rounded-md border border-line bg-surface-soft px-1.5 py-0.5 text-[10.5px] font-medium capitalize text-copy-muted">
-              {stage}
-            </span>
-            <span className={`truncate text-[10.5px] font-medium ${lead.ownerUserId ? "text-copy-muted" : "text-warning"}`}>
-              {lead.ownerName || "Unassigned"}
-            </span>
-            <span className="ibx-v3-row-channel ml-auto truncate text-[10px] capitalize text-copy-subtle">
-              <MessageCircle size={12}/> {sourceLabel}
-            </span>
+          <div className="mt-1 flex min-w-0 items-center gap-1.5 text-[11px] text-copy-muted">
+            <span aria-hidden className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: channelColor }} />
+            <span className="sr-only">{sourceLabel}</span>
+            <span className="min-w-0 truncate">{meta || sourceLabel}</span>
+            {snoozed ? (
+              <span className="ml-auto inline-flex shrink-0 items-center gap-1 rounded-md bg-surface-muted px-1.5 py-0.5 text-[10.5px] font-semibold text-copy-muted">
+                <Clock3 size={10} /> {formatSnooze(lead.snoozedUntil)}
+              </span>
+            ) : lead.resolved ? (
+              <span className="ibx-v2-completed-label ml-auto shrink-0">Done</span>
+            ) : lead.ownerUserId && lead.ownerName ? (
+              <span className="ml-auto shrink-0 truncate text-[10.5px] text-copy-subtle">{lead.ownerName}</span>
+            ) : null}
           </div>
         </div>
       </div>
     </Link>
   );
 }
+
+const STAGE_WORDS: Record<string, string> = {
+  qualified: "Qualified",
+  high_intent: "Ready to buy",
+  payment_pending: "Payment pending",
+  enrolled: "Enrolled",
+  closed_won: "Enrolled",
+  lost: "Lost",
+  not_now: "Not now",
+};
 
 function ScopeButton({
   active,

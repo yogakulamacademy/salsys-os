@@ -14,6 +14,7 @@ import {
 } from "@/lib/conversations-page-data";
 import { isMockMode } from "@/lib/data";
 import { requireCurrentOrganizationId } from "@/lib/workspace";
+import { withInboxRowFacts } from "@/lib/inbox-row-facts";
 import {
   getConversationsWorkspace as getCoreConversationsWorkspace,
   type ConversationWorkspaceResult,
@@ -156,7 +157,7 @@ export async function getConversationsWorkspace(
 
     return {
       ...pageWorkspace,
-      conversationSummary: groupedRows,
+      conversationSummary: mock ? groupedRows : await withInboxRowFacts(groupedRows),
       metrics: {
         ...workspace.metrics,
         activeConversations: fullPage?.totalMatching ?? groupedRows.length,
@@ -173,7 +174,7 @@ export async function getConversationsWorkspace(
 
     return {
       ...pageWorkspace,
-      conversationSummary: baseRows.map(withSingleOpportunityIdentity),
+      conversationSummary: mock ? baseRows.map(withSingleOpportunityIdentity) : await withInboxRowFacts(baseRows.map(withSingleOpportunityIdentity)),
       evidence: {
         ...evidence,
         contactGrouping: "lead_fallback",

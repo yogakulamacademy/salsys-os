@@ -12,10 +12,10 @@ test.beforeEach(async ({ context }) => {
 test('inbox opens unselected; search keeps a bounded, illustrated empty list', async ({ page }) => {
   await page.goto('/conversations');
   await expect(page.getByRole('heading', { name: 'Inbox', exact: true })).toBeVisible();
-  await expect(page.getByText('Select a conversation', { exact: true })).toBeVisible();
-  await expect(page.locator('.ui-empty-artwork').first()).toBeVisible();
+  await expect(page.getByText('Today in your inbox', { exact: true })).toBeVisible();
   await page.getByRole('textbox', { name: /Search conversations/ }).fill('zzzz-no-such-customer');
   await expect(page.getByText('No matching conversations', { exact: true })).toBeVisible();
+  await expect(page.locator('.ui-empty-artwork').first()).toBeVisible();
   await expect(page.getByRole('button', { name: 'Reset inbox filters' })).toBeVisible();
   await page.screenshot({ animations: 'disabled', path: 'test-results/inbox-empty-desktop.png' });
   for (const width of [390, 768, 1254, 1440]) {
@@ -34,7 +34,7 @@ test('selecting a conversation and hiding context reclaims the grid column', asy
   const first = page.locator('.conversation-sidebar a[href^="/conversations?lead="]').first();
   await expect(first).toBeVisible();
   await first.click();
-  await expect(page.getByText('Select a conversation', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('Today in your inbox', { exact: true })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Hide customer context', exact: true })).toBeVisible();
   const before = await page.locator('.conversation-workspace').evaluate(el => ({ width: el.clientWidth, scroll: el.scrollWidth, columns: getComputedStyle(el).gridTemplateColumns }));
   expect(before.scroll).toBeLessThanOrEqual(before.width + 2);

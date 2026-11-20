@@ -28,7 +28,10 @@ export function nextInboxQueueHref(
   if (!value ||
       (key === "page" && value === "1") ||
       (key === "sort" && value === "created_desc") ||
-      (key !== "scope" && inboxFilters.has(key) && value === "all")) {
+      // "Waiting" is the default view (20 Nov 2026), so it needs no param;
+      // "All" must now be kept in the address to be reachable.
+      (key === "filter" && value === "waiting") ||
+      (key !== "scope" && key !== "filter" && inboxFilters.has(key) && value === "all")) {
     params.delete(key);
   } else {
     params.set(key, value);

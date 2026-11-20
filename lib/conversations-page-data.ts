@@ -5,10 +5,11 @@ import { createClient } from "@/lib/supabase/server";
 
 export type InboxSort = "created_desc" | "activity_desc";
 export type InboxScope = "team" | "mine" | "unassigned" | `owner:${string}`;
-export type InboxFilter = "all" | "reply" | "unread" | "snoozed";
+export type InboxFilter = "all" | "reply" | "unread" | "snoozed" | "waiting" | "older";
 export type InboxChannel = "all" | "website" | "instagram" | "whatsapp";
 export type InboxPriority = "all" | "urgent" | "high" | "normal" | "waiting";
 import { INBOX_TOPICS, type InboxTopic } from "@/lib/inbox-topics";
+import { isRecentWait } from "@/lib/inbox-waiting";
 export type { InboxTopic };
 
 export type InboxQuery = {
@@ -30,6 +31,10 @@ export type InboxPageCounts = {
   reply: number;
   unread: number;
   snoozed: number;
+  /** Wrote in the last 7 days, no reply yet (owner request, 20 Nov 2026). */
+  waiting: number;
+  /** Waiting for a reply for more than 7 days. */
+  older: number;
 };
 
 export type InboxChannelCounts = { all: number; whatsapp: number; instagram: number; website: number };
@@ -98,52 +103,113 @@ export async function getInboxPage(
     /^owner:[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(query.scope)
     ? query.scope.toLowerCase() as InboxScope
     : choice(query.scope, ["team", "mine", "unassigned"] as const, defaultScope);
-  const filter = choice(query.filter, ["all", "reply", "unread", "snoozed"] as const, "all");
+  // Waiting (this week) is the default view; the full list is one tap away.
+  const filter = choice(query.filter, ["all", "reply", "unread", "snoozed", "waiting", "older"] as const, "waiting");
   const channel = choice(query.channel, ["all", "website", "instagram", "whatsapp"] as const, "all");
   const priority = choice(query.priority, ["all", "urgent", "high", "normal", "waiting"] as const, "all");
   const search = (query.q || "").trim().slice(0, 120);
   const topic = choice(query.topic, ["all", ...INBOX_TOPICS, "other"] as const, "all") as InboxTopic;
 
   const supabase = await createClient();
-  const args = {
-    p_page: page,
-    p_page_size: 50,
-    p_search: search,
-    p_sort: sort,
-    p_scope: scope,
-    p_filter: filter,
-    p_channel: channel,
-    p_priority: priority,
-  };
-  // v2 adds topics and channel counts; fall back to v1 only when v2 is not deployed.
-  let { data, error } = await (supabase as any).rpc("get_current_conversations_page_v2", { ...args, p_topic: topic });
   let usedV2 = true;
-  if (error && (error.code === "PGRST202" || error.code === "42883")) {
-    usedV2 = false;
-    ({ data, error } = await (supabase as any).rpc("get_current_conversations_page_v1", args));
+  async function callPage(p: { page: number; pageSize: number; filter: string; channel: string; sort: string }) {
+    const args = {
+      p_page: p.page,
+      p_page_size: p.pageSize,
+      p_search: search,
+      p_sort: p.sort,
+      p_scope: scope,
+      p_filter: p.filter,
+      p_channel: p.channel,
+      p_priority: priority,
+    };
+    // v2 adds topics and channel counts; fall back to v1 only when v2 is not deployed.
+    let { data, error } = usedV2
+      ? await (supabase as any).rpc("get_current_conversations_page_v2", { ...args, p_topic: topic })
+      : await (supabase as any).rpc("get_current_conversations_page_v1", args);
+    if (error && usedV2 && (error.code === "PGRST202" || error.code === "42883")) {
+      usedV2 = false;
+      ({ data, error } = await (supabase as any).rpc("get_current_conversations_page_v1", args));
+    }
+
+    if (error) {
+      if (error.code === "PGRST202" || error.code === "42883") {
+        throw new InboxPaginationNotDeployedError();
+      }
+      // PostgreSQL 57014 can also mean a manually canceled query. Only recover
+      // the known statement_timeout case; do not suppress authorization failures.
+      if (error.code === "57014" && /canceling statement due to statement timeout/i.test(error.message ?? "")) {
+        throw new InboxPaginationTimedOutError();
+      }
+      throw new Error(`Unable to load full Inbox page: ${error.message}`);
+    }
+    if (!data || typeof data !== "object" || !Array.isArray(data.inbox)) {
+      throw new Error("Inbox page returned an invalid payload");
+    }
+    return data;
   }
 
-  if (error) {
-    if (error.code === "PGRST202" || error.code === "42883") {
-      throw new InboxPaginationNotDeployedError();
-    }
-    // PostgreSQL 57014 can also mean a manually canceled query. Only recover
-    // the known statement_timeout case; do not suppress authorization failures.
-    if (error.code === "57014" && /canceling statement due to statement timeout/i.test(error.message ?? "")) {
-      throw new InboxPaginationTimedOutError();
-    }
-    throw new Error(`Unable to load full Inbox page: ${error.message}`);
+  // Waiting = needs a reply and wrote in the last 7 days. Needs-reply rows
+  // come newest first, so read them until they turn older than a week (all
+  // channels, so the channel chips can show this week's counts).
+  const now = Date.now();
+  const waitingAll: ConversationLeadSummary[] = [];
+  let replyAllPayload: any = null;
+  for (let p = 1; p <= 3; p += 1) {
+    const payload = await callPage({ page: p, pageSize: 100, filter: "reply", channel: "all", sort: "activity_desc" });
+    if (p === 1) replyAllPayload = payload;
+    const rows = payload.inbox as ConversationLeadSummary[];
+    const recent = rows.filter((r) => isRecentWait(r.waitingSince, now));
+    waitingAll.push(...recent);
+    if (recent.length < rows.length || rows.length < 100) break;
   }
-  if (!data || typeof data !== "object" || !Array.isArray(data.inbox)) {
-    throw new Error("Inbox page returned an invalid payload");
+  const waitingFor = (ch: string) => ch === "all" ? waitingAll : waitingAll.filter((r) => r.currentContactChannel === ch);
+
+  let data: any;
+  let rows: ConversationLeadSummary[];
+  let totalMatching: number;
+  let pageSize = 50;
+  if (filter === "waiting") {
+    data = replyAllPayload;
+    rows = waitingFor(channel);
+    totalMatching = rows.length;
+    pageSize = Math.max(50, rows.length);
+  } else if (filter === "older") {
+    // Older needs-reply rows sit after this week's in the same order.
+    const skip = waitingFor(channel).length;
+    const start = skip + (page - 1) * 50;
+    const rpcPage = Math.floor(start / 100) + 1;
+    const first = await callPage({ page: rpcPage, pageSize: 100, filter: "reply", channel, sort: "activity_desc" });
+    let pool = first.inbox as ConversationLeadSummary[];
+    const offset = start - (rpcPage - 1) * 100;
+    if (offset + 50 > pool.length && pool.length === 100) {
+      const next = await callPage({ page: rpcPage + 1, pageSize: 100, filter: "reply", channel, sort: "activity_desc" });
+      pool = pool.concat(next.inbox as ConversationLeadSummary[]);
+    }
+    data = first;
+    rows = pool.slice(offset, offset + 50).filter((r) => !isRecentWait(r.waitingSince, now));
+    totalMatching = Math.max(0, numberOrZero(first.totalMatching) - skip);
+  } else {
+    data = await callPage({ page, pageSize: 50, filter, channel, sort });
+    rows = data.inbox as ConversationLeadSummary[];
+    totalMatching = numberOrZero(data.totalMatching);
   }
 
   const counts = data.counts || {};
+  const waitingCount = waitingAll.length;
+  const channelCounts = filter === "waiting" && usedV2
+    ? {
+        all: waitingAll.length,
+        whatsapp: waitingFor("whatsapp").length,
+        instagram: waitingFor("instagram").length,
+        website: waitingFor("website").length,
+      }
+    : null;
   return {
-    rows: data.inbox as ConversationLeadSummary[],
-    page: numberOrZero(data.page) || page,
-    pageSize: numberOrZero(data.pageSize) || 50,
-    totalMatching: numberOrZero(data.totalMatching),
+    rows,
+    page: filter === "waiting" ? 1 : numberOrZero(data.page) || page,
+    pageSize: filter === "waiting" ? pageSize : numberOrZero(data.pageSize) || 50,
+    totalMatching,
     owners: Array.isArray(data.owners) ? data.owners.filter((owner: unknown) => Boolean(owner && typeof owner === "object" && typeof (owner as {id?: unknown}).id === "string" && typeof (owner as {name?: unknown}).name === "string")) : [],
     counts: {
       scope: numberOrZero(counts.scope),
@@ -153,15 +219,17 @@ export async function getInboxPage(
       reply: numberOrZero(counts.reply),
       unread: numberOrZero(counts.unread),
       snoozed: numberOrZero(counts.snoozed),
+      waiting: waitingCount,
+      older: Math.max(0, numberOrZero(counts.reply) - waitingCount),
     },
-    channelCounts: usedV2 && data.channels && typeof data.channels === "object"
+    channelCounts: channelCounts ?? (usedV2 && data.channels && typeof data.channels === "object"
       ? {
           all: numberOrZero(data.channels.all),
           whatsapp: numberOrZero(data.channels.whatsapp),
           instagram: numberOrZero(data.channels.instagram),
           website: numberOrZero(data.channels.website),
         }
-      : null,
+      : null),
     topicCounts: usedV2 && data.topics && typeof data.topics === "object"
       ? Object.fromEntries(Object.entries(data.topics as Record<string, unknown>).map(([k, v]) => [k, numberOrZero(v)])) as Partial<Record<InboxTopic, number>>
       : null,
