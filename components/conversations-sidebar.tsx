@@ -534,7 +534,7 @@ function ConversationRow({
       href={href}
       aria-current={selected ? "page" : undefined}
       data-channel={lead.currentContactChannel}
-      className={`ibx-v2-row group relative block border-b border-line/70 px-4 py-3 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-700/40 ${
+      className={`ibx-v2-row ibx-v4-row group relative block border-b border-line/70 px-4 py-3 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-700/40 ${
         selected ? "bg-brand-50" : paid ? "bg-emerald-50/50 hover:bg-emerald-50" : "bg-surface hover:bg-surface-soft"
       }`}
     >

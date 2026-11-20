@@ -20,6 +20,11 @@ test("last messages read like a person said them", () => {
   assert.equal(describeLastMessage("[Instagram ig_story message]"), "Mentioned you in a story");
   assert.equal(describeLastMessage("[Instagram ephemeral message]"), "Sent a disappearing photo or video");
   assert.equal(describeLastMessage("  Is accommodation\n provided? "), "Is accommodation provided?");
+  assert.equal(describeLastMessage("Shared an Instagram image\nhttps://x"), "Sent a photo");
+  assert.equal(describeLastMessage("Shared an Instagram voice message\nhttps://x"), "Sent a voice message");
+  assert.equal(describeLastMessage("Mentioned you in an Instagram story\nhttps://x"), "Mentioned you in a story");
+  assert.equal(describeLastMessage("[Instagram image]"), "Sent a photo");
+  assert.equal(describeLastMessage("[Instagram historical message]"), "Older message (text not available)");
 });
 
 test("questions, messages and shares are told apart", () => {
@@ -30,6 +35,9 @@ test("questions, messages and shares are told apart", () => {
   assert.equal(waitKind("Shared an Instagram reel https://x"), "share");
   assert.equal(waitKind("[Instagram story_reply message]"), "share");
   assert.equal(waitKind(""), "share");
+  assert.equal(waitKind("Shared an Instagram image\nhttps://x"), "share");
+  assert.equal(waitKind("Mentioned you in an Instagram story\nhttps://x"), "share");
+  assert.equal(waitKind("Is there a payment plan?"), "question");
   assert.equal(waitKind("I've made the payment", true), "paid");
 });
 

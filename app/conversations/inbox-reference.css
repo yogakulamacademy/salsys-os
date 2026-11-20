@@ -337,3 +337,12 @@ a.ibx-v3-head-btn{text-decoration:none;}
 html.dark .ibx-v3-quick-panel,html.dark .ibx-v3-fu-whens button,html.dark .ibx-v3-fu-date input{background:var(--app-surface);border-color:var(--app-border);color:var(--app-text);}
 html.dark .ibx-v3-fu-methods{background:var(--app-surface-muted);}
 html.dark .ibx-v3-fu-methods button[aria-pressed="true"]{background:var(--app-surface);color:var(--app-text-strong);}
+
+
+/* Inbox list, owner-approved combined design (20 Nov 2026): compact rows that
+   show the person's own words, and tabs/chips that wrap instead of hiding. */
+.ibx-v2.conversations-polish .conversation-sidebar .ibx-v2-row.ibx-v4-row{min-height:0!important;padding:11px 12px 11px 15px!important;}
+.ibx-v2.conversations-polish .conversation-sidebar .ibx-v4-row.bg-emerald-50\/50{background:#f0faf4!important;}
+.ibx-v2.conversations-polish .ibx-v2-tabs{flex-wrap:wrap!important;overflow:visible!important;row-gap:6px!important;}
+.ibx-v2.conversations-polish .ibx-v3-channel-chips{flex-wrap:wrap!important;overflow:visible!important;}
+.ibx-v2.conversations-polish .ibx-wait-group{letter-spacing:.06em;}
