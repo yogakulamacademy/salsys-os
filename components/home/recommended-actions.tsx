@@ -129,6 +129,10 @@ export function RecommendedActions() {
     return () => controller.abort();
   }, []);
 
+  // Home shows this box only when there are recommendations; a loading,
+  // unavailable or empty box said nothing (owner request, 20 Nov 2026).
+  if (state.status !== "ready" || !state.recommendations.length) return null;
+
   return (
     <section className="overflow-hidden rounded-card border border-ai-line bg-surface shadow-sm">
       <div className="flex flex-col gap-3 border-b border-line px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
@@ -154,24 +158,7 @@ export function RecommendedActions() {
         </span>
       </div>
 
-      {state.status === "loading" ? (
-        <div className="flex items-center gap-3 px-5 py-6 text-sm text-copy-muted">
-          <LoaderCircle size={17} className="animate-spin" />
-          Resolving current recommendation episodes…
-        </div>
-      ) : state.status === "error" ? (
-        <div className="m-4 flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/20 dark:text-amber-200">
-          <AlertTriangle size={17} className="mt-0.5 shrink-0" />
-          <div>
-            <div className="font-semibold">Recommended actions unavailable</div>
-            <p className="mt-1 text-xs leading-5">{state.message}</p>
-            <p className="mt-1 text-[11px] leading-5 opacity-80">
-              The factual Command Center panels remain available and are not
-              replaced by inferred fallback recommendations.
-            </p>
-          </div>
-        </div>
-      ) : state.recommendations.length ? (
+      {state.recommendations.length ? (
         <div>
           {state.partial ? (
             <div className="mx-4 mt-4 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-[11px] leading-5 text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/20 dark:text-amber-200">

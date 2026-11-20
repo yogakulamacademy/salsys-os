@@ -414,3 +414,21 @@
     height: auto;
   }
 }
+
+/* Home at 1920x1080 (owner-approved mockup, 20 Nov 2026): every row is three
+   equal columns with 16px gaps; cards in a row share one height. */
+.home-1920 .home-grid{display:grid;grid-template-columns:minmax(0,1fr);gap:16px;align-items:stretch;}
+.home-1920 .home-grid > *{min-width:0;height:100%;}
+.home-1920 .home-cell{display:flex;flex-direction:column;}
+.home-1920 .home-cell > *{flex:1 1 auto;}
+@media (min-width:768px){
+  .home-1920 .home-grid{grid-template-columns:repeat(2,minmax(0,1fr));}
+  .home-1920 .home-span-2,.home-1920 .home-span-3{grid-column:1/-1;}
+}
+@media (min-width:1280px){
+  .home-1920 .home-grid{grid-template-columns:repeat(3,minmax(0,1fr));}
+  .home-1920 .home-span-2{grid-column:span 2;}
+  .home-1920 .home-span-3{grid-column:1/-1;}
+}
+.home-1920 .home-kpis{gap:16px;}
+.home-1920 > * + *{margin-top:16px!important;}

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { ReactNode } from "react";
 import { AlertTriangle, Clock3, Lightbulb, MessageCircleReply, Snowflake, Sparkles } from "lucide-react";
 
 import { Panel } from "@/components/home/command-center/panel";
@@ -9,14 +10,14 @@ const STAGE_LABEL: Record<string, string> = {
 };
 
 /** One sentence about today, with the actions that answer it. */
-export function HomeTodayStrip({ story, aiMoves24h }: { story: HomeStory; aiMoves24h: number | null }) {
+export function HomeTodayStrip({ story, aiMoves24h, className = "", children }: { story: HomeStory; aiMoves24h: number | null; className?: string; children?: ReactNode }) {
   const extras = [
     story.leadsThisWeek != null ? `${story.leadsThisWeek.toLocaleString("en-IN")} new leads this week` : null,
     aiMoves24h ? `the AI moved ${aiMoves24h.toLocaleString("en-IN")} leads to the right stage` : null,
     story.aiRepliesToday ? `sent ${story.aiRepliesToday.toLocaleString("en-IN")} ${story.aiRepliesToday === 1 ? "reply" : "replies"}` : null,
   ].filter(Boolean).join(" · ");
   return (
-    <section aria-label="Today" className="flex flex-col gap-4 rounded-[18px] border border-line bg-surface p-5 shadow-card sm:p-6">
+    <section aria-label="Today" className={`flex flex-col justify-between gap-4 rounded-[18px] border border-line bg-surface p-5 shadow-card sm:p-6 ${className}`}>
       <div className="flex flex-col gap-1.5">
         <span className="text-[11px] font-bold uppercase tracking-[0.1em] text-brand-700">Today</span>
         <p className="max-w-[920px] text-xl font-bold leading-snug tracking-[-0.01em] text-copy-strong sm:text-[22px]">{story.headline}</p>
@@ -48,24 +49,25 @@ export function HomeTodayStrip({ story, aiMoves24h }: { story: HomeStory; aiMove
           </Link>
         ) : null}
       </div>
+      {children}
     </section>
   );
 }
 
-/** Shown only when new leads dropped sharply week on week. */
+/** Shown only when new leads dropped sharply week on week. Sits inside the Today card. */
 export function HomeLeadsAlert({ story, adsProblem }: { story: HomeStory; adsProblem: string | null }) {
   if (story.leadsChange == null || story.leadsChange > -40) return null;
   return (
-    <section aria-label="Needs attention" className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3.5 dark:border-amber-800 dark:bg-amber-950/40">
+    <div role="note" aria-label="Needs attention" className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-amber-50 px-3.5 py-2.5 dark:bg-amber-950/40">
       <div className="flex items-center gap-3">
-        <AlertTriangle size={19} className="shrink-0 text-amber-800 dark:text-amber-300" aria-hidden="true" />
+        <AlertTriangle size={17} className="shrink-0 text-amber-800 dark:text-amber-300" aria-hidden="true" />
         <p className="text-sm text-amber-900 dark:text-amber-100">
           <strong>New leads are down {Math.abs(story.leadsChange)}% this week</strong> ({story.leadsThisWeek?.toLocaleString("en-IN")} vs {story.leadsLastWeek?.toLocaleString("en-IN")}).{" "}
           {adsProblem ? `Ad results aren't syncing (${adsProblem}), so the cause can't be seen here yet.` : "Check your ads and posting."}
         </p>
       </div>
       <Link href="/marketing" className="text-sm font-semibold text-amber-900 hover:underline dark:text-amber-100">{adsProblem ? "Reconnect ads →" : "Marketing →"}</Link>
-    </section>
+    </div>
   );
 }
 
@@ -133,6 +135,9 @@ export function WinBackPanel({ story }: { story: HomeStory }) {
       <p className="text-xs leading-5 text-copy-muted">
         Instagram only allows a reply within 24 hours of the lead&apos;s last message, so most of these need WhatsApp, email or a new post to reach them.
       </p>
+      <div className="mt-auto flex flex-wrap gap-2">
+        <Link href="/conversations?filter=older" className="inline-flex h-10 items-center rounded-xl bg-brand-700 px-4 text-[13px] font-semibold text-white hover:bg-brand-800">Open the older chats</Link>
+      </div>
     </Panel>
   );
 }
@@ -148,7 +153,7 @@ export function MessageHoursPanel({ story }: { story: HomeStory }) {
       <div
         role="img"
         aria-label={`Messages by hour of day, last 30 days${story.busiest ? `; busiest ${story.busiest}` : ""}.`}
-        className="grid h-28 grid-cols-[repeat(24,minmax(0,1fr))] items-end gap-[3px]"
+        className="grid min-h-28 flex-1 grid-cols-[repeat(24,minmax(0,1fr))] items-end gap-[3px]"
       >
         {story.hours.map((count, hour) => (
           <span
@@ -162,7 +167,7 @@ export function MessageHoursPanel({ story }: { story: HomeStory }) {
       <div className="flex justify-between text-[11px] text-copy-muted">
         <span>12 am</span><span>6 am</span><span>12 pm</span><span>6 pm</span><span>11 pm</span>
       </div>
-      <span className="sr-only">{total} messages in total.</span>
+      <span className="text-xs text-copy-muted">{total.toLocaleString("en-IN")} messages in total</span>
     </Panel>
   );
 }

@@ -356,7 +356,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
   });
 
   return (
-    <div className="command-center-v3 w-full min-w-0 space-y-4 pb-7">
+    <div className="command-center-v3 home-1920 w-full min-w-0 space-y-4 pb-7">
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div className="min-w-0">
           <h1 className="text-[28px] font-extrabold tracking-[-0.03em] text-copy-strong">Command Center</h1>
@@ -384,7 +384,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
         </div>
       </header>
 
-      <section aria-label="Business pulse" className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 min-[1100px]:grid-cols-4">
+      <section aria-label="Business pulse" className={`home-kpis grid grid-cols-1 gap-4 sm:grid-cols-2 min-[1100px]:grid-cols-4 ${story ? "min-[1280px]:grid-cols-5" : ""}`}>
         <KpiCard
           icon={<Users size={18} />}
           label="Leads"
@@ -434,12 +434,33 @@ export default async function HomePage({ searchParams }: HomePageProps) {
           evidenceState="partial"
           definition="Paid minus refunded CRM payment records in the selected period. Not yet reconciled to bank or payment-provider settlement."
         />
+        {story ? (
+          <KpiCard
+            icon={<MessageSquareText size={18} />}
+            label="Waiting for a reply"
+            value={story.waitingThisWeek.toLocaleString("en-IN")}
+            chip={{ text: story.waitingNow ? `${story.waitingNow.toLocaleString("en-IN")} wrote in the last 3 days` : "None in the last 3 days", tone: story.waitingNow ? "warn" : "flat" }}
+            trend={null}
+            href="/conversations"
+            evidenceLabel="Inbox reply state"
+            evidenceState="observed"
+            definition="People whose last message in the past 7 days has no reply yet (the Inbox Waiting tab). Older unanswered chats are counted under Win back."
+          />
+        ) : null}
       </section>
 
-      {story ? <HomeTodayStrip story={story} aiMoves24h={extras.aiStageMoves24h} /> : null}
-      {story ? <HomeLeadsAlert story={story} adsProblem={health.find((item) => item.label === "Google & Meta ads" && item.state === "bad")?.note ?? null} /> : null}
+      {/* 1920x1080 layout (owner-approved mockup, 20 Nov 2026): equal three-column rows. */}
+      <div className="home-grid">
+        {story ? (
+          <HomeTodayStrip story={story} aiMoves24h={extras.aiStageMoves24h} className={mock ? "home-span-3" : "home-span-2"}>
+            <HomeLeadsAlert story={story} adsProblem={health.find((item) => item.label === "Google & Meta ads" && item.state === "bad")?.note ?? null} />
+          </HomeTodayStrip>
+        ) : null}
+        {!mock ? <AiAutopilotPanel /> : null}
+      </div>
 
-      <div className="flex flex-wrap gap-3.5">
+      <div className="home-grid">
+        <div className="home-span-2 home-cell">
         <LeadActivityPanel
           points={periodSeries}
           total={totalLeads}
@@ -449,6 +470,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
           available={periodAnalytics.available.leads}
         />
 
+        </div>
         <Panel id="home-action-queue" icon={<Zap size={19} />} title="Action queue" action={{ href: "/follow-ups", label: "Work queue" }} className="flex-[1_1_340px]">
           {queue.length ? (
             <ul className="flex flex-col">
@@ -467,10 +489,9 @@ export default async function HomePage({ searchParams }: HomePageProps) {
           )}
         </Panel>
 
-        {!mock ? <AiAutopilotPanel /> : null}
       </div>
 
-      <div className="flex flex-wrap gap-3.5">
+      <div className="home-grid">
         <PipelineHealthPanel groups={stageGroups} aiMoves24h={extras.aiStageMoves24h} insight={funnelInsight(stageGroups)} />
         <SourceQualityPanel
           rows={validatedSourceQuality ? validatedSourceQuality.map((row) => ({ source: row.source, leads: row.leads, qualified: row.qualified })) : null}
@@ -512,14 +533,14 @@ export default async function HomePage({ searchParams }: HomePageProps) {
       </div>
 
       {story ? (
-        <div className="flex flex-wrap gap-3.5">
+        <div className="home-grid">
           <GoingColdPanel story={story} now={new Date()} />
           <WinBackPanel story={story} />
           <MessageHoursPanel story={story} />
         </div>
       ) : null}
 
-      <div className="flex flex-wrap gap-3.5">
+      <div className="home-grid">
         <Panel id="home-sources" icon={<Target size={19} />} title="Lead sources" action={{ href: sourceDetailHref, label: "Analyze" }} className="flex-[1_1_320px]">
           {donutTotal > 0 ? (
             <div className="flex items-center gap-4">
@@ -567,7 +588,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
         <LocationsPanel breakdown={extras.locations} />
       </div>
 
-      <div className="flex flex-wrap gap-3.5">
+      <div className="home-grid">
         <Panel id="home-insights" icon={<Lightbulb size={19} />} title="Insights" className="flex-[1_1_320px]">
           {insights.length ? (
             <ul className="flex flex-col">
@@ -619,7 +640,8 @@ export default async function HomePage({ searchParams }: HomePageProps) {
         </Panel>
       </div>
 
-      <HomeReportingCoverage items={reportingEvidence} />
+      {/* Shown only when some evidence is missing; "5 of 5 available" said nothing (20 Nov 2026). */}
+      {reportingEvidence.some((item) => !item.available) ? <HomeReportingCoverage items={reportingEvidence} /> : null}
     </div>
   );
 }
