@@ -47,7 +47,7 @@ function stringArray(value: unknown): string[] {
 
 function instagramMessage(reasons: string[]) {
   if (reasons.includes("instagram_24h_window_closed")) {
-    return "The Instagram reply window is closed. The customer must message the connected account again before another API reply can be sent.";
+    return "Instagram's reply window has closed. Answer by hand in the Instagram app, or save a draft here for when they write again.";
   }
   if (reasons.includes("instagram_user_initiation_missing")) {
     return "Instagram requires the customer to start the conversation before SalsysOS can reply through the API.";

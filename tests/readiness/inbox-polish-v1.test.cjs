@@ -21,7 +21,8 @@ test('website lead without an approved WhatsApp template gets the draft composer
 
 test('header shows one needs-reply pill with the wait time', () => {
   const page = read('app/conversations/page.tsx');
-  assert.match(page, /\{selectedSummary\.needsReply \? "Needs reply" : "First contact"\}\s*\{selectedSummary\.waitingSince/);
+  // Combined Inbox design (20 Nov 2026): the pill reads "Waiting 2d".
+  assert.match(page, /\{selectedSummary\.needsReply \? "Waiting" : "First contact"\}\s*\{selectedSummary\.waitingSince/);
   assert.doesNotMatch(page, /Waiting \{formatWaiting/);
 });
 

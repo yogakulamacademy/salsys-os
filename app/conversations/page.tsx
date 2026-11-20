@@ -358,15 +358,15 @@ export default async function ConversationsPage({
                 candidates={team.assignmentCandidates} canAssign={team.canManageAssignments} mock={mock}/>
               {selectedSummary?.needsReply || selectedSummary?.needsFirstContact ? (
                 <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ${selectedSummary.needsReply ? "bg-warning-soft text-warning" : "bg-sky-50 text-sky-700"}`}>
-                  {selectedSummary.needsReply ? "Needs reply" : "First contact"}
+                  {selectedSummary.needsReply ? "Waiting" : "First contact"}
                   {selectedSummary.waitingSince ? <><Clock3 size={11} aria-hidden="true" /> {formatWaiting(selectedSummary.waitingSince)}</> : null}
                 </span>
               ) : null}
             </div>
             <div className="ibx-v3-lead-meta">
-              <span>Lead · {selectedSummary?.needsReply ? "Inbound inquiry" : "Customer inquiry"}</span>
+              <span className="capitalize">{selected.leadCreationChannel?.replaceAll("_", " ") || selected.currentContactChannel.replaceAll("_", " ")}</span>
               <span aria-hidden="true">·</span>
-              <span>Created {formatDateTime(selected.createdAt)}</span>
+              <span>Came in {formatDateTime(selected.createdAt)}</span>
             </div>
           </div>
         </div>
