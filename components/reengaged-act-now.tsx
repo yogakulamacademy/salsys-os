@@ -95,10 +95,10 @@ export function TrackingCoverage({ linked, total }: { linked: number; total: num
 }
 
 /** "Act now": the people most worth contacting, with why and a suggested next step. */
-export function ActNow({ leads }: { leads: ActNowLead[] }) {
+export function ActNow({ leads, compact = false }: { leads: ActNowLead[]; compact?: boolean }) {
   if (!leads.length) return null;
   return (
-    <section className="mt-4" data-testid="act-now">
+    <section data-testid="act-now">
       <div className="mb-3 flex items-end justify-between gap-4">
         <div>
           <div className="eyebrow">Act now</div>
@@ -108,7 +108,7 @@ export function ActNow({ leads }: { leads: ActNowLead[] }) {
         </div>
         <span className="text-xs text-slate-500">Sorted by interest · last 30 days</span>
       </div>
-      <div className="grid gap-4 lg:grid-cols-2 2xl:grid-cols-3">
+      <div className={`grid gap-4 lg:grid-cols-2 ${compact ? "" : "2xl:grid-cols-3"}`}>
         {leads.map((lead) => {
           const p = lead.profile;
           const step = suggestNextStep(p);
@@ -166,6 +166,56 @@ export function ActNow({ leads }: { leads: ActNowLead[] }) {
           );
         })}
       </div>
+    </section>
+  );
+}
+
+/** What the drafting AI is held to on this page; each rule is enforced in code. */
+export function ReengageRules() {
+  const rules = [
+    "Drafts only: a person reviews and sends every message from the Inbox",
+    "Instagram only within 24 h of their last message; after that, a WhatsApp template or email",
+    "Never offers a discount, scholarship or special price, and never sends a payment link",
+    "Discount and scholarship questions go to a person",
+    "Never mentions that it saw their website visits",
+    "Leads marked Lost 4 times stay out",
+  ];
+  return (
+    <section className="rounded-2xl border border-line bg-surface p-4 shadow-xs">
+      <h2 className="text-[12px] font-semibold uppercase tracking-[0.08em] text-copy-muted">Rules the AI follows</h2>
+      <ul className="mt-2">
+        {rules.map((rule) => (
+          <li key={rule} className="flex gap-2.5 border-t border-line py-2 text-[13px] leading-5 text-copy first:border-t-0">
+            <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-brand-600" aria-hidden="true" />
+            {rule}
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+/** People who went quiet and then came back (visited or wrote again). */
+export function CameBack({ leads }: { leads: { leadId: string; name: string; detail: string }[] }) {
+  return (
+    <section className="rounded-2xl border border-line bg-surface p-4 shadow-xs">
+      <h2 className="text-[12px] font-semibold uppercase tracking-[0.08em] text-copy-muted">Came back after going quiet</h2>
+      <p className="mt-1 text-[12px] text-copy-muted">Came back to the website after becoming a lead.</p>
+      {leads.length ? (
+        <ul className="mt-2">
+          {leads.map((lead) => (
+            <li key={lead.leadId} className="flex items-center gap-3 border-t border-line py-2 first:border-t-0">
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-[13.5px] font-semibold text-copy-strong">{lead.name}</span>
+                <span className="block truncate text-[12px] text-copy-muted">{lead.detail}</span>
+              </span>
+              <Link href={`/conversations?lead=${lead.leadId}`} className="shrink-0 rounded-lg bg-brand-50 px-2.5 py-1 text-[12px] font-semibold text-brand-700 hover:bg-brand-100">Open</Link>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="mt-2 text-[13px] text-copy-muted">Nobody yet.</p>
+      )}
     </section>
   );
 }
