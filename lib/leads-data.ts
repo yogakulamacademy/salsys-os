@@ -32,7 +32,9 @@ export type LeadsQuickView =
   | "unassigned"
   | "stuck"
   | "followup_overdue"
-  | "payment_pending";
+  | "payment_pending"
+  | "qualified_up"
+  | "set_aside";
 
 export type LeadsSortMode =
   | "created_desc"
@@ -105,6 +107,8 @@ const QUICK_VIEWS =
     "stuck",
     "followup_overdue",
     "payment_pending",
+    "qualified_up",
+    "set_aside",
   ]);
 
 const SORT_MODES =
@@ -599,6 +603,21 @@ function buildWorkspacePageFromRows(
             "payment_pending" &&
           lead.stage !==
             "payment_pending"
+        ) {
+          return false;
+        }
+
+        // Legacy fallback for the two views the list function also has.
+        if (
+          filters.quickView === "qualified_up" &&
+          !["qualified", "high_intent", "payment_pending", "closed_won", "enrolled"].includes(String(lead.stage))
+        ) {
+          return false;
+        }
+
+        if (
+          filters.quickView === "set_aside" &&
+          !["not_now", "lost"].includes(String(lead.stage))
         ) {
           return false;
         }

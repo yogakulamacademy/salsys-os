@@ -1,17 +1,17 @@
 import type { ReactNode } from 'react';
 
 import { CrmLeadInspectorBridge } from '@/components/crm/crm-lead-inspector-bridge';
-import { CrmNavigation } from '@/components/crm/crm-navigation';
+import { CrmTabs } from '@/components/crm/crm-navigation';
 import workspaceStyles from '@/components/marketing/marketing-workspace-frame.module.css';
 
 export function CrmWorkspaceFrame({ children, focused = false }: { children: ReactNode; focused?: boolean }) {
   return (
     <>
       <div
-        className={`crm-brand-scope ${workspaceStyles.studio} ${focused ? 'crm-focused-workspace' : 'grid gap-5 lg:grid-cols-[220px_minmax(0,1fr)] xl:grid-cols-[238px_minmax(0,1fr)] xl:gap-6'}`}
+        className={`crm-brand-scope ${workspaceStyles.studio} ${focused ? 'crm-focused-workspace' : ''}`}
       >
-        {!focused ? <CrmNavigation /> : null}
         <div className="min-w-0 pb-8">
+          {!focused ? <CrmTabs /> : null}
           <CrmLeadInspectorBridge>{children}</CrmLeadInspectorBridge>
         </div>
       </div>

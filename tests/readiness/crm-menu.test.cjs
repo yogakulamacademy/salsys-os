@@ -10,7 +10,9 @@ test('CRM menu: duplicates removed, Data Quality under Settings, badges admin-on
     assert.ok(!crm.includes(gone), gone);
   }
   assert.match(crm, /label: 'Pipeline & admissions'/);
-  assert.match(crm, /label: "They say they've paid"/);
+  assert.match(crm, /label: 'Say they paid'/);
+  // Owner-approved mockups: tabs across the top instead of the side menu.
+  assert.match(read('components/crm/crm-workspace-frame.tsx'), /<CrmTabs \/>/);
   const nav = read('lib/navigation.ts');
   assert.match(nav, /label: "Data Quality",\s*href: "\/data-quality"/);
   const route = read('app/api/crm/nav-counts/route.ts');

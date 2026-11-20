@@ -59,7 +59,8 @@ test('lead queue precedes booking cards and retains table headers for an empty v
   await expect(page.getByText('No leads match this view', { exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Clear filters', exact: true })).toBeVisible();
   const table = await page.locator('table').boundingBox();
-  expect(table!.y).toBeLessThan(600);
+  // CRM tabs across the top (owner-approved mockups) add one row above the page.
+  expect(table!.y).toBeLessThan(700);
   await page.screenshot({ animations: 'disabled', path: 'test-results/leads-empty-desktop.png' });
 });
 
@@ -161,17 +162,18 @@ test('Home evidence-first charts preserve empty-data and action semantics', asyn
 test('Leads overview renders real summary and responsive controls', async ({ page }) => {
   await page.goto('/leads');
   await expect(page.getByTestId('leads-overview')).toBeVisible();
-  await expect(page.getByRole('region', { name: 'Leads overview' }).getByRole('link')).toHaveCount(5);
+  // Owner-approved Leads mockup (20 Nov 2026): "do this now" cards and the
+  // columns who, interested in, stage, score, last message, next step, owner.
+  await expect(page.getByRole('region', { name: 'Do this now' }).getByRole('link').first()).toBeVisible();
   await expect(page.getByRole('textbox', { name: 'Search leads' })).toBeVisible();
-  await expect(page.getByRole('columnheader', { name: 'Source' })).toBeVisible();
-  await expect(page.getByRole('columnheader', { name: 'Interest' })).toBeVisible();
-  await expect(page.getByRole('columnheader', { name: 'Score' })).toBeVisible();
-  await expect(page.getByRole('columnheader', { name: 'Last activity' })).toBeVisible();
-  await expect(page.getByRole('columnheader', { name: 'Next step' })).toBeVisible();
-  await expect(page.getByRole('columnheader', { name: 'Aging' })).toBeVisible();
-  await expect(page.getByRole('columnheader', { name: 'Course' })).toHaveCount(0);
-  await expect(page.getByTestId('lead-source-icon').first()).toBeVisible();
-  await expect(page.getByRole('columnheader', { name: 'Attention' })).toHaveCount(0);
+  for (const name of ['Interested in', 'Stage', 'Score', 'Last message', 'Next step', 'Owner']) {
+    await expect(page.getByRole('columnheader', { name, exact: true })).toBeVisible();
+  }
+  for (const name of ['Source', 'Aging', 'Attention', 'Course']) {
+    await expect(page.getByRole('columnheader', { name, exact: true })).toHaveCount(0);
+  }
+  await expect(page.getByRole('button', { name: /^Qualified & up/ })).toBeVisible();
+  await expect(page.getByRole('button', { name: /^Not now \/ Lost/ })).toBeVisible();
   await expect(page.getByText('newest leads first')).toBeVisible();
   await page.getByRole('button', { name: 'More filters' }).click();
   await expect(page.getByText('Sort', { exact: true })).toBeVisible();

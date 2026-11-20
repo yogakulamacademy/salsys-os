@@ -89,18 +89,12 @@ export default async function AdmissionsLayout({ children }: { children: ReactNo
             </div>
           </section>
         ) : missingCapacityCount > 0 ? (
-          <section className="flex flex-col gap-2 rounded-xl border border-amber-200 bg-amber-50/70 px-4 py-3 text-sm text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/20 dark:text-amber-100 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-start gap-2">
-              <DatabaseZap size={16} className="mt-0.5 shrink-0" />
-              <div>
-                <strong>Capacity setup incomplete</strong>
-                <div className="mt-0.5 text-xs leading-5">
-                  Seats aren&apos;t set for {formatNumber(missingCapacityCount)} upcoming batch{missingCapacityCount === 1 ? '' : 'es'}, so you won&apos;t be warned when one fills up. Seat pressure remains unknown for those batches.
-                </div>
-              </div>
-            </div>
-            <Link href="/course-management" className="btn-secondary shrink-0">
-              Manage batch capacity
+          <section className="flex items-center justify-between gap-3 rounded-xl bg-amber-50 px-4 py-2.5 text-[13px] text-amber-900 dark:bg-amber-950/25 dark:text-amber-100">
+            <span>
+              <strong>Seats aren&apos;t set for {formatNumber(missingCapacityCount)} upcoming batch{missingCapacityCount === 1 ? '' : 'es'}</strong>, so you won&apos;t be warned when one fills up.
+            </span>
+            <Link href="/course-management" className="inline-flex shrink-0 items-center gap-1 font-semibold text-amber-900 hover:underline dark:text-amber-100">
+              Set seats →
             </Link>
           </section>
         ) : null}

@@ -1,11 +1,10 @@
 "use client";
 
+import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   ArrowLeft,
   ArrowRight,
-  Check,
-  ChevronDown,
   Columns3,
   Facebook,
   Filter,
@@ -64,27 +63,30 @@ type ColumnKey =
   | "signals"
   | "created";
 
+// Owner-approved Leads mockup (20 Nov 2026): who, what they want, stage,
+// score, their last message, one next step, owner. Others via Columns.
 const DEFAULT_COLUMNS: ColumnKey[] = [
   "lead",
-  "source",
   "course",
-  "owner",
   "stage",
   "score",
   "activity",
   "next",
-  "aging",
+  "owner",
 ];
+
+/** Column order in the table, whichever are visible. */
+const COLUMN_ORDER: ColumnKey[] = ["lead", "course", "stage", "score", "activity", "next", "owner", "source", "aging", "signals", "created", "contact"];
 
 const COLUMN_LABELS: Record<ColumnKey, string> = {
   lead: "Lead",
-  course: "Interest",
+  course: "Interested in",
   contact: "Contact",
   source: "Source",
   stage: "Stage",
   owner: "Owner",
   score: "Score",
-  activity: "Last activity",
+  activity: "Last message",
   aging: "Aging",
   next: "Next step",
   signals: "Attention",
@@ -100,6 +102,7 @@ export function LeadsCleanTable({
   options,
   summary,
   pagination,
+  viewCounts,
 }: {
   leads: LeadOverview[];
   intelligence: LeadListIntelligence[];
@@ -109,6 +112,8 @@ export function LeadsCleanTable({
   options: LeadsWorkspaceOptions;
   summary: LeadsWorkspaceSummary;
   pagination: LeadsWorkspacePagination;
+  /** Counts for the view tabs that the list summary doesn't carry; null hides the number. */
+  viewCounts?: { waiting: number | null; qualifiedUp: number | null; setAside: number | null };
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -119,7 +124,6 @@ export function LeadsCleanTable({
   const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set());
   const [showFilters, setShowFilters] = useState(false);
   const [showColumns, setShowColumns] = useState(false);
-  const [showViews, setShowViews] = useState(false);
   const [visibleColumns, setVisibleColumns] = useState<ColumnKey[]>(DEFAULT_COLUMNS);
   const toolbarRef = useRef<HTMLDivElement | null>(null);
 
@@ -182,7 +186,6 @@ export function LeadsCleanTable({
       const target = event.target;
       if (!(target instanceof Node)) return;
       if (toolbarRef.current?.contains(target)) return;
-      setShowViews(false);
       setShowColumns(false);
     }
 
@@ -245,6 +248,19 @@ export function LeadsCleanTable({
     );
   }
 
+  // View tabs (owner-approved Leads mockup). "Waiting for reply" opens the
+  // Inbox's Waiting view, where replying happens.
+  const leadViews: { key: string; label: string; count: number | null; href?: string }[] = [
+    { key: "all", label: "All", count: summary.all },
+    { key: "waiting", label: "Waiting for reply", count: viewCounts?.waiting ?? null, href: "/conversations?filter=waiting" },
+    { key: "qualified_up", label: "Qualified & up", count: viewCounts?.qualifiedUp ?? null },
+    { key: "unassigned", label: "Unassigned", count: summary.unassigned },
+    { key: "payment_pending", label: "Payment", count: summary.paymentPending },
+    { key: "set_aside", label: "Not now / Lost", count: viewCounts?.setAside ?? null },
+  ];
+  if (filters.quickView === "followup_overdue") leadViews.push({ key: "followup_overdue", label: "Overdue follow-ups", count: summary.followupOverdue });
+  if (filters.quickView === "stuck") leadViews.push({ key: "stuck", label: "Going quiet", count: summary.stuck });
+
   return (
     <>
       <section
@@ -254,21 +270,53 @@ export function LeadsCleanTable({
       >
         <div ref={toolbarRef} className="border-b border-line px-3 py-3 sm:px-4">
           <div className="flex flex-col gap-3 2xl:flex-row 2xl:items-center 2xl:justify-between">
-            <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
-              <label className="relative min-w-[210px] flex-[1_1_270px] 2xl:max-w-[390px]">
+            <div aria-label="Lead views" className="flex min-w-0 flex-wrap items-center gap-1 self-start rounded-xl bg-surface-soft p-1">
+              {leadViews.map((view) =>
+                view.href ? (
+                  <Link
+                    key={view.key}
+                    href={view.href}
+                    className="inline-flex h-9 items-center gap-1.5 rounded-lg px-3 text-[13px] font-medium text-copy-muted transition hover:bg-surface hover:text-copy-strong"
+                  >
+                    {view.label}
+                    {view.count != null ? <span className="text-[12px] tabular-nums text-copy-subtle">{view.count.toLocaleString("en-IN")}</span> : null}
+                  </Link>
+                ) : (
+                  <button
+                    key={view.key}
+                    type="button"
+                    aria-pressed={filters.quickView === view.key}
+                    onClick={() => updateUrl({ view: view.key === "all" ? null : view.key, page: 1 })}
+                    className={`inline-flex h-9 items-center gap-1.5 rounded-lg px-3 text-[13px] font-medium transition ${
+                      filters.quickView === view.key
+                        ? "bg-brand-700 text-white shadow-sm"
+                        : "text-copy-muted hover:bg-surface hover:text-copy-strong"
+                    }`}
+                  >
+                    {view.label}
+                    {view.count != null ? (
+                      <span className={`text-[12px] tabular-nums ${filters.quickView === view.key ? "text-white/85" : "text-copy-subtle"}`}>{view.count.toLocaleString("en-IN")}</span>
+                    ) : null}
+                  </button>
+                ),
+              )}
+            </div>
+
+            <div className="flex min-w-0 flex-wrap items-center gap-2 2xl:justify-end">
+              <label className="relative min-w-[210px] flex-[1_1_260px] 2xl:max-w-[320px]">
                 <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-copy-subtle" />
                 <span className="sr-only">Search leads</span>
                 <input
                   value={query}
                   onChange={(event) => setQuery(event.target.value)}
-                  placeholder="Search leads"
+                  placeholder="Search name, course, country…"
                   aria-label="Search leads"
-                  className="h-10 w-full rounded-ui border border-line bg-surface pl-9 pr-3 text-xs text-copy outline-none transition placeholder:text-copy-subtle focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
+                  className="h-10 w-full rounded-ui border border-line bg-surface pl-9 pr-3 text-[13px] text-copy outline-none transition placeholder:text-copy-subtle focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
                 />
               </label>
 
               <div className="hidden flex-wrap items-center gap-2 lg:flex">
-                <ToolbarSelect label="Stage" value={filters.stage || "all"} options={options.stages} onChange={(value) => updateUrl({ stage: value, page: 1 })} />
+                <ToolbarSelect label="Course" value={filters.course || "all"} options={options.courses} onChange={(value) => updateUrl({ course: value, page: 1 })} />
                 <ToolbarSelect label="Source" value={filters.source || "all"} options={options.sources} onChange={(value) => updateUrl({ source: value, page: 1 })} />
                 <ToolbarSelect label="Owner" value={filters.owner || "all"} options={options.owners} onChange={(value) => updateUrl({ owner: value, page: 1 })} />
               </div>
@@ -277,7 +325,7 @@ export function LeadsCleanTable({
                 type="button"
                 aria-expanded={showFilters}
                 onClick={() => setShowFilters((value) => !value)}
-                className={"inline-flex h-10 items-center gap-2 rounded-ui border px-3 text-[11px] font-semibold transition " + (
+                className={"inline-flex h-10 items-center gap-2 rounded-ui border px-3 text-[12px] font-semibold transition " + (
                   showFilters || filtersActive
                     ? "border-brand-200 bg-brand-50 text-brand-700 dark:bg-brand-950/30"
                     : "border-line bg-surface text-copy-muted hover:bg-surface-soft hover:text-copy-strong"
@@ -287,70 +335,24 @@ export function LeadsCleanTable({
               </button>
 
               {filtersActive ? (
-                <button type="button" onClick={resetFilters} className="inline-flex h-10 items-center gap-1 px-2 text-[11px] font-medium text-brand-700 dark:text-brand-300">
+                <button type="button" onClick={resetFilters} className="inline-flex h-10 items-center gap-1 px-2 text-[12px] font-medium text-brand-700 dark:text-brand-300">
                   <X size={13} /> Clear
                 </button>
               ) : null}
-            </div>
 
-            <div className="flex shrink-0 flex-wrap items-center gap-2">
               <div className="relative">
                 <button
                   type="button"
-                  onClick={() => {
-                    setShowViews((value) => !value);
-                    setShowColumns(false);
-                  }}
-                  aria-expanded={showViews}
-                  className="inline-flex h-10 items-center gap-2 rounded-ui border border-line bg-surface px-3 text-[11px] font-semibold text-copy-muted transition hover:border-line-strong hover:bg-surface-soft"
-                >
-                  Views
-                  <span className="rounded-full bg-surface-muted px-1.5 py-0.5 text-[10px] text-copy-strong">{summaryForView(summary, filters.quickView)}</span>
-                  <ChevronDown size={13} />
-                </button>
-                {showViews ? (
-                  <Popover className="left-0 top-11 w-64">
-                    <PopoverLabel>Operational views</PopoverLabel>
-                    {([
-                      ["all", "All leads", summary.all],
-                      ["unassigned", "Unassigned", summary.unassigned],
-                      ["stuck", "Stuck", summary.stuck],
-                      ["followup_overdue", "Overdue follow-ups", summary.followupOverdue],
-                      ["payment_pending", "Payment pending", summary.paymentPending],
-                    ] as const).map(([value, label, count]) => (
-                      <button
-                        key={value}
-                        type="button"
-                        onClick={() => {
-                          updateUrl({ view: value === "all" ? null : value, page: 1 });
-                          setShowViews(false);
-                        }}
-                        className="flex w-full items-center gap-2 rounded-ui px-2.5 py-2 text-left text-xs font-medium text-copy-muted transition hover:bg-surface-soft hover:text-copy-strong"
-                      >
-                        <span className="flex-1">{label}</span>
-                        <span className="text-[10px] text-copy-subtle">{count}</span>
-                        {filters.quickView === value ? <Check size={13} /> : null}
-                      </button>
-                    ))}
-                  </Popover>
-                ) : null}
-              </div>
-              <div className="relative">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowColumns((value) => !value);
-                    setShowViews(false);
-                  }}
+                  onClick={() => setShowColumns((value) => !value)}
                   aria-expanded={showColumns}
-                  className="inline-flex h-10 items-center gap-2 rounded-ui border border-line bg-surface px-3 text-[11px] font-semibold text-copy-muted transition hover:border-line-strong hover:bg-surface-soft"
+                  className="inline-flex h-10 items-center gap-2 rounded-ui border border-line bg-surface px-3 text-[12px] font-semibold text-copy-muted transition hover:border-line-strong hover:bg-surface-soft"
                 >
                   <Columns3 size={14} /> Columns
                 </button>
                 {showColumns ? (
                   <Popover className="right-0 top-11 w-56">
                     <PopoverLabel>Visible fields</PopoverLabel>
-                    {(Object.keys(COLUMN_LABELS) as ColumnKey[]).map((column) => (
+                    {COLUMN_ORDER.map((column) => (
                       <label key={column} className="flex cursor-pointer items-center gap-2 rounded-ui px-2.5 py-2 text-xs text-copy-muted hover:bg-surface-soft hover:text-copy-strong">
                         <input
                           type="checkbox"
@@ -368,33 +370,15 @@ export function LeadsCleanTable({
             </div>
           </div>
 
-          <div aria-label="Quick lead views" className="mt-3 flex min-w-0 flex-wrap items-center gap-1 border-t border-line pt-2.5">
-            <span className="mr-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-copy-subtle">Quick views</span>
-            {([
-              ["all", "All leads"],
-              ["unassigned", "Unassigned"],
-              ["stuck", "Stuck"],
-              ["followup_overdue", "Overdue"],
-              ["payment_pending", "Payment"],
-            ] as const).map(([value, label]) => (
-              <QuickViewButton
-                key={value}
-                label={label}
-                active={filters.quickView === value}
-                onClick={() => updateUrl({ view: value === "all" ? null : value, page: 1 })}
-              />
-            ))}
-          </div>
-
           {showFilters ? (
             <div className="mt-3 flex flex-wrap items-end gap-2 rounded-ui bg-surface-soft p-3">
+              <FilterSelect label="Stage" value={filters.stage || "all"} options={options.stages} onChange={(value) => updateUrl({ stage: value, page: 1 })} />
               <div className="flex flex-wrap gap-2 lg:hidden">
-                <FilterSelect label="Stage" value={filters.stage || "all"} options={options.stages} onChange={(value) => updateUrl({ stage: value, page: 1 })} />
+                <FilterSelect label="Course" value={filters.course || "all"} options={options.courses} onChange={(value) => updateUrl({ course: value, page: 1 })} />
                 <FilterSelect label="Source" value={filters.source || "all"} options={options.sources} onChange={(value) => updateUrl({ source: value, page: 1 })} />
                 <FilterSelect label="Owner" value={filters.owner || "all"} options={options.owners} onChange={(value) => updateUrl({ owner: value, page: 1 })} />
               </div>
               <FilterSelect label="Channel" value={filters.channel || "all"} options={options.channels} onChange={(value) => updateUrl({ channel: value, page: 1 })} />
-              <FilterSelect label="Interest" value={filters.course || "all"} options={options.courses} onChange={(value) => updateUrl({ course: value, page: 1 })} />
               <FilterSelect label="Aging" value={filters.aging || "all"} options={["healthy", "warning", "stuck", "untracked"]} onChange={(value) => updateUrl({ aging: value, page: 1 })} />
               <label className="min-w-[150px]">
                 <span className="mb-1 block text-[9px] font-semibold uppercase tracking-[0.08em] text-copy-subtle">Sort</span>
@@ -443,13 +427,13 @@ export function LeadsCleanTable({
                   <input type="checkbox" checked={allSelected} onChange={toggleAll} aria-label="Select all visible leads" className="h-3.5 w-3.5 rounded border-line" />
                 </th>
                 {visibleColumns.includes("lead") ? <HeaderCell>Lead</HeaderCell> : null}
-                {visibleColumns.includes("source") ? <HeaderCell>Source</HeaderCell> : null}
-                {visibleColumns.includes("course") ? <HeaderCell>Interest</HeaderCell> : null}
-                {visibleColumns.includes("owner") ? <HeaderCell>Owner</HeaderCell> : null}
+                {visibleColumns.includes("course") ? <HeaderCell>Interested in</HeaderCell> : null}
                 {visibleColumns.includes("stage") ? <HeaderCell>Stage</HeaderCell> : null}
                 {visibleColumns.includes("score") ? <HeaderCell>Score</HeaderCell> : null}
-                {visibleColumns.includes("activity") ? <HeaderCell><span title="Most recent recorded contact (not every CRM activity)">Last activity</span></HeaderCell> : null}
+                {visibleColumns.includes("activity") ? <HeaderCell>Last message</HeaderCell> : null}
                 {visibleColumns.includes("next") ? <HeaderCell>Next step</HeaderCell> : null}
+                {visibleColumns.includes("owner") ? <HeaderCell>Owner</HeaderCell> : null}
+                {visibleColumns.includes("source") ? <HeaderCell>Source</HeaderCell> : null}
                 {visibleColumns.includes("aging") ? <HeaderCell>Aging</HeaderCell> : null}
                 {visibleColumns.includes("signals") ? <HeaderCell>Attention</HeaderCell> : null}
                 {visibleColumns.includes("created") ? <HeaderCell>Created</HeaderCell> : null}
@@ -487,44 +471,26 @@ export function LeadsCleanTable({
                             <div className="min-w-0">
                               <div className="max-w-[220px] truncate text-[12px] font-semibold text-copy-strong">{lead.name || lead.leadCode}</div>
                               <div className="mt-0.5 truncate text-[10px] text-copy-subtle" title={tableEvidence[lead.id]?.countryInferred ? "Worked out from phone code, course-link visit, messages or rupee quotes" : undefined}>
-                                {lead.leadCode}
-                                {(tableEvidence[lead.id]?.country ?? lead.country) ? ` · ${tableEvidence[lead.id]?.country ?? lead.country}${tableEvidence[lead.id]?.countryInferred ? " (likely)" : ""}` : ""}
+                                {[
+                                  sourceLabel(lead.firstTouchSource || lead.currentContactChannel || ""),
+                                  (tableEvidence[lead.id]?.country ?? lead.country)
+                                    ? `${tableEvidence[lead.id]?.country ?? lead.country}${tableEvidence[lead.id]?.countryInferred ? " (likely)" : ""}`
+                                    : "",
+                                ].filter((part) => part && part !== "Unknown").join(" · ") || lead.leadCode}
                               </div>
                             </div>
                           </div>
                         </td>
                       ) : null}
 
-                      {visibleColumns.includes("source") ? (
-                        <td className="px-3 py-3">
-                          <div className="flex max-w-[160px] min-w-0 items-center gap-2" title={`Recorded source: ${lead.firstTouchSource || "Unknown"}`}>
-                            <SourceIcon source={lead.firstTouchSource} />
-                            <span className="truncate text-[11px] font-medium text-copy">{sourceLabel(lead.firstTouchSource || "Unknown")}</span>
-                          </div>
-                          {(() => {
-                            const detail = lead.firstTouchCampaign || lead.firstTouchMedium || "";
-                            // "Unattributed" on every row tells the reader nothing.
-                            return detail && !/^(unattributed|\(not set\)|none|unknown)$/i.test(detail.trim())
-                              ? <div className="mt-0.5 max-w-[160px] truncate text-[10px] text-copy-subtle">{detail}</div>
-                              : null;
-                          })()}
-                        </td>
-                      ) : null}
-
                       {visibleColumns.includes("course") ? (
                         <td className="px-3 py-3">
-                          <div className={`max-w-[220px] truncate text-[12px] font-medium ${hasCourse(lead.course) ? "text-copy" : "text-copy-subtle"}`}>{hasCourse(lead.course) ? lead.course : "Course not known yet"}</div>
+                          <div className={`max-w-[240px] truncate text-[12.5px] font-medium ${hasCourse(lead.course) ? "text-copy-strong" : "text-amber-700 dark:text-amber-300"}`}>{hasCourse(lead.course) ? lead.course : "Not known yet"}</div>
                           <div className="mt-0.5 max-w-[220px] truncate text-[10px] text-copy-subtle">
                             {intel?.batch_code || lead.location || (tableEvidence[lead.id]?.value != null
                               ? `Worth about ${formatValue(tableEvidence[lead.id]!.value!, tableEvidence[lead.id]?.currency ?? "INR")}`
                               : hasCourse(lead.course) ? "Batch not chosen" : "")}
                           </div>
-                        </td>
-                      ) : null}
-
-                      {visibleColumns.includes("owner") ? (
-                        <td className="px-3 py-3">
-                          <div className="text-[11px] font-medium text-copy">{intel?.owner_name || lead.owner || "Unassigned"}</div>
                         </td>
                       ) : null}
 
@@ -541,31 +507,54 @@ export function LeadsCleanTable({
                       ) : null}
 
                       {visibleColumns.includes("activity") ? (
-                        <td className="px-3 py-3" title="Latest verified contact time; this does not include every CRM activity.">
-                          {tableEvidence[lead.id]?.lastContactAt || (mock && lead.lastContactedAt) ? (
-                            <>
-                              <div className="whitespace-nowrap text-[11px] font-semibold text-copy">
-                                {relativeDate(tableEvidence[lead.id]?.lastContactAt || lead.lastContactedAt || "")}
-                              </div>
-                              <div className="mt-0.5 whitespace-nowrap text-[10px] text-copy-subtle">
-                                {tableEvidence[lead.id]?.lastContactKind || "Contact"} · {formatDate(tableEvidence[lead.id]?.lastContactAt || lead.lastContactedAt || "")}
-                              </div>
-                            </>
+                        <td className="px-3 py-3">
+                          {tableEvidence[lead.id]?.lastInboundText ? (
+                            <div className="max-w-[300px] truncate text-[12px] text-copy" title={tableEvidence[lead.id]!.lastInboundText!}>
+                              {describeMessage(tableEvidence[lead.id]!.lastInboundText!)}
+                            </div>
                           ) : (
-                            <span className="text-[11px] text-copy-subtle" title="No verified contact event available">—</span>
+                            <div className="text-[12px] text-copy-subtle">No message yet</div>
                           )}
+                          {tableEvidence[lead.id]?.lastContactAt || (mock && lead.lastContactedAt) ? (
+                            <div className="mt-0.5 whitespace-nowrap text-[11px] text-copy-subtle" title={formatDate(tableEvidence[lead.id]?.lastContactAt || lead.lastContactedAt || "")}>
+                              {relativeDate(tableEvidence[lead.id]?.lastContactAt || lead.lastContactedAt || "")}
+                            </div>
+                          ) : null}
                         </td>
                       ) : null}
 
                       {visibleColumns.includes("next") ? (
                         <td className="px-3 py-3">
-                          <div className={`max-w-[180px] text-[11px] font-medium ${tableEvidence[lead.id]?.saysPaid ? "text-emerald-700 dark:text-emerald-300" : tableEvidence[lead.id]?.waitingSince ? "text-rose-700 dark:text-rose-300" : "text-copy"}`}>
+                          <span className={`inline-flex max-w-[220px] items-center truncate rounded-lg px-2.5 py-1 text-[12px] font-semibold ${tableEvidence[lead.id]?.saysPaid ? "bg-emerald-50 text-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-300" : tableEvidence[lead.id]?.waitingSince ? "bg-orange-50 text-orange-700 dark:bg-orange-950/30 dark:text-orange-300" : "bg-brand-50/70 text-brand-700 dark:bg-brand-950/30 dark:text-brand-300"}`}>
                             {nextAction(lead, intel, tableEvidence[lead.id])}
-                          </div>
-                          {tableEvidence[lead.id]?.waitingSince && tableEvidence[lead.id]?.lastInboundText ? (
-                            <div className="mt-0.5 max-w-[180px] truncate text-[10px] text-copy-subtle" title={tableEvidence[lead.id]!.lastInboundText!}>{describeMessage(tableEvidence[lead.id]!.lastInboundText!)}</div>
-                          ) : null}
+                          </span>
                           {lead.nextFollowupAt ? <div className="mt-0.5 text-[10px] text-copy-subtle">{formatDate(lead.nextFollowupAt)}</div> : null}
+                        </td>
+                      ) : null}
+
+                      {visibleColumns.includes("owner") ? (
+                        <td className="px-3 py-3">
+                          {intel?.owner_name || lead.owner ? (
+                            <div className="text-[12px] font-medium text-copy">{intel?.owner_name || lead.owner}</div>
+                          ) : (
+                            <span className="text-[12px] font-semibold text-brand-700 dark:text-brand-300" title="Open the lead to assign an owner">+ Assign</span>
+                          )}
+                        </td>
+                      ) : null}
+
+                      {visibleColumns.includes("source") ? (
+                        <td className="px-3 py-3">
+                          <div className="flex max-w-[160px] min-w-0 items-center gap-2" title={`Recorded source: ${lead.firstTouchSource || "Unknown"}`}>
+                            <SourceIcon source={lead.firstTouchSource} />
+                            <span className="truncate text-[11px] font-medium text-copy">{sourceLabel(lead.firstTouchSource || "Unknown")}</span>
+                          </div>
+                          {(() => {
+                            const detail = lead.firstTouchCampaign || lead.firstTouchMedium || "";
+                            // "Unattributed" on every row tells the reader nothing.
+                            return detail && !/^(unattributed|\(not set\)|none|unknown)$/i.test(detail.trim())
+                              ? <div className="mt-0.5 max-w-[160px] truncate text-[10px] text-copy-subtle">{detail}</div>
+                              : null;
+                          })()}
                         </td>
                       ) : null}
 
@@ -664,9 +653,6 @@ function PopoverLabel({ children }: { children: ReactNode }) {
   return <div className="px-2.5 pb-1.5 pt-1 text-[9px] font-bold uppercase tracking-[0.1em] text-copy-subtle">{children}</div>;
 }
 
-function QuickViewButton({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
-  return <button type="button" aria-pressed={active} onClick={onClick} className={`h-9 rounded-ui px-3 text-[11px] font-semibold transition ${active ? "bg-brand-50 text-brand-700 dark:bg-brand-950/30" : "text-copy-muted hover:bg-surface-soft hover:text-copy-strong"}`}>{label}</button>;
-}
 
 function ToolbarSelect({ label, value, options, onChange }: { label: string; value: string; options: string[]; onChange: (value: string) => void }) {
   return (
@@ -763,13 +749,6 @@ function SignalPill({ children, tone }: { children: ReactNode; tone: "attention"
   return <span className={`rounded-full px-2 py-1 text-[9px] font-semibold ${className}`}>{children}</span>;
 }
 
-function summaryForView(summary: LeadsWorkspaceSummary, view: LeadsWorkspaceFilters["quickView"]) {
-  if (view === "unassigned") return summary.unassigned;
-  if (view === "stuck") return summary.stuck;
-  if (view === "followup_overdue") return summary.followupOverdue;
-  if (view === "payment_pending") return summary.paymentPending;
-  return summary.all;
-}
 
 function sortLabel(sort: LeadsWorkspaceFilters["sort"]) {
   if (sort === "created_desc") return "newest leads first";
@@ -800,6 +779,7 @@ function nextAction(lead: LeadOverview, intel: LeadListIntelligence | null, evid
   if (lead.stage === "payment_pending") return "Follow payment";
   if (intel?.aging_status === "stuck") return "Review stalled lead";
   if (lead.stage === "new") return "Make first contact";
+  if (lead.stage === "engaged" && !hasCourse(lead.course)) return "Ask which course and month";
   if (lead.stage === "qualified" || lead.stage === "high_intent") return "Move toward enrollment";
   return "Continue conversation";
 }

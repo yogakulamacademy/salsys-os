@@ -61,9 +61,10 @@ for (const [needle, label] of [
   ['Admissions automation healthy', 'healthy automation state'],
   ['Admissions automation requires review', 'degraded automation state'],
   ['No healthy state is inferred', 'fail-closed health copy'],
-  ['Capacity setup incomplete', 'missing capacity warning'],
-  ['Seat pressure remains unknown', 'unknown capacity semantics'],
-  ['Manage batch capacity', 'capacity repair path'],
+  // Owner-approved mockup (20 Nov 2026): one line, plain words.
+  ["Seats aren&apos;t set for", 'missing capacity warning'],
+  ["you won&apos;t be warned when one fills up", 'unknown capacity semantics'],
+  ['Set seats', 'capacity repair path'],
 ]) {
   requireText(layout, needle, label);
 }

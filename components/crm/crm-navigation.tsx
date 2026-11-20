@@ -40,14 +40,14 @@ const groups: NavigationGroup[] = [
     items: [
       { href: '/leads', label: 'Leads', icon: UserRoundSearch, badge: { key: 'waiting', label: 'waiting for a reply', tone: 'attention' } },
       { href: '/admissions', label: 'Pipeline & admissions', icon: Rows3, also: ['/pipeline'], badge: { key: 'paying', label: 'about to pay', tone: 'money' } },
-      { href: '/follow-ups', label: 'Tasks & Follow-ups', icon: ListTodo, badge: { key: 'overdue', label: 'overdue', tone: 'attention' } },
+      { href: '/follow-ups', label: 'Tasks & follow-ups', icon: ListTodo, badge: { key: 'overdue', label: 'overdue', tone: 'attention' } },
     ],
   },
   {
     label: 'Win more',
     items: [
       { href: '/re-engaged', label: 'Re-engaged', icon: RotateCcw },
-      { href: '/leads#says-paid', label: "They say they've paid", icon: BadgeCheck, badge: { key: 'saysPaid', label: 'to check', tone: 'money' } },
+      { href: '/leads#says-paid', label: 'Say they paid', icon: BadgeCheck, badge: { key: 'saysPaid', label: 'to check', tone: 'money' } },
       { href: '/customer-360', label: 'Customer 360', icon: UsersRound },
     ],
   },
@@ -195,5 +195,50 @@ export function CrmNavigation() {
         </div>
       </aside>
     </>
+  );
+}
+
+/**
+ * CRM tabs across the top (owner-approved CRM mockups, 20 Nov 2026): the
+ * same pages and live badges as the old side menu, giving each page the full
+ * width. Scrolls sideways on small screens.
+ */
+export function CrmTabs() {
+  const pathname = usePathname();
+  const counts = useCounts();
+  const items = groups.flatMap((group) => group.items);
+
+  return (
+    <nav aria-label="CRM navigation" className="crm-tabs -mx-1 mb-5 overflow-x-auto border-b border-line [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      <div className="flex min-w-max items-end gap-1 px-1">
+        {items.map((item) => {
+          const { href, label, badge } = item;
+          const active = isActive(pathname, item);
+          const count = badge && counts ? counts[badge.key] : 0;
+          return (
+            <Link
+              key={`${href}-${label}`}
+              href={href}
+              aria-current={active ? 'page' : undefined}
+              className={`relative flex h-11 items-center gap-2 whitespace-nowrap px-3.5 text-[14px] transition ${
+                active ? 'font-semibold text-copy-strong' : 'font-medium text-copy-muted hover:text-copy-strong'
+              }`}
+            >
+              <span>{label}</span>
+              {badge && count > 0 ? (
+                <span
+                  title={`${count.toLocaleString('en-IN')} ${badge.label}`}
+                  aria-label={`${count.toLocaleString('en-IN')} ${badge.label}`}
+                  className={`text-[12px] font-bold tabular-nums ${badge.tone === 'money' ? 'text-emerald-700' : 'text-brand-700'}`}
+                >
+                  {count > 999 ? '999+' : count.toLocaleString('en-IN')}
+                </span>
+              ) : null}
+              {active ? <span className="absolute inset-x-2 -bottom-px h-[2px] rounded-full bg-brand-700" /> : null}
+            </Link>
+          );
+        })}
+      </div>
+    </nav>
   );
 }

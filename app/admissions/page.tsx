@@ -4,20 +4,17 @@ import {
   ArrowRight,
   CalendarClock,
   CircleDollarSign,
-  Clock3,
   Inbox,
   LayoutDashboard,
   ListTodo,
-  Sparkles,
-  UserRoundCheck,
   UsersRound,
-  WalletCards,
 } from "lucide-react";
 
 import { PipelineWorkspace } from "@/components/crm/pipeline-workspace";
-import { DecisionMetricCard } from "@/components/intelligence/decision-metric-card";
+import { ActionCards, initialsOf, type ActionCardItem } from "@/components/crm/action-cards";
 import { EmptyState, PageHeader } from "@/components/ui";
 import { getAdmissionsSnapshot } from "@/lib/admissions-data";
+import { admissionsHeadline, focusBatch } from "@/lib/admissions-headline";
 import { getAdmissionsExtras, type AdmissionsExtras, type BatchDemand } from "@/lib/admissions-story-data";
 import { getHomeStory } from "@/lib/home-story-data";
 import type { HomeStory } from "@/lib/home-story";
@@ -217,19 +214,40 @@ export default async function AdmissionsDeskPage({
     newLeadCount: newLeads.length,
   });
 
+  // One sentence that says what matters (owner-approved mockup, 20 Nov 2026).
+  const staleDays = extras?.stalePayment ?? [];
+  const headline = admissionsHeadline({
+    saysPaid: story ? story.saysPaid.length : null,
+    paymentPending: paymentPending.length,
+    paymentMonthPlus: staleDays.filter((lead) => lead.days >= 30).length,
+    batch: extras
+      ? focusBatch(batchCapacity.map((row) => ({
+          name: row.course_name || "Next",
+          startDate: row.start_date,
+          interested: extras.demand[row.batch_id]?.interested ?? 0,
+          ready: extras.demand[row.batch_id]?.ready ?? 0,
+        })))
+      : null,
+  });
+
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       <PageHeader
-        eyebrow="CRM / Admissions"
-        title="Admissions"
-        description="One workspace for today’s sales actions, pipeline movement, payments, capacity and team performance."
+        title="Pipeline & admissions"
+        description={
+          view === "overview" ? (
+            <span className="text-[15px] leading-7 text-copy">
+              {headline.map((part, i) => (part.strong ? <strong key={i} className="font-semibold text-copy-strong">{part.text}</strong> : <span key={i}>{part.text}</span>))}
+            </span>
+          ) : "Today’s sales actions, pipeline movement, payments, capacity and team performance."
+        }
         actions={
           <div className="flex flex-wrap gap-2">
             <Link href="/follow-ups" className="btn-secondary">
               <CalendarClock size={15} /> Follow-ups
             </Link>
-            <Link href="/conversations" className="btn-primary">
-              <Inbox size={15} /> Inbox
+            <Link href="/admissions?view=queue" className="btn-primary">
+              Open work queue <ArrowRight size={14} />
             </Link>
           </div>
         }
@@ -238,10 +256,10 @@ export default async function AdmissionsDeskPage({
       {/* Results show as a toast that fades (20 Nov 2026), not a banner. */}
       <ToastOnLoad message={notice ? "Admissions updated." : null} error={error ?? null} />
 
-      <nav className="overflow-x-auto rounded-xl border border-slate-200 bg-white p-1 dark:border-slate-800 dark:bg-slate-950" aria-label="Admissions workspace views">
-        <div className="flex min-w-max items-center gap-1">
+      <nav className="overflow-x-auto" aria-label="Admissions workspace views">
+        <div className="flex min-w-max items-center gap-2">
           <ViewTab href={admissionsHref({ view: "overview" })} active={view === "overview"} label="Overview" />
-          <ViewTab href={admissionsHref({ view: "queue", owner: ownerFilter, band })} active={view === "queue"} label="Work Queue" />
+          <ViewTab href={admissionsHref({ view: "queue", owner: ownerFilter, band })} active={view === "queue"} label="Work queue" />
           <ViewTab href={admissionsHref({ view: "pipeline" })} active={view === "pipeline"} label="Pipeline" />
           <ViewTab href={admissionsHref({ view: "payments" })} active={view === "payments"} label="Payments" />
           <ViewTab href={admissionsHref({ view: "capacity" })} active={view === "capacity"} label="Capacity" />
@@ -342,81 +360,39 @@ function AdmissionsOverview({
 
   return (
     <div className="space-y-5">
-      <section className="grid gap-4 rounded-2xl border border-violet-100 bg-violet-50/50 p-5 dark:border-violet-900/50 dark:bg-violet-950/15 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-center">
-        <div className="flex items-start gap-3">
-          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-white text-violet-700 shadow-sm dark:bg-slate-950 dark:text-violet-300">
-            <Sparkles size={17} />
-          </span>
-          <div>
-            <div className="text-[10px] font-bold uppercase tracking-[0.12em] text-violet-600 dark:text-violet-300">Admissions brief</div>
-            <h2 className="mt-1 text-lg font-semibold text-slate-950 dark:text-white">{story ? story.headline : "Where the team should focus now"}</h2>
-            <p className="mt-1 max-w-4xl text-sm leading-6 text-slate-600 dark:text-slate-300">
-              {story
-                ? [
-                    month ? `${month} ${month === 1 ? "lead has" : "leads have"} been at Payment pending for a month or more.` : null,
-                    overdueCount ? `${formatNumber(overdueCount)} follow-ups are overdue.` : null,
-                    story.winBack.total ? `${formatNumber(story.winBack.total)} older messages never got a reply.` : null,
-                  ].filter(Boolean).join(" ") || "Work the queue first, then use Pipeline, Payments and Capacity for detail."
-                : brief}
-            </p>
-          </div>
-        </div>
-        <Link href="/admissions?view=queue" className="btn-primary whitespace-nowrap">
-          Open work queue <ArrowRight size={14} />
-        </Link>
-      </section>
-
-      {needsReplyCount + overdueCount + newLeadCount + paymentCount > 0 ? <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4" aria-label="Admissions action signals">
-        <DecisionMetricCard
-          href="/conversations"
-          label="Needs reply"
-          value={story ? formatNumber(story.waitingThisWeek) : inboxKnown ? formatNumber(needsReplyCount) : "—"}
-          detail={story ? `Wrote in the last 7 days${story.winBack.total ? ` · ${formatNumber(story.winBack.total)} older` : ""}` : unreadCount > 0 ? `${unreadCount} unread inbound` : "Conversation attention"}
-          tone={story ? (story.waitingThisWeek > 0 ? "warning" : "positive") : !inboxKnown ? "neutral" : needsReplyCount > 0 ? "warning" : "positive"}
-          statusLabel={story ? (story.waitingThisWeek > 0 ? "Reply" : "Clear") : !inboxKnown ? "Unknown" : needsReplyCount > 0 ? "Attention" : "Clear"}
-          icon={<Inbox size={16} />}
-          evidenceLabel="Conversation state"
-          definition="Active conversations currently recorded as needing a human reply. This is an action queue signal; it does not infer customer intent."
-        />
-        <DecisionMetricCard
-          href="/follow-ups"
-          label="Overdue follow-ups"
-          value={formatNumber(overdueCount)}
-          detail="Scheduled actions past due"
-          tone={overdueCount > 0 ? "warning" : "positive"}
-          statusLabel={overdueCount > 0 ? "Attention" : "Clear"}
-          icon={<Clock3 size={16} />}
-          evidenceLabel="Scheduled task evidence"
-          definition="Open follow-up tasks whose recorded due time has passed."
-        />
-        <DecisionMetricCard
-          href="/admissions?view=payments"
-          label="Payment pending"
-          value={formatNumber(paymentCount)}
-          detail={paymentDetail}
-          tone="neutral"
-          icon={<WalletCards size={16} />}
-          evidenceLabel="Pipeline & payment state"
-          definition="Opportunities currently recorded in the payment-pending stage. Outstanding amounts stay separated by recorded currency and amounts without currency are not combined into financial totals."
-        />
-        <DecisionMetricCard
-          href="/admissions?view=queue"
-          label="New leads"
-          value={formatNumber(newLeadCount)}
-          detail="Waiting to progress beyond New"
-          tone="neutral"
-          icon={<UserRoundCheck size={16} />}
-          evidenceLabel="CRM intake state"
-          definition="Leads currently recorded in the New stage. Intake volume is descriptive and is not treated as quality by itself."
-        />
-      </section> : null}
+      <ActionCards items={[
+        {
+          count: paymentCount,
+          title: "Payment pending",
+          detail: stale.length ? `${month ? `${formatNumber(month)} for a month or more` : `${formatNumber(stale.length)} for over a week`}: did they pay?` : paymentDetail,
+          cta: "Check", href: "/admissions?view=payments", tone: "attention",
+        },
+        {
+          count: story ? story.waitingThisWeek : needsReplyCount,
+          title: "Waiting for a reply",
+          detail: story ? `Wrote in the last 7 days${story.winBack.total ? ` · ${formatNumber(story.winBack.total)} older` : ""}` : unreadCount > 0 ? `${formatNumber(unreadCount)} unread` : "Conversations needing a reply",
+          cta: "Reply", href: "/conversations?filter=waiting", tone: "brand",
+        },
+        {
+          count: overdueCount,
+          title: "Overdue follow-ups",
+          detail: "Scheduled, now past due",
+          cta: "Open", href: "/follow-ups", tone: "danger",
+        },
+        {
+          count: newLeadCount,
+          title: "New, not moved on",
+          detail: "Still at New",
+          cta: "Review", href: "/leads?stage=new", tone: "neutral",
+        },
+      ] satisfies ActionCardItem[]} />
 
       <section className="grid gap-5 xl:grid-cols-[minmax(0,1.25fr)_minmax(340px,.75fr)]">
         <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-950">
-          <PanelHeader eyebrow="Who to contact first" title="Next best work" href="/admissions?view=queue" action="Full queue" />
+          <SlimHeader title="Who to contact first" href="/admissions?view=queue" action="Full queue" />
           {priorityQueue.length ? (
-            <div className="space-y-2 p-3">
-              {priorityQueue.slice(0, 6).map((row) => <PriorityQueueRow key={row.lead_id} row={row} compact />)}
+            <div className="divide-y divide-line px-5">
+              {priorityQueue.slice(0, 8).map((row) => <ContactFirstRow key={row.lead_id} row={row} />)}
             </div>
           ) : (
             <SimpleEmpty title="No priority work" detail="No priority rows are available in the current admissions snapshot." />
@@ -424,10 +400,10 @@ function AdmissionsOverview({
         </section>
 
         <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-950">
-          <PanelHeader eyebrow="Demand" title="Upcoming batches" href="/admissions?view=capacity" action="All batches" />
+          <SlimHeader title="Upcoming batches" href="/admissions?view=capacity" action="All batches" />
           {batchCapacity.length ? (
-            <div className="divide-y divide-slate-100 dark:divide-slate-900">
-              {batchCapacity.slice(0, 5).map((row) => <CapacityRow key={row.batch_id} row={row} compact demand={extras?.demand[row.batch_id] ?? null} />)}
+            <div className="divide-y divide-line px-5">
+              {batchCapacity.slice(0, 6).map((row) => <BatchDemandRow key={row.batch_id} row={row} demand={extras?.demand[row.batch_id] ?? null} />)}
             </div>
           ) : (
             <SimpleEmpty title="No upcoming batch data" detail="Capacity pressure will appear when scheduled batches are available." />
@@ -775,7 +751,7 @@ function StagePill({ value }: { value: string }) {
 }
 
 function ViewTab({ href, active, label }: { href: string; active: boolean; label: string }) {
-  return <Link href={href} className={`rounded-lg px-3 py-2 text-xs font-semibold transition ${active ? "bg-slate-950 text-white dark:bg-white dark:text-slate-950" : "text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-900"}`}>{label}</Link>;
+  return <Link href={href} aria-current={active ? "page" : undefined} className={`rounded-lg border px-3.5 py-2 text-[13px] font-medium transition ${active ? "border-slate-950 bg-slate-950 text-white dark:border-white dark:bg-white dark:text-slate-950" : "border-line bg-surface text-copy-muted hover:border-line-strong hover:text-copy-strong"}`}>{label}</Link>;
 }
 
 function FilterTab({ href, active, label }: { href: string; active: boolean; label: string }) {
@@ -846,3 +822,76 @@ function formatDateTime(value: string) { const date = new Date(value); if (Numbe
 function formatRelative(value: string) { const time = new Date(value).getTime(); if (!Number.isFinite(time)) return value; const minutes = Math.max(0, Math.floor((Date.now() - time) / 60000)); if (minutes < 60) return `${minutes}m ago`; const hours = Math.floor(minutes / 60); if (hours < 24) return `${hours}h ago`; return `${Math.floor(hours / 24)}d ago`; }
 function formatDate(value: string) { const date = new Date(`${value.slice(0, 10)}T00:00:00Z`); if (Number.isNaN(date.getTime())) return value; return new Intl.DateTimeFormat("en-IN", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }).format(date); }
 function pretty(value: string) { return value.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase()); }
+
+function SlimHeader({ title, href, action }: { title: string; href: string; action: string }) {
+  return (
+    <div className="flex items-center justify-between gap-3 px-5 pb-2 pt-4">
+      <h2 className="text-[12px] font-semibold uppercase tracking-[0.08em] text-copy-muted">{title}</h2>
+      <Link href={href} className="inline-flex items-center gap-1 text-[13px] font-semibold text-brand-700 hover:underline dark:text-brand-300">{action} <ArrowRight size={13} /></Link>
+    </div>
+  );
+}
+
+/** One person to contact: who, stage, why in a few words, owner, one action (owner-approved mockup). */
+function ContactFirstRow({ row }: { row: PriorityRow }) {
+  const stage = row.current_stage || "new";
+  const action = stage === "payment_pending"
+    ? { label: "Check payment", href: `/conversations?lead=${row.lead_id}`, primary: true }
+    : row.next_best_action?.toLowerCase().includes("reply")
+      ? { label: "Reply", href: `/conversations?lead=${row.lead_id}`, primary: false }
+      : { label: "Follow up", href: `/conversations?lead=${row.lead_id}`, primary: false };
+  const why = [
+    row.followup_overdue && row.next_followup_due_at ? `Overdue follow-up since ${formatDate(row.next_followup_due_at)}` : row.followup_due_today ? "Follow-up due today" : null,
+    row.course_name,
+  ].filter(Boolean).join(" · ") || row.priority_reason || "Next in the queue";
+  const tone = stage === "payment_pending"
+    ? "bg-amber-50 text-amber-800 dark:bg-amber-950/30 dark:text-amber-300"
+    : stage === "high_intent"
+      ? "bg-sky-50 text-sky-800 dark:bg-sky-950/30 dark:text-sky-300"
+      : "bg-surface-muted text-copy-muted";
+  return (
+    <div className="flex items-center gap-3 py-3">
+      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-brand-50 text-[12px] font-bold text-brand-700 dark:bg-brand-950/30 dark:text-brand-300">{initialsOf(row.lead_name || row.lead_code)}</span>
+      <div className="min-w-0 flex-1">
+        <div className="flex min-w-0 items-center gap-2">
+          <Link href={`/leads/${row.lead_id}`} className="truncate text-[14px] font-semibold text-copy-strong hover:text-brand-700">{row.lead_name || row.lead_code || "Lead"}</Link>
+          <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold ${tone}`}>{pretty(stage)}</span>
+        </div>
+        <div className="truncate text-[12.5px] text-copy-muted">{why}</div>
+      </div>
+      <span className="hidden shrink-0 text-[12.5px] text-copy-muted sm:inline">{row.owner_name || "Unassigned"}</span>
+      <Link href={action.href} className={`shrink-0 rounded-lg px-3 py-1.5 text-[13px] font-semibold transition ${action.primary ? "bg-brand-700 text-white hover:bg-brand-800" : "bg-brand-50 text-brand-700 hover:bg-brand-100 dark:bg-brand-950/30 dark:text-brand-300"}`}>{action.label}</Link>
+    </div>
+  );
+}
+
+/** One upcoming batch: where and when, how many are interested, how many are ready to pay. */
+function BatchDemandRow({ row, demand }: { row: AdmissionsBatchCapacityRow; demand: BatchDemand | null }) {
+  const days = row.start_date ? Math.ceil((Date.parse(`${row.start_date}T00:00:00Z`) - Date.now()) / 86_400_000) : null;
+  const when = days == null || days < 0 ? null : days === 0 ? "starts today" : days === 1 ? "tomorrow" : `in ${days} days`;
+  const interested = demand?.interested ?? toNumber(row.hot_prospects);
+  const ready = demand?.ready ?? 0;
+  const seatsKnown = row.capacity != null && toNumber(row.capacity) > 0;
+  const remaining = row.calculated_seats_remaining == null ? null : toNumber(row.calculated_seats_remaining);
+  return (
+    <div className="py-3">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="truncate text-[14px] font-semibold text-copy-strong">{row.course_name || "Batch"}</div>
+          <div className="text-[12.5px] text-copy-muted" title={row.batch_code ?? undefined}>{[row.location ? pretty(row.location) : null, row.start_date ? formatDate(row.start_date).replace(/ \d{4}$/, "") : null, when].filter(Boolean).join(" · ")}</div>
+        </div>
+        <div className="shrink-0 text-right">
+          <div className="text-[16px] font-bold tabular-nums text-copy-strong">{formatNumber(interested)}</div>
+          <div className="text-[11.5px] text-copy-muted">interested</div>
+        </div>
+      </div>
+      <div className="mt-2 flex items-center gap-3">
+        <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-surface-muted">
+          <span className="block h-full rounded-full bg-emerald-600" style={{ width: `${interested ? Math.min(100, Math.max(ready ? 4 : 0, (ready / interested) * 100)) : 0}%` }} />
+        </span>
+        <span className="shrink-0 text-[12px] font-semibold text-emerald-700 dark:text-emerald-300">{formatNumber(ready)} ready to pay</span>
+        <span className={`shrink-0 text-[12px] font-semibold ${seatsKnown ? "text-copy-muted" : "text-amber-700 dark:text-amber-300"}`}>· {seatsKnown ? `${formatNumber(remaining ?? 0)} seats left` : "seats not set"}</span>
+      </div>
+    </div>
+  );
+}
