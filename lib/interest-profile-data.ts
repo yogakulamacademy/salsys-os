@@ -92,3 +92,114 @@ export async function getInterestProfile(
     return null;
   }
 }
+
+const PAGE = 1000;
+
+function chunks<T>(items: T[], size: number): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
+  return out;
+}
+
+/** Read every page of a query (PostgREST returns at most 1000 rows per call). */
+async function readAll<T>(make: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: unknown }>, maxRows: number): Promise<T[]> {
+  const rows: T[] = [];
+  for (let from = 0; from < maxRows; from += PAGE) {
+    const { data, error } = await make(from, Math.min(from + PAGE, maxRows) - 1);
+    if (error || !data) break;
+    rows.push(...data);
+    if (data.length < PAGE) break;
+  }
+  return rows;
+}
+
+/**
+ * Interest profiles for a list of leads of one business (e.g. the Re-engaged
+ * list), with a fixed number of queries whatever the list size. Callers must
+ * pass only leads the user can already see. Never throws: returns an empty map
+ * when it can't be read.
+ */
+export async function getInterestProfilesForLeads(
+  admin: SupabaseClient,
+  organizationId: string,
+  leadIds: string[],
+  options: { days?: number } = {},
+): Promise<Map<string, InterestProfile>> {
+  const result = new Map<string, InterestProfile>();
+  const ids = [...new Set(leadIds)].slice(0, 300);
+  if (!ids.length) return result;
+  try {
+    const since = new Date(Date.now() - (options.days ?? 30) * 86_400_000).toISOString();
+    const leadChunks = chunks(ids, 100);
+
+    const [linkRows, sessionLeadRows, messageRows, courses] = await Promise.all([
+      Promise.all(leadChunks.map((c) => admin.from("visitor_identity_links").select("anonymous_visitor_id, lead_id")
+        .eq("organization_id", organizationId).in("lead_id", c).limit(PAGE))).then((r) => r.flatMap((x) => x.data ?? [])),
+      Promise.all(leadChunks.map((c) => admin.from("web_sessions").select("anonymous_visitor_id, lead_id")
+        .eq("organization_id", organizationId).in("lead_id", c).limit(PAGE))).then((r) => r.flatMap((x) => x.data ?? [])),
+      Promise.all(leadChunks.map((c) => readAll<{ lead_id: string; direction: string; body: string | null; created_at: string }>(
+        (from, to) => admin.from("messages").select("lead_id, direction, body, created_at")
+          .eq("organization_id", organizationId).in("lead_id", c).gte("created_at", since)
+          .order("created_at", { ascending: false }).range(from, to),
+        4000))).then((r) => r.flat()),
+      admin.from("courses").select("id, name, metadata").eq("organization_id", organizationId).eq("active", true).limit(120),
+    ]);
+
+    // Which leads each website visitor belongs to.
+    const leadsByVisitor = new Map<string, Set<string>>();
+    for (const r of [...linkRows, ...sessionLeadRows] as { anonymous_visitor_id: string | null; lead_id: string | null }[]) {
+      if (!r.anonymous_visitor_id || !r.lead_id) continue;
+      const set = leadsByVisitor.get(r.anonymous_visitor_id) ?? new Set<string>();
+      set.add(r.lead_id);
+      leadsByVisitor.set(r.anonymous_visitor_id, set);
+    }
+    const visitorChunks = chunks([...leadsByVisitor.keys()], 100);
+
+    const [eventRows, sessionRows] = await Promise.all([
+      Promise.all(visitorChunks.map((c) => readAll<{ anonymous_visitor_id: string; source_event_type: string; occurred_at: string; payload: Record<string, unknown> | null }>(
+        (from, to) => admin.from("raw_events").select("anonymous_visitor_id, source_event_type, occurred_at, payload")
+          .eq("organization_id", organizationId).in("anonymous_visitor_id", c)
+          .like("source_event_type", "web.%").gte("occurred_at", since)
+          .order("occurred_at", { ascending: false }).range(from, to),
+        8000))).then((r) => r.flat()),
+      Promise.all(visitorChunks.map((c) => readAll<{ anonymous_visitor_id: string; started_at: string; landing_page: string | null; source: string | null; geo_country: string | null }>(
+        (from, to) => admin.from("web_sessions").select("anonymous_visitor_id, started_at, landing_page, source, geo_country")
+          .eq("organization_id", organizationId).in("anonymous_visitor_id", c).gte("started_at", since)
+          .order("started_at", { ascending: false }).range(from, to),
+        3000))).then((r) => r.flat()),
+    ]);
+
+    const events = new Map<string, ProfileEvent[]>();
+    const sessions = new Map<string, ProfileSession[]>();
+    const messages = new Map<string, ProfileMessage[]>();
+    const push = <V,>(m: Map<string, V[]>, k: string, v: V) => { const a = m.get(k); if (a) a.push(v); else m.set(k, [v]); };
+
+    for (const e of eventRows) {
+      for (const leadId of leadsByVisitor.get(e.anonymous_visitor_id) ?? []) {
+        push(events, leadId, { name: String(e.source_event_type), at: String(e.occurred_at), props: e.payload ?? null });
+      }
+    }
+    for (const s of sessionRows) {
+      for (const leadId of leadsByVisitor.get(s.anonymous_visitor_id) ?? []) {
+        push(sessions, leadId, { startedAt: String(s.started_at), landingPage: s.landing_page, source: s.source, country: s.geo_country });
+      }
+    }
+    for (const m of messageRows) {
+      if (m.direction !== "inbound" && m.direction !== "outbound") continue;
+      push(messages, m.lead_id, { direction: m.direction, at: String(m.created_at), body: m.body });
+    }
+
+    const coursePages = coursePagesFrom((courses.data ?? []) as { id: string; name: string | null; metadata: unknown }[]);
+    for (const leadId of ids) {
+      result.set(leadId, buildInterestProfile({
+        events: events.get(leadId) ?? [],
+        sessions: sessions.get(leadId) ?? [],
+        messages: messages.get(leadId) ?? [],
+        coursePages,
+      }));
+    }
+  } catch {
+    return new Map();
+  }
+  return result;
+}

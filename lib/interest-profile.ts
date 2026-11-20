@@ -44,6 +44,9 @@ export function topicsInText(text: string | null | undefined): TopicKey[] {
   return TOPIC_RULES.filter(([, re]) => re.test(t)).map(([key]) => key);
 }
 
+/** Test or draft pages on the website, never shown as a course: "/courses/kerala/test.php". */
+const TEST_PAGE = /(^|[\/_-])(test|testing|demo|staging|draft|sample)(\d*)(\.\w+)?$/i;
+
 const HIGH_INTENT_PAGE = /enrol|enroll|apply|register|booking|book-now|checkout|payment|pay\b|fees?\b|price|pricing/i;
 const CONTACT_PAGE = /contact|enquir|inquir/i;
 
@@ -122,7 +125,7 @@ export function buildInterestProfile(input: {
   const pricePaths = new Set<string>();
 
   const touchCourse = (path: string | null, at: string, price = false) => {
-    if (!path || !path.includes("/courses/")) return;
+    if (!path || !path.includes("/courses/") || TEST_PAGE.test(path.replace(/\/+$/, ""))) return;
     const course = courseForPath(path, input.coursePages);
     const key = course?.courseId ?? path;
     const entry = courseMap.get(key) ?? { name: course?.courseName ?? pageLabel(path), courseId: course?.courseId ?? null, views: 0, priceSeen: false, lastAt: at };
@@ -251,4 +254,35 @@ export function buildInterestProfile(input: {
     interestBand,
     reasons: reasons.slice(0, 6),
   };
+}
+
+export type NextStep = { action: string; why: string; needsPerson: boolean };
+
+/**
+ * One suggested next step for the sales team, from the profile. Within policy:
+ * discounts and scholarships are never offered automatically; they go to a person.
+ */
+export function suggestNextStep(p: InterestProfile, courseName?: string | null): NextStep | null {
+  const course = courseName || p.courses[0]?.name || "the course";
+  const asked = new Set(p.topics.map((t) => t.key));
+  const enrolClicks = (p.ctaClicks.enrol ?? 0) + (p.ctaClicks.pay ?? 0);
+  if (asked.has("discount")) {
+    return { action: "Pass to a person: they asked about a discount or scholarship", why: "Discounts and scholarships are decided by the team, not sent automatically.", needsPerson: true };
+  }
+  if (enrolClicks > 0 || asked.has("payment") || asked.has("register")) {
+    return { action: "Help them finish enrolling — ask if anything stopped them", why: enrolClicks ? "They clicked enrol or pay." : "They asked how to join or pay.", needsPerson: false };
+  }
+  if (p.priceViews > 0 || p.highIntentPages > 0 || asked.has("fees") || asked.has("dates")) {
+    return { action: `Send the next dates and fees for ${course}, and offer a quick call`, why: "They looked at prices or asked about fees and dates.", needsPerson: false };
+  }
+  if (p.returnedAfterDays != null) {
+    return { action: `They came back after ${p.returnedAfterDays} days — send a short check-in about ${course}`, why: "A return visit after a gap often means they are deciding.", needsPerson: false };
+  }
+  if (p.readingMinutes >= 2 || p.videoCompletes > 0 || p.brochure > 0) {
+    return { action: `Share what students say about ${course} and ask what they'd like to know`, why: "They spent real time reading or watching.", needsPerson: false };
+  }
+  if (p.hasWebsiteData) {
+    return { action: `Send a course link for ${course}`, why: "Light activity so far; a link shows what they open next.", needsPerson: false };
+  }
+  return null;
 }

@@ -8,7 +8,11 @@ import { LeadJourneyIntelligence } from "@/components/lead-journey-intelligence"
 
 import { PageHeader } from "@/components/ui";
 
+import { ActNow, InterestBadge, TrackingCoverage, type ActNowLead } from "@/components/reengaged-act-now";
+import { InterestProfileCard } from "@/components/interest-profile-card";
+import { suggestNextStep } from "@/lib/interest-profile";
 import { getReEngagedWorkspace } from "@/lib/reengaged-data";
+import { getReEngagedIntelligence } from "@/lib/reengaged-intelligence-data";
 
 type JourneyLeadRow = {
   lead_id: string;
@@ -95,7 +99,29 @@ export default async function ReEngagedPage({
 
   const workspace = await getReEngagedWorkspace();
 
-  const { leads, summary, distribution } = workspace;
+  const { summary, distribution } = workspace;
+
+  // Interest profiles from website events and their own messages (last 30 days).
+  const intelligence = await getReEngagedIntelligence(workspace.leads.map((lead) => lead.lead_id));
+  const interestOf = (leadId: string) => intelligence.profiles.get(leadId)?.interestScore ?? -1;
+  // Most interested first; the old engagement score breaks ties.
+  const leads = [...workspace.leads].sort(
+    (a, b) => interestOf(b.lead_id) - interestOf(a.lead_id) || toNumber(b.engagement_score) - toNumber(a.engagement_score),
+  );
+  const CLOSED_STAGES = new Set(["enrolled", "closed_won", "lost", "unqualified", "duplicate"]);
+  const actNow: ActNowLead[] = leads
+    .filter((lead) => !CLOSED_STAGES.has(String(lead.current_stage || "")))
+    .map((lead) => ({ lead, profile: intelligence.profiles.get(lead.lead_id) }))
+    .filter((row) => row.profile && row.profile.interestScore >= 35)
+    .slice(0, 6)
+    .map(({ lead, profile }) => ({
+      leadId: lead.lead_id,
+      name: lead.lead_name,
+      stage: lead.current_stage,
+      source: lead.last_session_source,
+      personId: intelligence.personByLead.get(lead.lead_id) ?? null,
+      profile: profile!,
+    }));
 
   const selectedLead = selectedLeadId
     ? (leads.find((lead) => lead.lead_id === selectedLeadId) ?? null)
@@ -205,6 +231,12 @@ export default async function ReEngagedPage({
           sub="Returned after becoming a lead"
         />
       </div>
+
+      <ActNow leads={actNow} />
+
+      {intelligence.coverage ? (
+        <TrackingCoverage linked={intelligence.coverage.linked} total={intelligence.coverage.total} />
+      ) : null}
 
       <section className="card-pad mt-4">
         <div className="eyebrow">Conversion behaviour</div>
@@ -435,7 +467,7 @@ export default async function ReEngagedPage({
 
                   <th className="px-3 py-3">Temperature</th>
 
-                  <th className="px-3 py-3 text-right">Score</th>
+                  <th className="px-3 py-3">Interest</th>
 
                   <th className="px-3 py-3 text-right">7d visits</th>
 
@@ -475,8 +507,8 @@ export default async function ReEngagedPage({
                       <TemperatureBadge value={lead.behaviour_temperature} />
                     </td>
 
-                    <td className="px-3 py-3 text-right font-bold text-slate-800">
-                      {formatNumber(lead.engagement_score)}
+                    <td className="px-3 py-3">
+                      <InterestBadge profile={intelligence.profiles.get(lead.lead_id)} />
                     </td>
 
                     <td className="px-3 py-3 text-right text-slate-600">
@@ -502,7 +534,7 @@ export default async function ReEngagedPage({
                     </td>
 
                     <td className="max-w-[260px] px-3 py-3 text-xs leading-5 text-slate-500">
-                      {lead.behaviour_reason || "—"}
+                      {intelligence.profiles.get(lead.lead_id)?.reasons[0]?.text || lead.behaviour_reason || "—"}
                     </td>
 
                     <td className="px-3 py-3">
@@ -590,6 +622,20 @@ export default async function ReEngagedPage({
             </div>
 
             <div className="space-y-4 p-4">
+              {(() => {
+                const profile = intelligence.profiles.get(selectedLead.lead_id);
+                const step = profile ? suggestNextStep(profile) : null;
+                return step ? (
+                  <div className={`rounded-xl border px-4 py-3 text-sm ${step.needsPerson ? "border-amber-200 bg-amber-50 text-amber-800" : "border-violet-200 bg-violet-50 text-violet-900"}`}>
+                    <div className="text-[10.5px] font-bold uppercase tracking-wide opacity-80">{step.needsPerson ? "For a person" : "Suggested next step"}</div>
+                    <div className="mt-0.5 font-semibold">{step.action}</div>
+                    <div className="mt-0.5 text-xs opacity-80">{step.why}</div>
+                  </div>
+                ) : null;
+              })()}
+
+              <InterestProfileCard profile={intelligence.profiles.get(selectedLead.lead_id) ?? null} />
+
               <LeadJourneyIntelligence leadId={selectedLead.lead_id} />
 
               <div className="grid gap-2 sm:grid-cols-2">
