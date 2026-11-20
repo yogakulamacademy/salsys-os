@@ -263,7 +263,7 @@ export function ConversationSafeComposer({
                 <div className="text-[10px] font-semibold text-[#18362D]">
                   {isInstagram ? "Reply on Instagram" : "Prepare a response"}
                 </div>
-                <p className="mt-0.5 text-[9px] leading-4 text-[#596E64]">
+                <p className={`mt-0.5 text-[9px] leading-4 ${isInstagram && eligibility?.canReply === false ? "rounded-md bg-amber-50 px-2 py-1 font-semibold text-amber-800" : "text-[#596E64]"}`}>
                   {isInstagram
                     ? eligibility?.userMessage || "Salsys checks the customer-initiated Instagram reply window before the provider call. Nothing is sent until you click Send."
                     : "Draft only. Saving here never sends a message or changes the lead stage."}
@@ -274,11 +274,6 @@ export function ConversationSafeComposer({
               </span>
             </div>
 
-            {isInstagram && eligibility?.canReply === false ? (
-              <div className="mb-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[9px] leading-4 text-amber-800">
-                Sending is currently blocked. You can keep preparing the draft or add an internal note; provider eligibility will be checked again before any future send.
-              </div>
-            ) : null}
 
             <label className="sr-only" htmlFor={`reply-draft-${leadId}`}>
               {isInstagram ? "Write an Instagram reply" : "Write a reply draft"}

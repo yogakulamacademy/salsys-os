@@ -346,3 +346,8 @@ html.dark .ibx-v3-fu-methods button[aria-pressed="true"]{background:var(--app-su
 .ibx-v2.conversations-polish .ibx-v2-tabs{flex-wrap:wrap!important;overflow:visible!important;row-gap:6px!important;}
 .ibx-v2.conversations-polish .ibx-v3-channel-chips{flex-wrap:wrap!important;overflow:visible!important;}
 .ibx-v2.conversations-polish .ibx-wait-group{letter-spacing:.06em;}
+
+/* The suggested reply is the main AI action: one filled button. */
+.ibx-v2.conversations-polish .ibx-v2-ai-actions>button.ibx-v4-suggest{background:#5743c5!important;color:#fff!important;border-color:#5743c5!important;font-weight:700!important;padding-left:12px!important;padding-right:12px!important;}
+.ibx-v2.conversations-polish .ibx-v2-ai-actions>button.ibx-v4-suggest:hover{background:#4733ad!important;}
+.ibx-v2.conversations-polish .ibx-v2-ai-actions>button.ibx-v4-suggest:disabled{opacity:.55;}

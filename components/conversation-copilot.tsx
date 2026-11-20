@@ -151,10 +151,10 @@ export function ConversationCopilot({
     <section className="overflow-hidden rounded-xl border border-brand-100 bg-surface dark:border-slate-800 dark:bg-slate-950">
       {compactToolbar ? (
         <div className="ibx-v2-copilot-bar">
-          <span className="ibx-v2-ai-label"><Sparkles size={17}/> AI suggestions for this conversation</span>
+          <span className="ibx-v2-ai-label"><Sparkles size={17}/> Suggested reply</span>
           <div className="ibx-v2-ai-actions">
-            <button type="button" disabled={!enabled || isPending} onClick={generate} title={disabledReason || "Prepare a grounded reply for human review"}>
-              <WandSparkles size={14}/> {isPending ? "Drafting…" : "Draft a reply"}
+            <button type="button" className="ibx-v4-suggest" disabled={!enabled || isPending} onClick={generate} title={disabledReason || "Prepare a grounded reply for human review"}>
+              <WandSparkles size={14}/> {isPending ? "Writing…" : "Suggest a reply"}
             </button>
             <button type="button" onClick={() => {setShowSummary(prev=>!prev);setOpen(false);}}
               aria-expanded={showSummary} title="Summarize recent stored messages without inventing customer facts">
