@@ -84,8 +84,6 @@ export default async function Customer360DetailPage({
 }) {
   const { personId } = await params;
   const query = await searchParams;
-  const leads = await getLeads();
-  const accessibleLeadById = new Map(leads.map((lead) => [lead.id, lead]));
   const supabase = await createClient();
   const {
     data: { user },
@@ -106,6 +104,10 @@ export default async function Customer360DetailPage({
   }
 
   const linkedLeadIds = (linkResult.data ?? []).map((row) => row.lead_id as string);
+  // Only this person's leads, with the same visibility rules as the Leads list
+  // (a person whose lead is older than the newest 500 used to show "not found").
+  const leads = await getLeads({ ids: linkedLeadIds });
+  const accessibleLeadById = new Map(leads.map((lead) => [lead.id, lead]));
   const accessibleLeads = linkedLeadIds
     .map((leadId) => accessibleLeadById.get(leadId))
     .filter((lead) => Boolean(lead));
