@@ -3,6 +3,8 @@ import { notFound } from "next/navigation";
 import { CalendarClock, MessageCircle, ReceiptText, Search } from "lucide-react";
 
 import { initialsOf } from "@/components/crm/action-cards";
+import { FitBadge } from "@/components/reengaged-act-now";
+import { fitForLeads } from "@/lib/course-persona-data";
 import { InterestProfileCard } from "@/components/interest-profile-card";
 import { getLeads } from "@/lib/data";
 import { suggestNextStep } from "@/lib/interest-profile";
@@ -177,6 +179,16 @@ export default async function Customer360DetailPage({
     : ((conversationsResult.data ?? []) as ConversationRow[]);
 
   const [view, people] = await Promise.all([viewPromise, peoplePromise]);
+  // Placeholders like "—" or "Unassigned" mean nothing is known.
+  const known = (value: string | null | undefined) => {
+    const text = (value ?? "").trim();
+    return text && !/^(—|-|unknown|unassigned|none|not selected)$/i.test(text) ? text : null;
+  };
+  const leadLocation = known(view?.facts.location) ?? known(activeLead.location);
+  const owner = known(activeLead.owner);
+  const fit = interestProfile
+    ? (await fitForLeads(admin, organizationId, [activeLead.id], new Map([[activeLead.id, interestProfile]]))).get(activeLead.id) ?? null
+    : (await fitForLeads(admin, organizationId, [activeLead.id], new Map())).get(activeLead.id) ?? null;
   const displayName = activeLead.name || person?.latest_lead_name || "Customer";
   const course = activeLead.course && !/^(not selected|unknown)$/i.test(activeLead.course) ? activeLead.course : null;
   const timeline = view
@@ -187,8 +199,8 @@ export default async function Customer360DetailPage({
     : [];
   const summary = personSummary(
     {
-      name: displayName, course, location: view?.facts.location ?? (activeLead.location || null), month: view?.facts.month ?? null,
-      mode: view?.facts.mode ?? null, country: view?.facts.country ?? null, countryLikely: view?.facts.countryLikely ?? false, stage: activeLead.stage,
+      name: displayName, course, location: leadLocation, month: known(view?.facts.month),
+      mode: known(view?.facts.mode), country: view?.facts.country ?? null, countryLikely: view?.facts.countryLikely ?? false, stage: activeLead.stage,
     },
     {
       pagesViewed: interestProfile?.pagesViewed ?? 0,
@@ -203,9 +215,9 @@ export default async function Customer360DetailPage({
   const value = activeLead.value ? `worth about ${formatMoney(activeLead.value, activeLead.currency || "INR")}` : null;
   const facts: { label: string; value: string | null; source: string | null }[] = [
     { label: "Course", value: course, source: course ? "Their enquiry" : null },
-    { label: "When", value: view?.facts.month ?? null, source: view?.facts.month ? "Their messages" : null },
-    { label: "Where", value: view?.facts.location ?? (activeLead.location || null), source: view?.facts.location || activeLead.location ? "Their messages" : null },
-    { label: "Online or in person", value: view?.facts.mode ? pretty(view.facts.mode) : null, source: view?.facts.mode ? "Their messages" : null },
+    { label: "When", value: known(view?.facts.month), source: known(view?.facts.month) ? "Their messages" : null },
+    { label: "Where", value: leadLocation, source: leadLocation ? "Their messages" : null },
+    { label: "Online or in person", value: known(view?.facts.mode) ? pretty(view!.facts.mode!) : null, source: known(view?.facts.mode) ? "Their messages" : null },
     { label: "Country", value: view?.facts.country ? `${view.facts.country}${view.facts.countryLikely ? " (likely)" : ""}` : null, source: view?.facts.country ? (view.facts.countryLikely ? "Worked out from clues" : "Their details") : null },
   ];
   const identityRows = identityList(view);
@@ -310,10 +322,16 @@ export default async function Customer360DetailPage({
           <span className="grid h-12 w-12 shrink-0 place-items-center rounded-full bg-brand-50 text-[15px] font-bold text-brand-700 dark:bg-brand-950/40">{initialsOf(displayName)}</span>
           <div className="min-w-0 flex-1">
             <h1 className="truncate text-[18px] font-bold text-copy-strong">{displayName}</h1>
-            <div className="truncate text-[12.5px] text-copy-muted">{[stageText, person?.latest_lead_engagement_score != null ? `score ${person.latest_lead_engagement_score}` : null, value].filter(Boolean).join(" · ")}</div>
+            <div className="truncate text-[12.5px] text-copy-muted">{[stageText, Number(person?.latest_lead_engagement_score ?? 0) > 0 ? `score ${person!.latest_lead_engagement_score}` : null, value].filter(Boolean).join(" · ")}</div>
+            {fit ? (
+              <div className="mt-1 flex items-center gap-2 text-[12px] text-copy-muted">
+                <FitBadge fit={fit} />
+                <span className="truncate">{fit.reasons[0]?.text ?? "Little in common with people who joined yet"}</span>
+              </div>
+            ) : null}
           </div>
-          {activeLead.owner ? (
-            <span className="shrink-0 text-[13px] text-copy">{activeLead.owner}</span>
+          {owner ? (
+            <span className="shrink-0 text-[13px] text-copy">{owner}</span>
           ) : (
             <Link href={`/leads/${activeLead.id}`} className="shrink-0 text-[13px] font-semibold text-brand-700 hover:underline">+ Assign</Link>
           )}

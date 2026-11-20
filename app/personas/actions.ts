@@ -48,3 +48,24 @@ export async function approvePersonaAction(personaId: string): Promise<Result> {
   revalidatePath("/personas");
   return { ok: true, message: "Persona approved. Fit scores now use it." };
 }
+
+/** Approve every course's current draft at once. */
+export async function approveAllPersonasAction(): Promise<Result> {
+  const ctx = await managerContext();
+  if ("error" in ctx) return { ok: false, message: ctx.error ?? "Not allowed." };
+  const { data: rows, error } = await ctx.supabase.from("course_personas")
+    .select("id, draft_traits, draft_sample_size, draft_computed_at, approved_at").eq("organization_id", ctx.organizationId);
+  if (error) return { ok: false, message: error.message };
+  const pending = (rows ?? []).filter((r) => r.draft_sample_size > 0 && (!r.approved_at || (r.draft_computed_at && r.draft_computed_at > r.approved_at)));
+  const now = new Date().toISOString();
+  let approved = 0;
+  for (const row of pending) {
+    const { error: updateError } = await ctx.supabase.from("course_personas").update({
+      approved_traits: row.draft_traits, approved_sample_size: row.draft_sample_size,
+      approved_by: ctx.user.id, approved_at: now, updated_at: now,
+    }).eq("organization_id", ctx.organizationId).eq("id", row.id);
+    if (!updateError) approved += 1;
+  }
+  revalidatePath("/personas");
+  return { ok: true, message: approved ? `Approved ${approved} persona${approved === 1 ? "" : "s"}.` : "Nothing new to approve." };
+}

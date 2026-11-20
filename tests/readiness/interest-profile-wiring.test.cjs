@@ -50,11 +50,13 @@ test('Re-engaged intelligence: every admin read is scoped to the business', () =
 
 test('Re-engaged page shows Act now, coverage and interest, and never offers discounts itself', () => {
   const page = read('app/re-engaged/page.tsx');
-  assert.match(page, /<ActNow leads=\{actNow\} \/>/);
+  assert.match(page, /<ActNow leads=\{actNow\}/);
   assert.match(page, /<TrackingCoverage /);
   assert.match(page, /<InterestBadge profile=/);
   const card = read('components/reengaged-act-now.tsx');
-  assert.doesNotMatch(card, /payment link|Approve & send/i);
+  // Nothing on the card sends a message; the rules say so in plain words.
+  assert.doesNotMatch(card, /Approve & send|sendMessage/i);
+  assert.match(card, /Never offers a discount, scholarship or special price, and never sends a payment link/);
 });
 
 test('re-engage drafts: access checked, nothing sent, no discounts, no tracking talk', () => {

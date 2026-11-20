@@ -8,7 +8,7 @@ import { LeadJourneyIntelligence } from "@/components/lead-journey-intelligence"
 
 import { PageHeader } from "@/components/ui";
 
-import { ActNow, InterestBadge, TrackingCoverage, type ActNowLead } from "@/components/reengaged-act-now";
+import { ActNow, CameBack, FitBadge, InterestBadge, ReengageRules, TrackingCoverage, type ActNowLead } from "@/components/reengaged-act-now";
 import { InterestProfileCard } from "@/components/interest-profile-card";
 import { suggestNextStep } from "@/lib/interest-profile";
 import { getReEngagedWorkspace } from "@/lib/reengaged-data";
@@ -121,6 +121,7 @@ export default async function ReEngagedPage({
       source: lead.last_session_source,
       personId: intelligence.personByLead.get(lead.lead_id) ?? null,
       profile: profile!,
+      fit: intelligence.fit.get(lead.lead_id) ?? null,
     }));
 
   const selectedLead = selectedLeadId
@@ -233,7 +234,28 @@ export default async function ReEngagedPage({
         />
       </div>
 
-      <ActNow leads={actNow} />
+      <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1fr)_380px]">
+        <div className="min-w-0">
+          {actNow.length ? <ActNow leads={actNow} compact /> : (
+            <section className="rounded-2xl border border-dashed border-line px-5 py-10 text-center text-[13px] text-copy-muted">
+              Nobody stands out right now. Leads with an Interest score of 35 or more show here.
+            </section>
+          )}
+        </div>
+        <div className="flex flex-col gap-4">
+          <CameBack
+            leads={leads
+              .filter((lead) => Boolean(lead.is_reengaged))
+              .slice(0, 5)
+              .map((lead) => ({
+                leadId: lead.lead_id,
+                name: lead.lead_name || lead.lead_code,
+                detail: `${pretty(lead.current_stage)} · back ${formatDateTime(lead.last_visit_at)}`,
+              }))}
+          />
+          <ReengageRules />
+        </div>
+      </div>
 
       {intelligence.coverage ? (
         <TrackingCoverage linked={intelligence.coverage.linked} total={intelligence.coverage.total} />
@@ -501,7 +523,10 @@ export default async function ReEngagedPage({
                     </td>
 
                     <td className="px-3 py-3">
-                      <InterestBadge profile={intelligence.profiles.get(lead.lead_id)} />
+                      <span className="flex items-center gap-1.5">
+                        <InterestBadge profile={intelligence.profiles.get(lead.lead_id)} />
+                        <FitBadge fit={intelligence.fit.get(lead.lead_id)} />
+                      </span>
                     </td>
 
                     <td className="px-3 py-3 text-right text-slate-600">

@@ -34,3 +34,16 @@ test('Re-engaged no longer shows the old temperature', () => {
   assert.doesNotMatch(page, /TemperatureBadge/);
   assert.doesNotMatch(page, /<th className="px-3 py-3">Temperature<\/th>/);
 });
+
+test('Personas page: managers learn and approve; Fit uses approved personas only', () => {
+  const page = read('app/personas/page.tsx');
+  assert.match(page, /can_manage_organization/);
+  assert.match(page, /manager \? \(/);
+  const data = read('lib/course-persona-data.ts');
+  const fit = data.slice(data.indexOf('export async function fitForLeads'));
+  assert.match(fit, /getApprovedPersonas\(admin, organizationId\)/);
+  assert.doesNotMatch(fit, /draft_traits/);
+  assert.match(fit, /\.eq\("organization_id", organizationId\)/);
+  const nav = read('components/crm/crm-navigation.tsx');
+  assert.match(nav, /href: '\/personas', label: 'Personas'/);
+});
