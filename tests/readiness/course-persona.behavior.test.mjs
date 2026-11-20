@@ -52,3 +52,15 @@ test('fit: a lead like the persona scores high with reasons; an unlike one score
   assert.equal(unlike.band, 'weak');
   assert.ok(like.score <= 100);
 });
+
+import { personaAdvice } from '../../lib/course-persona.ts';
+
+test('advice comes from the persona numbers and never offers a discount', () => {
+  const base = { version: 1, outcome: 'provisional', sampleSize: 34, countries: [], websiteSample: 0, behaviour: { sawPrice: 0, cameBack: 0, readTwoMinutes: 0, contactedYou: 0, medianVisits: 0 } };
+  const a = personaAdvice({ ...base, channels: [{ value: 'instagram', share: 0.97 }], topics: [{ value: 'certification', share: 0.53 }, { value: 'discount', share: 0.24 }] });
+  assert.match(a, /Mention the certificate early: 53% ask about it\./);
+  assert.match(a, /24% ask for a discount: anything beyond the standard offer goes to a person\./);
+  assert.match(a, /Almost all come through Instagram\./);
+  assert.doesNotMatch(a, /offer (them )?a discount|give .*discount/i);
+  assert.equal(personaAdvice({ ...base, channels: [], topics: [] }), 'Not enough detail yet to say more.');
+});

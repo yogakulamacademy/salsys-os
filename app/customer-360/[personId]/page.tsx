@@ -3,6 +3,8 @@ import { notFound } from "next/navigation";
 import { CalendarClock, MessageCircle, ReceiptText, Search } from "lucide-react";
 
 import { initialsOf } from "@/components/crm/action-cards";
+import { FitBadge } from "@/components/reengaged-act-now";
+import { fitForLeads } from "@/lib/course-persona-data";
 import { InterestProfileCard } from "@/components/interest-profile-card";
 import { getLeads } from "@/lib/data";
 import { suggestNextStep } from "@/lib/interest-profile";
@@ -177,6 +179,9 @@ export default async function Customer360DetailPage({
     : ((conversationsResult.data ?? []) as ConversationRow[]);
 
   const [view, people] = await Promise.all([viewPromise, peoplePromise]);
+  const fit = interestProfile
+    ? (await fitForLeads(admin, organizationId, [activeLead.id], new Map([[activeLead.id, interestProfile]]))).get(activeLead.id) ?? null
+    : (await fitForLeads(admin, organizationId, [activeLead.id], new Map())).get(activeLead.id) ?? null;
   const displayName = activeLead.name || person?.latest_lead_name || "Customer";
   const course = activeLead.course && !/^(not selected|unknown)$/i.test(activeLead.course) ? activeLead.course : null;
   const timeline = view
@@ -311,6 +316,12 @@ export default async function Customer360DetailPage({
           <div className="min-w-0 flex-1">
             <h1 className="truncate text-[18px] font-bold text-copy-strong">{displayName}</h1>
             <div className="truncate text-[12.5px] text-copy-muted">{[stageText, person?.latest_lead_engagement_score != null ? `score ${person.latest_lead_engagement_score}` : null, value].filter(Boolean).join(" · ")}</div>
+            {fit ? (
+              <div className="mt-1 flex items-center gap-2 text-[12px] text-copy-muted">
+                <FitBadge fit={fit} />
+                <span className="truncate">{fit.reasons[0]?.text ?? "Little in common with people who joined yet"}</span>
+              </div>
+            ) : null}
           </div>
           {activeLead.owner ? (
             <span className="shrink-0 text-[13px] text-copy">{activeLead.owner}</span>

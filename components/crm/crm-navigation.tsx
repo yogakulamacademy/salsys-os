@@ -9,6 +9,7 @@ import {
   ListTodo,
   Rows3,
   RotateCcw,
+  Sparkles,
   UserRoundSearch,
   UsersRound,
 } from 'lucide-react';
@@ -49,6 +50,7 @@ const groups: NavigationGroup[] = [
       { href: '/re-engaged', label: 'Re-engaged', icon: RotateCcw },
       { href: '/leads#says-paid', label: 'Say they paid', icon: BadgeCheck, badge: { key: 'saysPaid', label: 'to check', tone: 'money' } },
       { href: '/customer-360', label: 'Customer 360', icon: UsersRound },
+      { href: '/personas', label: 'Personas', icon: Sparkles },
     ],
   },
 ];

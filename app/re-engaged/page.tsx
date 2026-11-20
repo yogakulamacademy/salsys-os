@@ -8,7 +8,7 @@ import { LeadJourneyIntelligence } from "@/components/lead-journey-intelligence"
 
 import { PageHeader } from "@/components/ui";
 
-import { ActNow, InterestBadge, TrackingCoverage, type ActNowLead } from "@/components/reengaged-act-now";
+import { ActNow, FitBadge, InterestBadge, TrackingCoverage, type ActNowLead } from "@/components/reengaged-act-now";
 import { InterestProfileCard } from "@/components/interest-profile-card";
 import { suggestNextStep } from "@/lib/interest-profile";
 import { getReEngagedWorkspace } from "@/lib/reengaged-data";
@@ -121,6 +121,7 @@ export default async function ReEngagedPage({
       source: lead.last_session_source,
       personId: intelligence.personByLead.get(lead.lead_id) ?? null,
       profile: profile!,
+      fit: intelligence.fit.get(lead.lead_id) ?? null,
     }));
 
   const selectedLead = selectedLeadId
@@ -501,7 +502,10 @@ export default async function ReEngagedPage({
                     </td>
 
                     <td className="px-3 py-3">
-                      <InterestBadge profile={intelligence.profiles.get(lead.lead_id)} />
+                      <span className="flex items-center gap-1.5">
+                        <InterestBadge profile={intelligence.profiles.get(lead.lead_id)} />
+                        <FitBadge fit={intelligence.fit.get(lead.lead_id)} />
+                      </span>
                     </td>
 
                     <td className="px-3 py-3 text-right text-slate-600">

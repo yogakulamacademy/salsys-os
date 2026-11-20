@@ -2,7 +2,8 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { learnPersona, PROVISIONAL_STAGES, STRONG_STAGES, type PersonaLead, type PersonaTraits } from "@/lib/course-persona";
+import { fitScore, learnPersona, PROVISIONAL_STAGES, STRONG_STAGES, type FitResult, type PersonaLead, type PersonaTraits } from "@/lib/course-persona";
+import type { InterestProfile } from "@/lib/interest-profile";
 import { normalizeCountry } from "@/lib/home-command-center";
 import { getInterestProfilesForLeads } from "@/lib/interest-profile-data";
 
@@ -87,4 +88,37 @@ export async function getApprovedPersonas(client: SupabaseClient, organizationId
   const { data } = await client.from("course_personas").select("course_id, approved_traits")
     .eq("organization_id", organizationId).not("approved_traits", "is", null);
   return new Map(((data ?? []) as { course_id: string; approved_traits: PersonaTraits }[]).map((r) => [r.course_id, r.approved_traits]));
+}
+
+/**
+ * Fit scores for leads against the approved persona of the course they want.
+ * Leads with no course, or a course with no approved persona, get none.
+ * Scoped to the business. Never throws.
+ */
+export async function fitForLeads(
+  admin: SupabaseClient,
+  organizationId: string,
+  leadIds: string[],
+  profiles: Map<string, InterestProfile>,
+): Promise<Map<string, FitResult>> {
+  const out = new Map<string, FitResult>();
+  if (!leadIds.length) return out;
+  try {
+    const personas = await getApprovedPersonas(admin, organizationId);
+    if (!personas.size) return out;
+    const { data } = await admin.from("leads").select("id, interested_course_id, country, geo_country, lead_creation_channel")
+      .eq("organization_id", organizationId).in("id", leadIds.slice(0, 300));
+    for (const lead of (data ?? []) as { id: string; interested_course_id: string | null; country: string | null; geo_country: string | null; lead_creation_channel: string | null }[]) {
+      const persona = lead.interested_course_id ? personas.get(lead.interested_course_id) : null;
+      if (!persona) continue;
+      out.set(lead.id, fitScore({
+        country: normalizeCountry(lead.country) ?? normalizeCountry(lead.geo_country),
+        channel: lead.lead_creation_channel,
+        profile: profiles.get(lead.id) ?? null,
+      }, persona));
+    }
+  } catch {
+    return new Map();
+  }
+  return out;
 }

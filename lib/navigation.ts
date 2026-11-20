@@ -179,6 +179,7 @@ export function buildNavigation(access: NavAccess): NavSection[] {
         "/follow-ups",
         "/customer-360",
         "/re-engaged",
+        "/personas",
       ],
       items: [
         {
@@ -204,6 +205,12 @@ export function buildNavigation(access: NavAccess): NavSection[] {
           href: "/re-engaged",
           description: "Leads that came back after going quiet.",
           keywords: "re-engaged returning lead activity reengagement",
+        },
+        {
+          label: "Personas",
+          href: "/personas",
+          description: "Who joins each course, and how well each lead fits.",
+          keywords: "personas ideal customer fit score course audience",
         },
       ],
     },

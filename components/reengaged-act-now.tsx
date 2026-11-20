@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { ReengageDraft } from "@/components/reengaged-draft";
+import type { FitResult } from "@/lib/course-persona";
 import { suggestNextStep, type InterestProfile } from "@/lib/interest-profile";
 
 export type ActNowLead = {
@@ -10,7 +11,28 @@ export type ActNowLead = {
   source: string | null;
   personId: string | null;
   profile: InterestProfile;
+  fit?: FitResult | null;
 };
+
+const FIT_STYLE: Record<FitResult["band"], string> = {
+  strong: "bg-emerald-50 text-emerald-800 border-emerald-200",
+  good: "bg-teal-50 text-teal-800 border-teal-200",
+  some: "bg-slate-50 text-slate-700 border-slate-200",
+  weak: "bg-slate-50 text-slate-500 border-slate-200",
+};
+
+/** How much the lead looks like people who join the course (approved persona). */
+export function FitBadge({ fit }: { fit: FitResult | null | undefined }) {
+  if (!fit) return null;
+  return (
+    <span
+      title={fit.reasons.length ? fit.reasons.map((r) => `${r.text} (+${r.points})`).join("\n") : "Little in common with people who joined yet"}
+      className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold ${FIT_STYLE[fit.band]}`}
+    >
+      Fit {fit.score}
+    </span>
+  );
+}
 
 const BAND_STYLE: Record<InterestProfile["interestBand"], string> = {
   hot: "bg-red-50 text-red-700 border-red-200",
@@ -99,7 +121,10 @@ export function ActNow({ leads }: { leads: ActNowLead[] }) {
                     {[lead.source ? pretty(lead.source) : null, pretty(lead.stage || "new"), p.courses[0]?.name].filter(Boolean).join(" · ")}
                   </div>
                 </div>
-                <InterestBadge profile={p} />
+                <span className="flex shrink-0 items-center gap-1.5">
+                  <FitBadge fit={lead.fit} />
+                  <InterestBadge profile={p} />
+                </span>
               </div>
 
               {p.reasons.length ? (

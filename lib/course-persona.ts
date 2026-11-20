@@ -157,3 +157,28 @@ const TOPIC_TEXT: Partial<Record<TopicKey | string, string>> = {
   certification: "certificate", experience: "experience needed", food: "food", visa: "visa & travel",
 };
 export const labelTopic = (key: string) => TOPIC_TEXT[key] ?? key.replace(/_/g, " ");
+
+/**
+ * One line on what a persona means for sales, from its own numbers.
+ * Never suggests offering a discount: discount questions go to a person.
+ */
+export function personaAdvice(p: PersonaTraits): string {
+  const parts: string[] = [];
+  const topics = p.topics;
+  const share = (key: string) => topics.find((t) => t.value === key)?.share ?? 0;
+  const top = topics[0];
+  if (top) {
+    const pct = Math.round(top.share * 100);
+    if (top.value === "certification") parts.push(`Mention the certificate early: ${pct}% ask about it.`);
+    else if (top.value === "dates") parts.push(`They decide on dates: send the next batches with the fee (${pct}% ask about dates).`);
+    else if (top.value === "online_offline") parts.push(`Say early whether it's online or in person: ${pct}% ask.`);
+    else if (top.value === "accommodation") parts.push(`Include the stay options: ${pct}% ask about them.`);
+    else parts.push(`Lead with the ${labelTopic(top.value)} in the first reply: ${pct}% ask about it.`);
+  }
+  const discount = share("discount");
+  if (discount >= 0.15) parts.push(`${Math.round(discount * 100)}% ask for a discount: anything beyond the standard offer goes to a person.`);
+  else if (topics.length && discount > 0 && discount < 0.1) parts.push("Discount questions are rare here.");
+  const ig = p.channels.find((c) => c.value === "instagram")?.share ?? 0;
+  if (ig >= 0.8) parts.push("Almost all come through Instagram.");
+  return parts.join(" ") || "Not enough detail yet to say more.";
+}

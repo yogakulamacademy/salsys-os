@@ -1,5 +1,7 @@
 import "server-only";
 
+import type { FitResult } from "@/lib/course-persona";
+import { fitForLeads } from "@/lib/course-persona-data";
 import type { InterestProfile } from "@/lib/interest-profile";
 import { getInterestProfilesForLeads } from "@/lib/interest-profile-data";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -8,11 +10,13 @@ import { requireCurrentOrganizationId } from "@/lib/workspace";
 
 export type ReEngagedIntelligence = {
   profiles: Map<string, InterestProfile>;
+  /** Fit against the approved persona of the lead's course (missing when none). */
+  fit: Map<string, FitResult>;
   personByLead: Map<string, string>;
   coverage: { linked: number; total: number } | null;
 };
 
-const EMPTY: ReEngagedIntelligence = { profiles: new Map(), personByLead: new Map(), coverage: null };
+const EMPTY: ReEngagedIntelligence = { profiles: new Map(), fit: new Map(), personByLead: new Map(), coverage: null };
 
 /**
  * Interest profiles, Customer 360 links and tracking coverage for the leads on
@@ -44,7 +48,9 @@ export async function getReEngagedIntelligence(leadIds: string[]): Promise<ReEng
     const linked = new Set([...(linkedA.data ?? []), ...(linkedB.data ?? [])].map((r) => String((r as { lead_id: string }).lead_id))).size;
     const total = totalLeads.count ?? 0;
 
-    return { profiles, personByLead, coverage: total ? { linked: Math.min(linked, total), total } : null };
+    const fit = await fitForLeads(admin, organizationId, ids, profiles);
+
+    return { profiles, fit, personByLead, coverage: total ? { linked: Math.min(linked, total), total } : null };
   } catch {
     return EMPTY;
   }
