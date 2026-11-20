@@ -35,3 +35,22 @@ test('person summary is read after the access check, scoped, and never fatal', (
   assert.match(page.slice(viewRead, viewRead + 600), /\.eq\("organization_id", organizationId\)\s*\.eq\("person_id", personId\)/);
   assert.doesNotMatch(page, /Unable to load customer relationship summary/);
 });
+
+test('Re-engaged intelligence: every admin read is scoped to the business', () => {
+  for (const file of ['lib/reengaged-intelligence-data.ts', 'lib/interest-profile-data.ts']) {
+    const src = read(file);
+    const reads = (src.match(/admin\.from\("[a-z_]+"\)/g) || []).length;
+    const scoped = (src.match(/\.eq\("organization_id", organizationId\)/g) || []).length;
+    assert.ok(reads > 0 && scoped >= reads, `${file}: ${scoped} scoped of ${reads} reads`);
+  }
+  assert.match(read('lib/reengaged-intelligence-data.ts'), /requireCurrentOrganizationId\(supabase, user\.id\)/);
+});
+
+test('Re-engaged page shows Act now, coverage and interest, and never offers discounts itself', () => {
+  const page = read('app/re-engaged/page.tsx');
+  assert.match(page, /<ActNow leads=\{actNow\} \/>/);
+  assert.match(page, /<TrackingCoverage /);
+  assert.match(page, /<InterestBadge profile=/);
+  const card = read('components/reengaged-act-now.tsx');
+  assert.doesNotMatch(card, /payment link|Approve & send/i);
+});

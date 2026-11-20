@@ -74,3 +74,30 @@ test('long silence lowers the score; bad timestamps are ignored', () => {
   assert.equal(p.pagesViewed, 1);
   assert.equal(p.interestScore, 0);
 });
+
+import { suggestNextStep } from '../../lib/interest-profile.ts';
+
+test('test pages on the website never show as a course', () => {
+  const p = buildInterestProfile({
+    now: NOW, coursePages: [], sessions: [], messages: [],
+    events: [
+      { name: 'web.page_viewed', at: at(1), props: { pagePath: '/courses/kerala/test.php' } },
+      { name: 'web.page_viewed', at: at(1), props: { pagePath: '/courses/kerala/200-hour-ytt.php' } },
+    ],
+  });
+  assert.deepEqual(p.courses.map((c) => c.name), ['200 hour ytt']);
+});
+
+test('next step: discount questions always go to a person; price views get dates and fees', () => {
+  const base = { now: NOW, coursePages: [], sessions: [] };
+  const discount = buildInterestProfile({ ...base, events: [], messages: [{ direction: 'inbound', at: at(1), body: 'any scholarship or discount?' }] });
+  assert.equal(suggestNextStep(discount).needsPerson, true);
+  const price = buildInterestProfile({ ...base, messages: [], events: [{ name: 'web.pricing_viewed', at: at(1), props: { pagePath: '/courses/mysore/100-hour.php' } }] });
+  const step = suggestNextStep(price);
+  assert.equal(step.needsPerson, false);
+  assert.match(step.action, /dates and fees/);
+  assert.doesNotMatch(step.action, /discount|scholarship|payment link/i);
+  const enrol = buildInterestProfile({ ...base, messages: [], events: [{ name: 'web.cta_clicked', at: at(1), props: { cta_kind: 'enrol' } }] });
+  assert.match(suggestNextStep(enrol).action, /finish enrolling/);
+  assert.equal(suggestNextStep(buildInterestProfile({ ...base, events: [], messages: [] })), null);
+});
