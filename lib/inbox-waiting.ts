@@ -27,8 +27,9 @@ export function isRecentWait(waitingSince: string | null | undefined, now: numbe
   return Number.isFinite(at) && now - at <= WAITING_DAYS * DAY;
 }
 
-const SHARE = /^shared an instagram (reel|post|story)\b/i;
-const IG_EVENT = /^\[instagram ([a-z_]+) message\]$/i;
+const SHARE = /^shared an instagram (reel|post|story|image|video|voice message|audio|file)\b/i;
+const MENTION = /^mentioned you in an instagram story\b/i;
+const IG_EVENT = /^\[instagram ([a-z_ ]+?)(?: message)?\]$/i;
 const QUESTION_WORDS = /\b(fees?|price|cost|how much|dates?|batch(es)?|when|where|how|which|what|accommodation|stay|food|certificat\w*|online|offline|regist\w*|enrol\w*|apply|admission|discount|instal+ments?|emi|available|duration|timings?|schedule|syllabus|refund|interested|details|brochure)\b/i;
 
 /** Plain words for the last message, as a person would say it. */
@@ -36,14 +37,25 @@ export function describeLastMessage(text: string | null | undefined): string {
   const t = (text ?? "").replace(/\s+/g, " ").trim();
   if (!t) return "";
   const share = t.match(SHARE);
-  if (share) return `Shared a ${share[1].toLowerCase()}`;
+  if (share) {
+    const what = share[1].toLowerCase();
+    if (what === "voice message" || what === "audio") return "Sent a voice message";
+    if (what === "image") return "Sent a photo";
+    if (what === "video") return "Sent a video";
+    if (what === "file") return "Sent a file";
+    return `Shared a ${what}`;
+  }
+  if (MENTION.test(t)) return "Mentioned you in a story";
   const ig = t.match(IG_EVENT);
   if (ig) {
-    const kind = ig[1].toLowerCase();
+    const kind = ig[1].toLowerCase().trim();
     if (kind === "story_reply") return "Replied to your story";
     if (kind === "ig_story" || kind === "story_mention") return "Mentioned you in a story";
+    if (kind === "ig_post") return "Shared a post";
     if (kind === "ephemeral") return "Sent a disappearing photo or video";
+    if (kind === "image") return "Sent a photo";
     if (kind === "reaction" || kind === "like_heart") return "Reacted to a message";
+    if (kind === "historical") return "Older message (text not available)";
     return "Sent an attachment";
   }
   return t.length > 140 ? `${t.slice(0, 139).trimEnd()}…` : t;
@@ -53,7 +65,7 @@ export function describeLastMessage(text: string | null | undefined): string {
 export function waitKind(text: string | null | undefined, saysPaid = false): WaitKind {
   if (saysPaid) return "paid";
   const t = (text ?? "").replace(/\s+/g, " ").trim();
-  if (!t || SHARE.test(t) || IG_EVENT.test(t)) return "share";
+  if (!t || SHARE.test(t) || MENTION.test(t) || IG_EVENT.test(t)) return "share";
   if (t.includes("?") || QUESTION_WORDS.test(t)) return "question";
   return "message";
 }
