@@ -21,6 +21,9 @@ export type InboxQuery = {
   channel?: string;
   priority?: string;
   topic?: string;
+  /** "1" = rows only for a further page of an ordinary tab: skip the Waiting
+   *  scan (its counts are already on screen). Keeps "load more" cheap. */
+  light?: string;
 };
 
 export type InboxPageCounts = {
@@ -155,7 +158,8 @@ export async function getInboxPage(
   const now = Date.now();
   const waitingAll: ConversationLeadSummary[] = [];
   let replyAllPayload: any = null;
-  for (let p = 1; p <= 3; p += 1) {
+  const skipWaitingScan = query.light === "1" && filter !== "waiting" && filter !== "older";
+  for (let p = 1; p <= (skipWaitingScan ? 0 : 3); p += 1) {
     const payload = await callPage({ page: p, pageSize: 100, filter: "reply", channel: "all", sort: "activity_desc" });
     if (p === 1) replyAllPayload = payload;
     const rows = payload.inbox as ConversationLeadSummary[];

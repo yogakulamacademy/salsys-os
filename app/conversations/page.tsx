@@ -18,7 +18,6 @@ import { WhatsAppComposer } from "@/components/conversation-composer";
 import { ConversationIntelligencePanel } from "@/components/conversation-intelligence-panel";
 import { AILeadInsightPanel } from "@/components/ai-lead-insight-panel";
 import { InboxQuickActions } from "@/components/inbox-quick-actions";
-import { changeInboxLeadStageAction } from "@/app/conversations/team-actions";
 import { buildQuickReplies } from "@/lib/inbox-quick-replies";
 import { getUpcomingBatchesForQuickReplies } from "@/lib/inbox-quick-reply-data";
 import { InboxHeaderActions } from "@/components/inbox-header-actions";
@@ -56,6 +55,9 @@ import { getMessagingEligibility } from "@/lib/messaging-eligibility";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentWorkspaceContext } from "@/lib/workspace";
 import { getApprovedWhatsAppTemplates } from "@/lib/whatsapp-templates";
+import { noticeFor } from "@/lib/inbox-notices";
+import { InboxToastHost } from "@/components/inbox-toast";
+import { changeStageInline, logInteractionInline } from "@/app/conversations/inline-actions";
 import "./inbox-v2.css";
 import "./inbox-reference.css";
 import "./inbox-v5.css";
@@ -253,9 +255,8 @@ export default async function ConversationsPage({
   const whatsappTemplateAction = selectedId
     ? sendWhatsAppTemplateAction.bind(null, selectedId)
     : undefined;
-  const stageAction = selectedId
-    ? changeInboxLeadStageAction.bind(null, selectedId)
-    : undefined;
+  const stageInlineAction = selectedId ? changeStageInline.bind(null, selectedId) : undefined;
+  const logInlineAction = selectedId ? logInteractionInline.bind(null, selectedId) : undefined;
   const quickBatches = selected && !mock
     ? await getUpcomingBatchesForQuickReplies(selected.interestedCourseId).catch(() => [])
     : [];
@@ -625,7 +626,7 @@ export default async function ConversationsPage({
       <section className="ibx-v5-card ibx-v5-actions-card" aria-label="Quick actions and follow-up">
         <InboxQuickActions key={`qa-${selected.id}`} phone={selectedPhone} canCall={Boolean(hasTelephoneContact)}
           profileHref={`/leads/${selected.id}`} channel={selected.currentContactChannel}
-          replies={quickReplies!} logAction={interactionAction} stageAction={stageAction} mock={mock}/>
+          replies={quickReplies!} logAction={mock ? undefined : logInlineAction} stageAction={mock ? undefined : stageInlineAction} mock={mock}/>
         <div id="inbox-next-steps" className="ibx-v2-next-step-card">
           <ConversationIntelligencePanel
             compact
@@ -695,8 +696,8 @@ export default async function ConversationsPage({
           {warning}
         </Notice>
       ))}
-      {query.error ? <Notice tone="error">{query.error}</Notice> : null}
-      {noticeText ? <Notice tone="success">{noticeText}</Notice> : null}
+      {/* Results show as a small toast that fades after 2 seconds (owner request, 20 Nov 2026). */}
+      <InboxToastHost initialMessage={noticeText} initialError={query.error ?? null} />
 
       <ConversationWorkspaceShell
         inbox={inbox}
@@ -743,20 +744,6 @@ async function resolveTelephoneCapability(leadId: string) {
   return data === true;
 }
 
-function noticeFor(value?: string) {
-  if (value === "whatsapp-sent") return "WhatsApp message sent.";
-  if (value === "whatsapp-template-sent") return "WhatsApp template sent.";
-  if (value === "whatsapp-started") return "WhatsApp conversation started.";
-  if (value === "lead-context-updated") return "Lead details updated.";
-  if (value === "interaction-logged") return "Call recorded on the lead.";
-  if (value === "owner-updated") return "Conversation owner updated across CRM and open work.";
-  if (value === "conversation-snoozed") return "Conversation snoozed in your inbox.";
-  if (value === "conversation-unsnoozed") return "Conversation returned to your active inbox.";
-  if (value === "conversation-done") return "Conversation marked done. New inbound messages will reopen it.";
-  if (value === "conversation-reopened") return "Conversation returned to the active reply queue.";
-  if (value === "inbox-stage-updated") return "Lead stage updated and recorded in CRM history.";
-  return value ? "Interaction logged." : null;
-}
 
 function SectionHeading({ children }: { children: React.ReactNode }) {
   return (

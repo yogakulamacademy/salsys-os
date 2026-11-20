@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import type { ReactNode } from "react";
+import { useTransition, type ReactNode } from "react";
 import { ArrowUpRight, Check, Clock3, Ellipsis, CalendarClock, FileText } from "lucide-react";
-import { setConversationDoneAction, snoozeConversationAction } from "@/app/conversations/team-actions";
+import { setDoneInline, snoozeInline } from "@/app/conversations/inline-actions";
+import { showInboxToast } from "@/lib/inbox-toast";
 
 export function InboxHeaderActions({ leadId, resolved, canResolve, mock, snoozed=false, lead }:{
   leadId:string; resolved:boolean; canResolve:boolean; mock:boolean; snoozed?:boolean;
@@ -27,15 +28,19 @@ export function InboxHeaderActions({ leadId, resolved, canResolve, mock, snoozed
       .find(node=>node.textContent?.includes('Notes'));
     tab?.click();
   };
-  const doneAction=setConversationDoneAction.bind(null,leadId);
-  const snoozeAction=snoozeConversationAction.bind(null,leadId);
+  // In place: no page navigation; a toast says what happened (20 Nov 2026).
+  const [pending,startTransition]=useTransition();
+  const run=(action:typeof setDoneInline, formData:FormData)=>startTransition(async()=>{
+    const result=await action(leadId,formData);
+    showInboxToast(result.message,result.ok?'success':'error');
+  });
   // Owner-approved design (20 Nov 2026): Hand to AI, Snooze, Mark done; the rest in "…".
   return <div className="ibx-v3-header-buttons ibx-v5-head-actions" aria-label="Conversation actions">
     {lead}
-    <form action={snoozeAction} className="ibx-v3-head-snooze">
+    <form onSubmit={event=>{event.preventDefault();run(snoozeInline,new FormData(event.currentTarget));event.currentTarget.reset();}} className="ibx-v3-head-snooze">
       <Clock3 size={14} aria-hidden="true"/>
       <label htmlFor="inbox-header-snooze" className="sr-only">Snooze this conversation</label>
-      <select id="inbox-header-snooze" name="snooze_for" defaultValue="" disabled={mock}
+      <select id="inbox-header-snooze" name="snooze_for" defaultValue="" disabled={mock||pending}
         title="Hide from your queue until later. Teammates still see it."
         onChange={event=>{ if(event.currentTarget.value) event.currentTarget.form?.requestSubmit(); }}>
         <option value="" disabled>{snoozed?'Snoozed':'Snooze'}</option>
@@ -46,9 +51,9 @@ export function InboxHeaderActions({ leadId, resolved, canResolve, mock, snoozed
         {snoozed?<option value="clear">Return to inbox now</option>:null}
       </select>
     </form>
-    <form action={doneAction}>
+    <form onSubmit={event=>{event.preventDefault();run(setDoneInline,new FormData(event.currentTarget));}}>
       <input type="hidden" name="operation" value={resolved?'reopen':'done'}/>
-      <button type="submit" disabled={!canResolve || mock}
+      <button type="submit" disabled={!canResolve || mock || pending}
         title={mock?'Demo mode does not persist inbox resolution':!canResolve?'Inbox resolution is unavailable':'Changes inbox reply status, not independent CRM follow-up tasks'}
         className="ibx-v3-head-btn">
         <Check size={14}/> {resolved?'Reopen':'Mark done'}

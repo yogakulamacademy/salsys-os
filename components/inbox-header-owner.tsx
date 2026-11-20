@@ -3,7 +3,8 @@
 import { useFormStatus } from "react-dom";
 import { ChevronDown, UserRound } from "lucide-react";
 
-import { assignConversationOwnerAction } from "@/app/conversations/team-actions";
+import { assignOwnerInline } from "@/app/conversations/inline-actions";
+import { showInboxToast } from "@/lib/inbox-toast";
 
 type Candidate = { id: string; name: string; role: string };
 
@@ -24,7 +25,11 @@ export function InboxHeaderOwner({ leadId, ownerUserId, ownerName, candidates, c
       </span>
     );
   }
-  const action = assignConversationOwnerAction.bind(null, leadId);
+  // In place, with a toast (20 Nov 2026): the page is not reloaded.
+  const action = async (formData: FormData) => {
+    const result = await assignOwnerInline(leadId, formData);
+    showInboxToast(result.message, result.ok ? "success" : "error");
+  };
   return (
     <form action={action} className={`ibx-v3-header-owner ibx-v3-header-owner-pick ${ownerUserId ? "" : "is-unassigned"}`}>
       <UserRound size={12} aria-hidden="true" />
