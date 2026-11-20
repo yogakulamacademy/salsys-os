@@ -12,8 +12,11 @@ import {
   UsersRound,
 } from "lucide-react";
 
+import { InterestProfileCard } from "@/components/interest-profile-card";
 import { PageHeader } from "@/components/ui";
 import { getLeads } from "@/lib/data";
+import { getInterestProfile } from "@/lib/interest-profile-data";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { requireCurrentOrganizationId } from "@/lib/workspace";
 
@@ -119,6 +122,9 @@ export default async function Customer360DetailPage({
 
   const accessibleIds = accessibleLeads.map((lead) => lead!.id);
 
+  // Interest profile: admin reads, scoped to this business and to leads this user can already see.
+  const interestProfilePromise = getInterestProfile(createAdminClient(), organizationId, accessibleIds);
+
   const [personResult, tasksResult, paymentsResult, enrollmentsResult, conversationsResult] =
     await Promise.all([
       supabase
@@ -165,6 +171,7 @@ export default async function Customer360DetailPage({
   }
 
   const person = (personResult.data ?? null) as PersonRow | null;
+  const interestProfile = await interestProfilePromise;
   const tasks = tasksResult.error ? [] : ((tasksResult.data ?? []) as TaskRow[]);
   const payments = paymentsResult.error ? [] : ((paymentsResult.data ?? []) as PaymentRow[]);
   const enrollments = enrollmentsResult.error ? [] : ((enrollmentsResult.data ?? []) as EnrollmentRow[]);
@@ -272,6 +279,8 @@ export default async function Customer360DetailPage({
           </div>
         </section>
 
+        <div className="space-y-5">
+        <InterestProfileCard profile={interestProfile} />
         <section className="rounded-panel border border-line bg-surface p-5 shadow-xs">
           <div className="eyebrow">Relationship</div>
           <h2 className="section-title mt-1">Contact-level signals</h2>
@@ -292,6 +301,7 @@ export default async function Customer360DetailPage({
             </div>
           ) : null}
         </section>
+        </div>
       </div>
 
       <div className="grid gap-5 xl:grid-cols-3">
