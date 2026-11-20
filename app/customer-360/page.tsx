@@ -297,7 +297,7 @@ export default async function Customer360Page({ searchParams }: { searchParams?:
                       </td>
                       <td className="px-4 py-3 text-[13px] text-copy">Since {formatShortDate(firstOpportunityAt)}</td>
                       <td className="px-4 py-3 text-[13px]">
-                        {latestLead?.owner ? <span className="text-copy">{latestLead.owner}</span> : <Link href={`/leads/${latestLead?.id ?? ""}`} className="font-semibold text-brand-700 hover:underline">+ Assign</Link>}
+                        {latestLead?.owner && !/^(unassigned|—|-)$/i.test(latestLead.owner.trim()) ? <span className="text-copy">{latestLead.owner}</span> : <Link href={`/leads/${latestLead?.id ?? ""}`} className="font-semibold text-brand-700 hover:underline">+ Assign</Link>}
                       </td>
                       <td className="px-4 py-3 text-right">
                         <Link href={href} className="inline-flex h-8 items-center rounded-lg bg-brand-50 px-3 text-[13px] font-semibold text-brand-700 transition hover:bg-brand-100">
