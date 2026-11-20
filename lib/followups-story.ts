@@ -28,6 +28,8 @@ export type StoryTask = {
   value: number | null;
   currency: string | null;
   course: string | null;
+  /** Their last message says they paid or enrolled and nothing is recorded. */
+  saysPaid?: boolean;
 };
 
 export type ShapedTask = StoryTask & {
@@ -110,6 +112,7 @@ export function whyLine(t: StoryTask, kind: TaskKind): string {
     return reason ? `AI stopped: ${reason.charAt(0).toLowerCase()}${reason.slice(1)}` : "AI stopped and needs a person to reply";
   }
   if (kind === "first_reply") return `${formLabel(t.origin)} · no reply logged in the CRM yet`;
+  if (t.saysPaid) return "They wrote that they paid: check the payment, then mark them enrolled";
   if (kind === "payment") return t.stage === "payment_pending" ? "At Payment pending: check whether they paid" : "Check their payment";
   return desc ? quote(desc) : t.title;
 }
@@ -141,13 +144,15 @@ export function shapeTask(t: StoryTask, now: Date): ShapedTask {
     due: dueLabel(t.dueAt, now),
     settled: settledLabel != null,
     settledLabel,
-    waiting: Number.isFinite(inAt) && (!Number.isFinite(outAt) || inAt > outAt),
+    // "I'll get back to you" or "no thanks" is their last word, not a question to us.
+    waiting: kind !== "promised" && kind !== "lost" && Number.isFinite(inAt) && (!Number.isFinite(outAt) || inAt > outAt),
   };
 }
 
 /** Most useful first: hotter stage, hotter form, then newest (fresh leads answer more). */
 export function compareTasks(a: ShapedTask, b: ShapedTask): number {
   if (a.settled !== b.settled) return a.settled ? 1 : -1;
+  if (Boolean(a.saysPaid) !== Boolean(b.saysPaid)) return a.saysPaid ? -1 : 1;
   const stage = (STAGE_WEIGHT[b.stage] ?? 0) - (STAGE_WEIGHT[a.stage] ?? 0);
   if (a.kind === "first_reply" && b.kind === "first_reply") {
     const heat = formHeat(b.origin) - formHeat(a.origin);
@@ -198,7 +203,8 @@ export function buildFollowupsStory(tasks: StoryTask[], now: Date): FollowupsSto
   const settled = due.filter((t) => t.settled).length;
 
   const parts: string[] = [];
-  if (counts.payment) parts.push(`${plural(counts.payment, "payment needs", "payments need")} checking`);
+  const saysPaid = due.filter((t) => t.saysPaid && !t.settled).length;
+  if (counts.payment) parts.push(`${plural(counts.payment, "payment needs", "payments need")} checking${saysPaid ? ` (${saysPaid.toLocaleString("en-IN")} say they've paid)` : ""}`);
   if (counts.promised) parts.push(`${plural(counts.promised, "person", "people")} asked you to get back to them and it's time`);
   if (counts.first_reply) parts.push(`${plural(counts.first_reply, "website form has", "website forms have")} no reply logged${oldestFormDays ? ` (oldest ${plural(oldestFormDays, "day", "days")})` : ""}`);
   if (counts.handover) parts.push(`AI handed ${plural(counts.handover, "chat", "chats")} to you`);

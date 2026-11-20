@@ -64,7 +64,7 @@ test("story: settled leads drop out of the counts; hot forms come first", () => 
   assert.equal(story.counts.first_reply, 2);
   assert.equal(story.settled, 1);
   assert.equal(story.oldestFormDays, 22);
-  assert.equal(story.waiting, 1);
+  assert.equal(story.waiting, 0, "'I'll get back to you' is their last word, not a wait on us");
   const forms = story.due.filter((t) => t.kind === "first_reply").map((t) => t.id);
   assert.deepEqual(forms, ["b", "a", "c"]);
   assert.equal(
@@ -75,4 +75,15 @@ test("story: settled leads drop out of the counts; hot forms come first", () => 
 
 test("an empty queue says so", () => {
   assert.equal(buildFollowupsStory([], NOW).headline, "Nothing urgent is waiting.");
+});
+
+test("people who say they paid go first, and website forms with no reply count as waiting", () => {
+  const story = buildFollowupsStory([
+    task({ id: "p1", title: "Payment follow-up", stage: "payment_pending", lastInboundAt: "2026-11-10T06:00:00Z" }),
+    task({ id: "p2", title: "Payment follow-up", stage: "payment_pending", saysPaid: true, lastInboundAt: "2026-11-06T06:00:00Z" }),
+  ], NOW);
+  assert.deepEqual(story.due.map((t) => t.id), ["p2", "p1"]);
+  assert.match(story.due[0].why, /wrote that they paid/);
+  assert.equal(story.waiting, 2);
+  assert.ok(story.headline.startsWith("2 payments need checking (1 say they've paid)"));
 });
