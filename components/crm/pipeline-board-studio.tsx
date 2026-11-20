@@ -17,6 +17,11 @@ import { movePipelineLeadStage } from "@/app/pipeline/actions";
 import { LeadInspectorButton } from "@/components/crm/lead-inspector";
 import type { PipelineSnapshotBoardLead } from "@/lib/pipeline-data";
 import type { PipelineStage } from "@/types/crm";
+import { normalizeCountry } from "@/lib/home-command-center";
+
+// Rendering every lead (1,300+ cards, each with two menus) froze the page;
+// show the first cards of each column and let people ask for more.
+const CARDS_PER_STEP = 30;
 
 const columns: Array<{ stage: PipelineStage; label: string }> = [
   { stage: "new", label: "New" },
@@ -70,6 +75,7 @@ export function PipelineBoardStudio({
   const [query, setQuery] = useState("");
   const [channel, setChannel] = useState("all");
   const [aging, setAging] = useState<AgingFilter>("all");
+  const [shownPerStage, setShownPerStage] = useState<Record<string, number>>({});
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [overStage, setOverStage] = useState<PipelineStage | null>(null);
   const [savingLeadId, setSavingLeadId] = useState<string | null>(null);
@@ -348,7 +354,7 @@ export function PipelineBoardStudio({
                     </div>
                   ) : null}
 
-                  {stageItems.map((lead) => (
+                  {stageItems.slice(0, shownPerStage[stage] ?? CARDS_PER_STEP).map((lead) => (
                     <PipelineLeadCard
                       key={lead.id}
                       lead={lead}
@@ -371,6 +377,18 @@ export function PipelineBoardStudio({
                       onOutcome={(nextStage) => requestOutcome(lead.id, nextStage)}
                     />
                   ))}
+                  {stageItems.length > (shownPerStage[stage] ?? CARDS_PER_STEP) ? (
+                    <div className="flex flex-col gap-1.5 pt-1">
+                      <button
+                        type="button"
+                        onClick={() => setShownPerStage((current) => ({ ...current, [stage]: (current[stage] ?? CARDS_PER_STEP) + CARDS_PER_STEP }))}
+                        className="h-9 rounded-lg border border-line bg-surface text-[11px] font-semibold text-brand-700 hover:border-brand-300"
+                      >
+                        Show {Math.min(CARDS_PER_STEP, stageItems.length - (shownPerStage[stage] ?? CARDS_PER_STEP))} more of {stageItems.length.toLocaleString("en-IN")}
+                      </button>
+                      <Link href={`/leads?stage=${stage}`} className="text-center text-[10px] font-semibold text-copy-muted hover:text-brand-700">Open all in Leads →</Link>
+                    </div>
+                  ) : null}
                 </div>
               </div>
             );
@@ -487,7 +505,7 @@ function PipelineLeadCard({
             {lead.name}
           </Link>
           <div className="mt-0.5 truncate text-[9px] text-copy-subtle">
-            {[lead.country, lead.location].filter(Boolean).join(" · ") || "Location unavailable"}
+            {[normalizeCountry(lead.country) ?? lead.country, lead.location].filter(Boolean).join(" · ") || "Place not known"}
           </div>
         </div>
         <span className="text-copy-subtle opacity-0 transition group-hover:opacity-100">

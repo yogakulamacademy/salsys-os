@@ -57,16 +57,11 @@ export default async function AdmissionsLayout({ children }: { children: ReactNo
     <CrmWorkspaceFrame>
       <div className="space-y-4">
         {healthy ? (
-          <section className="flex flex-col gap-2 rounded-xl border border-emerald-200 bg-emerald-50/70 px-4 py-3 text-sm dark:border-emerald-900/60 dark:bg-emerald-950/20 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-center gap-2 text-emerald-800 dark:text-emerald-200">
-              <CheckCircle2 size={16} />
-              <strong>Admissions automation healthy</strong>
-            </div>
-            <div className="text-xs text-emerald-700 dark:text-emerald-300">
-              {formatNumber(health?.runs_24h)} runs · 0 failures in 24h
-              {health?.last_completed_at ? ` · Last completed ${formatDateTime(health.last_completed_at)}` : ''}
-            </div>
-          </section>
+          // All is well: a quiet one-liner instead of a banner (owner review, 20 Nov 2026).
+          <div className="flex items-center justify-end gap-1.5 text-[11px] text-emerald-700 dark:text-emerald-300" title={`${formatNumber(health?.runs_24h)} runs · 0 failures in 24h${health?.last_completed_at ? ` · Last completed ${formatDateTime(health.last_completed_at)}` : ''}`}>
+            <CheckCircle2 size={13} />
+            <span>Admissions automation healthy</span>
+          </div>
         ) : (
           <section className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50/70 px-4 py-3 text-sm text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/20 dark:text-amber-100">
             <AlertTriangle size={16} className="mt-0.5 shrink-0" />
@@ -100,7 +95,7 @@ export default async function AdmissionsLayout({ children }: { children: ReactNo
               <div>
                 <strong>Capacity setup incomplete</strong>
                 <div className="mt-0.5 text-xs leading-5">
-                  {formatNumber(missingCapacityCount)} upcoming active batch{missingCapacityCount === 1 ? '' : 'es'} {missingCapacityCount === 1 ? 'does' : 'do'} not have capacity configured. Seat pressure remains unknown for those batches.
+                  Seats aren&apos;t set for {formatNumber(missingCapacityCount)} upcoming batch{missingCapacityCount === 1 ? '' : 'es'}, so you won&apos;t be warned when one fills up. Seat pressure remains unknown for those batches.
                 </div>
               </div>
             </div>

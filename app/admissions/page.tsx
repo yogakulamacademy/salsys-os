@@ -17,6 +17,9 @@ import { PipelineWorkspace } from "@/components/crm/pipeline-workspace";
 import { DecisionMetricCard } from "@/components/intelligence/decision-metric-card";
 import { EmptyState, Notice, PageHeader } from "@/components/ui";
 import { getAdmissionsSnapshot } from "@/lib/admissions-data";
+import { getAdmissionsExtras, type AdmissionsExtras, type BatchDemand } from "@/lib/admissions-story-data";
+import { getHomeStory } from "@/lib/home-story-data";
+import type { HomeStory } from "@/lib/home-story";
 import { getPipelineSnapshot } from "@/lib/pipeline-data";
 
 type PriorityRow = {
@@ -161,10 +164,15 @@ export default async function AdmissionsDeskPage({
   const band = one(resolved.band) || "all";
   const ownerFilter = one(resolved.owner) || "all";
 
-  const [snapshot, pipelineSnapshot] = await Promise.all([
+  const [snapshot, pipelineSnapshot, story] = await Promise.all([
     getAdmissionsSnapshot(),
     view === "pipeline" ? getPipelineSnapshot() : Promise.resolve(null),
+    view === "overview" ? getHomeStory() : Promise.resolve(null),
   ]);
+  const batchIds = ((snapshot.batchCapacity ?? []) as Array<{ batch_id: string }>).map((row) => row.batch_id);
+  const extras = view === "overview" || view === "capacity" || view === "payments" || view === "pipeline"
+    ? await getAdmissionsExtras(batchIds)
+    : null;
 
   const user = snapshot.user;
   const priorityQueue = snapshot.priorityQueue as PriorityRow[];
@@ -242,6 +250,8 @@ export default async function AdmissionsDeskPage({
 
       {view === "overview" ? (
         <AdmissionsOverview
+          story={story}
+          extras={extras}
           brief={brief}
           priorityQueue={priorityQueue}
           batchCapacity={batchCapacity}
@@ -267,14 +277,20 @@ export default async function AdmissionsDeskPage({
       ) : null}
 
       {view === "pipeline" && pipelineSnapshot ? (
-        <PipelineWorkspace snapshot={pipelineSnapshot} embedded />
+        <>
+          <StalePaymentCallout extras={extras} />
+          <PipelineWorkspace snapshot={pipelineSnapshot} embedded />
+        </>
       ) : null}
 
       {view === "payments" ? (
-        <PaymentsView rows={paymentPending} outstanding={paymentOutstanding} />
+        <>
+          <StalePaymentCallout extras={extras} />
+          <PaymentsView rows={paymentPending} outstanding={paymentOutstanding} />
+        </>
       ) : null}
 
-      {view === "capacity" ? <CapacityView rows={batchCapacity} /> : null}
+      {view === "capacity" ? <CapacityView rows={batchCapacity} demand={extras?.demand ?? null} /> : null}
 
       {view === "performance" ? (
         <AdmissionsPerformance sla={slaOverview} ownerWorkload={ownerWorkload} />
@@ -284,6 +300,8 @@ export default async function AdmissionsDeskPage({
 }
 
 function AdmissionsOverview({
+  story,
+  extras,
   brief,
   priorityQueue,
   batchCapacity,
@@ -305,11 +323,17 @@ function AdmissionsOverview({
   paymentCount: number;
   paymentOutstanding: OutstandingSummary;
   inboxKnown: boolean;
+  story: HomeStory | null;
+  extras: AdmissionsExtras | null;
 }) {
   if (!priorityQueue.length && !batchCapacity.length && needsReplyCount + unreadCount + overdueCount + newLeadCount + paymentCount === 0) {
     return <EmptyState title={inboxKnown ? "No admissions activity yet" : "Admissions evidence is incomplete"} description={inboxKnown ? "Enquiries, follow-ups and batch demand will appear here as they are recorded." : "Some queue counts are unavailable. Open the underlying enquiries to review current work."} action={<Link href="/leads" className="btn-primary">Open leads</Link>} />;
   }
-  const paymentDetail = paymentOutstanding.hasAmount
+  const stale = extras?.stalePayment ?? [];
+  const month = stale.filter((lead) => lead.days >= 30).length;
+  const paymentDetail = stale.length
+    ? `${month ? `${month} for a month or more` : `${stale.length} for over a week`}. Did they pay?`
+    : paymentOutstanding.hasAmount
     ? `${paymentOutstanding.display} recorded outstanding`
     : paymentOutstanding.missingCurrencyRecords > 0
       ? `${paymentOutstanding.missingCurrencyRecords} amount ${paymentOutstanding.missingCurrencyRecords === 1 ? "record has" : "records have"} no currency`
@@ -324,8 +348,16 @@ function AdmissionsOverview({
           </span>
           <div>
             <div className="text-[10px] font-bold uppercase tracking-[0.12em] text-violet-600 dark:text-violet-300">Admissions brief</div>
-            <h2 className="mt-1 text-lg font-semibold text-slate-950 dark:text-white">Where the team should focus now</h2>
-            <p className="mt-1 max-w-4xl text-sm leading-6 text-slate-600 dark:text-slate-300">{brief}</p>
+            <h2 className="mt-1 text-lg font-semibold text-slate-950 dark:text-white">{story ? story.headline : "Where the team should focus now"}</h2>
+            <p className="mt-1 max-w-4xl text-sm leading-6 text-slate-600 dark:text-slate-300">
+              {story
+                ? [
+                    month ? `${month} ${month === 1 ? "lead has" : "leads have"} been at Payment pending for a month or more.` : null,
+                    overdueCount ? `${formatNumber(overdueCount)} follow-ups are overdue.` : null,
+                    story.winBack.total ? `${formatNumber(story.winBack.total)} older messages never got a reply.` : null,
+                  ].filter(Boolean).join(" ") || "Work the queue first, then use Pipeline, Payments and Capacity for detail."
+                : brief}
+            </p>
           </div>
         </div>
         <Link href="/admissions?view=queue" className="btn-primary whitespace-nowrap">
@@ -337,10 +369,10 @@ function AdmissionsOverview({
         <DecisionMetricCard
           href="/conversations"
           label="Needs reply"
-          value={inboxKnown ? formatNumber(needsReplyCount) : "—"}
-          detail={unreadCount > 0 ? `${unreadCount} unread inbound` : "Conversation attention"}
-          tone={!inboxKnown ? "neutral" : needsReplyCount > 0 ? "warning" : "positive"}
-          statusLabel={!inboxKnown ? "Unknown" : needsReplyCount > 0 ? "Attention" : "Clear"}
+          value={story ? formatNumber(story.waitingThisWeek) : inboxKnown ? formatNumber(needsReplyCount) : "—"}
+          detail={story ? `Wrote in the last 7 days${story.winBack.total ? ` · ${formatNumber(story.winBack.total)} older` : ""}` : unreadCount > 0 ? `${unreadCount} unread inbound` : "Conversation attention"}
+          tone={story ? (story.waitingThisWeek > 0 ? "warning" : "positive") : !inboxKnown ? "neutral" : needsReplyCount > 0 ? "warning" : "positive"}
+          statusLabel={story ? (story.waitingThisWeek > 0 ? "Reply" : "Clear") : !inboxKnown ? "Unknown" : needsReplyCount > 0 ? "Attention" : "Clear"}
           icon={<Inbox size={16} />}
           evidenceLabel="Conversation state"
           definition="Active conversations currently recorded as needing a human reply. This is an action queue signal; it does not infer customer intent."
@@ -380,7 +412,7 @@ function AdmissionsOverview({
 
       <section className="grid gap-5 xl:grid-cols-[minmax(0,1.25fr)_minmax(340px,.75fr)]">
         <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-950">
-          <PanelHeader eyebrow="Priority intelligence" title="Next best work" href="/admissions?view=queue" action="Full queue" />
+          <PanelHeader eyebrow="Who to contact first" title="Next best work" href="/admissions?view=queue" action="Full queue" />
           {priorityQueue.length ? (
             <div className="space-y-2 p-3">
               {priorityQueue.slice(0, 6).map((row) => <PriorityQueueRow key={row.lead_id} row={row} compact />)}
@@ -391,10 +423,10 @@ function AdmissionsOverview({
         </section>
 
         <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-950">
-          <PanelHeader eyebrow="Demand pressure" title="Upcoming capacity" href="/admissions?view=capacity" action="View capacity" />
+          <PanelHeader eyebrow="Demand" title="Upcoming batches" href="/admissions?view=capacity" action="All batches" />
           {batchCapacity.length ? (
             <div className="divide-y divide-slate-100 dark:divide-slate-900">
-              {batchCapacity.slice(0, 5).map((row) => <CapacityRow key={row.batch_id} row={row} compact />)}
+              {batchCapacity.slice(0, 5).map((row) => <CapacityRow key={row.batch_id} row={row} compact demand={extras?.demand[row.batch_id] ?? null} />)}
             </div>
           ) : (
             <SimpleEmpty title="No upcoming batch data" detail="Capacity pressure will appear when scheduled batches are available." />
@@ -481,8 +513,14 @@ function PaymentsView({ rows, outstanding }: { rows: RevenueRow[]; outstanding: 
   );
 }
 
-function CapacityView({ rows }: { rows: AdmissionsBatchCapacityRow[] }) {
+function CapacityView({ rows, demand }: { rows: AdmissionsBatchCapacityRow[]; demand: Record<string, BatchDemand> | null }) {
   const hot = rows.reduce((sum, row) => sum + toNumber(row.hot_prospects), 0);
+  // Busiest batch by interest, to tell the story in one line.
+  const busiest = demand
+    ? [...rows].sort((a, b) => (demand[b.batch_id]?.interested ?? 0) - (demand[a.batch_id]?.interested ?? 0))[0]
+    : null;
+  const busiestDemand = busiest && demand ? demand[busiest.batch_id] : null;
+  const unsetSeats = rows.filter((row) => row.calculated_seats_remaining == null).length;
   const seats = rows.reduce((sum, row) => sum + Math.max(0, toNumber(row.calculated_seats_remaining)), 0);
   const nearCapacity = rows.filter((row) => {
     const remaining = toNumber(row.calculated_seats_remaining);
@@ -493,15 +531,19 @@ function CapacityView({ rows }: { rows: AdmissionsBatchCapacityRow[] }) {
     <div className="space-y-4">
       {rows.length > 0 ? <section className="grid gap-3 sm:grid-cols-3">
         <PerformanceMetric label="Upcoming batches" value={formatNumber(rows.length)} detail="Batches represented in current admissions demand" />
-        <PerformanceMetric label="Hot prospects" value={formatNumber(hot)} detail="High-intent demand attached to upcoming batches" />
-        <PerformanceMetric label="Near capacity" value={formatNumber(nearCapacity)} detail={`${formatNumber(seats)} calculated seats remain across visible batches`} attention={nearCapacity > 0} />
+        {busiest && busiestDemand && busiestDemand.interested > 0 ? (
+          <PerformanceMetric label="Most wanted" value={busiest.course_name || "Batch"} detail={`${formatNumber(busiestDemand.interested)} interested in ${busiest.location || "this course"} · ${formatNumber(busiestDemand.ready)} ready to buy`} />
+        ) : (
+          <PerformanceMetric label="Hot prospects" value={formatNumber(hot)} detail="High-intent demand attached to upcoming batches" />
+        )}
+        <PerformanceMetric label="Near capacity" value={unsetSeats === rows.length ? "Seats not set" : formatNumber(nearCapacity)} detail={unsetSeats === rows.length ? "Set seats per batch in Course management to get a warning before one fills." : `${formatNumber(seats)} calculated seats remain across visible batches`} attention={nearCapacity > 0} />
       </section> : null}
 
       <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-950">
-        <PanelHeader eyebrow="Demand planning" title="Batch capacity & prospect pressure" href="/course-management" action="Manage batches" />
+        <PanelHeader eyebrow="Demand planning" title="Who wants each batch" href="/course-management" action="Manage batches" />
         {rows.length ? (
           <div className="divide-y divide-slate-100 dark:divide-slate-900">
-            {rows.map((row) => <CapacityRow key={row.batch_id} row={row} />)}
+            {rows.map((row) => <CapacityRow key={row.batch_id} row={row} demand={demand?.[row.batch_id] ?? null} />)}
           </div>
         ) : (
           <SimpleEmpty title="No upcoming batch data" detail="Batch capacity will appear when course schedules are available." />
@@ -658,17 +700,48 @@ function PriorityQueueRow({ row, compact = false }: { row: PriorityRow; compact?
   );
 }
 
-function CapacityRow({ row, compact = false }: { row: AdmissionsBatchCapacityRow; compact?: boolean }) {
+function CapacityRow({ row, compact = false, demand = null }: { row: AdmissionsBatchCapacityRow; compact?: boolean; demand?: BatchDemand | null }) {
   const remaining = row.calculated_seats_remaining == null ? null : toNumber(row.calculated_seats_remaining);
+  const days = row.start_date ? Math.ceil((Date.parse(`${row.start_date}T00:00:00Z`) - Date.now()) / 86_400_000) : null;
   return (
     <div className={`grid gap-2 px-5 py-4 ${compact ? "sm:grid-cols-[minmax(0,1fr)_90px_90px]" : "sm:grid-cols-[minmax(220px,1fr)_100px_100px_100px_110px_120px]"} sm:items-center`}>
-      <div className="min-w-0"><div className="truncate text-sm font-semibold text-slate-900 dark:text-white">{row.course_name || row.batch_code || "Batch"}</div><div className="mt-0.5 text-xs text-slate-500">{[row.batch_code, row.location, row.start_date ? formatDate(row.start_date) : null].filter(Boolean).join(" · ")}</div></div>
-      <MiniMetric label="Hot" value={formatNumber(row.hot_prospects)} />
+      {/* Batch codes are internal; people read course, place and date. */}
+      <div className="min-w-0"><div className="truncate text-sm font-semibold text-slate-900 dark:text-white">{row.course_name || "Batch"}</div><div className="mt-0.5 text-xs text-slate-500" title={row.batch_code ?? undefined}>{[row.location, row.start_date ? formatDate(row.start_date) : null, days != null && days >= 0 ? (days === 0 ? "starts today" : `in ${days} ${days === 1 ? "day" : "days"}`) : null].filter(Boolean).join(" · ")}</div></div>
+      {demand ? (
+        <div title="Leads interested in this course here, or who haven't said where yet (shared across dates)"><div className="text-[10px] text-slate-400">Interested</div><div className="mt-0.5 text-sm font-semibold text-slate-800 dark:text-slate-100">{formatNumber(demand.interested)}{demand.ready ? <span className="ml-1 text-xs font-semibold text-emerald-700 dark:text-emerald-300">· {formatNumber(demand.ready)} ready</span> : null}</div></div>
+      ) : (
+        <MiniMetric label="Hot" value={formatNumber(row.hot_prospects)} />
+      )}
       <MiniMetric label="Seats" value={remaining == null ? "—" : formatNumber(remaining)} />
       {!compact ? <MiniMetric label="Enrolled" value={formatNumber(row.enrolled_count)} /> : null}
       {!compact ? <MiniMetric label="Payment" value={formatNumber(row.payment_pending)} /> : null}
       {!compact ? <MiniMetric label="Needs reply" value={formatNumber(row.needs_reply)} /> : null}
     </div>
+  );
+}
+
+function StalePaymentCallout({ extras }: { extras: AdmissionsExtras | null }) {
+  const stale = extras?.stalePayment ?? [];
+  if (!stale.length) return null;
+  return (
+    <section aria-label="Paying for weeks" className="rounded-2xl border border-emerald-200 bg-emerald-50/60 p-4 dark:border-emerald-900/50 dark:bg-emerald-950/20">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <h2 className="text-sm font-semibold text-emerald-900 dark:text-emerald-100">
+          {formatNumber(stale.length)} {stale.length === 1 ? "lead has" : "leads have"} been at Payment pending for over a week. Did they pay?
+        </h2>
+        <span className="text-xs text-emerald-800 dark:text-emerald-300">Check the bank or gateway, then Mark enrolled in the Inbox, or move them back.</span>
+      </div>
+      <ul className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+        {stale.slice(0, 12).map((lead) => (
+          <li key={lead.id}>
+            <Link href={`/conversations?lead=${lead.id}`} className="flex items-center justify-between gap-2 rounded-xl bg-white px-3 py-2 text-xs transition hover:text-violet-700 dark:bg-slate-950">
+              <span className="min-w-0"><span className="block truncate font-semibold text-slate-900 dark:text-white">{lead.name}</span><span className="block truncate text-slate-500">{lead.course ?? "Course not set"}</span></span>
+              <span className="shrink-0 font-semibold text-emerald-800 dark:text-emerald-300">{lead.days}d</span>
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 
