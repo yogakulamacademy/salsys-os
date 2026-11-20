@@ -396,19 +396,6 @@ export default async function HomePage({ searchParams }: HomePageProps) {
           evidenceState={periodAnalytics.available.leads ? "observed" : "unknown"}
           definition="Leads created in the selected period. Missing period evidence stays unknown rather than substituting current snapshot totals."
         />
-        {story ? (
-          <KpiCard
-            icon={<MessageSquareText size={18} />}
-            label="Waiting for a reply"
-            value={story.waitingThisWeek.toLocaleString("en-IN")}
-            chip={{ text: story.waitingNow ? `${story.waitingNow.toLocaleString("en-IN")} wrote in the last 3 days` : "None in the last 3 days", tone: story.waitingNow ? "warn" : "flat" }}
-            trend={null}
-            href="/conversations"
-            evidenceLabel="Inbox reply state"
-            evidenceState="observed"
-            definition="People whose last message in the past 7 days has no reply yet (the Inbox Waiting tab). Older unanswered chats are counted under Win back."
-          />
-        ) : null}
         <KpiCard
           icon={<UserRoundCheck size={18} />}
           label="Qualified"
@@ -447,6 +434,19 @@ export default async function HomePage({ searchParams }: HomePageProps) {
           evidenceState="partial"
           definition="Paid minus refunded CRM payment records in the selected period. Not yet reconciled to bank or payment-provider settlement."
         />
+        {story ? (
+          <KpiCard
+            icon={<MessageSquareText size={18} />}
+            label="Waiting for a reply"
+            value={story.waitingThisWeek.toLocaleString("en-IN")}
+            chip={{ text: story.waitingNow ? `${story.waitingNow.toLocaleString("en-IN")} wrote in the last 3 days` : "None in the last 3 days", tone: story.waitingNow ? "warn" : "flat" }}
+            trend={null}
+            href="/conversations"
+            evidenceLabel="Inbox reply state"
+            evidenceState="observed"
+            definition="People whose last message in the past 7 days has no reply yet (the Inbox Waiting tab). Older unanswered chats are counted under Win back."
+          />
+        ) : null}
       </section>
 
       {/* 1920x1080 layout (owner-approved mockup, 20 Nov 2026): equal three-column rows. */}

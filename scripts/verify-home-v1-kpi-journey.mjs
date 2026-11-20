@@ -20,7 +20,9 @@ const pulseEnd = pulseStart >= 0 ? home.indexOf("</section>", pulseStart) : -1;
 const pulse = pulseEnd > pulseStart ? home.slice(pulseStart, pulseEnd) : "";
 const labels = [...pulse.matchAll(/\slabel="([^"]+)"/g)].map((match) => match[1]);
 assert(
-  labels.join("|") === "Leads|Qualified|Pipeline value|Recorded collections",
+  // The four executive KPIs keep their order; "Waiting for a reply" may follow
+  // them as a fifth, operational number (owner-approved Home layout, 20 Nov 2026).
+  ["Leads|Qualified|Pipeline value|Recorded collections", "Leads|Qualified|Pipeline value|Recorded collections|Waiting for a reply"].includes(labels.join("|")),
   "The executive KPI order must be Leads, Qualified, Open Pipeline, Recorded Collections.",
 );
 assert(
