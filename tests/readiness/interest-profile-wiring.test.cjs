@@ -15,7 +15,7 @@ test('interest profile reads are scoped to the business and to visible leads', (
 
 test('Customer 360 passes only leads the user can already see', () => {
   const page = read('app/customer-360/[personId]/page.tsx');
-  assert.match(page, /getInterestProfile\(createAdminClient\(\), organizationId, accessibleIds\)/);
+  assert.match(page, /getInterestProfile\(admin, organizationId, accessibleIds\)/);
   assert.match(page, /<InterestProfileCard profile=\{interestProfile\} \/>/);
 });
 
@@ -25,4 +25,13 @@ test('Customer 360 loads only this person\'s leads, so older contacts open too',
   assert.doesNotMatch(page, /getLeads\(\)/);
   const data = read('lib/data.ts');
   assert.match(data, /query = query\.in\("id", options\.ids\.slice\(0, 200\)\)/);
+});
+
+test('person summary is read after the access check, scoped, and never fatal', () => {
+  const page = read('app/customer-360/[personId]/page.tsx');
+  const access = page.indexOf('if (!accessibleLeads.length) notFound();');
+  const viewRead = page.indexOf('admin\n        .from("v_person_360_operational")');
+  assert.ok(access > 0 && viewRead > access, 'view read happens after the access check');
+  assert.match(page.slice(viewRead, viewRead + 600), /\.eq\("organization_id", organizationId\)\s*\.eq\("person_id", personId\)/);
+  assert.doesNotMatch(page, /Unable to load customer relationship summary/);
 });

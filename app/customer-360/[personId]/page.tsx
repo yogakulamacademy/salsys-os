@@ -125,11 +125,15 @@ export default async function Customer360DetailPage({
   const accessibleIds = accessibleLeads.map((lead) => lead!.id);
 
   // Interest profile: admin reads, scoped to this business and to leads this user can already see.
-  const interestProfilePromise = getInterestProfile(createAdminClient(), organizationId, accessibleIds);
+  const admin = createAdminClient();
+  const interestProfilePromise = getInterestProfile(admin, organizationId, accessibleIds);
 
   const [personResult, tasksResult, paymentsResult, enrollmentsResult, conversationsResult] =
     await Promise.all([
-      supabase
+      // Read with the server client: under row-level security this view times
+      // out. Access was already checked above (this person's leads are visible
+      // to the user), and the read is scoped to this business and person.
+      admin
         .from("v_person_360_operational")
         .select(
           "person_id,person_status,latest_lead_name,person_created_at,verified_identifier_count,session_count,sessions_30d,touchpoint_count,page_view_count,last_message_at,latest_lead_engagement_score,latest_lead_behaviour_temperature,latest_lead_behaviour_reason",
@@ -168,11 +172,7 @@ export default async function Customer360DetailPage({
         .limit(20),
     ]);
 
-  if (personResult.error) {
-    throw new Error(`Unable to load customer relationship summary: ${personResult.error.message}`);
-  }
-
-  const person = (personResult.data ?? null) as PersonRow | null;
+  const person = (personResult.error ? null : personResult.data ?? null) as PersonRow | null;
   const interestProfile = await interestProfilePromise;
   const tasks = tasksResult.error ? [] : ((tasksResult.data ?? []) as TaskRow[]);
   const payments = paymentsResult.error ? [] : ((paymentsResult.data ?? []) as PaymentRow[]);
