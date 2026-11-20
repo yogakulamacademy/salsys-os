@@ -23,6 +23,12 @@ export function HomeTodayStrip({ story, aiMoves24h }: { story: HomeStory; aiMove
         {extras ? <p className="text-[13px] text-copy-muted">{extras}</p> : null}
       </div>
       <div className="flex flex-wrap gap-2.5">
+        {story.saysPaid.length ? (
+          <Link href="/leads#says-paid" className="inline-flex h-11 items-center gap-2 rounded-xl bg-emerald-700 px-4 text-sm font-semibold text-white hover:bg-emerald-800">
+            Check payments they say they made
+            <span className="rounded-full bg-white/20 px-2 py-0.5 text-xs">{story.saysPaid.length.toLocaleString("en-IN")}</span>
+          </Link>
+        ) : null}
         {story.waitingNow ? (
           <Link href="/conversations" className="inline-flex h-11 items-center gap-2 rounded-xl bg-brand-700 px-4 text-sm font-semibold text-white hover:bg-brand-800">
             <MessageCircleReply size={16} aria-hidden="true" /> Reply now

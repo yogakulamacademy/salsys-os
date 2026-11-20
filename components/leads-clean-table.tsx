@@ -486,7 +486,10 @@ export function LeadsCleanTable({
                             <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-full text-[10px] font-bold ${avatarTone(lead.currentContactChannel)}`}>{initials(lead.name || lead.leadCode)}</span>
                             <div className="min-w-0">
                               <div className="max-w-[220px] truncate text-[12px] font-semibold text-copy-strong">{lead.name || lead.leadCode}</div>
-                              <div className="mt-0.5 truncate text-[10px] text-copy-subtle">{lead.leadCode}{lead.country ? ` · ${lead.country}` : ""}</div>
+                              <div className="mt-0.5 truncate text-[10px] text-copy-subtle" title={tableEvidence[lead.id]?.countryInferred ? "Worked out from phone code, course-link visit, messages or rupee quotes" : undefined}>
+                                {lead.leadCode}
+                                {(tableEvidence[lead.id]?.country ?? lead.country) ? ` · ${tableEvidence[lead.id]?.country ?? lead.country}${tableEvidence[lead.id]?.countryInferred ? " (likely)" : ""}` : ""}
+                              </div>
                             </div>
                           </div>
                         </td>
@@ -498,14 +501,24 @@ export function LeadsCleanTable({
                             <SourceIcon source={lead.firstTouchSource} />
                             <span className="truncate text-[11px] font-medium text-copy">{sourceLabel(lead.firstTouchSource || "Unknown")}</span>
                           </div>
-                          <div className="mt-0.5 max-w-[160px] truncate text-[10px] text-copy-subtle">{lead.firstTouchCampaign || lead.firstTouchMedium || "—"}</div>
+                          {(() => {
+                            const detail = lead.firstTouchCampaign || lead.firstTouchMedium || "";
+                            // "Unattributed" on every row tells the reader nothing.
+                            return detail && !/^(unattributed|\(not set\)|none|unknown)$/i.test(detail.trim())
+                              ? <div className="mt-0.5 max-w-[160px] truncate text-[10px] text-copy-subtle">{detail}</div>
+                              : null;
+                          })()}
                         </td>
                       ) : null}
 
                       {visibleColumns.includes("course") ? (
                         <td className="px-3 py-3">
                           <div className="max-w-[220px] truncate text-[12px] font-medium text-copy">{lead.course || "—"}</div>
-                          <div className="mt-0.5 max-w-[220px] truncate text-[10px] text-copy-subtle">{intel?.batch_code || lead.location || "Not selected"}</div>
+                          <div className="mt-0.5 max-w-[220px] truncate text-[10px] text-copy-subtle">
+                            {intel?.batch_code || lead.location || (tableEvidence[lead.id]?.value != null
+                              ? `Worth about ${formatValue(tableEvidence[lead.id]!.value!, tableEvidence[lead.id]?.currency ?? "INR")}`
+                              : lead.course ? "Batch not chosen" : "Course not known yet")}
+                          </div>
                         </td>
                       ) : null}
 
@@ -546,7 +559,12 @@ export function LeadsCleanTable({
 
                       {visibleColumns.includes("next") ? (
                         <td className="px-3 py-3">
-                          <div className="max-w-[165px] text-[11px] font-medium text-copy">{nextAction(lead, intel)}</div>
+                          <div className={`max-w-[180px] text-[11px] font-medium ${tableEvidence[lead.id]?.saysPaid ? "text-emerald-700 dark:text-emerald-300" : tableEvidence[lead.id]?.waitingSince ? "text-rose-700 dark:text-rose-300" : "text-copy"}`}>
+                            {nextAction(lead, intel, tableEvidence[lead.id])}
+                          </div>
+                          {tableEvidence[lead.id]?.waitingSince && tableEvidence[lead.id]?.lastInboundText ? (
+                            <div className="mt-0.5 max-w-[180px] truncate text-[10px] text-copy-subtle" title={tableEvidence[lead.id]!.lastInboundText!}>&ldquo;{tableEvidence[lead.id]!.lastInboundText}&rdquo;</div>
+                          ) : null}
                           {lead.nextFollowupAt ? <div className="mt-0.5 text-[10px] text-copy-subtle">{formatDate(lead.nextFollowupAt)}</div> : null}
                         </td>
                       ) : null}
@@ -772,15 +790,26 @@ function avatarTone(channel: LeadOverview["currentContactChannel"]) {
   return "bg-violet-100 text-violet-700";
 }
 
-function nextAction(lead: LeadOverview, intel: LeadListIntelligence | null) {
+function nextAction(lead: LeadOverview, intel: LeadListIntelligence | null, evidence?: LeadsTableEvidence) {
+  // What the lead last did beats any schedule: someone who says they paid, or
+  // who is waiting for an answer, comes first.
+  if (evidence?.saysPaid) return "Says they paid · check and mark enrolled";
+  if (evidence?.waitingSince) return `Reply · waiting ${relativeDate(evidence.waitingSince).replace(/ ago$/, "")}`;
   const followup = lead.nextFollowupAt ? Date.parse(lead.nextFollowupAt) : Number.NaN;
   if (Number.isFinite(followup) && followup < Date.now()) return "Follow-up overdue";
   if (lead.stage === "payment_pending") return "Follow payment";
-  if (!intel?.owner_name && !lead.owner) return "Assign owner";
   if (intel?.aging_status === "stuck") return "Review stalled lead";
   if (lead.stage === "new") return "Make first contact";
   if (lead.stage === "qualified" || lead.stage === "high_intent") return "Move toward enrollment";
   return "Continue conversation";
+}
+
+function formatValue(amount: number, currency: string) {
+  try {
+    return new Intl.NumberFormat(currency === "INR" ? "en-IN" : "en-US", { style: "currency", currency, maximumFractionDigits: 0 }).format(amount);
+  } catch {
+    return `${currency} ${Math.round(amount).toLocaleString("en-IN")}`;
+  }
 }
 
 function isOverdue(value?: string) {

@@ -11,6 +11,7 @@ import {
 } from "@/lib/leads-attribution-scope";
 import { parseLeadsWorkspaceParams } from "@/lib/leads-data";
 import { getLeadsTableEvidence } from "@/lib/leads-table-evidence";
+import { getHomeStory } from "@/lib/home-story-data";
 import { isMockMode } from "@/lib/data";
 import { createClient } from "@/lib/supabase/server";
 import { requireCurrentOrganizationId } from "@/lib/workspace";
@@ -41,8 +42,11 @@ export default async function LeadsPage({ searchParams }: LeadsPageProps) {
   const filters = parseLeadsWorkspaceParams(params);
   const attributionScope = parseLeadsAttributionScope(params);
   const workspace = await getLeadsWorkspacePageWithAttributionScope(filters, attributionScope);
-  const tableEvidence = await getLeadsTableEvidence(workspace.leads);
   const mock = isMockMode();
+  const [tableEvidence, story] = await Promise.all([
+    getLeadsTableEvidence(workspace.leads),
+    mock ? Promise.resolve(null) : getHomeStory(),
+  ]);
   const notice = one(params.notice);
   const error = one(params.error);
 
@@ -108,7 +112,7 @@ export default async function LeadsPage({ searchParams }: LeadsPageProps) {
         </Notice>
       ) : null}
 
-      <LeadsOverview summary={workspace.summary} />
+      <LeadsOverview summary={workspace.summary} story={story} />
 
       <LeadsAttributionScopeBar scope={attributionScope} />
 
