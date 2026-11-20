@@ -131,18 +131,20 @@ export function ConversationsSidebar({
     }
   }
   const listRef = useRef<HTMLDivElement | null>(null);
-  const sentinelRef = useRef<HTMLDivElement | null>(null);
   const hasMore = Boolean(pagination && pagination.filter !== "waiting" && pagination.page * pagination.pageSize < pagination.totalMatching);
+  // Near the end of the list, load the next 50 (scroll position, not an
+  // IntersectionObserver, so it also works in scaled or embedded views).
+  const loadMoreRef = useRef<() => void>(() => {});
   useEffect(() => {
     const root = listRef.current;
-    const target = sentinelRef.current;
-    if (!root || !target || !hasMore) return;
-    const observer = new IntersectionObserver((entries) => {
-      if (entries.some((entry) => entry.isIntersecting)) loadMore();
-    }, { root, rootMargin: "0px 0px 240px 0px" });
-    observer.observe(target);
-    return () => observer.disconnect();
-  });
+    if (!root) return;
+    const onScroll = () => {
+      if (root.scrollTop + root.clientHeight >= root.scrollHeight - 320) loadMoreRef.current();
+    };
+    root.addEventListener("scroll", onScroll, { passive: true });
+    return () => root.removeEventListener("scroll", onScroll);
+  }, []);
+  loadMoreRef.current = () => loadMore();
   function loadMore() {
     if (!pagination || !hasMore || listLoading) return;
     const params = new URLSearchParams(searchParams.toString());
@@ -530,7 +532,7 @@ export function ConversationsSidebar({
             return visible.map(renderRow);
           })()
         )}
-        {hasMore ? <div ref={sentinelRef} className="ibx-list-sentinel" aria-hidden="true">{listLoading === "more" ? "Loading more…" : ""}</div> : null}
+        {hasMore ? <div className="ibx-list-sentinel" aria-hidden="true">{listLoading === "more" ? "Loading more…" : ""}</div> : null}
         {!serverMode && filteredLeads.length > visibleCount ? <div className="p-3 text-center"><button type="button" className="btn-secondary w-full" onClick={() => setVisibleCount(count => count + 50)}>Show more conversations</button></div> : null}
       </div>
 
