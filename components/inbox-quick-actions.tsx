@@ -1,14 +1,16 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import {
   ArrowUpRight, CalendarDays, IndianRupee, MessageCircle, MoreHorizontal, Phone, PhoneCall, X,
 } from "lucide-react";
 
 import type { QuickReplies } from "@/lib/inbox-quick-replies";
+import { showInboxToast } from "@/lib/inbox-toast";
 
-type ServerAction = (formData: FormData) => void | Promise<void>;
+/** Inline actions: return what happened instead of navigating (20 Nov 2026). */
+type ServerAction = (formData: FormData) => Promise<{ ok: boolean; message: string }>;
 
 export function InboxQuickActions({
   phone, canCall, profileHref, channel, replies, logAction, stageAction, mock,
@@ -24,6 +26,17 @@ export function InboxQuickActions({
 }) {
   const [note, setNote] = useState<string | null>(null);
   const [panel, setPanel] = useState<"none" | "log" | "lost">("none");
+  const [pending, startTransition] = useTransition();
+  const submitInline = (action: ServerAction | undefined) => (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!action || pending) return;
+    const formData = new FormData(event.currentTarget);
+    startTransition(async () => {
+      const result = await action(formData);
+      showInboxToast(result.message, result.ok ? "success" : "error");
+      if (result.ok) setPanel("none");
+    });
+  };
   const callNumber = phone?.replace(/[^\d+]/g, "") || "";
   const isInstagram = channel === "instagram";
 
@@ -79,7 +92,7 @@ export function InboxQuickActions({
       </div>
 
       {panel === "log" && logAction ? (
-        <form action={logAction} className="ibx-v3-quick-panel">
+        <form onSubmit={submitInline(logAction)} className="ibx-v3-quick-panel">
           <input type="hidden" name="channel" value="phone" />
           <input type="hidden" name="return_to" value="conversations" />
           <div className="ibx-v3-quick-row">
@@ -93,7 +106,7 @@ export function InboxQuickActions({
           <input id="quick-log-body" name="body" required className="input h-9 text-[12px]"
             placeholder="What happened? e.g. Interested in March batch, call back Friday" />
           <div className="ibx-v3-quick-row">
-            <button type="submit" className="btn-primary h-9 flex-1">Save call</button>
+            <button type="submit" disabled={pending} className="btn-primary h-9 flex-1">{pending ? "Saving…" : "Save call"}</button>
             <button type="button" className="btn-secondary h-9" onClick={() => setPanel("none")}>Cancel</button>
           </div>
           <p className="text-[10px] text-copy-subtle">Records the call on the lead; nothing is sent.</p>
@@ -101,12 +114,12 @@ export function InboxQuickActions({
       ) : null}
 
       {panel === "lost" && stageAction ? (
-        <form action={stageAction} className="ibx-v3-quick-panel ibx-v3-quick-panel-danger">
+        <form onSubmit={submitInline(stageAction)} className="ibx-v3-quick-panel ibx-v3-quick-panel-danger">
           <input type="hidden" name="stage" value="lost" />
           <p className="text-[12px] font-semibold text-copy-strong">Close this lead as lost?</p>
           <p className="text-[11px] text-copy-muted">It moves to the Lost stage and is recorded in the lead history. You can change the stage back any time.</p>
           <div className="ibx-v3-quick-row">
-            <button type="submit" className="h-9 flex-1 rounded-lg bg-rose-700 px-3 text-[12px] font-semibold text-white">Yes, mark lost</button>
+            <button type="submit" disabled={pending} className="h-9 flex-1 rounded-lg bg-rose-700 px-3 text-[12px] font-semibold text-white disabled:opacity-60">{pending ? "Saving…" : "Yes, mark lost"}</button>
             <button type="button" className="btn-secondary h-9" onClick={() => setPanel("none")}>Keep open</button>
           </div>
         </form>

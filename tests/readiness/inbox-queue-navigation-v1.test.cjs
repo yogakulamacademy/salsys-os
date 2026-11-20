@@ -10,7 +10,7 @@ function parts(href) {
   return { path: url.pathname, query: url.searchParams };
 }
 
-test("search changes clear a stale selected conversation and transient send notices", () => {
+test("search changes keep the open conversation and clear transient send notices", () => {
   const previous = "lead=old-lead&q=old&page=6&sort=activity_desc&scope=mine&channel=instagram&notice=sent&wamid=secret-id&error=legacy";
   const next = parts(nextInboxQueueHref(previous, "q", "new search"));
   assert.equal(next.path, "/conversations");
@@ -18,7 +18,8 @@ test("search changes clear a stale selected conversation and transient send noti
   assert.equal(next.query.get("scope"), "mine");
   assert.equal(next.query.get("sort"), "activity_desc");
   assert.equal(next.query.get("channel"), "instagram");
-  for (const key of ["lead", "page", "notice", "wamid", "error"]) {
+  assert.equal(next.query.get("lead"), "old-lead"); // the open chat stays open (20 Nov 2026)
+  for (const key of ["page", "notice", "wamid", "error"]) {
     assert.equal(next.query.has(key), false, key);
   }
 });
@@ -32,7 +33,7 @@ test("filter, scope, priority and channel changes discard old thread selection",
     assert.equal(next.query.get(key), value);
     assert.equal(next.query.get("q"), "fee");
     assert.equal(next.query.get("sort"), "activity_desc");
-    assert.equal(next.query.has("lead"), false);
+    assert.equal(next.query.has("lead"), true); // the open chat stays open (owner request, 20 Nov 2026)
     assert.equal(next.query.has("page"), false);
   }
 });
@@ -47,14 +48,14 @@ test("pagination retains queue context and selected thread is cleared", () => {
   assert.equal(next.query.get("sort"), "activity_desc");
   assert.equal(next.query.get("filter"), "reply");
   assert.equal(next.query.get("channel"), "instagram");
-  assert.equal(next.query.has("lead"), false);
+  assert.equal(next.query.has("lead"), true); // the open chat stays open (owner request, 20 Nov 2026)
 });
 
-test("reset clears all queue and selected detail state", () => {
+test("reset clears all queue state and keeps the open chat", () => {
   const href = resetInboxQueueHref(
     "lead=old&page=4&q=lead&sort=activity_desc&scope=mine&filter=reply&priority=high&channel=website&notice=sent&error=oops&wamid=123",
   );
-  assert.equal(href, "/conversations");
+  assert.equal(href, "/conversations?lead=old"); // the open chat stays open (20 Nov 2026)
 });
 
 test("default values canonicalize without reintroducing stale selected lead", () => {
@@ -65,7 +66,7 @@ test("default values canonicalize without reintroducing stale selected lead", ()
   for (const [key, value] of values) {
     const next = parts(nextInboxQueueHref(`lead=stale&${key}=anything`, key, value, key === "page"));
     assert.equal(next.query.has(key), false, key);
-    assert.equal(next.query.has("lead"), false);
+    assert.equal(next.query.has("lead"), true); // the open chat stays open (owner request, 20 Nov 2026)
   }
 });
 
@@ -74,7 +75,8 @@ test("Inbox sidebar actually uses pure URL guards, not its previous stale query 
   assert.match(sidebar, /nextInboxQueueHref\(searchParams\.toString\(\), key, value, preservePage\)/);
   assert.match(sidebar, /resetInboxQueueHref\(searchParams\.toString\(\)\)/);
   assert.match(sidebar, /params\.set\("lead", id\)/);
-  assert.match(sidebar, /setInboxParam\("page", String\(pagination\.page \+ 1\), true\)/);
+  // Offset paging: the next 50 rows are appended, not a new page render (20 Nov 2026).
+  assert.match(sidebar, /params\.set\("page", String\(pagination\.page \+ 1\)\)/);
   assert.doesNotMatch(sidebar, /for \(const key of \["q","page","sort","scope","filter","priority","channel"\]\) params\.delete/);
 });
 

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import type { InboxPage } from "@/lib/conversations-page-data";
 import { nextInboxQueueHref, resetInboxQueueHref } from "@/lib/inbox-query-navigation";
 import { CHANNEL_CHIPS, INBOX_TOPICS, INBOX_TOPIC_LABELS } from "@/lib/inbox-topics";
@@ -9,6 +9,8 @@ import { Clock3, Search, SlidersHorizontal, UsersRound, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { EmptyState } from "@/components/ui";
 import { DragScrollRow } from "@/components/drag-scroll-row";
+import { loadInboxListAction } from "@/app/conversations/list-actions";
+import { showInboxToast } from "@/lib/inbox-toast";
 import { personInitials } from "@/lib/ui-format";
 import { WAIT_KIND_LABEL, groupWaiting, type WaitKind } from "@/lib/inbox-waiting";
 import { compactMoney } from "@/lib/home-data-health";
@@ -52,11 +54,11 @@ type PriorityFilter = "all" | ConversationPriority;
 type ChannelFilter = "all" | "website" | "instagram" | "whatsapp";
 
 export function ConversationsSidebar({
-  leads,
+  leads: leadsProp,
   selectedId,
   currentUserId,
   canManageAssignments,
-  pagination,
+  pagination: paginationProp,
   autopilotLabel,
 }: {
   leads: ConversationLeadSummary[];
@@ -67,8 +69,15 @@ export function ConversationsSidebar({
   /** e.g. "AI Autopilot on · Instagram"; shown next to the Inbox title. */
   autopilotLabel?: { text: string; on: boolean } | null;
 }) {
-  const router = useRouter();
   const searchParams = useSearchParams();
+  // The list loads on its own (owner request, 20 Nov 2026): tabs, chips, owner and
+  // search fetch just the list, 50 rows at a time by offset, and keep the open chat.
+  const [live, setLive] = useState<{ leads: ConversationLeadSummary[]; pagination: Omit<InboxPage, "rows"> } | null>(null);
+  const [listLoading, setListLoading] = useState<"replace" | "more" | null>(null);
+  const listRequest = useRef(0);
+  useEffect(() => { setLive(null); }, [leadsProp, paginationProp]);
+  const leads = live?.leads ?? leadsProp;
+  const pagination = live?.pagination ?? paginationProp;
   const serverMode = Boolean(pagination);
   const explicitLeadId = searchParams.get("lead");
   const [search, setSearch] = useState(pagination?.search ?? "");
@@ -90,10 +99,55 @@ export function ConversationsSidebar({
     value: string,
     preservePage = false,
   ) {
-    router.replace(
-      nextInboxQueueHref(searchParams.toString(), key, value, preservePage),
-      { scroll: false },
-    );
+    const href = nextInboxQueueHref(searchParams.toString(), key, value, preservePage);
+    // Update the address without re-rendering the page; then load only the list.
+    window.history.replaceState(null, "", href);
+    void loadList(new URLSearchParams(href.split("?")[1] ?? ""), false);
+  }
+  async function loadList(params: URLSearchParams, append: boolean) {
+    const id = ++listRequest.current;
+    setListLoading(append ? "more" : "replace");
+    const query: Record<string, string> = {};
+    params.forEach((value, key) => { if (key !== "lead") query[key] = value; });
+    if (append) query.light = "1";
+    try {
+      const result = await loadInboxListAction(query);
+      if (id !== listRequest.current || !result.pagination) return;
+      const next = result.pagination;
+      setLive((current) => {
+        const base = current ?? (paginationProp ? { leads: leadsProp, pagination: paginationProp } : null);
+        if (!append || !base) return { leads: result.rows, pagination: next };
+        const seen = new Set(base.leads.map((lead) => lead.id));
+        return {
+          leads: [...base.leads, ...result.rows.filter((lead) => !seen.has(lead.id))],
+          // A further page skips the Waiting scan, so keep the counts already shown.
+          pagination: { ...next, counts: base.pagination.counts, channelCounts: base.pagination.channelCounts ?? next.channelCounts, topicCounts: base.pagination.topicCounts ?? next.topicCounts },
+        };
+      });
+    } catch {
+      if (id === listRequest.current) showInboxToast("The list did not load. Please try again.", "error");
+    } finally {
+      if (id === listRequest.current) setListLoading(null);
+    }
+  }
+  const listRef = useRef<HTMLDivElement | null>(null);
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
+  const hasMore = Boolean(pagination && pagination.filter !== "waiting" && pagination.page * pagination.pageSize < pagination.totalMatching);
+  useEffect(() => {
+    const root = listRef.current;
+    const target = sentinelRef.current;
+    if (!root || !target || !hasMore) return;
+    const observer = new IntersectionObserver((entries) => {
+      if (entries.some((entry) => entry.isIntersecting)) loadMore();
+    }, { root, rootMargin: "0px 0px 240px 0px" });
+    observer.observe(target);
+    return () => observer.disconnect();
+  });
+  function loadMore() {
+    if (!pagination || !hasMore || listLoading) return;
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("page", String(pagination.page + 1));
+    void loadList(params, true);
   }
   function updateScope(value: ScopeFilter) {
     setScope(value);
@@ -118,7 +172,9 @@ export function ConversationsSidebar({
     setPriorityFilter("all");
     setChannelFilter("all");
     if (serverMode) {
-      router.replace(resetInboxQueueHref(searchParams.toString()), { scroll: false });
+      const href = resetInboxQueueHref(searchParams.toString());
+      window.history.replaceState(null, "", href);
+      void loadList(new URLSearchParams(href.split("?")[1] ?? ""), false);
     }
   }
   function leadHref(id: string) {
@@ -143,9 +199,6 @@ export function ConversationsSidebar({
     return () => window.clearTimeout(timeout);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search, pagination?.search]);
-  const pageCount = pagination ? Math.max(1, Math.ceil(pagination.totalMatching / pagination.pageSize)) : 1;
-  const pageStart = pagination && pagination.totalMatching > 0 ? (pagination.page - 1) * pagination.pageSize + 1 : 0;
-  const pageEnd = pagination ? Math.min(pagination.page * pagination.pageSize, pagination.totalMatching) : 0;
   const allScopeCount = pagination?.counts.scope;
 
 
@@ -294,6 +347,9 @@ export function ConversationsSidebar({
           aria-label="Conversation filters"
           onKeyDown={handleFilterKeyDown}
         >
+          <InboxTab active={filter === "all"} onClick={() => updateFilter("all")} count={allScopeCount ?? activeScopedLeads.length}>
+            All
+          </InboxTab>
           <InboxTab active={filter === "waiting"} onClick={() => updateFilter("waiting")} count={pagination?.counts.waiting ?? replyCount}>
             Waiting
           </InboxTab>
@@ -305,9 +361,6 @@ export function ConversationsSidebar({
           </InboxTab>
           <InboxTab active={filter === "older" || filter === "reply"} onClick={() => updateFilter("older")} count={pagination?.counts.older ?? 0}>
             Older
-          </InboxTab>
-          <InboxTab active={filter === "all"} onClick={() => updateFilter("all")} count={allScopeCount ?? activeScopedLeads.length}>
-            All
           </InboxTab>
         </div>
         <div className="ibx-v2-search-line">
@@ -439,7 +492,7 @@ export function ConversationsSidebar({
       </div>
       )}
 
-      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain [scrollbar-width:thin]">
+      <div ref={listRef} aria-busy={listLoading === "replace"} className={`ibx-list-body min-h-0 flex-1 overflow-y-auto overscroll-contain [scrollbar-width:thin] ${listLoading === "replace" ? "is-loading" : ""}`}>
         {filteredLeads.length === 0 ? (
           <EmptyState compact variant="conversation"
             title={leads.length === 0 ? "No conversations yet" : filter === "snoozed" ? "Nothing snoozed" : filter === "unread" && !search && channelFilter === "all" && priorityFilter === "all" ? "You’re all caught up" : "No matching conversations"}
@@ -477,30 +530,26 @@ export function ConversationsSidebar({
             return visible.map(renderRow);
           })()
         )}
+        {hasMore ? <div ref={sentinelRef} className="ibx-list-sentinel" aria-hidden="true">{listLoading === "more" ? "Loading more…" : ""}</div> : null}
         {!serverMode && filteredLeads.length > visibleCount ? <div className="p-3 text-center"><button type="button" className="btn-secondary w-full" onClick={() => setVisibleCount(count => count + 50)}>Show more conversations</button></div> : null}
       </div>
 
-      {pagination && pageCount <= 1 ? null : (
-      <div className="shrink-0 border-t border-line px-4 py-2.5 text-[11px] text-copy-subtle">
-        {pagination ? (
-          <div className="flex items-center justify-between gap-2">
-            <span><UsersRound size={12} className="inline" /> {pageStart}–{pageEnd} of {pagination.totalMatching} matching leads</span>
-            <div className="flex items-center gap-2">
-              <button type="button" aria-label="Previous inbox page" disabled={pagination.page <= 1}
-                className="rounded border border-line px-2 py-1 disabled:opacity-40"
-                onClick={() => setInboxParam("page", String(pagination.page - 1), true)}>Prev</button>
-              <span>{pagination.page} / {pageCount}</span>
-              <button type="button" aria-label="Next inbox page" disabled={pagination.page >= pageCount}
-                className="rounded border border-line px-2 py-1 disabled:opacity-40"
-                onClick={() => setInboxParam("page", String(pagination.page + 1), true)}>Next</button>
-            </div>
-          </div>
-        ) : (
+      {pagination ? (
+        // Offset paging: the next 50 load when you reach the end of the list.
+        <div className="ibx-list-footer shrink-0 border-t border-line px-4 py-2 text-[11px] text-copy-subtle" aria-live="polite">
+          <span><UsersRound size={12} className="inline" /> {leads.length.toLocaleString("en-IN")} of {pagination.totalMatching.toLocaleString("en-IN")} shown</span>
+          {hasMore ? (
+            <button type="button" aria-label="Next inbox page" className="ibx-list-more" disabled={Boolean(listLoading)} onClick={loadMore}>
+              {listLoading === "more" ? "Loading…" : "Load 50 more"}
+            </button>
+          ) : null}
+        </div>
+      ) : (
+        <div className="shrink-0 border-t border-line px-4 py-2.5 text-[11px] text-copy-subtle">
           <span className="inline-flex items-center gap-1.5">
             <UsersRound size={12} /> {Math.min(visibleCount, filteredLeads.length)} of {filteredLeads.length} conversations loaded
           </span>
-        )}
-      </div>
+        </div>
       )}
     </aside>
   );

@@ -7,7 +7,9 @@ const read = (p) => fs.readFileSync(path.join(__dirname, '../..', p), 'utf8');
 test('managers assign the owner from the header; others see read-only text', () => {
   const owner = read('components/inbox-header-owner.tsx');
   assert.match(owner, /if \(!canAssign \|\| mock\)/);
-  assert.match(owner, /assignConversationOwnerAction\.bind\(null, leadId\)/);
+  // Assigns in place via the inline wrapper (20 Nov 2026), which calls assignConversationOwnerAction.
+  assert.match(owner, /assignOwnerInline\(leadId, formData\)/);
+  assert.match(read('app/conversations/inline-actions.ts'), /assignConversationOwnerAction\(leadId, fd\)/);
   assert.match(owner, /id="inbox-header-owner"/);
   assert.match(owner, /requestSubmit\(\)/);
   const page = read('app/conversations/page.tsx');

@@ -17,8 +17,12 @@ const migration=read('supabase/migrations/20261104143500_inbox_resolution_v1.sql
 const composer=read('components/conversation-safe-composer.tsx');
 test('reference actions are real and do not substitute unrelated CRM task completion',()=>{
   assert.ok(page.includes('<InboxHeaderActions'));
-  assert.ok(header.includes("setConversationDoneAction.bind(null,leadId)"));
-  assert.ok(header.includes("snoozeConversationAction.bind(null,leadId)"));
+  // In place with a toast (20 Nov 2026): inline wrappers around the same actions.
+  assert.ok(header.includes("run(setDoneInline"));
+  assert.ok(header.includes("run(snoozeInline"));
+  const inline=read('app/conversations/inline-actions.ts');
+  assert.ok(inline.includes("setConversationDoneAction(leadId, fd)"));
+  assert.ok(inline.includes("snoozeConversationAction(leadId, fd)"));
   assert.ok(header.includes("document.getElementById('inbox-next-steps')"));
   assert.ok(header.includes('Mark done'));
   assert.ok(header.includes('Reopen'));

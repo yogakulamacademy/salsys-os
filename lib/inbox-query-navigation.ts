@@ -6,7 +6,9 @@
  * Pure URL builder: no browser navigation, messaging, reads, or CRM writes.
  */
 const inboxFilters = new Set(["filter", "priority", "channel", "topic"]);
-const staleDetailParams = ["lead", "notice", "error", "wamid"];
+// The open chat stays open while the list changes (owner request, 20 Nov 2026);
+// only one-time result params are dropped.
+const staleDetailParams = ["notice", "error", "wamid"];
 
 function inboxHref(params: URLSearchParams): string {
   const search = params.toString();
