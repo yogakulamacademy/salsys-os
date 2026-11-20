@@ -23,6 +23,9 @@ const nextConfig: NextConfig = {
   // Keep local visual QA artifacts separate from a production build.
   distDir: process.env.SALSYS_BUILD_DIR || '.next',
   outputFileTracingRoot: process.cwd(),
+  // Self-hosting (Docker on our own server) needs the standalone server
+  // bundle. Vercel builds leave this unset and are unchanged.
+  ...(process.env.SALSYS_STANDALONE === '1' ? { output: 'standalone' as const } : {}),
   reactStrictMode: true,
   devIndicators: false,
   poweredByHeader: false,

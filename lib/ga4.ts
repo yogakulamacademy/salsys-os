@@ -1,5 +1,7 @@
 import { getVercelOidcToken } from '@vercel/oidc';
 
+import { googleKeyClient } from '@/lib/google-key-credentials';
+
 
 
 import {
@@ -417,6 +419,9 @@ implements SubjectTokenSupplier {
 
 
 export function createGa4AuthClient() {
+  const keyClient = googleKeyClient(['https://www.googleapis.com/auth/analytics.readonly']);
+  if (keyClient) return keyClient;
+
 
   const config = legacyGa4Config();
 

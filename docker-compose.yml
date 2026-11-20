@@ -1,0 +1,18 @@
+# Self-hosting: the CRM app; the scheduler that replaces Vercel Cron runs
+# inside the same container (scripts/self-host/start.mjs).
+# In Coolify you can deploy the Dockerfile directly instead of this file.
+# Put every production environment variable in .env.production (copy them from
+# Vercel). SALSYS_EVENT_QUEUE=off is set in the image already.
+services:
+  app:
+    build:
+      context: .
+      args:
+        NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL}
+        NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY:-}
+        NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY:-}
+    restart: unless-stopped
+    env_file:
+      - .env.production
+    ports:
+      - "3000:3000"

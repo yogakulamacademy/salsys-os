@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+import { requestGeoFromHeaders } from '@/lib/request-geo';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { normalizeLeadPhone } from '@/lib/phone-normalization';
 import { courseFromText } from '@/lib/lead-source-context';
@@ -444,7 +445,7 @@ export async function POST(request: NextRequest) {
     // de-duplication matches on it); the E.164 form is recorded alongside.
     const phoneNormalization = normalizeLeadPhone(payload.phone, {
       formCountry: payload.country,
-      ipCountry: request.headers.get('x-vercel-ip-country'),
+      ipCountry: requestGeoFromHeaders(request.headers).country,
       timezone: payload.timezone,
     });
 
