@@ -513,11 +513,11 @@ export function LeadsCleanTable({
 
                       {visibleColumns.includes("course") ? (
                         <td className="px-3 py-3">
-                          <div className="max-w-[220px] truncate text-[12px] font-medium text-copy">{lead.course || "—"}</div>
+                          <div className={`max-w-[220px] truncate text-[12px] font-medium ${hasCourse(lead.course) ? "text-copy" : "text-copy-subtle"}`}>{hasCourse(lead.course) ? lead.course : "Course not known yet"}</div>
                           <div className="mt-0.5 max-w-[220px] truncate text-[10px] text-copy-subtle">
                             {intel?.batch_code || lead.location || (tableEvidence[lead.id]?.value != null
                               ? `Worth about ${formatValue(tableEvidence[lead.id]!.value!, tableEvidence[lead.id]?.currency ?? "INR")}`
-                              : lead.course ? "Batch not chosen" : "Course not known yet")}
+                              : hasCourse(lead.course) ? "Batch not chosen" : "")}
                           </div>
                         </td>
                       ) : null}
@@ -530,7 +530,7 @@ export function LeadsCleanTable({
 
                       {visibleColumns.includes("stage") ? (
                         <td className="px-3 py-3">
-                          <div className="flex flex-wrap items-center gap-1.5"><StageBadge stage={lead.stage} /><IntentLabel intent={lead.intent} /></div>
+                          <div className="flex flex-wrap items-center gap-1.5"><StageBadge stage={lead.stage} />{lead.intent && lead.intent !== "unknown" ? <IntentLabel intent={lead.intent} /> : null}</div>
                         </td>
                       ) : null}
 
@@ -563,7 +563,7 @@ export function LeadsCleanTable({
                             {nextAction(lead, intel, tableEvidence[lead.id])}
                           </div>
                           {tableEvidence[lead.id]?.waitingSince && tableEvidence[lead.id]?.lastInboundText ? (
-                            <div className="mt-0.5 max-w-[180px] truncate text-[10px] text-copy-subtle" title={tableEvidence[lead.id]!.lastInboundText!}>&ldquo;{tableEvidence[lead.id]!.lastInboundText}&rdquo;</div>
+                            <div className="mt-0.5 max-w-[180px] truncate text-[10px] text-copy-subtle" title={tableEvidence[lead.id]!.lastInboundText!}>{describeMessage(tableEvidence[lead.id]!.lastInboundText!)}</div>
                           ) : null}
                           {lead.nextFollowupAt ? <div className="mt-0.5 text-[10px] text-copy-subtle">{formatDate(lead.nextFollowupAt)}</div> : null}
                         </td>
@@ -802,6 +802,19 @@ function nextAction(lead: LeadOverview, intel: LeadListIntelligence | null, evid
   if (lead.stage === "new") return "Make first contact";
   if (lead.stage === "qualified" || lead.stage === "high_intent") return "Move toward enrollment";
   return "Continue conversation";
+}
+
+function hasCourse(course?: string | null) {
+  return Boolean(course && !/^(not selected|unknown|—|-)$/i.test(course.trim()));
+}
+
+/** Their last message in plain words; shares and Instagram system notes get a label. */
+function describeMessage(text: string) {
+  if (/^Shared an Instagram (reel|post|video|image|story)/i.test(text)) return "Shared a post or reel";
+  if (/^\[Instagram ephemeral/i.test(text)) return "Sent a disappearing message (open Instagram)";
+  if (/^\[Instagram (ig_story|story)/i.test(text)) return "Replied to a story";
+  if (/^\[Instagram /i.test(text)) return "Sent something only Instagram can show";
+  return `\u201c${text}\u201d`;
 }
 
 function formatValue(amount: number, currency: string) {
