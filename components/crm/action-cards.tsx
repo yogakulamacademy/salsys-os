@@ -22,7 +22,7 @@ const TONE: Record<ActionCardItem["tone"], string> = {
 export function ActionCards({ items, label = "Do this now" }: { items: ActionCardItem[]; label?: string }) {
   if (!items.length) return null;
   return (
-    <section aria-label={label} className={`grid gap-3 sm:grid-cols-2 ${items.length >= 4 ? "xl:grid-cols-4" : "xl:grid-cols-3"}`}>
+    <section aria-label={label} className={`grid gap-3 sm:grid-cols-2 ${items.length >= 5 ? "lg:grid-cols-3 xl:grid-cols-5" : items.length === 4 ? "xl:grid-cols-4" : "xl:grid-cols-3"}`}>
       {items.map((card) => (
         <Link
           key={card.title}
