@@ -310,3 +310,74 @@ html.dark .ibx-v2.ibx-v5 .ibx-v5-actions-card .ibx-v3-quick-danger{color:#FF9C92
 
 /* Contact card */
 .ibx-v2.ibx-v5 .ibx-v2-profile-card{gap:8px;}
+
+/* ---------- 20 Nov 2026 fixes after the owner's review ---------- */
+
+/* 1. Chip rows stay on one line; drag, swipe or scroll sideways to see more. */
+.ibx-drag-row{display:flex!important;flex-wrap:nowrap!important;overflow-x:auto!important;overflow-y:hidden;
+  scrollbar-width:none;cursor:grab;user-select:none;-webkit-user-select:none;overscroll-behavior-x:contain;}
+.ibx-drag-row::-webkit-scrollbar{display:none;}
+.ibx-drag-row[data-dragging]{cursor:grabbing;scroll-behavior:auto;}
+.ibx-drag-row > *{flex:none!important;}
+.ibx-drag-row[data-fade-end]{-webkit-mask-image:linear-gradient(90deg,#000 calc(100% - 36px),transparent);mask-image:linear-gradient(90deg,#000 calc(100% - 36px),transparent);}
+.ibx-drag-row[data-fade-start]{-webkit-mask-image:linear-gradient(90deg,transparent,#000 36px);mask-image:linear-gradient(90deg,transparent,#000 36px);}
+.ibx-drag-row[data-fade-start][data-fade-end]{-webkit-mask-image:linear-gradient(90deg,transparent,#000 36px,#000 calc(100% - 36px),transparent);mask-image:linear-gradient(90deg,transparent,#000 36px,#000 calc(100% - 36px),transparent);}
+.ibx-v2.ibx-v5 .ibx-v3-channel-chips.ibx-drag-row,
+.ibx-v2.ibx-v5 .ibx-v3-topic-chips > .ibx-drag-row{flex-wrap:nowrap!important;overflow-x:auto!important;}
+
+/* 2. New messages stand out: tinted row, purple edge, bold name and text, purple time. */
+.ibx-v2.ibx-v5 .ibx-v4-row.ibx-unread{background:#F5F2FF;}
+.ibx-v2.ibx-v5 .ibx-v4-row.ibx-unread:hover{background:#EFEAFF;}
+.ibx-v2.ibx-v5 .ibx-v4-row.ibx-unread::before{content:"";position:absolute;left:0;top:8px;bottom:8px;width:3px;border-radius:0 3px 3px 0;background:var(--ibx5-accent);}
+.ibx-v2.ibx-v5 .ibx-v4-row.ibx-unread .truncate.font-semibold{font-weight:800!important;color:var(--ibx5-ink)!important;}
+.ibx-v2.ibx-v5 .ibx-v4-row.ibx-unread .ibx-row-text{font-weight:600;color:var(--ibx5-ink)!important;}
+.ibx-unread-dot{display:inline-block;width:8px;height:8px;margin-right:6px;border-radius:999px;background:var(--ibx5-accent,#5743C5);
+  vertical-align:middle;box-shadow:0 0 0 3px rgba(87,67,197,.18);}
+.ibx-unread-time{color:var(--ibx5-accent,#5743C5)!important;font-weight:800!important;}
+html.dark .ibx-v2.ibx-v5 .ibx-v4-row.ibx-unread{background:rgba(124,104,240,.14);}
+
+/* 3. More room for the chat: slimmer side columns, compact header, bars and composer. */
+@media (min-width:1601px){
+  .ibx-v2.ibx-v5 .conversation-workspace.inbox-context-open{
+    grid-template-columns:minmax(330px,380px) minmax(560px,1fr) minmax(340px,400px)!important;
+  }
+  .inbox-standalone-scope .ibx-v2.ibx-v5 .conversation-workspace{padding:14px 16px 16px;column-gap:14px;}
+}
+.ibx-v2.ibx-v5 .ibx-v5-chat-header{padding:10px 64px 10px 18px!important;}
+.ibx-v2.ibx-v5 .ibx-v5-head-actions .ibx-v3-head-snooze{flex:none!important;width:auto!important;}
+.ibx-v2.ibx-v5 .ibx-v5-head-actions .ibx-v3-head-snooze select{width:auto!important;min-width:0!important;font-size:13px!important;
+  font-weight:600!important;appearance:none;-webkit-appearance:none;}
+.ibx-v2.ibx-v5 .ibx-v5-head-actions .ibx-v3-head-btn:hover,
+.ibx-v2.ibx-v5 .ibx-v5-head-actions .ibx-v3-head-snooze:hover{border-color:var(--ibx5-accent-line)!important;background:var(--ibx5-accent-soft)!important;}
+.ibx-v2.ibx-v5 .ibx-autopilot{padding:7px 18px!important;font-size:12.5px!important;gap:8px!important;border-top:0!important;
+  border-bottom:1px solid var(--ibx5-line-soft);}
+.ibx-v2.ibx-v5 .ibx-autopilot button{height:30px;padding:0 10px!important;border-radius:8px!important;font-size:12px!important;}
+.ibx-v2.ibx-v5 .ibx-v2-center-tabs{height:42px!important;}
+.ibx-v2.ibx-v5 .ibx-v2-chat .overscroll-contain{padding-top:14px!important;padding-bottom:14px!important;}
+
+/* The suggestion never scrolls inside its own box; the messages above give way. */
+.inbox-standalone-scope .ibx-v2.ibx-v5 .ibx-v2-chat .ibx-v2-ai-toolbar{flex:none!important;overflow:visible!important;max-height:none!important;}
+.ibx-v5-reply-zone{padding:10px 16px 12px;gap:8px;}
+.ibx-v5-suggest-text{max-height:6.4em;overflow-y:auto;}
+.ibx-v2.ibx-v5 .ibx-v5-suggest-card{padding:10px 14px!important;gap:6px;}
+.ibx-v2.ibx-v5 .ibx-v5-suggest-actions .ibx-v4-suggest,.ibx-v5-suggest-alt{height:34px!important;}
+.ibx-v5-window-notice{padding:8px 12px;}
+
+/* Composer: one line that grows, no resize grip, no tall legacy textarea. */
+.ibx-v2.ibx-v5 [aria-label="Conversation composer"] textarea{min-height:38px!important;resize:none!important;font-size:14px!important;
+  border:0!important;box-shadow:none!important;}
+.ibx-v5-composer-tabs{padding:3px 4px;}
+.ibx-v5-mode-tab{height:28px;}
+.ibx-v5-composer-row{padding:2px 6px 6px 14px;}
+.ibx-v5-btn{height:36px;padding:0 14px;}
+
+/* 4. Profile card first, with Lead details and Edit folded inside it. */
+.ibx-v2.ibx-v5 .ibx-v5-profile{gap:10px!important;}
+.ibx-v2.ibx-v5 .ibx-v5-profile .ibx-v2-profile-heading{display:flex;align-items:center;gap:12px;}
+.ibx-v2.ibx-v5 .ibx-v5-profile .ibx-v2-profile-avatar{width:42px;height:42px;font-size:14px;}
+.ibx-v2.ibx-v5 .ibx-v5-profile .ibx-v2-profile-name strong{font-size:15px;}
+.ibx-v5-subfold,.ibx-v5-subfold-wrap{border-top:1px solid var(--ibx5-line-soft);padding:10px 0 0!important;margin:0!important;background:transparent!important;border-left:0;border-right:0;border-bottom:0;}
+.ibx-v5-subfold-wrap > .ibx-v5-subfold{border-top:0;padding-top:0!important;}
+.ibx-v5-subfold > summary{padding:0!important;}
+.ibx-v5-subfold[open] > summary{margin-bottom:8px;}
+.ibx-v5-subfold > section,.ibx-v5-subfold > div{border:0!important;padding-left:0!important;padding-right:0!important;background:transparent!important;}
