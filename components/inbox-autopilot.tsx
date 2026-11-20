@@ -67,10 +67,6 @@ export function InboxAutopilotHeaderButton({ leadId, state, canHandToAi }: { lea
   );
 }
 
-export function autopilotBarVisible(state: InboxAutopilotState) {
-  return state.status === "active" || state.status === "handed_over";
-}
-
 /** A follow-up is due today and the AI has written it. */
 export function InboxFollowupDraftCard({ followup }: { followup: InboxFollowupDraft }) {
   const [pending, start] = useTransition();
