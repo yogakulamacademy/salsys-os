@@ -59,7 +59,8 @@ test('lead queue precedes booking cards and retains table headers for an empty v
   await expect(page.getByText('No leads match this view', { exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Clear filters', exact: true })).toBeVisible();
   const table = await page.locator('table').boundingBox();
-  expect(table!.y).toBeLessThan(600);
+  // CRM tabs across the top (owner-approved mockups) add one row above the page.
+  expect(table!.y).toBeLessThan(700);
   await page.screenshot({ animations: 'disabled', path: 'test-results/leads-empty-desktop.png' });
 });
 
