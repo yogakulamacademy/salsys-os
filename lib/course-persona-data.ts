@@ -3,6 +3,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { learnPersona, PROVISIONAL_STAGES, STRONG_STAGES, type PersonaLead, type PersonaTraits } from "@/lib/course-persona";
+import { normalizeCountry } from "@/lib/home-command-center";
 import { getInterestProfilesForLeads } from "@/lib/interest-profile-data";
 
 export type CoursePersonaRow = {
@@ -45,7 +46,7 @@ export async function refreshCoursePersonas(admin: SupabaseClient, organizationI
     const list = byCourse.get(l.interested_course_id) ?? [];
     list.push({
       leadId: l.id, courseId: l.interested_course_id, stage: l.current_stage,
-      country: l.country || l.geo_country, channel: l.lead_creation_channel, profile: profiles.get(l.id) ?? null,
+      country: normalizeCountry(l.country) ?? normalizeCountry(l.geo_country), channel: l.lead_creation_channel, profile: profiles.get(l.id) ?? null,
     });
     byCourse.set(l.interested_course_id, list);
   }
