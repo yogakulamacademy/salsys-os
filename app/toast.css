@@ -1,6 +1,6 @@
-/* App-wide toasts (owner-approved reference, 20 Nov 2026): white card, soft tint
+/* App-wide toasts, bottom-right corner (owner request, 20 Nov 2026) (owner-approved reference, 20 Nov 2026): white card, soft tint
    from the left by tone, filled icon, title, optional text, close, Retry / Dismiss. */
-.app-toasts{position:fixed;top:78px;right:20px;z-index:1000;display:flex;flex-direction:column;gap:10px;
+.app-toasts{position:fixed;bottom:24px;right:20px;justify-content:flex-end;z-index:1000;display:flex;flex-direction:column;gap:10px;
   width:min(420px,calc(100vw - 32px));pointer-events:none;}
 .app-toast{pointer-events:auto;position:relative;display:grid;grid-template-columns:22px minmax(0,1fr) 24px;gap:12px;
   align-items:start;padding:15px 16px 15px 18px;border:1px solid #E7E5EE;border-radius:16px;background:#FFFFFF;
@@ -22,10 +22,12 @@
 .app-toast-actions button:hover{text-decoration:underline;}
 .app-toast-close{display:grid;place-items:center;width:24px;height:24px;border:0;border-radius:6px;background:none;color:#8A87A0;cursor:pointer;}
 .app-toast-close:hover{background:rgba(23,20,43,.06);color:#17142B;}
-.app-toast.is-leaving{opacity:0;transform:translateY(-6px);}
-@keyframes app-toast-in{from{opacity:0;transform:translateY(-8px);}to{opacity:1;transform:none;}}
+.app-toast.is-leaving{opacity:0;transform:translateY(6px);}
+@keyframes app-toast-in{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:none;}}
 @media (prefers-reduced-motion:reduce){.app-toast{animation:none;transition:none;}}
-@media (max-width:620px){.app-toasts{top:64px;right:16px;}}
+@media (max-width:620px){.app-toasts{bottom:16px;right:16px;}}
+/* Pages with the floating team button in the corner: sit just above it. */
+body:has(.inbox-standalone-scope) .app-toasts{bottom:84px;}
 html.dark .app-toast{border-color:rgba(255,255,255,.10);background:#1D1A2E;box-shadow:0 10px 30px rgba(0,0,0,.35);}
 html.dark .app-toast.is-success{background:linear-gradient(100deg,rgba(46,139,90,.22) 0%,#1D1A2E 45%);}
 html.dark .app-toast.is-info{background:linear-gradient(100deg,rgba(59,111,216,.22) 0%,#1D1A2E 45%);}
