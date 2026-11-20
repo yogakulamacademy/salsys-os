@@ -27,6 +27,7 @@ import { getUpcomingBatchesForQuickReplies } from "@/lib/inbox-quick-reply-data"
 import { InboxHeaderActions } from "@/components/inbox-header-actions";
 import { InboxLeadOverview } from "@/components/inbox-lead-overview";
 import { InboxOfferCard } from "@/components/inbox-offer-card";
+import { InboxOverview } from "@/components/inbox-overview";
 import { InboxLeadIntelligence } from "@/components/inbox-lead-intelligence";
 import { getLeadSourceForInbox } from "@/lib/lead-source-context-data";
 import { InboxHeaderOwner } from "@/components/inbox-header-owner";
@@ -327,7 +328,12 @@ export default async function ConversationsPage({
 
   const chat = !selected ? (
     <section className="inbox-unselected h-full bg-surface">
-      <EmptyState variant="conversation" title="Select a conversation" description="Choose a conversation on the left to see messages and customer details." />
+      {/* Nothing open: show what's waiting today instead of "Select a conversation". */}
+      <InboxOverview
+        rows={conversationSummary}
+        pagination={workspace.pagination}
+        hrefFor={(leadId) => `/conversations?lead=${leadId}`}
+      />
     </section>
   ) : (
     <section className="ibx-v2-chat flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-surface">

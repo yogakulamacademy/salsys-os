@@ -71,7 +71,9 @@ export function ConversationsSidebar({
   const [scope, setScope] = useState<ScopeFilter>(
     pagination?.scope ?? (currentUserId && !canManageAssignments ? "mine" : "team"),
   );
-  const [filter, setFilter] = useState<InboxFilter>(pagination?.filter ?? "waiting");
+  // Live inbox opens on Waiting; demo data (no server paging) keeps All.
+  const defaultFilter: InboxFilter = pagination ? "waiting" : "all";
+  const [filter, setFilter] = useState<InboxFilter>(pagination?.filter ?? defaultFilter);
   const [priorityFilter, setPriorityFilter] = useState<PriorityFilter>(pagination?.priority ?? "all");
   const [channelFilter, setChannelFilter] = useState<ChannelFilter>(pagination?.channel ?? "all");
   const [now, setNow] = useState(0);
@@ -108,7 +110,7 @@ export function ConversationsSidebar({
   function resetFilters() {
     setSearch("");
     setScope(currentUserId && !canManageAssignments ? "mine" : "team");
-    setFilter("waiting");
+    setFilter(defaultFilter);
     setPriorityFilter("all");
     setChannelFilter("all");
     if (serverMode) {
@@ -265,7 +267,7 @@ export function ConversationsSidebar({
   const hasFilters = Boolean(
     search ||
       scope !== (currentUserId && !canManageAssignments ? "mine" : "team") ||
-      filter !== "waiting" ||
+      filter !== defaultFilter ||
       priorityFilter !== "all" ||
       channelFilter !== "all" ||
       Boolean(pagination && (pagination.page > 1 || pagination.sort !== "activity_desc")),
