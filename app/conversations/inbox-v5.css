@@ -326,15 +326,16 @@ html.dark .ibx-v2.ibx-v5 .ibx-v5-actions-card .ibx-v3-quick-danger{color:#FF9C92
 .ibx-v2.ibx-v5 .ibx-v3-topic-chips > .ibx-drag-row{flex-wrap:nowrap!important;overflow-x:auto!important;}
 
 /* 2. New messages stand out: tinted row, purple edge, bold name and text, purple time. */
-.ibx-v2.ibx-v5 .ibx-v4-row.ibx-unread{background:#F5F2FF;}
-.ibx-v2.ibx-v5 .ibx-v4-row.ibx-unread:hover{background:#EFEAFF;}
+/* Legacy rows force white with !important, so this must too. */
+.ibx-v2.ibx-v5 .conversation-sidebar .ibx-v2-row.ibx-v4-row.ibx-unread{background:#F5F2FF!important;}
+.ibx-v2.ibx-v5 .conversation-sidebar .ibx-v2-row.ibx-v4-row.ibx-unread:hover{background:#EFEAFF!important;}
 .ibx-v2.ibx-v5 .ibx-v4-row.ibx-unread::before{content:"";position:absolute;left:0;top:8px;bottom:8px;width:3px;border-radius:0 3px 3px 0;background:var(--ibx5-accent);}
 .ibx-v2.ibx-v5 .ibx-v4-row.ibx-unread .truncate.font-semibold{font-weight:800!important;color:var(--ibx5-ink)!important;}
 .ibx-v2.ibx-v5 .ibx-v4-row.ibx-unread .ibx-row-text{font-weight:600;color:var(--ibx5-ink)!important;}
 .ibx-unread-dot{display:inline-block;width:8px;height:8px;margin-right:6px;border-radius:999px;background:var(--ibx5-accent,#5743C5);
   vertical-align:middle;box-shadow:0 0 0 3px rgba(87,67,197,.18);}
 .ibx-unread-time{color:var(--ibx5-accent,#5743C5)!important;font-weight:800!important;}
-html.dark .ibx-v2.ibx-v5 .ibx-v4-row.ibx-unread{background:rgba(124,104,240,.14);}
+html.dark .ibx-v2.ibx-v5 .conversation-sidebar .ibx-v2-row.ibx-v4-row.ibx-unread{background:rgba(124,104,240,.14)!important;}
 
 /* 3. More room for the chat: slimmer side columns, compact header, bars and composer. */
 @media (min-width:1601px){
