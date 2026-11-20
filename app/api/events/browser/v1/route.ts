@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 
 import { requestGeoFromHeaders } from '@/lib/request-geo';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { trackedLinkCodeFromEvent } from '@/lib/dm-links';
+import { linkVisitorFromTrackedLink } from '@/lib/tracked-link-identity';
 import {
   consumeTrackingRateLimit,
   corsHeadersForTrackingOrigin,
@@ -306,6 +308,18 @@ export async function POST(request: NextRequest) {
 
     const accepted = Boolean(data?.accepted);
     const duplicate = Boolean(data?.duplicate);
+
+    // DM-LINK: a visitor who arrived through a lead's tracked link becomes that
+    // lead's visitor, so this and later website visits count for them.
+    const linkCode = accepted && !duplicate ? trackedLinkCodeFromEvent(raw) : null;
+    if (linkCode) {
+      await linkVisitorFromTrackedLink(admin, {
+        organizationId: source.organizationId,
+        code: linkCode,
+        visitorId: event.anonymousVisitorId,
+        sessionKey: event.sessionKey,
+      });
+    }
     const rawEventId = data?.event_id ? String(data.event_id) : null;
 
     let processing: Record<string, unknown> | null = null;

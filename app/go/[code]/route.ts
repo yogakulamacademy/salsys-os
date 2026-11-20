@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 
 import { requestGeoFromHeaders } from "@/lib/request-geo";
-import { classifyLinkRequest, fallbackDestination, isAllowedDestination, isAppHost, isLinkCode } from "@/lib/dm-links";
+import { classifyLinkRequest, fallbackDestination, isAllowedDestination, isAppHost, isLinkCode, withLinkMarker } from "@/lib/dm-links";
 import { findBusinessByLinkDomain, getOrgSalesAiSettings } from "@/lib/org-sales-ai-settings";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -48,7 +48,10 @@ async function handle(request: NextRequest, code: string) {
       p_code: code, p_kind: kind, p_country: country, p_region: region, p_agent: agent,
     });
     const destination = typeof data === "string" ? data : null;
-    return redirect(isAllowedDestination(destination, settings.websiteHosts) ? destination : fallbackDestination(settings.websiteHosts));
+    if (!isAllowedDestination(destination, settings.websiteHosts)) return redirect(fallbackDestination(settings.websiteHosts));
+    // A person (not a preview bot) gets ?slk=<code> so the website tracker can
+    // link this visitor to the lead; the tracker removes it from the address bar.
+    return redirect(kind === "open" ? withLinkMarker(destination, code) : destination);
   } catch (error) {
     console.error("Tracked link visit not recorded", { error: error instanceof Error ? error.message : "unknown" });
     return redirect("https://salsysos.com/");

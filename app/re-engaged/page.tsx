@@ -278,19 +278,11 @@ export default async function ReEngagedPage({
               </div>
 
               <div className="mt-2 text-xs leading-5 text-slate-500">
-                Avg visit #
-                {formatDecimal(
-                  row.avg_visit_number,
-
-                  1,
-                )}
-                {" · "}
-                {formatDecimal(
-                  row.avg_days_to_lead,
-
-                  1,
-                )}{" "}
-                days to lead
+                {/* "Unknown" = no website visit before they became a lead (e.g. Instagram DMs);
+                    their later visits made the old average negative ("-4.2 days"). */}
+                {row.visit_bucket === "unknown" || Number(row.avg_days_to_lead) < 0
+                  ? "No website visit before they became a lead"
+                  : <>Avg visit #{formatDecimal(row.avg_visit_number, 1)} · {formatDecimal(row.avg_days_to_lead, 1)} days to lead</>}
               </div>
             </div>
           ))}

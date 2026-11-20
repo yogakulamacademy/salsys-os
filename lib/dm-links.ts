@@ -46,6 +46,34 @@ export function isLinkCode(code: string | null | undefined): code is string {
   return typeof code === "string" && /^[A-Za-z0-9]{8,16}$/.test(code);
 }
 
+/**
+ * Destination with the link code added as ?slk=<code>, so the website tracker
+ * can tell the CRM which lead this visitor is (it removes the parameter from
+ * the address bar). Returns the URL unchanged if it cannot be parsed.
+ */
+export function withLinkMarker(url: string, code: string): string {
+  if (!isLinkCode(code)) return url;
+  try {
+    const parsed = new URL(url);
+    parsed.searchParams.set("slk", code);
+    return parsed.toString();
+  } catch {
+    return url;
+  }
+}
+
+/** The tracked-link code a website event carries (properties.trackedLinkCode), if valid. */
+export function trackedLinkCodeFromEvent(raw: unknown): string | null {
+  if (!raw || typeof raw !== "object") return null;
+  const properties = (raw as { properties?: unknown }).properties;
+  if (!properties || typeof properties !== "object") return null;
+  const code = (properties as { trackedLinkCode?: unknown }).trackedLinkCode;
+  return typeof code === "string" && isLinkCode(code) ? code : null;
+}
+
+/** How long after a link is first opened its code may still link a website visitor. */
+export const LINK_IDENTITY_WINDOW_MS = 30 * 24 * 3_600_000;
+
 /** A link may only lead to an HTTPS page on the business's own website. */
 export function isAllowedDestination(url: string | null | undefined, websiteHosts: string[]): url is string {
   if (typeof url !== "string") return false;

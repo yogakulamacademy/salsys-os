@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 
 import {
   classifyLinkRequest, courseDestination, isAllowedDestination, isLinkCode, newLinkCode,
-  noOpenTaskDue, trackedLinkUrl, countryName, isAppHost, fallbackDestination,
+  noOpenTaskDue, trackedLinkUrl, countryName, isAppHost, fallbackDestination, withLinkMarker, trackedLinkCodeFromEvent,
 } from '../../lib/dm-links.ts';
 
 const IG_INAPP = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 Instagram 345.0.0.31.98 (iPhone14,2; iOS 17_5; en_IN; en)';
@@ -66,4 +66,15 @@ test('an unopened link becomes a team task after 12 hours, only if the lead has 
 
 test('visit country shows a readable name', () => {
   assert.equal(countryName('AE'), 'UAE'); assert.equal(countryName('in'), 'India'); assert.equal(countryName('PT'), 'PT'); assert.equal(countryName(null), null);
+});
+
+test('tracked-link handoff: destination gets ?slk=<code>, and only valid codes are read back from events', () => {
+  assert.equal(withLinkMarker('https://yogakulamacademy.com/200-hour?utm_source=dm', 'Ab3dEf7hJk'),
+    'https://yogakulamacademy.com/200-hour?utm_source=dm&slk=Ab3dEf7hJk');
+  assert.equal(withLinkMarker('https://yogakulamacademy.com/', 'bad code!'), 'https://yogakulamacademy.com/');
+  assert.equal(withLinkMarker('not a url', 'Ab3dEf7hJk'), 'not a url');
+  assert.equal(trackedLinkCodeFromEvent({ properties: { trackedLinkCode: 'Ab3dEf7hJk' } }), 'Ab3dEf7hJk');
+  assert.equal(trackedLinkCodeFromEvent({ properties: { trackedLinkCode: "x' or 1=1" } }), null);
+  assert.equal(trackedLinkCodeFromEvent({ properties: {} }), null);
+  assert.equal(trackedLinkCodeFromEvent(null), null);
 });
