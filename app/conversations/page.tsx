@@ -1,10 +1,7 @@
 import Link from "next/link";
 import {
   ArrowUpRight,
-  CalendarClock,
   ChevronDown,
-  Clock3,
-  MessageCircle,
   Phone,
   Save,
 } from "lucide-react";
@@ -28,11 +25,11 @@ import { InboxHeaderActions } from "@/components/inbox-header-actions";
 import { InboxLeadOverview } from "@/components/inbox-lead-overview";
 import { InboxOfferCard } from "@/components/inbox-offer-card";
 import { InboxOverview } from "@/components/inbox-overview";
-import { InboxLeadIntelligence } from "@/components/inbox-lead-intelligence";
+import { InboxLeadIntelligence, InboxLeadTimeline } from "@/components/inbox-lead-intelligence";
 import { getLeadSourceForInbox } from "@/lib/lead-source-context-data";
 import { InboxHeaderOwner } from "@/components/inbox-header-owner";
 import { InboxSnoozedBanner } from "@/components/inbox-snoozed-banner";
-import { InboxAutopilotBar, InboxFollowupDraftCard } from "@/components/inbox-autopilot";
+import { InboxAutopilotBar, InboxAutopilotHeaderButton, InboxFollowupDraftCard, autopilotBarVisible } from "@/components/inbox-autopilot";
 import { getInboxAutopilot } from "@/lib/autopilot-inbox-data";
 import { InboxCourseLink } from "@/components/inbox-course-link";
 import { InboxCourseInterests, type InboxInterest } from "@/components/inbox-course-interests";
@@ -50,7 +47,7 @@ import { ConversationSafeComposer } from "@/components/conversation-safe-compose
 import { ConversationWorkspaceShell } from "@/components/conversation-workspace-shell";
 import { ConversationsRealtime } from "@/components/conversations-realtime";
 import { ConversationsSidebar } from "@/components/conversations-sidebar";
-import { EmptyState, Notice, StageBadge } from "@/components/ui";
+import { Notice, StageBadge } from "@/components/ui";
 import { WhatsAppTemplateComposer } from "@/components/whatsapp-template-composer";
 import { getConversationsWorkspace } from "@/lib/conversations-data";
 import { getCourses, getLead, isMockMode } from "@/lib/data";
@@ -61,6 +58,7 @@ import { getCurrentWorkspaceContext } from "@/lib/workspace";
 import { getApprovedWhatsAppTemplates } from "@/lib/whatsapp-templates";
 import "./inbox-v2.css";
 import "./inbox-reference.css";
+import "./inbox-v5.css";
 
 export default async function ConversationsPage({
   searchParams,
@@ -323,7 +321,13 @@ export default async function ConversationsPage({
       currentUserId={team.currentUserId}
       canManageAssignments={team.canManageAssignments}
       pagination={workspace.pagination}
+      autopilotLabel={{ text: autopilotLive ? "AI Autopilot on · Instagram" : "AI Autopilot off", on: Boolean(autopilotLive) }}
     />
+  );
+
+  const instagramWindowClosed = Boolean(
+    selected && selected.currentContactChannel === "instagram" &&
+    messagingEligibility?.channel === "instagram" && messagingEligibility.canReply === false,
   );
 
   const chat = !selected ? (
@@ -339,47 +343,46 @@ export default async function ConversationsPage({
     <section className="ibx-v2-chat flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-surface">
       <ConversationReadMarker leadId={selected.id} />
 
-      <header className="ibx-v2-chat-header shrink-0 border-b border-line bg-surface px-4 py-3.5 pr-32 sm:px-5">
+      <header className="ibx-v2-chat-header ibx-v5-chat-header shrink-0 border-b border-line bg-surface">
         <div className="flex min-w-0 items-center gap-3">
-          <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-brand-100 text-[11px] font-bold text-brand-700">
-            {initials(selected.name)}
-          </div>
+          <div className="ibx-v5-head-avatar" aria-hidden="true">{initials(selected.name)}</div>
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
-              <h2 className="truncate text-[15px] font-semibold text-copy-strong">
-                {selected.name}
-              </h2>
+              <h2 className="ibx-v5-head-name truncate">{selected.name}</h2>
               <StageBadge stage={selected.stage} />
-              <span className="ibx-v3-header-channel"><MessageCircle size={12}/>
-                {selected.currentContactChannel.replaceAll("_"," ")}
-              </span>
-              <InboxHeaderOwner key={`owner-${selected.id}`} leadId={selected.id}
-                ownerUserId={selected.ownerUserId} ownerName={selected.ownerName}
-                candidates={team.assignmentCandidates} canAssign={team.canManageAssignments} mock={mock}/>
               {selectedSummary?.needsReply || selectedSummary?.needsFirstContact ? (
-                <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ${selectedSummary.needsReply ? "bg-warning-soft text-warning" : "bg-sky-50 text-sky-700"}`}>
+                <span className={`ibx-v5-wait-chip ${selectedSummary.needsReply ? "" : "is-first"}`}>
                   {selectedSummary.needsReply ? "Waiting" : "First contact"}
-                  {selectedSummary.waitingSince ? <><Clock3 size={11} aria-hidden="true" /> {formatWaiting(selectedSummary.waitingSince)}</> : null}
+                  {selectedSummary.waitingSince ? <> {formatWaiting(selectedSummary.waitingSince)}</> : null}
                 </span>
               ) : null}
             </div>
-            <div className="ibx-v3-lead-meta">
+            <div className="ibx-v3-lead-meta ibx-v5-head-meta">
               <span className="capitalize">{selected.leadCreationChannel?.replaceAll("_", " ") || selected.currentContactChannel.replaceAll("_", " ")}</span>
               <span aria-hidden="true">·</span>
-              <span>Came in {formatDateTime(selected.createdAt)}</span>
+              <span>came in {formatDateTime(selected.createdAt)}</span>
+              <span aria-hidden="true">·</span>
+              <span className="ibx-v5-head-owner">Owner:
+                <InboxHeaderOwner key={`owner-${selected.id}`} leadId={selected.id}
+                  ownerUserId={selected.ownerUserId} ownerName={selected.ownerName}
+                  candidates={team.assignmentCandidates} canAssign={team.canManageAssignments} mock={mock}/>
+              </span>
             </div>
           </div>
         </div>
         <InboxHeaderActions leadId={selected.id}
           resolved={Boolean(selectedSummary?.resolved)}
           canResolve={workspace.evidence.inboxResolutionAvailable} mock={mock}
-          snoozed={isSnoozedNow}/>
-
+          snoozed={isSnoozedNow}
+          lead={autopilot ? (
+            <InboxAutopilotHeaderButton key={`aph-${selected.id}`} leadId={selected.id} state={autopilot.state}
+              canHandToAi={selected.currentContactChannel === "instagram"} />
+          ) : null}/>
       </header>
       {isSnoozedNow && selected.snoozedUntil ? (
         <InboxSnoozedBanner leadId={selected.id} until={selected.snoozedUntil} />
       ) : null}
-      {autopilot ? (
+      {autopilot && autopilotBarVisible(autopilot.state) ? (
         <InboxAutopilotBar key={`ap-${selected.id}`} leadId={selected.id} state={autopilot.state} canHandToAi={selected.currentContactChannel === "instagram"} />
       ) : null}
 
@@ -403,6 +406,13 @@ export default async function ConversationsPage({
       {/* Shadow drafts no longer run when a conversation is opened (owner request,
           18 Nov 2026). AI drafts come only from the Draft buttons or Autopilot. */}
 
+      <div className="ibx-v5-reply-zone shrink-0">
+      {instagramWindowClosed ? (
+        <div role="status" className="ibx-v5-window-notice">
+          <span><strong>Instagram reply window is closed.</strong> Reply by hand in the Instagram app, or save a draft for when they write again.</span>
+          <a href="https://www.instagram.com/direct/inbox/" target="_blank" rel="noreferrer">Open in Instagram</a>
+        </div>
+      ) : null}
       {copilotChannel ? (
         <section className="ibx-v2-ai-toolbar" aria-label="AI reply suggestions">
           <ConversationCopilot
@@ -424,7 +434,7 @@ export default async function ConversationsPage({
       ) : null}
 
 
-      <div className="shrink-0 border-t border-line bg-surface">
+      <div className="ibx-v5-composer-wrap">
         {selected.currentContactChannel === "whatsapp" &&
         normalizedWhatsAppMode === "template" ? (
           <div className="border-b border-amber-100 bg-amber-50 px-4 py-2.5 dark:border-amber-900/40 dark:bg-amber-950/15">
@@ -496,44 +506,53 @@ export default async function ConversationsPage({
             notice={canStartWhatsApp && !hasStartTemplates
               ? "WhatsApp needs an approved Meta template first; none is approved yet. Reply by email or log a call instead."
               : null}
+            windowNoticeShown={instagramWindowClosed}
           />
         )}
+      </div>
       </div>
     </section>
   );
 
   const context = selected ? (
-    <div className="ibx-v2-context conversation-context-pane min-h-full bg-surface-soft">
-      {/* Owner-approved combined Inbox design (20 Nov 2026): one column, each fact once.
-          Order: what to do (intelligence), the course and enrolment, actions, the offer
-          folded, then lead details and contact. */}
-      {leadIntel ? <InboxLeadIntelligence intel={leadIntel} score={leadScore} source={leadSource} /> : null}
-      {interestData ? (
-        <InboxCourseInterests key={`int-${selected.id}`} leadId={selected.id} interests={interestData.interests} valueNote={interestData.valueNote} />
+    <div className="ibx-v2-context ibx-v5-context conversation-context-pane min-h-full">
+      {/* Owner-approved combined Inbox design (20 Nov 2026): separate cards, each fact once.
+          Order: Lead intelligence, Course & enrolment, Quick actions with follow-up,
+          the AI offer as one line, What's happened, then lead details and contact. */}
+      {leadIntel ? <InboxLeadIntelligence intel={leadIntel} score={leadScore} source={leadSource} withTimeline={false} /> : null}
+      {interestData || enrollmentPanel || (selected.currentContactChannel === "instagram" && !mock) ? (
+        <section className="ibx-v5-card ibx-v5-course-card" aria-label="Course and enrolment">
+          <h3 className="ibx-v5-card-title">Course &amp; enrolment</h3>
+          {interestData ? (
+            <InboxCourseInterests key={`int-${selected.id}`} leadId={selected.id} interests={interestData.interests} valueNote={interestData.valueNote} />
+          ) : null}
+          {selected.currentContactChannel === "instagram" && !mock ? (
+            <InboxCourseLink key={`link-${selected.id}`} leadId={selected.id}
+              status={courseLink ? { ...courseLink, visitCountryName: countryName(courseLink.visitCountry) } : null} />
+          ) : null}
+          {enrollmentPanel ? <InboxEnrollment key={`enr-${selected.id}`} leadId={selected.id} panel={enrollmentPanel} /> : null}
+        </section>
       ) : null}
-      {enrollmentPanel ? <InboxEnrollment key={`enr-${selected.id}`} leadId={selected.id} panel={enrollmentPanel} /> : null}
-      {selected.currentContactChannel === "instagram" && !mock ? (
-        <InboxCourseLink key={`link-${selected.id}`} leadId={selected.id}
-          status={courseLink ? { ...courseLink, visitCountryName: countryName(courseLink.visitCountry) } : null} />
-      ) : null}
-      <section id="inbox-next-steps" className="ibx-v2-next-step-card border-b border-line px-3.5 py-4">
-        <ConversationIntelligencePanel
-          compact
-          leadId={selected.id}
-          stage={selected.stage}
-          priority={selectedSummary?.priority ?? "normal"}
-          needsReply={Boolean(selectedSummary?.needsReply)}
-          needsFirstContact={Boolean(selectedSummary?.needsFirstContact)}
-          waitingSince={selectedSummary?.waitingSince ?? null}
-        />
+      <section className="ibx-v5-card ibx-v5-actions-card" aria-label="Quick actions and follow-up">
+        <InboxQuickActions key={`qa-${selected.id}`} phone={selectedPhone} canCall={Boolean(hasTelephoneContact)}
+          profileHref={`/leads/${selected.id}`} channel={selected.currentContactChannel}
+          replies={quickReplies!} logAction={interactionAction} stageAction={stageAction} mock={mock}/>
+        <div id="inbox-next-steps" className="ibx-v2-next-step-card">
+          <ConversationIntelligencePanel
+            compact
+            leadId={selected.id}
+            stage={selected.stage}
+            priority={selectedSummary?.priority ?? "normal"}
+            needsReply={Boolean(selectedSummary?.needsReply)}
+            needsFirstContact={Boolean(selectedSummary?.needsFirstContact)}
+            waitingSince={selectedSummary?.waitingSince ?? null}
+          />
+        </div>
       </section>
-      <InboxQuickActions key={`qa-${selected.id}`} phone={selectedPhone} canCall={Boolean(hasTelephoneContact)}
-        profileHref={`/leads/${selected.id}`} channel={selected.currentContactChannel}
-        replies={quickReplies!} logAction={interactionAction} stageAction={stageAction} mock={mock}/>
       {autopilot?.followup ? <InboxFollowupDraftCard key={`fu-${autopilot.followup.taskId}`} followup={autopilot.followup} /> : null}
       {offerSuggestion ? (
-        <details className="ibx-v4-fold group border-b border-line bg-surface">
-          <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3">
+        <details className="ibx-v4-fold ibx-v5-card ibx-v5-offer group">
+          <summary className="flex cursor-pointer list-none items-center justify-between gap-3">
             <span className="flex flex-col">
               <span className="text-[13px] font-bold text-copy-strong">AI offer · {offerSuggestion.confidence.percent}% chance it helps</span>
               <span className="text-[12px] text-copy-muted">{offerSuggestion.confidence.verdictLabel}. Nothing is sent until you approve.</span>
@@ -546,13 +565,14 @@ export default async function ConversationsPage({
         </details>
       ) : null}
       {!mock && process.env.AI_LEAD_INSIGHTS_ENABLED === "true" && process.env.AI_LEAD_INSIGHTS_UI_ENABLED === "true" && (
-        <div className="border-b border-line px-3.5 py-3">
+        <div className="ibx-v5-card">
           <AILeadInsightPanel leadId={selected.id} compact />
         </div>
       )}
+      {leadIntel ? <InboxLeadTimeline intel={leadIntel} profileHref={`/leads/${selected.id}`} /> : null}
       {/* Stage, owner, source and country, folded: the header and Lead intelligence already show the rest. */}
-      <details className="ibx-v4-fold group border-b border-line bg-surface">
-        <summary className="flex cursor-pointer list-none items-center justify-between px-4 py-3 text-[13px] font-bold text-copy-strong">Lead details <span className="text-[12px] font-semibold text-copy-muted group-open:hidden">Stage, owner, source, country</span></summary>
+      <details className="ibx-v4-fold ibx-v5-card ibx-v5-fold group">
+        <summary className="flex cursor-pointer list-none items-center justify-between text-[13px] font-bold text-copy-strong">Lead details <span className="text-[12px] font-semibold text-copy-muted group-open:hidden">Stage, owner, source, country</span></summary>
       {/* key: remount per lead so the stage/owner selects never keep the previous conversation's value */}
       <InboxLeadOverview key={selected.id} leadId={selected.id} stage={selected.stage}
         ownerUserId={selected.ownerUserId} ownerName={selected.ownerName}
@@ -564,8 +584,8 @@ export default async function ConversationsPage({
         state={conversationStatus}/>
       </details>
       {leadContextAction ? (
-        <section className="border-b border-line px-4 py-4">
-          <details className="group rounded-ui border border-line bg-surface">
+        <section className="ibx-v5-card ibx-v5-fold">
+          <details className="group">
             <summary className="flex cursor-pointer list-none items-center justify-between px-3 py-3 text-[12px] font-semibold text-copy-muted">
               Edit lead details
               <ChevronDown
@@ -616,7 +636,7 @@ export default async function ConversationsPage({
           </details>
         </section>
       ) : null}
-      <section className="ibx-v2-profile-card border-b border-line px-4 py-4">
+      <section className="ibx-v2-profile-card ibx-v5-card">
         <div className="ibx-v2-profile-heading">
           <div className="ibx-v2-profile-avatar">{initials(selected.name)}</div>
           <div className="ibx-v2-profile-name">
@@ -641,7 +661,7 @@ export default async function ConversationsPage({
   ) : null;
 
   return (
-    <div className="ibx-v2 conversations-polish gap-2">
+    <div className="ibx-v2 ibx-v5 conversations-polish gap-2">
       {!mock ? <ConversationsRealtime /> : null}
 
       <section className="inbox-page-heading ibx-v2-page-heading flex flex-wrap items-center justify-between gap-3">
@@ -649,9 +669,10 @@ export default async function ConversationsPage({
           <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-brand-700">
             Customer conversations
           </div>
-          <h1 className="mt-1.5 text-[30px] font-semibold tracking-[-0.035em] text-copy-strong">
+          {/* The visible "Inbox" title now heads the conversation list. */}
+          <div className="mt-1.5 text-[30px] font-semibold tracking-[-0.035em] text-copy-strong">
             Inbox
-          </h1>
+          </div>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">

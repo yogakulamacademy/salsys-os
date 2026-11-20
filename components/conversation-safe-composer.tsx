@@ -43,6 +43,7 @@ export function ConversationSafeComposer({
   eligibility,
   emailTo,
   notice,
+  windowNoticeShown = false,
 }: {
   leadId: string;
   channel: Channel;
@@ -52,6 +53,8 @@ export function ConversationSafeComposer({
   emailTo?: string | null;
   /** One-line context shown above the composer, e.g. why WhatsApp is not available. */
   notice?: string | null;
+  /** The page already shows the closed-window notice above the suggested reply. */
+  windowNoticeShown?: boolean;
 }) {
   const router = useRouter();
   const [mode, setMode] = useState<ComposeMode>("reply");
@@ -238,143 +241,115 @@ export function ConversationSafeComposer({
     tabs[nextIndex]?.click();
   }
 
+  const windowClosed = isInstagram && eligibility?.canReply === false;
+  const replyPlaceholder = isInstagram
+    ? windowClosed
+      ? "Write an Instagram reply… (saved as draft while the window is closed)"
+      : "Write an Instagram reply…"
+    : "Write a reply… it stays here as a draft until you choose how to send it.";
+  const replyHint = isInstagram
+    ? windowClosed && !windowNoticeShown ? eligibility?.userMessage ?? null : null
+    : null;
+
+  // Owner-approved design (20 Nov 2026): a compact Reply / Internal note box.
   return (
-    <section className="bg-white p-3" aria-label="Conversation composer">
-      {notice ? <p className="ibx-v3-composer-notice mb-2 text-[10px] leading-4 text-[#715B31]">{notice}</p> : null}
-      <div className="overflow-hidden rounded-lg border border-[#D4DFD2] bg-white shadow-[0_1px_3px_rgba(21,62,51,0.04)]">
-        <div
-          className="flex items-center gap-5 border-b border-[#EEF2EF] px-3 pt-2"
-          role="tablist"
-          aria-label="Compose mode"
-          onKeyDown={handleModeKeyDown}
-        >
-          <ModeTab active={mode === "reply"} onClick={() => setMode("reply")} icon={<MessageSquareText size={11} />}>
+    <section className="ibx-v5-composer" aria-label="Conversation composer">
+      {notice ? <p className="ibx-v3-composer-notice">{notice}</p> : null}
+      <div className="ibx-v5-composer-box">
+        <div className="ibx-v5-composer-tabs" role="tablist" aria-label="Compose mode" onKeyDown={handleModeKeyDown}>
+          <ModeTab active={mode === "reply"} onClick={() => setMode("reply")} icon={<MessageSquareText size={12} />}>
             {isInstagram ? "Reply" : "Reply draft"}
           </ModeTab>
-          <ModeTab active={mode === "note"} onClick={() => setMode("note")} icon={<FileText size={11} />}>
+          <ModeTab active={mode === "note"} onClick={() => setMode("note")} icon={<FileText size={12} />}>
             Internal note
           </ModeTab>
+          <span className="ibx-v5-composer-status" aria-live="polite">
+            {mode === "reply"
+              ? `${draftStatus(draftState)} · ${replyDraft.length}/${replyLimit}${copilotAssisted && isInstagram ? " · AI-assisted, reviewed by you" : ""}`
+              : noteError ? <span className="text-red-700">{noteError} Your note is still here.</span>
+              : noteSuccess ? <span className="text-[#216551]">{noteSuccess}</span>
+              : "Private · never sent to the lead"}
+          </span>
         </div>
 
         {mode === "reply" ? (
-          <div role="tabpanel" className="p-3">
-            <div className="composer-intro mb-2 flex items-start justify-between gap-3">
-              <div>
-                <div className="text-[10px] font-semibold text-[#18362D]">
-                  {isInstagram ? "Reply on Instagram" : "Prepare a response"}
-                </div>
-                <p className={`mt-0.5 text-[9px] leading-4 ${isInstagram && eligibility?.canReply === false ? "rounded-md bg-amber-50 px-2 py-1 font-semibold text-amber-800" : "text-[#596E64]"}`}>
-                  {isInstagram
-                    ? eligibility?.userMessage || "Salsys checks the customer-initiated Instagram reply window before the provider call. Nothing is sent until you click Send."
-                    : "Draft only. Saving here never sends a message or changes the lead stage."}
-                </p>
-              </div>
-              <span className="rounded border border-[#DCE4DF] bg-[#F6F8F7] px-2 py-1 text-[8px] font-semibold capitalize text-[#596E64]">
-                {channel.replaceAll("_", " ")}
-              </span>
-            </div>
-
-
+          <div role="tabpanel" className="ibx-v5-composer-row">
+            {replyHint ? <p className="composer-intro ibx-v5-composer-hint">{replyHint}</p> : null}
             <label className="sr-only" htmlFor={`reply-draft-${leadId}`}>
               {isInstagram ? "Write an Instagram reply" : "Write a reply draft"}
             </label>
-            <textarea
-              ref={replyTextareaRef}
-              id={`reply-draft-${leadId}`}
-              value={replyDraft}
-              onChange={(event) => updateReplyDraft(event.target.value)}
-              onKeyDown={(event) => {
-                if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
-                  event.preventDefault();
-                  if (isInstagram && instagramSendAllowed) sendInstagramReply();
-                  else persistDraft(replyDraft);
-                }
-              }}
-              rows={3}
-              maxLength={replyLimit}
-              disabled={isInstagram && isPending}
-              placeholder={
-                isInstagram
-                  ? "Reply to this Instagram conversation…"
-                  : "Prepare a reply… it stays here until you choose an eligible sending channel."
-              }
-              className="min-h-[76px] w-full resize-y rounded-lg border border-[#DCE4DF] bg-white px-3 py-2 text-[11px] leading-5 text-[#18362D] outline-none placeholder:text-[#71847A] focus:border-[#216551] focus:ring-2 focus:ring-[#216551]/10 disabled:bg-[#F6F8F7] disabled:text-[#71847A]"
-            />
-
-            {sendError ? (
-              <div className="mt-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[9px] leading-4 text-red-700">
-                {sendError}
-              </div>
-            ) : null}
-
-            <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
-              <div className="text-[9px] text-[#71847A]">
-                {draftStatus(draftState)} · {replyDraft.length}/{replyLimit} · Ctrl/⌘ + Enter {isInstagram && instagramSendAllowed ? "sends" : "saves"}
-                {copilotAssisted && isInstagram ? " · AI-assisted draft reviewed by human" : ""}
-              </div>
+            <div className="ibx-v5-composer-line">
+              <textarea
+                ref={replyTextareaRef}
+                id={`reply-draft-${leadId}`}
+                value={replyDraft}
+                onChange={(event) => updateReplyDraft(event.target.value)}
+                onKeyDown={(event) => {
+                  if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
+                    event.preventDefault();
+                    if (isInstagram && instagramSendAllowed) sendInstagramReply();
+                    else persistDraft(replyDraft);
+                  }
+                }}
+                rows={replyDraft.includes("\n") || replyDraft.length > 90 ? 3 : 1}
+                maxLength={replyLimit}
+                disabled={isInstagram && isPending}
+                placeholder={replyPlaceholder}
+                title={`Ctrl/⌘ + Enter ${isInstagram && instagramSendAllowed ? "sends" : "saves"}`}
+              />
               <div className="ibx-v3-composer-actions">
                 <button type="button" onClick={() => persistDraft(replyDraft)}
                   disabled={!replyDraft.trim()}
-                  className="ibx-v3-save-draft inline-flex h-8 items-center justify-center gap-1.5 rounded-lg border border-[#DCE4DF] bg-white px-3 text-[9px] font-semibold text-[#596E64] disabled:opacity-50">
-                  <Save size={11}/> Save draft
+                  className="ibx-v3-save-draft ibx-v5-btn">
+                  <Save size={13}/> Save draft
                 </button>
                 {emailTo && !isInstagram ? <a
                   href={`mailto:${emailTo}?subject=${encodeURIComponent("Re: your enquiry")}&body=${encodeURIComponent(replyDraft)}`}
                   onClick={() => persistDraft(replyDraft)}
                   aria-disabled={!replyDraft.trim()}
                   title={`Opens your email app with this draft to ${emailTo}. Nothing is sent from the CRM.`}
-                  className={`ibx-v3-email-draft inline-flex h-8 items-center justify-center gap-1.5 rounded-lg bg-[#153E33] px-3 text-[9px] font-semibold text-white ${replyDraft.trim() ? "" : "pointer-events-none opacity-50"}`}>
-                  <Mail size={11}/> Open in email
+                  className={`ibx-v3-email-draft ibx-v5-btn is-primary ${replyDraft.trim() ? "" : "pointer-events-none opacity-50"}`}>
+                  <Mail size={13}/> Open in email
                 </a> : null}
-                {isInstagram ? <button type="button" onClick={sendInstagramReply}
-                  disabled={!instagramSendAllowed || !replyDraft.trim() || isPending}
-                  className="ibx-v3-send inline-flex h-8 items-center justify-center gap-1.5 rounded-lg bg-[#153E33] px-3 text-[9px] font-semibold text-white disabled:opacity-50">
-                  {isPending?<RefreshCw size={10} className="animate-spin"/>:<Send size={11}/>}
-                  {isPending?"Sending…":instagramSendAllowed?"Send":"Blocked"}
+                {isInstagram && instagramSendAllowed ? <button type="button" onClick={sendInstagramReply}
+                  disabled={!replyDraft.trim() || isPending}
+                  className="ibx-v3-send ibx-v5-btn is-primary">
+                  {isPending?<RefreshCw size={12} className="animate-spin"/>:<Send size={13}/>}
+                  {isPending?"Sending…":"Send"}
                 </button>:null}
               </div>
             </div>
+            {sendError ? <div className="ibx-v5-composer-error">{sendError}</div> : null}
           </div>
         ) : (
-          <div role="tabpanel" className="bg-[#FFFCF2] p-3">
-            <div className="mb-2 flex items-start justify-between gap-3">
-              <div>
-                <div className="text-[10px] font-semibold text-[#18362D]">Private team note</div>
-                <p className="mt-0.5 text-[9px] leading-4 text-[#70581F]">Stored as internal CRM activity. Never sent to the lead.</p>
-              </div>
-              <span className="rounded border border-[#E6DDBE] bg-white px-2 py-1 text-[8px] font-semibold text-[#70581F]">Private</span>
-            </div>
+          <div role="tabpanel" className="ibx-v5-composer-row is-note">
             <label className="sr-only" htmlFor={`internal-note-${leadId}`}>Write an internal note</label>
-            <textarea
-              id={`internal-note-${leadId}`}
-              value={note}
-              onChange={(event) => {
-                setNote(event.target.value.slice(0, 4000));
-                setNoteError(null);
-                setNoteSuccess(null);
-              }}
-              onKeyDown={(event) => {
-                if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
-                  event.preventDefault();
-                  void saveInternalNote();
-                }
-              }}
-              rows={3}
-              maxLength={4000}
-              placeholder="Add context for your team…"
-              className="min-h-[76px] w-full resize-y rounded-lg border border-[#D8D3BD] bg-white px-3 py-2 text-[11px] leading-5 text-[#18362D] outline-none placeholder:text-[#7A806E] focus:border-[#216551] focus:ring-2 focus:ring-[#216551]/10"
-            />
-            <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
-              <div className="min-w-0 text-[9px]">
-                {noteError ? <span className="text-red-700">{noteError} Your note is still here.</span> : noteSuccess ? <span className="text-[#216551]">{noteSuccess}</span> : <span className="text-[#70581F]">{note.length}/4000 · Ctrl/⌘ + Enter adds note · Saving does not send.</span>}
-              </div>
+            <div className="ibx-v5-composer-line">
+              <textarea
+                id={`internal-note-${leadId}`}
+                value={note}
+                onChange={(event) => {
+                  setNote(event.target.value.slice(0, 4000));
+                  setNoteError(null);
+                  setNoteSuccess(null);
+                }}
+                onKeyDown={(event) => {
+                  if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
+                    event.preventDefault();
+                    void saveInternalNote();
+                  }
+                }}
+                rows={note.includes("\n") || note.length > 90 ? 3 : 1}
+                maxLength={4000}
+                placeholder="Add a private note for your team…"
+              />
               <button
                 type="button"
                 onClick={() => void saveInternalNote()}
                 disabled={!note.trim() || noteSaving}
-                className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg bg-[#153E33] px-3 text-[9px] font-semibold text-white transition hover:bg-[#216551] disabled:cursor-not-allowed disabled:bg-[#EDF0EC] disabled:text-[#59685F]"
+                className="ibx-v5-btn is-primary"
               >
-                {noteSaving ? <RefreshCw size={10} className="animate-spin" /> : null}
+                {noteSaving ? <RefreshCw size={12} className="animate-spin" /> : null}
                 {noteSaving ? "Saving…" : "Add note"}
               </button>
             </div>
@@ -421,7 +396,7 @@ function ModeTab({
       aria-selected={active}
       tabIndex={active ? 0 : -1}
       onClick={onClick}
-      className={`inline-flex h-9 items-center gap-1.5 border-b-2 text-[9px] font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#216551] ${active ? "border-[#216551] text-[#216551]" : "border-transparent text-[#596E64] hover:text-[#18362D]"}`}
+      className={`ibx-v5-mode-tab ${active ? "is-active" : ""}`}
     >
       {icon}{children}
     </button>

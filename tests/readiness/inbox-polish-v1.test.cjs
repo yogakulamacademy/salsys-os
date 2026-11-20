@@ -3,9 +3,9 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const read = (p) => fs.readFileSync(require('node:path').join(__dirname, '../..', p), 'utf8');
 
-test('status filters are scrollable pills like the channel chips', () => {
+test('status filters are one segmented control (owner-approved design, 20 Nov 2026)', () => {
   const sidebar = read('components/conversations-sidebar.tsx');
-  assert.match(sidebar, /ibx-v2-tabs ibx-v3-pills flex gap-1\.5 overflow-x-auto/);
+  assert.match(sidebar, /ibx-v2-tabs ibx-v3-pills ibx-v5-seg flex gap-1\.5 overflow-x-auto/);
   assert.match(sidebar, /aria-label="Filter by question topic" className="flex gap-1\.5 overflow-x-auto/);
   assert.doesNotMatch(sidebar, /aria-label="Filter by question topic" className="flex flex-wrap/);
 });

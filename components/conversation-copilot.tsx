@@ -150,28 +150,56 @@ export function ConversationCopilot({
   return (
     <section className="overflow-hidden rounded-xl border border-brand-100 bg-surface dark:border-slate-800 dark:bg-slate-950">
       {compactToolbar ? (
-        <div className="ibx-v2-copilot-bar">
-          <span className="ibx-v2-ai-label"><Sparkles size={17}/> Suggested reply</span>
-          <div className="ibx-v2-ai-actions">
-            <button type="button" className="ibx-v4-suggest" disabled={!enabled || isPending} onClick={generate} title={disabledReason || "Prepare a grounded reply for human review"}>
-              <WandSparkles size={14}/> {isPending ? "Writing…" : "Suggest a reply"}
-            </button>
-            <button type="button" onClick={() => {setShowSummary(prev=>!prev);setOpen(false);}}
-              aria-expanded={showSummary} title="Summarize recent stored messages without inventing customer facts">
-              <Database size={14}/> Summarize
-            </button>
-            <button type="button" onClick={() => {
-              const panel=document.getElementById("inbox-next-steps");
-              if(panel){panel.scrollIntoView({block:"nearest",behavior:"smooth"});return;}
-              document.querySelector<HTMLButtonElement>('button[aria-label="Show customer context"]')?.click();
-            }} title="Review next steps in the customer panel">
-              <Sparkles size={14}/> Next best action
-            </button>
-            <button type="button" onClick={() => setOpen(value=>!value)}
-              aria-label={open?"Collapse AI suggestions":"Expand AI suggestions"}
-              aria-expanded={open} title="AI suggestion details">
-              {open?<ChevronUp size={14}/>:<ChevronDown size={14}/>}
-            </button>
+        // Owner-approved design (20 Nov 2026): the suggestion itself, with Use / Another version.
+        <div className="ibx-v2-copilot-bar ibx-v5-suggest-card">
+          <div className="ibx-v5-suggest-head">
+            <span className="ibx-v2-ai-label"><Sparkles size={14}/> Suggested reply</span>
+            <div className="ibx-v2-ai-actions ibx-v5-suggest-links">
+              <button type="button" onClick={() => {setShowSummary(prev=>!prev);setOpen(false);}}
+                aria-expanded={showSummary} title="Summarize recent stored messages without inventing customer facts">
+                Summarize chat
+              </button>
+              <button type="button" onClick={() => {
+                const panel=document.getElementById("inbox-next-steps");
+                if(panel){panel.scrollIntoView({block:"nearest",behavior:"smooth"});return;}
+                document.querySelector<HTMLButtonElement>('button[aria-label="Show customer context"]')?.click();
+              }} title="Review next steps in the customer panel">
+                Next best action
+              </button>
+              {result ? (
+                <button type="button" onClick={() => setOpen(value=>!value)}
+                  aria-label={open?"Hide suggestion details":"Show suggestion details"}
+                  aria-expanded={open} title="Risk, sources and approved assets for this suggestion">
+                  {open?<ChevronUp size={14}/>:<ChevronDown size={14}/>}
+                </button>
+              ) : null}
+            </div>
+          </div>
+          {isPending ? (
+            <p className="ibx-v5-suggest-text is-muted">Writing a reply from this chat and your course data…</p>
+          ) : error ? (
+            <p className="ibx-v5-suggest-text is-error">{error}</p>
+          ) : result ? (
+            <p className="ibx-v5-suggest-text">{result.draft}</p>
+          ) : (
+            <p className="ibx-v5-suggest-text is-muted">
+              {enabled
+                ? "Get a reply written from this chat and your course data. Nothing is sent until you press Send."
+                : disabledReason || "A suggested reply isn't available for this channel right now."}
+            </p>
+          )}
+          <div className="ibx-v5-suggest-actions">
+            {result && !isPending ? (
+              <>
+                <button type="button" className="ibx-v4-suggest" onClick={useDraft}>Use this reply</button>
+                <button type="button" className="ibx-v5-suggest-alt" onClick={generate} disabled={!enabled}>Another version</button>
+                {result.risk !== "low" ? <span className="ibx-v5-suggest-risk" title={result.reason}>{result.risk === "human_only" ? "Needs a person" : "Check before sending"}</span> : null}
+              </>
+            ) : (
+              <button type="button" className="ibx-v4-suggest" disabled={!enabled || isPending} onClick={generate} title={disabledReason || "Prepare a grounded reply for human review"}>
+                <WandSparkles size={14}/> {isPending ? "Writing…" : "Suggest a reply"}
+              </button>
+            )}
           </div>
         </div>
       ) : (
@@ -221,7 +249,7 @@ export function ConversationCopilot({
             </div>
           ) : null}
 
-          {enabled ? (
+          {enabled && !compactToolbar ? (
             <button
               type="button"
               onClick={generate}
@@ -241,7 +269,7 @@ export function ConversationCopilot({
             </button>
           ) : null}
 
-          {error ? (
+          {error && !compactToolbar ? (
             <div className="mt-3 rounded-lg border border-red-100 bg-red-50 px-3 py-2 text-[10px] leading-4 text-red-700 dark:border-red-900/40 dark:bg-red-950/20 dark:text-red-300">
               {error}
             </div>
@@ -270,9 +298,9 @@ export function ConversationCopilot({
                 ) : null}
               </div>
 
-              <div className="rounded-lg border border-line bg-surface-soft px-3 py-3 text-[11px] leading-5 text-copy-muted dark:border-slate-800 dark:bg-slate-900/50 dark:text-slate-200">
+              {compactToolbar ? null : <div className="rounded-lg border border-line bg-surface-soft px-3 py-3 text-[11px] leading-5 text-copy-muted dark:border-slate-800 dark:bg-slate-900/50 dark:text-slate-200">
                 {result.draft}
-              </div>
+              </div>}
 
               {assetSuggestions.length > 0 || assetError ? (
                 <div className="rounded-lg border border-sky-100 bg-sky-50/50 p-3 dark:border-sky-900/40 dark:bg-sky-950/10">
@@ -400,13 +428,13 @@ export function ConversationCopilot({
                 </div>
               ) : null}
 
-              <button
+              {compactToolbar ? null : <button
                 type="button"
                 onClick={useDraft}
                 className="inline-flex h-9 w-full items-center justify-center rounded-lg border border-brand-100 bg-surface px-3 text-[10px] font-semibold text-brand-700 transition hover:bg-brand-50 dark:border-slate-800 dark:bg-slate-950 dark:text-violet-200 dark:hover:bg-slate-900"
               >
                 Use draft in composer
-              </button>
+              </button>}
 
               <div className="text-center text-[8px] leading-4 text-copy-subtle">
                 AI never sends the message. Eligibility is checked separately, and a human must review and press Send.
