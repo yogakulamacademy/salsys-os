@@ -43,6 +43,29 @@
     '/api/privacy/consent/v1'
   );
 
+  // Tracked-link handoff (DM-LINK): links sent to a lead open the website with
+  // ?slk=<code>. Keep the code for this tab session so the server can link this
+  // visitor to that lead, then remove it from the address bar. Runs before the
+  // SPA hooks are installed, so removing it is not counted as a page view.
+  var LINK_CODE_KEY = 'salsys_link_code_v1';
+  var trackedLinkCode = null;
+  try {
+    var linkUrl = new URL(window.location.href);
+    var linkParam = linkUrl.searchParams.get('slk');
+    if (linkParam && /^[A-Za-z0-9]{8,16}$/.test(linkParam)) {
+      trackedLinkCode = linkParam;
+      try { window.sessionStorage.setItem(LINK_CODE_KEY, linkParam); } catch (_) {}
+      linkUrl.searchParams.delete('slk');
+      if (window.history && window.history.replaceState) {
+        window.history.replaceState(window.history.state, '', linkUrl.pathname + linkUrl.search + linkUrl.hash);
+      }
+    } else {
+      var storedCode = null;
+      try { storedCode = window.sessionStorage.getItem(LINK_CODE_KEY); } catch (_) {}
+      if (storedCode && /^[A-Za-z0-9]{8,16}$/.test(storedCode)) trackedLinkCode = storedCode;
+    }
+  } catch (_) {}
+
   var KEYS = {
     persistentVisitor: 'salsys_vid',
     sessionVisitor: 'salsys_vid_session',
@@ -329,6 +352,7 @@
     var signals = observedMetaSignals();
     properties.pageUrl = safePageUrl();
     properties.pagePath = window.location.pathname;
+    if (trackedLinkCode) properties.trackedLinkCode = trackedLinkCode;
     properties.pageTitle = document.title ? String(document.title).slice(0, 500) : null;
     properties.referrer = safeReferrer();
     properties.firstTouch = firstTouch;
