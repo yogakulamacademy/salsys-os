@@ -46,7 +46,7 @@ test("UI uses the paged result and retains URL query context", () => {
 test("page reader does not accept a client-supplied organization id", () => {
   const reader = read("lib/conversations-page-data.ts");
   assert.ok(reader.includes('"get_current_conversations_page_v1"'));
-  assert.ok(reader.includes("p_page_size: 50"));
+  assert.ok(reader.includes("pageSize: 50, filter, channel, sort")); // ordinary tabs still read 50 rows a page
   assert.ok(reader.includes("totalMatching:"));
   assert.doesNotMatch(reader, /p_organization_id:/);
 });

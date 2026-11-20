@@ -28,18 +28,22 @@ function setup({ v2Missing = false } = {}) {
     'server-only': {},
     '@/lib/supabase/server': { createClient: async () => session },
     '@/lib/inbox-topics': { INBOX_TOPICS: ['fee', 'dates', 'register', 'accommodation', 'online_offline', 'location', 'certification'] },
+    '@/lib/inbox-waiting': { isRecentWait: (at, now) => Boolean(at) && now - Date.parse(at) <= 7 * 86400000 },
   });
   return { reader, calls };
 }
 
 test('Inbox defaults to latest conversation activity instead of lead creation', async () => {
+  // Default view is Waiting (20 Nov 2026): one read of needs-reply rows, newest activity first.
   const {reader,calls} = setup();
   const result = await reader.getInboxPage({}, 'team');
   assert.equal(result.sort, 'activity_desc');
+  assert.equal(result.filter, 'waiting');
   assert.equal(calls.length, 1);
   assert.equal(calls[0].name, 'get_current_conversations_page_v2');
   assert.equal(calls[0].args.p_topic, 'all');
   assert.equal(calls[0].args.p_sort, 'activity_desc');
+  assert.equal(calls[0].args.p_filter, 'reply');
   assert.equal(calls[0].args.p_page, 1);
   assert.equal(calls[0].args.p_scope, 'team');
 });
@@ -63,11 +67,12 @@ test('Unknown topics are ignored', async () => {
 });
 
 test('Explicit created-date sort is retained and unsupported sort defaults safely', async () => {
+  // On the All tab: the first call counts this week's waiting chats, the second is the page.
   const {reader,calls} = setup();
-  assert.equal((await reader.getInboxPage({sort:'created_desc'}, 'team')).sort, 'created_desc');
-  assert.equal(calls[0].args.p_sort, 'created_desc');
-  assert.equal((await reader.getInboxPage({sort:'unexpected'}, 'team')).sort, 'activity_desc');
-  assert.equal(calls[1].args.p_sort, 'activity_desc');
+  assert.equal((await reader.getInboxPage({sort:'created_desc', filter:'all'}, 'team')).sort, 'created_desc');
+  assert.equal(calls[1].args.p_sort, 'created_desc');
+  assert.equal((await reader.getInboxPage({sort:'unexpected', filter:'all'}, 'team')).sort, 'activity_desc');
+  assert.equal(calls[3].args.p_sort, 'activity_desc');
 });
 
 test('Sidebar treats activity-first as default and preserves user sort choice', () => {
