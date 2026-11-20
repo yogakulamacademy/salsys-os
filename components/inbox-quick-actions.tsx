@@ -31,11 +31,12 @@ export function InboxQuickActions({
     event.preventDefault();
     if (!action || pending) return;
     const formData = new FormData(event.currentTarget);
-    startTransition(async () => {
+    const attempt = () => startTransition(async () => {
       const result = await action(formData);
-      showInboxToast(result.message, result.ok ? "success" : "error");
+      showInboxToast(result.message, result.ok ? "success" : "error", result.ok ? undefined : attempt);
       if (result.ok) setPanel("none");
     });
+    attempt();
   };
   const callNumber = phone?.replace(/[^\d+]/g, "") || "";
   const isInstagram = channel === "instagram";

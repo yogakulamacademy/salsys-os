@@ -1,4 +1,5 @@
 import { LeadsAttributionScopeBar } from "@/components/leads-attribution-scope-bar";
+import { ToastOnLoad } from "@/components/app-toast";
 import { LeadsCleanTable } from "@/components/leads-clean-table";
 import { LeadsOverview } from "@/components/leads/leads-overview";
 import { LeadsHeaderActions } from "@/components/leads/leads-header-actions";
@@ -98,13 +99,10 @@ export default async function LeadsPage({ searchParams }: LeadsPageProps) {
         </Notice>
       ) : null}
 
-      {notice === "owner-updated" || notice === "owner-unassigned" ? (
-        <Notice tone="success">
-          {notice === "owner-unassigned" ? "Lead ownership removed." : "Lead owner updated."}
-        </Notice>
-      ) : null}
-
-      {error ? <Notice tone="error">{error}</Notice> : null}
+      {/* Results show as a toast that fades (20 Nov 2026), not a banner. */}
+      <ToastOnLoad
+        message={notice === "owner-unassigned" ? "Lead ownership removed." : notice === "owner-updated" ? "Lead owner updated." : null}
+        error={error ?? null} />
 
       {workspace.warning ? (
         <Notice tone="warning" title="Leads loaded with a fallback path">

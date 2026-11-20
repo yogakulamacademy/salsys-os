@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { ToastOnLoad } from "@/components/app-toast";
 
 import Link from "next/link";
 
@@ -22,7 +23,7 @@ import {
 } from "@/app/actions/crm";
 
 import { SubmitButton } from "@/components/submit-button";
-import { ChannelBadge, EmptyState, Notice, PageHeader, StageBadge } from "@/components/ui";
+import { ChannelBadge, EmptyState, PageHeader, StageBadge } from "@/components/ui";
 import { getFollowUpsWorkspace } from "@/lib/followups-data";
 import { getFollowupsStory } from "@/lib/followups-story-data";
 import {
@@ -108,10 +109,8 @@ export default async function FollowUpsPage({ searchParams }: FollowUpsPageProps
         description={mock ? "Mock mode: changes are not saved." : undefined}
       />
 
-      {query.error ? <Notice tone="error">{query.error}</Notice> : null}
-      {query.notice ? (
-        <Notice tone={query.notice.startsWith("mock-") ? "warning" : "success"}>{noticeText(query.notice)}</Notice>
-      ) : null}
+      {/* Results show as a toast that fades (20 Nov 2026), not a banner. */}
+      <ToastOnLoad message={query.notice ? noticeText(query.notice) : null} error={query.error ?? null} />
 
       <section aria-label="Today" className="flex flex-col gap-1.5 rounded-[18px] border border-line bg-surface p-5 shadow-card sm:p-6">
         <span className="text-[11px] font-bold uppercase tracking-[0.1em] text-brand-700">Today</span>

@@ -1,7 +1,10 @@
-/** Show a small Inbox toast (fades after 2 seconds). Safe to import in client components. */
+import { toast } from "@/lib/toast";
+
+/** Inbox results as app-wide toasts. An error message becomes the description under "Something went wrong". */
 export type InboxToastTone = "success" | "error";
 
-export function showInboxToast(message: string, tone: InboxToastTone = "success") {
-  if (typeof window === "undefined" || !message) return;
-  window.dispatchEvent(new CustomEvent("crm:inbox-toast", { detail: { message, tone } }));
+export function showInboxToast(message: string, tone: InboxToastTone = "success", onRetry?: () => void) {
+  if (!message) return;
+  if (tone === "error") toast.error("Something went wrong", { description: message, onRetry });
+  else toast.success(message);
 }
