@@ -316,10 +316,16 @@ async function getCurrentOrganizationId(supabase: any): Promise<string> {
 
 ========================================================= */
 
-export async function getLeads(): Promise<LeadOverview[]> {
+/**
+ * Leads the current user can see, newest first (500 max). Pass `ids` to load
+ * specific leads instead (same owner scope and contact masking), e.g. one
+ * person's leads on Customer 360, which may be older than the newest 500.
+ */
+export async function getLeads(options: { ids?: string[] } = {}): Promise<LeadOverview[]> {
   if (useMockData) {
-    return mockLeads;
+    return options.ids ? mockLeads.filter((lead) => options.ids!.includes(lead.id)) : mockLeads;
   }
+  if (options.ids && options.ids.length === 0) return [];
 
   const supabase = await createClient();
 
@@ -343,6 +349,10 @@ export async function getLeads(): Promise<LeadOverview[]> {
     })
 
     .limit(500);
+
+  if (options.ids) {
+    query = query.in("id", options.ids.slice(0, 200));
+  }
 
   /*
 

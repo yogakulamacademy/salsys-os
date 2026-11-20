@@ -18,3 +18,11 @@ test('Customer 360 passes only leads the user can already see', () => {
   assert.match(page, /getInterestProfile\(createAdminClient\(\), organizationId, accessibleIds\)/);
   assert.match(page, /<InterestProfileCard profile=\{interestProfile\} \/>/);
 });
+
+test('Customer 360 loads only this person\'s leads, so older contacts open too', () => {
+  const page = read('app/customer-360/[personId]/page.tsx');
+  assert.match(page, /getLeads\(\{ ids: linkedLeadIds \}\)/);
+  assert.doesNotMatch(page, /getLeads\(\)/);
+  const data = read('lib/data.ts');
+  assert.match(data, /query = query\.in\("id", options\.ids\.slice\(0, 200\)\)/);
+});
