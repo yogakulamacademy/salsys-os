@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ToastOnLoad } from "@/components/app-toast";
 import {
   ArrowRight,
   CalendarClock,
@@ -15,7 +16,7 @@ import {
 
 import { PipelineWorkspace } from "@/components/crm/pipeline-workspace";
 import { DecisionMetricCard } from "@/components/intelligence/decision-metric-card";
-import { EmptyState, Notice, PageHeader } from "@/components/ui";
+import { EmptyState, PageHeader } from "@/components/ui";
 import { getAdmissionsSnapshot } from "@/lib/admissions-data";
 import { getAdmissionsExtras, type AdmissionsExtras, type BatchDemand } from "@/lib/admissions-story-data";
 import { getHomeStory } from "@/lib/home-story-data";
@@ -234,8 +235,8 @@ export default async function AdmissionsDeskPage({
         }
       />
 
-      {error ? <Notice tone="error">{error}</Notice> : null}
-      {notice ? <Notice tone="success">Admissions updated.</Notice> : null}
+      {/* Results show as a toast that fades (20 Nov 2026), not a banner. */}
+      <ToastOnLoad message={notice ? "Admissions updated." : null} error={error ?? null} />
 
       <nav className="overflow-x-auto rounded-xl border border-slate-200 bg-white p-1 dark:border-slate-800 dark:bg-slate-950" aria-label="Admissions workspace views">
         <div className="flex min-w-max items-center gap-1">

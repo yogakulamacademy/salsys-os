@@ -22,9 +22,11 @@ import './release-readiness-polish.css';
 import './uiux-release-qa.css';
 import './lead-inspector-uiux-qa.css';
 import './marketing-inspector-uiux-qa.css';
+import './toast.css';
 import { InteractionFeedbackBridge } from '@/components/interaction-feedback-bridge';
 import { MotionRouteSurface } from '@/components/motion-route-surface';
 import { RootShell } from '@/components/root-shell';
+import { AppToastHost } from '@/components/app-toast';
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://salsysos.com'),
@@ -57,6 +59,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         <MotionRouteSurface>
           <RootShell>{children}</RootShell>
         </MotionRouteSurface>
+        <AppToastHost />
       </body>
     </html>
   );

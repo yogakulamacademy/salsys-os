@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { ToastOnLoad } from "@/components/app-toast";
 import {
   Activity, AlertTriangle, ArrowRight, BarChart3, CheckCircle2, CircleDashed,
   Clock3, Database, History, Instagram, KeyRound, Layers3, MessageCircle,
@@ -181,8 +182,8 @@ export default async function SettingsPage({
         description="Manage your pipeline, forecast weights, aging thresholds and operational configuration."
       />
 
-      {query.notice ? <Notice tone="success" text={query.notice}/> : null}
-      {query.error ? <Notice tone="error" text={query.error}/> : null}
+      {/* Results show as a toast that fades (20 Nov 2026), not a banner. */}
+      <ToastOnLoad message={query.notice ?? null} error={query.error ?? null} />
       {settingsError ? <Notice tone="warning"
         text={'Live Settings data could not be verified: '+settingsError+'. Tenant forecast and aging values are hidden rather than replaced with defaults. Live forecast probabilities could not be verified, so no fallback values are presented as tenant configuration. Live pipeline-aging rules could not be verified. No thresholds are inferred from fallback defaults.'}/> : null}
       {providerVisibility.error && live ? <Notice tone="warning"

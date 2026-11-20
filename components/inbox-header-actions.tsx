@@ -30,9 +30,9 @@ export function InboxHeaderActions({ leadId, resolved, canResolve, mock, snoozed
   };
   // In place: no page navigation; a toast says what happened (20 Nov 2026).
   const [pending,startTransition]=useTransition();
-  const run=(action:typeof setDoneInline, formData:FormData)=>startTransition(async()=>{
+  const run=(action:typeof setDoneInline, formData:FormData):void=>startTransition(async()=>{
     const result=await action(leadId,formData);
-    showInboxToast(result.message,result.ok?'success':'error');
+    showInboxToast(result.message,result.ok?'success':'error',result.ok?undefined:()=>run(action,formData));
   });
   // Owner-approved design (20 Nov 2026): Hand to AI, Snooze, Mark done; the rest in "…".
   return <div className="ibx-v3-header-buttons ibx-v5-head-actions" aria-label="Conversation actions">
