@@ -12,6 +12,8 @@ import type { Channel, IntentLevel, LeadStage } from "@/types/crm";
 
 import { requireCurrentOrganizationId } from "@/lib/workspace";
 
+import { snoozeTarget } from "@/lib/followups-story";
+
 const allowedStages: LeadStage[] = [
   "new",
 
@@ -1193,6 +1195,9 @@ export async function logLeadInteractionAction(
   revalidatePath("/conversations");
 
   // Inbox quick actions stay on the conversation instead of jumping to the profile.
+  if (textValue(formData, "return_to") === "follow-ups") {
+    redirect(followUpsReturn(formData, "completed"));
+  }
   if (textValue(formData, "return_to") === "conversations") {
     redirect(`/conversations?lead=${encodeURIComponent(leadId)}&notice=interaction-logged`);
   }
@@ -1207,11 +1212,15 @@ export async function snoozeFollowUpAction(formData: FormData) {
     "task_id",
   );
 
-  const dueAt = textValue(
-    formData,
+  const snoozeDays = Number.parseInt(textValue(formData, "snooze_days") ?? "", 10);
+  const dueAt =
+    Number.isFinite(snoozeDays) && snoozeDays > 0 && snoozeDays <= 60
+      ? snoozeTarget(snoozeDays, new Date())
+      : textValue(
+          formData,
 
-    "due_at",
-  );
+          "due_at",
+        );
 
   if (!taskId || !dueAt) {
     redirect("/follow-ups?error=Task%20and%20new%20time%20are%20required");
@@ -1241,5 +1250,56 @@ export async function snoozeFollowUpAction(formData: FormData) {
 
   revalidatePath("/dashboard");
 
-  redirect("/follow-ups?notice=snoozed");
+  redirect(followUpsReturn(formData, "snoozed"));
+}
+
+/** Back to the same Tasks & Follow-ups view after an action. */
+function followUpsReturn(formData: FormData, notice: string) {
+  const view = (textValue(formData, "view") ?? "").replace(/[^a-z_]/g, "");
+  return `/follow-ups?${view ? `view=${view}&` : ""}notice=${notice}`;
+}
+
+/** The person agrees with the AI: move the lead to Lost and close the suggestion. */
+export async function confirmLostFromTaskAction(formData: FormData) {
+  const taskId = textValue(formData, "task_id");
+  const leadId = textValue(formData, "lead_id");
+  if (!taskId || !leadId) redirect("/follow-ups?error=Task%20and%20lead%20are%20required");
+  if (useMockData) redirect("/follow-ups?notice=mock-complete");
+
+  const supabase = await createClient();
+  const { data: claims } = await supabase.auth.getClaims();
+  const { error: stageError } = await supabase.rpc("set_lead_stage", {
+    p_lead_id: leadId,
+    p_new_stage: "lost",
+    p_changed_by_type: "human",
+    p_changed_by_id: claims?.claims?.sub ?? null,
+    p_reason: "Confirmed the AI's Lost suggestion from Tasks & Follow-ups",
+  });
+  if (stageError) redirect(`/follow-ups?view=lost&error=${encodeURIComponent(stageError.message)}`);
+
+  const { error } = await supabase.rpc("complete_followup_task", { p_task_id: taskId });
+  if (error) redirect(`/follow-ups?view=lost&error=${encodeURIComponent(error.message)}`);
+
+  revalidatePath("/follow-ups");
+  revalidatePath("/leads");
+  revalidatePath(`/leads/${leadId}`);
+  revalidatePath("/home");
+  redirect(followUpsReturn(formData, "lost-confirmed"));
+}
+
+/** Close every listed task at once (used for leads already enrolled or lost). */
+export async function closeSettledTasksAction(formData: FormData) {
+  const ids = formData.getAll("task_id").map(String).filter((v) => /^[0-9a-f-]{36}$/i.test(v)).slice(0, 200);
+  if (!ids.length) redirect("/follow-ups");
+  if (useMockData) redirect("/follow-ups?notice=mock-complete");
+
+  const supabase = await createClient();
+  let closed = 0;
+  for (const id of ids) {
+    const { error } = await supabase.rpc("complete_followup_task", { p_task_id: id });
+    if (!error) closed += 1;
+  }
+  revalidatePath("/follow-ups");
+  revalidatePath("/home");
+  redirect(`/follow-ups?notice=closed-${closed}`);
 }
