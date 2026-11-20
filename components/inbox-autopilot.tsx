@@ -48,6 +48,29 @@ export function InboxAutopilotBar({ leadId, state, canHandToAi }: { leadId: stri
   );
 }
 
+/** Header button: Hand to AI when nobody (or a person) is handling the lead.
+ *  The status bar only shows while the AI is working or has handed back. */
+export function InboxAutopilotHeaderButton({ leadId, state, canHandToAi }: { leadId: string; state: InboxAutopilotState; canHandToAi: boolean }) {
+  const [pending, start] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+  if (!canHandToAi || state.status === "active" || state.status === "handed_over") return null;
+  return (
+    <button type="button" disabled={pending} title={error ?? "Let AI Autopilot reply to this lead when it is confident"}
+      className="ibx-v5-hand-ai"
+      onClick={() => start(async () => {
+        setError(null);
+        const result = await setAutopilotStateAction(leadId, "hand_to_ai");
+        if (!result.ok) setError(result.error);
+      })}>
+      <Bot size={14} aria-hidden /> {pending ? "Handing…" : error ? "Try again" : "Hand to AI"}
+    </button>
+  );
+}
+
+export function autopilotBarVisible(state: InboxAutopilotState) {
+  return state.status === "active" || state.status === "handed_over";
+}
+
 /** A follow-up is due today and the AI has written it. */
 export function InboxFollowupDraftCard({ followup }: { followup: InboxFollowupDraft }) {
   const [pending, start] = useTransition();

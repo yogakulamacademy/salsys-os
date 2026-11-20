@@ -45,7 +45,10 @@ test('Selected Inbox thread exposes real Notes, Activity and customer context',a
   await expect(page.getByRole('tab',{name:/Activity/})).toBeVisible();
   await page.getByRole('tab',{name:/Notes/}).click();
   await expect(page.getByRole('heading',{name:'Private team notes'})).toBeVisible();
+  // Next step lives in the header's "…" menu (owner-approved design, 20 Nov 2026).
+  await page.getByLabel('More conversation actions').click();
   await expect(page.getByRole('button',{name:/Next step/})).toBeVisible();
+  await page.getByLabel('More conversation actions').click();
   await expect(page.getByRole('button',{name:'Mark done'})).toBeDisabled();
   // Lead details are folded in the combined design (20 Nov 2026).
   await page.locator('summary',{hasText:/^Lead details/}).click();

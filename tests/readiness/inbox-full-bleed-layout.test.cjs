@@ -38,7 +38,8 @@ test("Inbox stretches flush to edges without modifying its three-column contents
 test("Inbox starts immediately below app header without a live-status strip", () => {
   const page = read("app/conversations/page.tsx");
   const realtime = read("components/conversations-realtime.tsx");
-  assert.ok(page.includes('className="ibx-v2 conversations-polish gap-2"'));
+  // ibx-v5: owner-approved Combined design (20 Nov 2026), same flush layout.
+  assert.ok(page.includes('className="ibx-v2 ibx-v5 conversations-polish gap-2"'));
   assert.ok(!page.includes('className="ibx-v2 conversations-polish space-y-2"'));
   assert.ok(page.includes("<ConversationsRealtime />"));
 

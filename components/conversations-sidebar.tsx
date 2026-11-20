@@ -56,12 +56,15 @@ export function ConversationsSidebar({
   currentUserId,
   canManageAssignments,
   pagination,
+  autopilotLabel,
 }: {
   leads: ConversationLeadSummary[];
   selectedId?: string;
   currentUserId: string | null;
   canManageAssignments: boolean;
   pagination?: Omit<InboxPage, "rows">;
+  /** e.g. "AI Autopilot on · Instagram"; shown next to the Inbox title. */
+  autopilotLabel?: { text: string; on: boolean } | null;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -276,9 +279,16 @@ export function ConversationsSidebar({
   return (
     <aside className="conversation-sidebar flex h-full min-h-0 flex-col overflow-hidden bg-surface">
       <div className="ibx-v2-sidebar-header shrink-0 border-b border-line px-4 pt-3">
-        <h2 className="sr-only">Conversations</h2>
+        <div className="ibx-v5-list-title">
+          <h1>Inbox</h1>
+          {autopilotLabel ? (
+            <span className={`ibx-v5-ap-pill ${autopilotLabel.on ? "is-on" : ""}`} title="AI Autopilot replies by itself on new Instagram leads when it is confident, and hands the rest to the team.">
+              <span aria-hidden="true" />{autopilotLabel.text}
+            </span>
+          ) : null}
+        </div>
         <div
-          className="ibx-v2-tabs ibx-v3-pills flex gap-1.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden [&>button]:shrink-0 [&>button]:whitespace-nowrap"
+          className="ibx-v2-tabs ibx-v3-pills ibx-v5-seg flex gap-1.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden [&>button]:shrink-0 [&>button]:whitespace-nowrap"
           role="tablist"
           aria-label="Conversation filters"
           onKeyDown={handleFilterKeyDown}
@@ -310,7 +320,7 @@ export function ConversationsSidebar({
             ref={searchRef}
             value={search}
             onChange={(event) => setSearch(event.target.value)}
-            placeholder="Search name, message or course…"
+            placeholder="Search name, message, course"
             className="h-10 w-full rounded-ui border border-line bg-surface-soft pl-9 pr-14 text-[13px] text-copy-strong outline-none transition placeholder:text-copy-subtle focus:border-brand-600 focus:bg-surface focus:ring-2 focus:ring-brand-700/10"
           />
           {!search ? (
@@ -327,6 +337,18 @@ export function ConversationsSidebar({
               <X size={13} />
             </button>
           )}
+        </label>
+        <label className="ibx-v5-owner">
+          <span className="sr-only">Owner</span>
+          <select aria-label="Owner" value={scope} onChange={(event) => updateScope(event.target.value as ScopeFilter)}>
+            <option value="team">All owners</option>
+            {currentUserId ? <option value="mine">My conversations</option> : null}
+            <option value="unassigned">Unassigned</option>
+            {Array.from(new Map((pagination?.owners ?? leads.filter(lead => lead.ownerUserId && lead.ownerName)
+              .map(lead => ({id:lead.ownerUserId!,name:lead.ownerName!}))).map(owner => [owner.id,owner.name])).entries()).map(([id,name]) => (
+              <option key={id} value={`owner:${id}`}>{name}</option>
+            ))}
+          </select>
         </label>
           <details className="ibx-v2-advanced-filter">
             <summary aria-label="More inbox filters" title="More filters">
@@ -396,8 +418,9 @@ export function ConversationsSidebar({
         </div>
       ) : null}
 
-      <div className={`ibx-v2-secondary-filters grid shrink-0 ${pagination?.channelCounts ? "grid-cols-1" : "grid-cols-2"} gap-2 border-b border-line bg-surface px-4 py-2.5`}>
-        {pagination?.channelCounts ? null : (
+      {pagination?.channelCounts ? null : (
+      <div className="ibx-v2-secondary-filters grid shrink-0 grid-cols-1 gap-2 border-b border-line bg-surface px-4 py-2.5">
+        {(
         <label className="min-w-0">
           <span className="mb-1 block text-xs font-medium text-copy-muted">Channel</span>
           <select
@@ -412,23 +435,8 @@ export function ConversationsSidebar({
           </select>
         </label>
         )}
-        <label className="min-w-0">
-          <span className="mb-1 block text-xs font-medium text-copy-muted">Owner</span>
-          <select aria-label="Owner" value={scope} onChange={(event) => updateScope(event.target.value as ScopeFilter)}
-            className="h-8 w-full rounded-md border border-line bg-surface-soft px-2 text-[11px] font-medium text-copy-muted outline-none focus:border-brand-600 focus:text-brand-700">
-            <option value="team">All owners</option>
-            {currentUserId ? <option value="mine">My conversations</option> : null}
-            <option value="unassigned">Unassigned</option>
-            {Array.from(new Map((pagination?.owners ?? leads.filter(lead => lead.ownerUserId && lead.ownerName)
-              .map(lead => ({id:lead.ownerUserId!,name:lead.ownerName!}))).map(owner => [owner.id,owner.name])).entries()).map(([id,name]) => (
-              <option key={id} value={`owner:${id}`}>{name}</option>
-            ))}
-          </select>
-        </label>
-        <span className="col-span-2 text-right text-[10.5px] text-copy-subtle" aria-live="polite">
-          {pagination?.totalMatching ?? filteredLeads.length} {(pagination?.totalMatching ?? filteredLeads.length) === 1 ? "lead" : "leads"} match
-        </span>
       </div>
+      )}
 
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain [scrollbar-width:thin]">
         {filteredLeads.length === 0 ? (
@@ -471,6 +479,7 @@ export function ConversationsSidebar({
         {!serverMode && filteredLeads.length > visibleCount ? <div className="p-3 text-center"><button type="button" className="btn-secondary w-full" onClick={() => setVisibleCount(count => count + 50)}>Show more conversations</button></div> : null}
       </div>
 
+      {pagination && pageCount <= 1 ? null : (
       <div className="shrink-0 border-t border-line px-4 py-2.5 text-[11px] text-copy-subtle">
         {pagination ? (
           <div className="flex items-center justify-between gap-2">
@@ -491,6 +500,7 @@ export function ConversationsSidebar({
           </span>
         )}
       </div>
+      )}
     </aside>
   );
 }
