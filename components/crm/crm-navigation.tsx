@@ -2,13 +2,10 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useEffect, useState } from 'react';
 import {
-  Activity,
-  AlertTriangle,
+  BadgeCheck,
   ChevronDown,
-  CircleDollarSign,
-  DatabaseZap,
-  LayoutDashboard,
   ListTodo,
   Rows3,
   RotateCcw,
@@ -16,10 +13,16 @@ import {
   UsersRound,
 } from 'lucide-react';
 
+type Counts = { waiting: number; overdue: number; paying: number; saysPaid: number };
+
 type NavigationItem = {
   href: string;
   label: string;
   icon: React.ComponentType<{ size?: number; className?: string }>;
+  /** Other routes that belong to this item. */
+  also?: string[];
+  /** Live badge: which count, what it means, and its colour. */
+  badge?: { key: keyof Counts; label: string; tone: 'attention' | 'money' };
 };
 
 type NavigationGroup = {
@@ -27,54 +30,63 @@ type NavigationGroup = {
   items: NavigationItem[];
 };
 
+// Owner review (20 Nov 2026): Sales Overview (= Home), Today (old command
+// center), separate Pipeline (= Admissions tab) and the two saved views
+// (duplicates of Leads quick views) were removed; Data Quality moved to
+// Settings. Old links still work.
 const groups: NavigationGroup[] = [
   {
-    label: 'Workspace',
+    label: "Today's work",
     items: [
-      { href: '/crm', label: 'Sales Overview', icon: LayoutDashboard },
-      { href: '/dashboard', label: 'Today', icon: Activity },
-      { href: '/admissions', label: 'Admissions', icon: UsersRound },
+      { href: '/leads', label: 'Leads', icon: UserRoundSearch, badge: { key: 'waiting', label: 'waiting for a reply', tone: 'attention' } },
+      { href: '/admissions', label: 'Pipeline & admissions', icon: Rows3, also: ['/pipeline'], badge: { key: 'paying', label: 'about to pay', tone: 'money' } },
+      { href: '/follow-ups', label: 'Tasks & Follow-ups', icon: ListTodo, badge: { key: 'overdue', label: 'overdue', tone: 'attention' } },
     ],
   },
   {
-    label: 'Selling',
+    label: 'Win more',
     items: [
-      { href: '/leads', label: 'Leads', icon: UserRoundSearch },
-      { href: '/pipeline', label: 'Pipeline', icon: Rows3 },
-      { href: '/follow-ups', label: 'Tasks & Follow-ups', icon: ListTodo },
-    ],
-  },
-  {
-    label: 'Customer & quality',
-    items: [
-      { href: '/customer-360', label: 'Customer 360', icon: UsersRound },
-      { href: '/data-quality', label: 'Data Quality', icon: DatabaseZap },
       { href: '/re-engaged', label: 'Re-engaged', icon: RotateCcw },
-    ],
-  },
-  {
-    label: 'Saved views',
-    items: [
-      { href: '/leads?stage=payment_pending', label: 'Payment Pending', icon: CircleDollarSign },
-      { href: '/leads?view=attention', label: 'Aging Alerts', icon: AlertTriangle },
+      { href: '/leads#says-paid', label: "They say they've paid", icon: BadgeCheck, badge: { key: 'saysPaid', label: 'to check', tone: 'money' } },
+      { href: '/customer-360', label: 'Customer 360', icon: UsersRound },
     ],
   },
 ];
 
 function pathOnly(href: string) {
-  return href.split('?')[0];
+  return href.split(/[?#]/)[0];
 }
 
-function isActive(pathname: string, href: string) {
-  if (href.includes('?')) return false;
-  const path = pathOnly(href);
-  if (path === '/crm') return pathname === path;
-  if (path === '/dashboard') return pathname === path;
-  if (path === '/leads') return pathname === '/leads' || pathname.startsWith('/leads/');
-  return pathname === path || pathname.startsWith(`${path}/`);
+function isActive(pathname: string, item: NavigationItem) {
+  if (item.href.includes('#') || item.href.includes('?')) return false;
+  const paths = [pathOnly(item.href), ...(item.also ?? [])];
+  return paths.some((path) => (path === '/leads'
+    ? pathname === '/leads' || pathname.startsWith('/leads/')
+    : pathname === path || pathname.startsWith(`${path}/`)));
 }
 
-function NavigationLinks({ mobile = false }: { mobile?: boolean }) {
+// One fetch per page load, shared by the desktop and mobile menus.
+let countsPromise: Promise<Counts | null> | null = null;
+function loadCounts(): Promise<Counts | null> {
+  countsPromise ??= fetch('/api/crm/nav-counts', { cache: 'no-store' })
+    .then((r) => (r.ok ? r.json() : null))
+    .then((body) => (body?.counts ?? null) as Counts | null)
+    .catch(() => null);
+  return countsPromise;
+}
+
+function useCounts() {
+  const [counts, setCounts] = useState<Counts | null>(null);
+  useEffect(() => {
+    let alive = true;
+    countsPromise = null;
+    loadCounts().then((c) => { if (alive) setCounts(c); });
+    return () => { alive = false; };
+  }, []);
+  return counts;
+}
+
+function NavigationLinks({ mobile = false, counts }: { mobile?: boolean; counts: Counts | null }) {
   const pathname = usePathname();
 
   return (
@@ -85,8 +97,10 @@ function NavigationLinks({ mobile = false }: { mobile?: boolean }) {
             {group.label}
           </div>
           <div className="space-y-1">
-            {group.items.map(({ href, label, icon: Icon }) => {
-              const active = isActive(pathname, href);
+            {group.items.map((item) => {
+              const { href, label, icon: Icon, badge } = item;
+              const active = isActive(pathname, item);
+              const count = badge && counts ? counts[badge.key] : 0;
 
               return (
                 <Link
@@ -111,6 +125,19 @@ function NavigationLinks({ mobile = false }: { mobile?: boolean }) {
                     }
                   />
                   <span className="min-w-0 flex-1">{label}</span>
+                  {badge && count > 0 ? (
+                    <span
+                      title={`${count.toLocaleString('en-IN')} ${badge.label}`}
+                      aria-label={`${count.toLocaleString('en-IN')} ${badge.label}`}
+                      className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-bold tabular-nums ${
+                        badge.tone === 'money'
+                          ? 'bg-emerald-50 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300'
+                          : 'bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300'
+                      }`}
+                    >
+                      {count > 999 ? '999+' : count.toLocaleString('en-IN')}
+                    </span>
+                  ) : null}
                 </Link>
               );
             })}
@@ -123,9 +150,10 @@ function NavigationLinks({ mobile = false }: { mobile?: boolean }) {
 
 export function CrmNavigation() {
   const pathname = usePathname();
+  const counts = useCounts();
   const current = groups
     .flatMap((group) => group.items)
-    .find((item) => isActive(pathname, item.href));
+    .find((item) => isActive(pathname, item));
 
   return (
     <>
@@ -146,7 +174,7 @@ export function CrmNavigation() {
               Manage leads, admissions, follow-ups and customer context in one workspace.
             </div>
           </div>
-          <NavigationLinks mobile />
+          <NavigationLinks mobile counts={counts} />
         </div>
       </details>
 
@@ -163,7 +191,7 @@ export function CrmNavigation() {
               Manage leads, admissions, follow-ups and customer context in one workspace.
             </p>
           </div>
-          <NavigationLinks />
+          <NavigationLinks counts={counts} />
         </div>
       </aside>
     </>
