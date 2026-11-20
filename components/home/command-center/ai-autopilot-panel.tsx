@@ -9,9 +9,9 @@ import { createClient } from "@/lib/supabase/server";
 export async function AiAutopilotPanel() {
   const supabase = await createClient();
   const since = new Date(Date.now() - 24 * 3_600_000).toISOString();
-  const [{ data: handed }, { count: active }, { count: sentToday }, { data: followups }] = await Promise.all([
-    supabase.from("ai_autopilot_leads").select("lead_id, handover_reason, handover_detail, handed_over_at, leads(display_name)")
-      .eq("status", "handed_over").order("handed_over_at", { ascending: false }).limit(6),
+  const [{ data: handed, count: handedCount }, { count: active }, { count: sentToday }, { data: followups }] = await Promise.all([
+    supabase.from("ai_autopilot_leads").select("lead_id, handover_reason, handover_detail, handed_over_at, leads(display_name)", { count: "exact" })
+      .eq("status", "handed_over").order("handed_over_at", { ascending: false }).limit(3),
     supabase.from("ai_autopilot_leads").select("id", { count: "exact", head: true }).eq("status", "active"),
     supabase.from("ai_autopilot_runs").select("id", { count: "exact", head: true }).eq("mode", "autopilot").eq("status", "sent").gte("created_at", since),
     supabase.from("tasks").select("id, metadata").eq("created_by_id", "ai_followup_detection_v1").eq("status", "open").lte("due_at", new Date().toISOString()).limit(200),
@@ -26,7 +26,7 @@ export async function AiAutopilotPanel() {
         <div className="rounded-lg bg-brand-50 px-2 py-2"><strong className="block text-lg">{sentToday ?? 0}</strong><span className="text-[11px] text-copy-muted">AI replies, 24h</span></div>
         <div className="rounded-lg bg-amber-50 px-2 py-2"><strong className="block text-lg text-amber-900">{readyFollowups}/{dueFollowups}</strong><span className="text-[11px] text-amber-900">follow-ups drafted</span></div>
       </div>
-      <div className="text-[11px] font-bold uppercase tracking-wide text-copy-muted">Needs you</div>
+      <div className="text-[11px] font-bold uppercase tracking-wide text-copy-muted">Needs you{handedCount ? ` · ${handedCount.toLocaleString("en-IN")}` : ""}</div>
       {list.length ? (
         <ul className="mt-1 flex flex-col">
           {list.map((row) => {
@@ -42,7 +42,11 @@ export async function AiAutopilotPanel() {
             );
           })}
         </ul>
-      ) : (
+      ) : null}
+      {/* Three here keeps the first screen compact (Home at 1920x1080, 20 Nov 2026). */}
+      {list.length > 0 && (handedCount ?? 0) > list.length ? (
+        <Link href="/conversations?filter=all" className="mt-auto text-[13px] font-semibold text-brand-700 hover:text-brand-800">See all {handedCount?.toLocaleString("en-IN")} →</Link>
+      ) : list.length > 0 ? null : (
         <p className="mt-1 text-[12px] text-copy-muted">Nothing handed over by the AI.</p>
       )}
     </Panel>

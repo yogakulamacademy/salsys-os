@@ -17,7 +17,7 @@ export function HomeTodayStrip({ story, aiMoves24h, className = "", children }: 
     story.aiRepliesToday ? `sent ${story.aiRepliesToday.toLocaleString("en-IN")} ${story.aiRepliesToday === 1 ? "reply" : "replies"}` : null,
   ].filter(Boolean).join(" · ");
   return (
-    <section aria-label="Today" className={`flex flex-col justify-between gap-4 rounded-[18px] border border-line bg-surface p-5 shadow-card sm:p-6 ${className}`}>
+    <section aria-label="Today" className={`flex flex-col gap-4 rounded-[18px] border border-line bg-surface p-5 shadow-card sm:p-6 ${className}`}>
       <div className="flex flex-col gap-1.5">
         <span className="text-[11px] font-bold uppercase tracking-[0.1em] text-brand-700">Today</span>
         <p className="max-w-[920px] text-xl font-bold leading-snug tracking-[-0.01em] text-copy-strong sm:text-[22px]">{story.headline}</p>
@@ -49,7 +49,7 @@ export function HomeTodayStrip({ story, aiMoves24h, className = "", children }: 
           </Link>
         ) : null}
       </div>
-      {children}
+      {children ? <div className="mt-auto">{children}</div> : null}
     </section>
   );
 }
