@@ -424,7 +424,8 @@ export default async function ConversationsPage({
             enabled={copilotEnabled}
             disabledReason={
               !copilotEnabled
-                ? messagingEligibility?.userMessage ||
+                ? (instagramWindowClosed ? "Suggestions come back when they message you again. You can still write and save a draft below." : null) ||
+                  messagingEligibility?.userMessage ||
                   (copilotChannel === "whatsapp"
                     ? "The WhatsApp service window is closed. Use an approved template instead of a free-text draft."
                     : "This channel is not currently eligible for a direct reply.")

@@ -140,7 +140,9 @@ html.dark .ibx-v5-ap-pill.is-on{background:rgba(30,138,80,.18);color:#8FE0B4;}
 .ibx-v2.ibx-v5 .ibx-v5-chat-header{
   display:flex;align-items:center;justify-content:space-between;gap:12px;
   padding:12px 66px 12px 18px!important;border-bottom:1px solid var(--ibx5-line-soft)!important;
+  flex-wrap:nowrap!important;
 }
+.ibx-v2.ibx-v5 .ibx-v5-chat-header > :first-child{flex:1 1 auto;min-width:0;}
 .ibx-v5-head-avatar{flex:none;width:42px;height:42px;border-radius:999px;display:grid;place-items:center;
   background:var(--ibx5-chip);color:var(--ibx5-accent-ink);font-weight:700;font-size:14px;}
 .ibx-v2.ibx-v5 .ibx-v5-head-name{margin:0;font-size:17px;font-weight:700;color:var(--ibx5-ink);}
@@ -152,7 +154,7 @@ html.dark .ibx-v5-ap-pill.is-on{background:rgba(30,138,80,.18);color:#8FE0B4;}
 .ibx-v5-head-owner{display:inline-flex;align-items:center;gap:4px;}
 .ibx-v5-head-owner > *{font-size:13px!important;}
 
-.ibx-v2.ibx-v5 .ibx-v5-head-actions{display:flex;align-items:center;gap:8px;flex:none;}
+.ibx-v2.ibx-v5 .ibx-v5-head-actions{display:flex!important;align-items:center;gap:8px!important;flex:none!important;width:auto!important;margin:0!important;}
 .ibx-v2.ibx-v5 .ibx-v5-head-actions .ibx-v3-head-btn,
 .ibx-v2.ibx-v5 .ibx-v5-head-actions .ibx-v3-head-snooze,
 .ibx-v5-hand-ai{
