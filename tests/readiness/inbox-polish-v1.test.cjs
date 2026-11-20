@@ -31,3 +31,11 @@ test('collaborate dock is a compact round button unless teammates are viewing', 
   assert.match(dock, /w-11 justify-center px-0/);
   assert.match(dock, /aria-label=/);
 });
+
+test('the server page imports only components from the client autopilot module (20 Nov 2026 outage)', () => {
+  const page = read('app/conversations/page.tsx');
+  const line = page.split('\n').find((l) => l.includes('from "@/components/inbox-autopilot"')) || '';
+  const names = (line.match(/\{([^}]*)\}/)?.[1] || '').split(',').map((n) => n.trim()).filter(Boolean);
+  assert.ok(names.length > 0);
+  for (const n of names) assert.match(n, /^[A-Z]/, `${n} would be called on the server from a "use client" module`);
+});

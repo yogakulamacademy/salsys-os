@@ -29,7 +29,7 @@ import { InboxLeadIntelligence, InboxLeadTimeline } from "@/components/inbox-lea
 import { getLeadSourceForInbox } from "@/lib/lead-source-context-data";
 import { InboxHeaderOwner } from "@/components/inbox-header-owner";
 import { InboxSnoozedBanner } from "@/components/inbox-snoozed-banner";
-import { InboxAutopilotBar, InboxAutopilotHeaderButton, InboxFollowupDraftCard, autopilotBarVisible } from "@/components/inbox-autopilot";
+import { InboxAutopilotBar, InboxAutopilotHeaderButton, InboxFollowupDraftCard } from "@/components/inbox-autopilot";
 import { getInboxAutopilot } from "@/lib/autopilot-inbox-data";
 import { InboxCourseLink } from "@/components/inbox-course-link";
 import { InboxCourseInterests, type InboxInterest } from "@/components/inbox-course-interests";
@@ -382,7 +382,8 @@ export default async function ConversationsPage({
       {isSnoozedNow && selected.snoozedUntil ? (
         <InboxSnoozedBanner leadId={selected.id} until={selected.snoozedUntil} />
       ) : null}
-      {autopilot && autopilotBarVisible(autopilot.state) ? (
+      {/* Only while the AI is working or has handed back (a client-module helper cannot run here). */}
+      {autopilot && (autopilot.state.status === "active" || autopilot.state.status === "handed_over") ? (
         <InboxAutopilotBar key={`ap-${selected.id}`} leadId={selected.id} state={autopilot.state} canHandToAi={selected.currentContactChannel === "instagram"} />
       ) : null}
 
