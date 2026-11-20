@@ -1,23 +1,31 @@
 import Link from "next/link";
 import {
   ArrowRight,
+  BadgeCheck,
   Clock3,
   CreditCard,
   ListFilter,
+  MessageCircleReply,
   UserRoundX,
   UsersRound,
 } from "lucide-react";
 import type { LeadsWorkspaceSummary } from "@/lib/leads-data";
+import { waitedFor, type HomeStory } from "@/lib/home-story";
 
 type LeadsOverviewProps = {
   summary: LeadsWorkspaceSummary;
+  /** Plain-language story (waiting, going cold, says they paid); null when unavailable. */
+  story?: HomeStory | null;
 };
 
 /**
  * Overview uses only the server's authoritative Leads workspace summary,
  * never client-page counts or invented historical trends.
  */
-export function LeadsOverview({ summary }: LeadsOverviewProps) {
+export function LeadsOverview({ summary, story = null }: LeadsOverviewProps) {
+  // Until the business assigns owners, "Unassigned" is every lead and says
+  // nothing; show who is waiting for a reply instead.
+  const ownersInUse = summary.unassigned < summary.all;
   const cards = [
     {
       label: "Total leads",
@@ -28,19 +36,29 @@ export function LeadsOverview({ summary }: LeadsOverviewProps) {
       tone: "text-brand-700 dark:text-brand-300",
       surface: "bg-brand-50 dark:bg-brand-950/30",
     },
+    ownersInUse || !story
+      ? {
+          label: "Unassigned",
+          value: summary.unassigned,
+          detail: "Need an owner",
+          icon: UserRoundX,
+          href: "/leads?view=unassigned",
+          tone: "text-indigo-700 dark:text-indigo-300",
+          surface: "bg-indigo-50 dark:bg-indigo-950/30",
+        }
+      : {
+          label: "Waiting for a reply",
+          value: story.waitingThisWeek,
+          detail: "Wrote in the last 7 days",
+          icon: MessageCircleReply,
+          href: "/conversations",
+          tone: "text-indigo-700 dark:text-indigo-300",
+          surface: "bg-indigo-50 dark:bg-indigo-950/30",
+        },
     {
-      label: "Unassigned",
-      value: summary.unassigned,
-      detail: "Need an owner",
-      icon: UserRoundX,
-      href: "/leads?view=unassigned",
-      tone: "text-indigo-700 dark:text-indigo-300",
-      surface: "bg-indigo-50 dark:bg-indigo-950/30",
-    },
-    {
-      label: "Stuck leads",
+      label: "Going quiet",
       value: summary.stuck,
-      detail: "Beyond stage threshold",
+      detail: "In their stage longer than usual",
       icon: ListFilter,
       href: "/leads?view=stuck",
       tone: "text-orange-700 dark:text-orange-300",
@@ -67,6 +85,27 @@ export function LeadsOverview({ summary }: LeadsOverviewProps) {
   ];
 
   const urgent = [
+    story?.saysPaid.length
+      ? {
+          text: story.saysPaid.length.toLocaleString("en-IN") + (story.saysPaid.length === 1 ? " lead says they've paid" : " leads say they've paid"),
+          detail: "Nothing recorded yet: check and mark enrolled",
+          href: "#says-paid",
+        }
+      : null,
+    story?.waitingNow
+      ? {
+          text: story.waitingNow.toLocaleString("en-IN") + " waiting for a reply",
+          detail: "Wrote in the last 3 days",
+          href: "/conversations",
+        }
+      : null,
+    story?.goingColdCount
+      ? {
+          text: story.goingColdCount.toLocaleString("en-IN") + " interested leads going cold",
+          detail: "Asked about fees, dates or paying; no reply for 2+ days",
+          href: "/home#home-going-cold",
+        }
+      : null,
     summary.followupOverdue > 0
       ? {
           text: summary.followupOverdue.toLocaleString("en-IN") + " overdue follow-ups",
@@ -74,14 +113,14 @@ export function LeadsOverview({ summary }: LeadsOverviewProps) {
           href: "/leads?view=followup_overdue",
         }
       : null,
-    summary.unassigned > 0
+    summary.unassigned > 0 && ownersInUse
       ? {
           text: summary.unassigned.toLocaleString("en-IN") + " unassigned leads",
           detail: "Review ownership",
           href: "/leads?view=unassigned",
         }
       : null,
-  ].filter((value): value is { text: string; detail: string; href: string } => value != null);
+  ].filter((value): value is { text: string; detail: string; href: string } => value != null).slice(0, 4);
 
   return (
     <div className="space-y-2.5" data-testid="leads-overview">
@@ -131,6 +170,27 @@ export function LeadsOverview({ summary }: LeadsOverviewProps) {
               </Link>
             ))}
           </div>
+        </section>
+      ) : null}
+
+      {story?.saysPaid.length ? (
+        <section id="says-paid" aria-label="Say they've paid" className="flex flex-col gap-2.5 rounded-xl border border-emerald-200 bg-emerald-50/60 px-3.5 py-3 dark:border-emerald-900/50 dark:bg-emerald-950/20">
+          <div className="flex items-center gap-2 text-xs font-semibold text-emerald-800 dark:text-emerald-300">
+            <BadgeCheck size={15} aria-hidden /> They say they&apos;ve paid. Find the payment, then use Mark enrolled in the Inbox.
+          </div>
+          <ul className="grid gap-2 lg:grid-cols-2">
+            {story.saysPaid.slice(0, 8).map((lead) => (
+              <li key={lead.id}>
+                <Link href={`/conversations?lead=${lead.id}`} className="flex min-w-0 items-center gap-2.5 rounded-lg bg-surface px-3 py-2.5 text-[11px] transition hover:text-brand-700">
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate font-semibold text-copy-strong">{lead.name}{lead.course ? <span className="font-normal text-copy-muted"> · {lead.course}</span> : null}</span>
+                    {lead.quote ? <span className="block truncate text-copy-muted">&ldquo;{lead.quote}&rdquo; · {waitedFor(lead.lastInboundAt, new Date())} ago</span> : null}
+                  </span>
+                  <ArrowRight size={13} className="shrink-0 text-brand-700" aria-hidden />
+                </Link>
+              </li>
+            ))}
+          </ul>
         </section>
       ) : null}
     </div>

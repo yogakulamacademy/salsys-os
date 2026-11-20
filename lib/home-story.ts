@@ -10,6 +10,17 @@ export type StoryLead = {
   quote: string | null;
 };
 
+/**
+ * The lead says they have paid or enrolled ("Payment made", "I've made the
+ * payment", "I have enrolled"). A question about paying doesn't count.
+ */
+export function saysTheyPaid(text: string | null | undefined): boolean {
+  const t = (text ?? "").toLowerCase().replace(/[’']/g, "'");
+  if (!t.trim() || /\?\s*$/.test(t)) return false;
+  if (/\b(how|where|can i|should i|when|will i|want to|going to|shall i)\b/.test(t)) return false;
+  return /\b(payment (is )?(made|done|completed|successful|sent)|(i'?ve|i have|i|we'?ve|we have|just) (made|done|completed|sent) (the |my )?payment|(i'?ve|i have|i|just|already) paid|paid the (fee|fees|amount)|(i'?ve|i have|i) (enrolled|registered)|transferred the (fee|fees|amount|money))\b/.test(t);
+}
+
 export type HomeStory = {
   /** Waiting for a reply, last message within 3 days. */
   waitingNow: number;
@@ -22,6 +33,8 @@ export type HomeStory = {
   winBack: { total: number; withCourse: number; withoutCourse: number };
   lostSuggestions: number;
   aiRepliesToday: number;
+  /** Leads whose last message says they paid or enrolled, with nothing recorded yet. */
+  saysPaid: StoryLead[];
   leadsThisWeek: number | null;
   leadsLastWeek: number | null;
   /** Percentage change, null without a meaningful baseline. */
@@ -73,6 +86,7 @@ export function buildHomeStory(input: {
   leadsLastWeek: number | null;
   lostSuggestions: number;
   aiRepliesToday: number;
+  saysPaid?: StoryLead[];
 }): HomeStory {
   const now = input.now.getTime();
   const ageH = (l: StoryLead) => (now - Date.parse(l.lastInboundAt)) / HOUR;
@@ -91,11 +105,13 @@ export function buildHomeStory(input: {
   const { leadsThisWeek: tw, leadsLastWeek: lw } = input;
   const leadsChange = tw != null && lw != null && lw >= 20 ? Math.round(((tw - lw) / lw) * 100) : null;
 
+  const saysPaid = input.saysPaid ?? [];
   const parts: string[] = [];
+  if (saysPaid.length) parts.push(`${plural(saysPaid.length, "lead says they've", "leads say they've")} paid but nothing is recorded`);
   if (waitingNow) parts.push(`${plural(waitingNow, "person is", "people are")} waiting for a reply`);
   if (cold.length) parts.push(`${plural(cold.length, "interested lead hasn't", "interested leads haven't")} heard from you in over 2 days`);
   const headline = parts.length
-    ? `${parts.join(", and ")}.`.replace(/^./, (c) => c.toUpperCase())
+    ? `${parts.length > 2 ? `${parts.slice(0, -1).join(", ")}, and ${parts[parts.length - 1]}` : parts.join(", and ")}.`.replace(/^./, (c) => c.toUpperCase())
     : "Everyone who wrote recently has a reply. Nice work.";
 
   return {
@@ -106,6 +122,7 @@ export function buildHomeStory(input: {
     winBack: { total: old.length, withCourse, withoutCourse: old.length - withCourse },
     lostSuggestions: input.lostSuggestions,
     aiRepliesToday: input.aiRepliesToday,
+    saysPaid,
     leadsThisWeek: tw,
     leadsLastWeek: lw,
     leadsChange,

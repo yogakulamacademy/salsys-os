@@ -42,3 +42,15 @@ test('story: funnel insight names the stall', () => {
   assert.match(funnelInsight(g), /^80% of leads asked something \(usually the fee\) and went quiet; only 1 in 8 has said which course and when/);
   assert.equal(funnelInsight(groupHomePipelineStages({ new: 3, contacted: 0, engaged: 2, qualified: 0, high_intent: 0, payment_pending: 0 })), null);
 });
+
+test('story: says they paid, not asking how to pay', async () => {
+  const { saysTheyPaid } = await import('../../lib/home-story.ts');
+  for (const t of ['Payment made', 'I’ve made the payment', 'Yeah thank u. I have enrolled', 'Payment done mam', 'I paid the fee yesterday', 'Already paid']) assert.equal(saysTheyPaid(t), true, t);
+  for (const t of ['How can I make the payment?', 'Can I pay in installments', 'I will make the payment tomorrow?', 'Where should I pay', 'I want to enrol', 'What is the course fee?']) assert.equal(saysTheyPaid(t), false, t);
+});
+
+test('story: paid leads lead the headline', () => {
+  const s = buildHomeStory({ now, waiting: [lead('a', 'engaged', 5)], inboundTimes: [], leadsThisWeek: 1, leadsLastWeek: 1, lostSuggestions: 0, aiRepliesToday: 0,
+    saysPaid: [{ id: 'p', name: 'p', stage: 'payment_pending', course: null, lastInboundAt: ago(300), quote: 'Payment made' }] });
+  assert.equal(s.headline, "1 lead says they've paid but nothing is recorded, and 1 person is waiting for a reply.");
+});

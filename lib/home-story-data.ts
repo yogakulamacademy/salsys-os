@@ -1,6 +1,6 @@
 import "server-only";
 
-import { buildHomeStory, type HomeStory, type StoryLead } from "@/lib/home-story";
+import { buildHomeStory, saysTheyPaid, type HomeStory, type StoryLead } from "@/lib/home-story";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { requireCurrentOrganizationId } from "@/lib/workspace";
@@ -79,7 +79,40 @@ export async function getHomeStory(now = new Date()): Promise<HomeStory | null> 
       });
     }
 
+    // Leads who wrote that they paid or enrolled (last 60 days), with no payment
+    // or enrolment recorded and still open.
+    const PAID_WORDS = ["payment made", "made the payment", "made payment", "payment done", "payment is done", "have paid", "i paid", "already paid", "paid the fee", "have enrolled", "i enrolled", "payment completed", "transferred the"];
+    const paidMsgs = await allRows<{ lead_id: string; body: string | null; created_at: string }>((a, b) => admin.from("messages")
+      .select("lead_id, body, created_at").eq("organization_id", organizationId).eq("direction", "inbound")
+      .gte("created_at", new Date(now.getTime() - 60 * 86_400_000).toISOString())
+      .or(PAID_WORDS.map((w) => `body.ilike.%${w}%`).join(","))
+      .order("created_at", { ascending: false }).range(a, b), 3000);
+    const paidCandidates = new Map<string, { body: string; at: string }>();
+    for (const m of paidMsgs) {
+      if (!visible.has(m.lead_id) || paidCandidates.has(m.lead_id) || !saysTheyPaid(m.body)) continue;
+      paidCandidates.set(m.lead_id, { body: (m.body ?? "").replace(/\s+/g, " ").slice(0, 90), at: m.created_at });
+    }
+    let saysPaid: StoryLead[] = [];
+    if (paidCandidates.size) {
+      const ids = [...paidCandidates.keys()];
+      const [{ data: pays }, { data: enrs }] = await Promise.all([
+        admin.from("payments").select("lead_id").in("lead_id", ids).in("status", ["pending", "paid"]),
+        admin.from("enrollments").select("lead_id").in("lead_id", ids),
+      ]);
+      const recorded = new Set([...(pays ?? []), ...(enrs ?? [])].map((r: { lead_id: string }) => r.lead_id));
+      saysPaid = ids.filter((id) => !recorded.has(id)).map((id) => {
+        const lead = visible.get(id)!;
+        const c = paidCandidates.get(id)!;
+        return {
+          id, name: lead.display_name ?? "Lead", stage: lead.current_stage,
+          course: lead.interested_course_id ? courseName.get(lead.interested_course_id) ?? null : null,
+          lastInboundAt: c.at, quote: c.body,
+        };
+      });
+    }
+
     const story = buildHomeStory({
+      saysPaid,
       now,
       waiting,
       inboundTimes: hours.map((m) => m.created_at),
