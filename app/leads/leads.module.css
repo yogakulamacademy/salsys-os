@@ -181,3 +181,8 @@
     border-left: 0;
   }
 }
+
+/* Leads mockup (20 Nov 2026): the story sentence uses the page width. */
+.workspace :global(.ui-page-description) {
+  max-width: 1200px;
+}

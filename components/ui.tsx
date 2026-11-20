@@ -15,7 +15,7 @@ import {
 import { resolveMetricStatus } from '@/lib/metric-definitions';
 import { Channel, IntentLevel, PipelineStage } from '@/types/crm';
 
-export function PageHeader({ eyebrow, title, description, actions }: { eyebrow?: string; title: string; description?: string; actions?: ReactNode }) {
+export function PageHeader({ eyebrow, title, description, actions }: { eyebrow?: string; title: string; description?: ReactNode; actions?: ReactNode }) {
   return (
     <div className="ui-page-header">
       <div className="min-w-0">

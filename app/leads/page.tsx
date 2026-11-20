@@ -1,7 +1,7 @@
 import { LeadsAttributionScopeBar } from "@/components/leads-attribution-scope-bar";
 import { ToastOnLoad } from "@/components/app-toast";
 import { LeadsCleanTable } from "@/components/leads-clean-table";
-import { LeadsOverview } from "@/components/leads/leads-overview";
+import { LeadsOverview, LeadsSaysPaid } from "@/components/leads/leads-overview";
 import { LeadsHeaderActions } from "@/components/leads/leads-header-actions";
 import { RecentBookingActivity } from "@/components/recent-booking-activity";
 import { TeamAssignmentPanel } from "@/components/team-assignment-panel";
@@ -13,6 +13,8 @@ import {
 import { parseLeadsWorkspaceParams } from "@/lib/leads-data";
 import { getLeadsTableEvidence } from "@/lib/leads-table-evidence";
 import { getHomeStory } from "@/lib/home-story-data";
+import { getLeadStageCounts } from "@/lib/leads-stage-counts";
+import { leadsStory, QUALIFIED_UP } from "@/lib/leads-story";
 import { isMockMode } from "@/lib/data";
 import { createClient } from "@/lib/supabase/server";
 import { requireCurrentOrganizationId } from "@/lib/workspace";
@@ -44,10 +46,22 @@ export default async function LeadsPage({ searchParams }: LeadsPageProps) {
   const attributionScope = parseLeadsAttributionScope(params);
   const workspace = await getLeadsWorkspacePageWithAttributionScope(filters, attributionScope);
   const mock = isMockMode();
-  const [tableEvidence, story] = await Promise.all([
+  const [tableEvidence, story, stages] = await Promise.all([
     getLeadsTableEvidence(workspace.leads),
     mock ? Promise.resolve(null) : getHomeStory(),
+    mock ? Promise.resolve(null) : getLeadStageCounts(),
   ]);
+  const storyParts = leadsStory({
+    all: workspace.summary.all,
+    unassigned: workspace.summary.unassigned,
+    waiting: story?.waitingThisWeek ?? null,
+    stages,
+  });
+  const viewCounts = {
+    waiting: story?.waitingThisWeek ?? null,
+    qualifiedUp: stages ? QUALIFIED_UP.reduce((sum, key) => sum + (stages[key as keyof typeof stages] ?? 0), 0) : null,
+    setAside: stages ? stages.not_now + stages.lost : null,
+  };
   const notice = one(params.notice);
   const error = one(params.error);
 
@@ -87,9 +101,12 @@ export default async function LeadsPage({ searchParams }: LeadsPageProps) {
   return (
     <div className={`leads-workspace-v2 ${styles.workspace} min-w-0 space-y-3 pb-4`} data-testid="leads-workspace">
       <PageHeader
-        eyebrow="CRM · Workspace"
         title="Leads"
-        description="Manage, qualify, and move incoming leads forward from one workspace."
+        description={
+          <span className="text-[15px] leading-7 text-copy">
+            {storyParts.map((part, i) => (part.strong ? <strong key={i} className="font-semibold text-copy-strong">{part.text}</strong> : <span key={i}>{part.text}</span>))}
+          </span>
+        }
         actions={<LeadsHeaderActions canExport={canExport} canImport={canImport} canExportContacts={canExportContacts} mock={mock} exportHref={exportHref} />}
       />
 
@@ -110,7 +127,7 @@ export default async function LeadsPage({ searchParams }: LeadsPageProps) {
         </Notice>
       ) : null}
 
-      <LeadsOverview summary={workspace.summary} story={story} />
+      <LeadsOverview summary={workspace.summary} story={story} stages={stages} activeStage={filters.stage} />
 
       <LeadsAttributionScopeBar scope={attributionScope} />
 
@@ -123,7 +140,10 @@ export default async function LeadsPage({ searchParams }: LeadsPageProps) {
         options={workspace.options}
         summary={workspace.summary}
         pagination={workspace.pagination}
+        viewCounts={viewCounts}
       />
+
+      <LeadsSaysPaid story={story} />
 
       <TeamAssignmentPanel returnTo="/leads" />
       <details className="ui-panel overflow-hidden">
