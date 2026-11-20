@@ -27,6 +27,19 @@ export function coursePagesFrom(courses: { id: string; name: string | null; meta
   return pages;
 }
 
+/** Website visitor ids tied to these leads (identity links and sessions), at most 100. */
+export async function visitorsForLeads(admin: SupabaseClient, organizationId: string, leadIds: string[]): Promise<string[]> {
+  if (!leadIds.length) return [];
+  const [links, leadSessions] = await Promise.all([
+    admin.from("visitor_identity_links").select("anonymous_visitor_id").eq("organization_id", organizationId).in("lead_id", leadIds).limit(200),
+    admin.from("web_sessions").select("anonymous_visitor_id").eq("organization_id", organizationId).in("lead_id", leadIds).limit(500),
+  ]);
+  return [...new Set([
+    ...(links.data ?? []).map((r) => r.anonymous_visitor_id as string | null),
+    ...(leadSessions.data ?? []).map((r) => r.anonymous_visitor_id as string | null),
+  ].filter((v): v is string => Boolean(v)))].slice(0, 100);
+}
+
 /**
  * Interest profile for the given leads of one business (all leads of one person).
  * Every read is scoped to organizationId; callers must have already checked the

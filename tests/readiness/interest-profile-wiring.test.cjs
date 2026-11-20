@@ -21,8 +21,10 @@ test('Customer 360 passes only leads the user can already see', () => {
 
 test('Customer 360 loads only this person\'s leads, so older contacts open too', () => {
   const page = read('app/customer-360/[personId]/page.tsx');
-  assert.match(page, /getLeads\(\{ ids: linkedLeadIds \}\)/);
-  assert.doesNotMatch(page, /getLeads\(\)/);
+  // Access to this person comes from their own leads only; the side list of
+  // other people (newest leads) is navigation and never grants access.
+  assert.match(page, /const leads = await getLeads\(\{ ids: linkedLeadIds \}\);/);
+  assert.match(page, /if \(!accessibleLeads\.length\) notFound\(\);/);
   const data = read('lib/data.ts');
   assert.match(data, /query = query\.in\("id", options\.ids\.slice\(0, 200\)\)/);
 });
@@ -71,4 +73,16 @@ test('re-engage drafts: access checked, nothing sent, no discounts, no tracking 
   assert.match(read('components/conversation-safe-composer.tsx'), /salsysos:conversation-draft:v1:\$\{leadId\}:\$\{channel\}/);
   // Discount or scholarship cards never get an AI draft.
   assert.match(read('components/reengaged-act-now.tsx'), /step\?\.needsPerson \?/);
+});
+
+test('person view reads are scoped to the business and the person', () => {
+  const src = read('lib/person-360-data.ts');
+  assert.match(src, /import "server-only"/);
+  const reads = (src.match(/admin\.from\("[a-z_]+"\)/g) || []);
+  // Stage history has no organization column: it is limited to this person's lead ids.
+  for (const r of reads.filter((x) => !x.includes('lead_stage_history'))) {
+    const at = src.indexOf(r);
+    assert.match(src.slice(at, at + 400), /\.eq\("organization_id", organizationId\)/, r);
+  }
+  assert.match(src, /from\("lead_stage_history"\)[\s\S]{0,200}\.in\("lead_id", leadIds\)/);
 });

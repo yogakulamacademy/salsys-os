@@ -162,7 +162,7 @@ test('GT-01 Journey panel shows scoped counts, filters activity and fits phone w
 
 test('empty Customer 360, Admissions and Courses retain useful structure without zero stats', async ({ page }) => {
   await page.goto('/customer-360');
-  await expect(page.getByRole('columnheader', { name: 'Contact', exact: true })).toBeVisible();
+  await expect(page.getByRole('columnheader', { name: 'Person', exact: true })).toBeVisible();
   await expect(page.getByText('No customer profiles available', { exact: true })).toBeVisible();
   await expect(page.getByText('Active opportunities', { exact: true })).toHaveCount(0);
   await page.screenshot({ animations: 'disabled', path: 'test-results/customer-360-empty.png' });

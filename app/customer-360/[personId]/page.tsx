@@ -1,21 +1,14 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import {
-  ArrowLeft,
-  ArrowRight,
-  CalendarClock,
-  CheckCircle2,
-  CreditCard,
-  MessageCircle,
-  ReceiptText,
-  Route,
-  UsersRound,
-} from "lucide-react";
+import { CalendarClock, MessageCircle, ReceiptText, Search } from "lucide-react";
 
+import { initialsOf } from "@/components/crm/action-cards";
 import { InterestProfileCard } from "@/components/interest-profile-card";
-import { PageHeader } from "@/components/ui";
 import { getLeads } from "@/lib/data";
+import { suggestNextStep } from "@/lib/interest-profile";
 import { getInterestProfile } from "@/lib/interest-profile-data";
+import { getPersonViewData } from "@/lib/person-360-data";
+import { buildPersonTimeline, personSummary, STAGE_LABEL, type TimelineKind } from "@/lib/person-story";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { requireCurrentOrganizationId } from "@/lib/workspace";
@@ -80,7 +73,7 @@ export default async function Customer360DetailPage({
   searchParams,
 }: {
   params: Promise<{ personId: string }>;
-  searchParams: Promise<{ opportunity?: string }>;
+  searchParams: Promise<{ opportunity?: string; q?: string }>;
 }) {
   const { personId } = await params;
   const query = await searchParams;
@@ -127,6 +120,8 @@ export default async function Customer360DetailPage({
   // Interest profile: admin reads, scoped to this business and to leads this user can already see.
   const admin = createAdminClient();
   const interestProfilePromise = getInterestProfile(admin, organizationId, accessibleIds);
+  const viewPromise = getPersonViewData(admin, organizationId, personId, accessibleIds, activeLead.id);
+  const peoplePromise = getPeopleList(supabase, organizationId, (query.q ?? "").trim());
 
   const [personResult, tasksResult, paymentsResult, enrollmentsResult, conversationsResult] =
     await Promise.all([
@@ -181,190 +176,266 @@ export default async function Customer360DetailPage({
     ? []
     : ((conversationsResult.data ?? []) as ConversationRow[]);
 
+  const [view, people] = await Promise.all([viewPromise, peoplePromise]);
   const displayName = activeLead.name || person?.latest_lead_name || "Customer";
-  const paidPayments = payments.filter((payment) => payment.status === "paid");
-  const paidByCurrency = paidPayments.reduce<Record<string, number>>((accumulator, payment) => {
-    const currency = payment.currency || "INR";
-    accumulator[currency] = (accumulator[currency] ?? 0) + Number(payment.amount || 0);
-    return accumulator;
-  }, {});
-  const overdueTasks = tasks.filter((task) => {
-    if (!task.due_at) return false;
-    const timestamp = Date.parse(task.due_at);
-    return Number.isFinite(timestamp) && timestamp < Date.now();
-  });
+  const course = activeLead.course && !/^(not selected|unknown)$/i.test(activeLead.course) ? activeLead.course : null;
+  const timeline = view
+    ? buildPersonTimeline({
+        ...view.timeline,
+        payments: payments.map((p) => ({ at: p.paid_at || p.created_at, status: p.status, amount: Number(p.amount || 0), currency: p.currency || "INR" })),
+      })
+    : [];
+  const summary = personSummary(
+    {
+      name: displayName, course, location: view?.facts.location ?? (activeLead.location || null), month: view?.facts.month ?? null,
+      mode: view?.facts.mode ?? null, country: view?.facts.country ?? null, countryLikely: view?.facts.countryLikely ?? false, stage: activeLead.stage,
+    },
+    {
+      pagesViewed: interestProfile?.pagesViewed ?? 0,
+      formAt: view?.formAt ?? null,
+      lastInboundAt: view?.lastInboundAt ?? null,
+      lastOutboundAt: view?.lastOutboundAt ?? null,
+    },
+  );
+  const step = interestProfile ? suggestNextStep(interestProfile, course) : null;
+  const waiting = Boolean(view?.lastInboundAt && (!view.lastOutboundAt || Date.parse(view.lastInboundAt) > Date.parse(view.lastOutboundAt)));
+  const stageText = STAGE_LABEL[activeLead.stage] ?? pretty(activeLead.stage);
+  const value = activeLead.value ? `worth about ${formatMoney(activeLead.value, activeLead.currency || "INR")}` : null;
+  const facts: { label: string; value: string | null; source: string | null }[] = [
+    { label: "Course", value: course, source: course ? "Their enquiry" : null },
+    { label: "When", value: view?.facts.month ?? null, source: view?.facts.month ? "Their messages" : null },
+    { label: "Where", value: view?.facts.location ?? (activeLead.location || null), source: view?.facts.location || activeLead.location ? "Their messages" : null },
+    { label: "Online or in person", value: view?.facts.mode ? pretty(view.facts.mode) : null, source: view?.facts.mode ? "Their messages" : null },
+    { label: "Country", value: view?.facts.country ? `${view.facts.country}${view.facts.countryLikely ? " (likely)" : ""}` : null, source: view?.facts.country ? (view.facts.countryLikely ? "Worked out from clues" : "Their details") : null },
+  ];
+  const identityRows = identityList(view);
 
   return (
-    <div className="space-y-5">
-      <PageHeader
-        eyebrow="Sales · Customer 360"
-        title={displayName}
-        description={`One Contact · ${accessibleLeads.length} accessible opportunit${accessibleLeads.length === 1 ? "y" : "ies"}. Commercial state changes with the selected Opportunity; relationship identity does not.`}
-        actions={
-          <div className="flex flex-wrap items-center gap-2">
-            <Link href="/customer-360" className="btn-secondary">
-              <ArrowLeft size={14} /> Customers
-            </Link>
-            <Link href={`/conversations?lead=${activeLead.id}`} className="btn-primary">
-              <MessageCircle size={14} /> Open conversation
-            </Link>
-          </div>
-        }
-      />
+    <div className="grid gap-4 xl:grid-cols-[300px_minmax(0,1fr)_400px] 2xl:grid-cols-[340px_minmax(0,1fr)_420px]">
+      {/* People */}
+      <aside className="flex min-h-0 flex-col gap-3 rounded-2xl border border-line bg-surface p-3 shadow-xs xl:sticky xl:top-20 xl:max-h-[calc(100vh-7rem)]">
+        <form action={`/customer-360/${personId}`} className="relative">
+          <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-copy-subtle" />
+          <input name="q" defaultValue={query.q ?? ""} placeholder="Search name, phone, email…" aria-label="Search people" className="h-10 w-full rounded-ui border border-line bg-surface pl-9 pr-3 text-[13px] outline-none placeholder:text-copy-subtle focus:border-brand-500 focus:ring-2 focus:ring-brand-100" />
+        </form>
+        <Link href="/customer-360" className="px-1 text-[12px] font-semibold text-brand-700 hover:underline">All people →</Link>
+        <nav aria-label="People" className="-mx-1 flex-1 space-y-1 overflow-y-auto px-1">
+          {people.map((row) => {
+            const active = row.personId === personId;
+            return (
+              <Link
+                key={row.personId}
+                href={`/customer-360/${row.personId}?opportunity=${row.leadId}${query.q ? `&q=${encodeURIComponent(query.q)}` : ""}`}
+                aria-current={active ? "page" : undefined}
+                className={`flex items-center gap-3 rounded-xl px-2.5 py-2 transition ${active ? "bg-brand-50 outline outline-2 -outline-offset-2 outline-brand-600 dark:bg-brand-950/30" : "hover:bg-surface-soft"}`}
+              >
+                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-brand-50 text-[12px] font-bold text-brand-700 dark:bg-brand-950/40">{initialsOf(row.name)}</span>
+                <span className="min-w-0">
+                  <span className="block truncate text-[13.5px] font-semibold text-copy-strong">{row.name}</span>
+                  <span className="block truncate text-[12px] text-copy-muted">{[STAGE_LABEL[row.stage] ?? pretty(row.stage), row.course || "course not known"].join(" · ")}</span>
+                </span>
+              </Link>
+            );
+          })}
+          {!people.length ? <p className="px-2 py-4 text-[12px] text-copy-muted">No one matches.</p> : null}
+        </nav>
+      </aside>
 
-      <section className="rounded-panel border border-line bg-surface p-4 shadow-xs">
-        <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-          <div>
-            <div className="eyebrow">Opportunity context</div>
-            <div className="mt-1 text-sm font-semibold text-copy-strong">Choose the commercial context for this Contact</div>
+      {/* What happened */}
+      <div className="flex min-w-0 flex-col gap-4">
+        <section className="rounded-2xl border border-line bg-surface p-5 shadow-xs">
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-[11.5px] font-bold uppercase tracking-[0.08em] text-brand-700">Summary · from their own messages and visits</span>
           </div>
-          <div className="flex flex-wrap gap-2">
-            {accessibleLeads.map((lead) => {
-              if (!lead) return null;
-              const active = lead.id === activeLead.id;
-              return (
-                <Link
-                  key={lead.id}
-                  href={`/customer-360/${personId}?opportunity=${lead.id}`}
-                  className={`rounded-ui border px-3 py-2 text-[11px] font-semibold transition ${
-                    active
-                      ? "border-brand-300 bg-brand-50 text-brand-700"
-                      : "border-line bg-surface text-copy-muted hover:border-line-strong hover:bg-surface-soft"
-                  }`}
-                >
-                  {lead.course || lead.leadCode} · {pretty(lead.stage)}
-                </Link>
-              );
-            })}
-          </div>
-        </div>
-      </section>
-
-      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <Metric icon={<Route size={16} />} label="Opportunities" value={String(accessibleLeads.length)} note="Accessible commercial records for this Contact" />
-        <Metric icon={<CalendarClock size={16} />} label="Open tasks" value={String(tasks.length)} note={overdueTasks.length ? `${overdueTasks.length} overdue` : "No overdue tasks"} />
-        <Metric icon={<CreditCard size={16} />} label="Paid payments" value={String(paidPayments.length)} note={formatMoneyMap(paidByCurrency)} />
-        <Metric icon={<CheckCircle2 size={16} />} label="Enrollments" value={String(enrollments.length)} note="Enrollment state remains separate from payment" />
-      </section>
-
-      <div className="grid gap-5 xl:grid-cols-[minmax(0,1.2fr)_minmax(320px,.8fr)]">
-        <section className="overflow-hidden rounded-panel border border-line bg-surface shadow-xs">
-          <div className="border-b border-line px-5 py-4">
-            <div className="eyebrow">Opportunities</div>
-            <h2 className="section-title mt-1">Commercial history</h2>
-          </div>
-          <div className="divide-y divide-line">
-            {accessibleLeads.map((lead) => {
-              if (!lead) return null;
-              const selected = lead.id === activeLead.id;
-              return (
-                <div key={lead.id} className={`px-5 py-4 ${selected ? "bg-brand-50/40" : ""}`}>
-                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <div className="min-w-0">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="text-sm font-semibold text-copy-strong">{lead.course || "Course not selected"}</span>
-                        <Pill>{pretty(lead.stage)}</Pill>
-                        {lead.intent ? <Pill>{pretty(lead.intent)} intent</Pill> : null}
-                      </div>
-                      <div className="mt-1 text-[11px] text-copy-subtle">
-                        {lead.leadCode} · {lead.location || "Location not selected"} · {lead.owner || "Unassigned"}
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Link href={`/conversations?lead=${lead.id}`} className="btn-secondary">Conversation</Link>
-                      <Link href={`/leads/${lead.id}`} className="btn-secondary">Opportunity <ArrowRight size={12} /></Link>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </section>
-
-        <div className="space-y-5">
-        <InterestProfileCard profile={interestProfile} />
-        <section className="rounded-panel border border-line bg-surface p-5 shadow-xs">
-          <div className="eyebrow">Relationship</div>
-          <h2 className="section-title mt-1">Contact-level signals</h2>
-          <div className="mt-4 space-y-3">
-            <RelationshipRow label="Relationship since" value={formatDate(person?.person_created_at)} />
-            <RelationshipRow label="Verified identifiers" value={String(Number(person?.verified_identifier_count ?? 0))} />
-            <RelationshipRow label="Sessions" value={String(Number(person?.session_count ?? 0))} />
-            <RelationshipRow label="Sessions · 30d" value={String(Number(person?.sessions_30d ?? 0))} />
-            <RelationshipRow label="Touchpoints" value={String(Number(person?.touchpoint_count ?? 0))} />
-            <RelationshipRow label="Page views" value={String(Number(person?.page_view_count ?? 0))} />
-            <RelationshipRow label="Last message" value={formatDateTime(person?.last_message_at)} />
-            <RelationshipRow label="Engagement score" value={person?.latest_lead_engagement_score == null ? "—" : String(person.latest_lead_engagement_score)} />
-            <RelationshipRow label="Behaviour" value={person?.latest_lead_behaviour_temperature ? pretty(person.latest_lead_behaviour_temperature) : "—"} />
-          </div>
-          {person?.latest_lead_behaviour_reason ? (
-            <div className="mt-4 rounded-ui bg-brand-50 p-3 text-[11px] leading-5 text-brand-700">
-              {person.latest_lead_behaviour_reason}
+          <p className="mt-2 text-[16px] font-semibold leading-7 text-copy-strong">{summary}</p>
+          {step || waiting ? (
+            <div className={`mt-3 flex flex-wrap items-center justify-between gap-3 rounded-xl px-4 py-3 ${step?.needsPerson ? "bg-amber-50 dark:bg-amber-950/25" : "bg-brand-50/70 dark:bg-brand-950/25"}`}>
+              <div className="min-w-0">
+                <div className={`text-[12px] font-bold ${step?.needsPerson ? "text-amber-800 dark:text-amber-300" : "text-brand-700 dark:text-brand-300"}`}>{step?.needsPerson ? "For a person" : "Next best action"}</div>
+                <div className="text-[14px] font-semibold text-copy-strong">{step?.action ?? "Reply to their last message"}</div>
+              </div>
+              <Link href={`/conversations?lead=${activeLead.id}`} className="btn-primary shrink-0">{waiting ? "Reply" : "Open conversation"}</Link>
             </div>
           ) : null}
         </section>
+
+        <section className="rounded-2xl border border-line bg-surface p-5 shadow-xs">
+          <h2 className="text-[12px] font-semibold uppercase tracking-[0.08em] text-copy-muted">Everything that happened</h2>
+          {timeline.length ? (
+            <ol className="mt-2">
+              {[...timeline].reverse().map((item, i) => (
+                <li key={`${item.at}-${i}`} className="grid grid-cols-[110px_14px_minmax(0,1fr)] gap-3 border-t border-line py-3 first:border-t-0">
+                  <span className="text-[12px] text-copy-muted">{formatWhen(item.at)}</span>
+                  <span className={`mt-1.5 h-2.5 w-2.5 rounded-full ${DOT[item.kind]}`} aria-hidden="true" />
+                  <span className="min-w-0">
+                    <span className="block text-[14px] font-semibold text-copy-strong">{item.title}</span>
+                    {item.detail ? <span className="block truncate text-[13px] text-copy-muted" title={item.detail}>{item.detail}</span> : null}
+                  </span>
+                </li>
+              ))}
+            </ol>
+          ) : (
+            <p className="mt-3 text-[13px] text-copy-muted">Nothing recorded yet.</p>
+          )}
+        </section>
+
+        <div className="grid gap-4 lg:grid-cols-3">
+          <ListPanel title="Tasks" icon={<CalendarClock size={15} />} empty="No open tasks.">
+            {tasks.slice(0, 6).map((task) => (
+              <ListRow key={task.id} title={task.title} detail={pretty(task.task_type)} meta={formatDateTime(task.due_at)} />
+            ))}
+          </ListPanel>
+          <ListPanel title="Payments" icon={<ReceiptText size={15} />} empty="No payments recorded.">
+            {payments.slice(0, 6).map((payment) => (
+              <ListRow key={payment.id} title={`${payment.currency} ${Number(payment.amount || 0).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`} detail={`${pretty(payment.payment_kind)} · ${pretty(payment.status)}`} meta={formatDate(payment.paid_at || payment.created_at)} />
+            ))}
+          </ListPanel>
+          <ListPanel title="Conversations" icon={<MessageCircle size={15} />} empty="No conversations.">
+            {conversations.slice(0, 6).map((conversation) => (
+              <div key={conversation.id} className="flex items-center justify-between gap-3 border-b border-line px-4 py-3 last:border-b-0">
+                <div>
+                  <div className="text-[13px] font-semibold text-copy-strong">{pretty(conversation.channel)}</div>
+                  <div className="mt-0.5 text-[12px] text-copy-muted">{formatDateTime(conversation.last_message_at)}</div>
+                </div>
+                <Link href={`/conversations?lead=${conversation.lead_id}`} className="text-[13px] font-semibold text-brand-700 hover:underline">Open</Link>
+              </div>
+            ))}
+          </ListPanel>
         </div>
       </div>
 
-      <div className="grid gap-5 xl:grid-cols-3">
-        <ListPanel title="Tasks & follow-ups" icon={<CalendarClock size={16} />} empty="No open tasks for accessible opportunities.">
-          {tasks.slice(0, 8).map((task) => (
-            <ListRow key={task.id} title={task.title} detail={`${pretty(task.task_type)} · ${pretty(task.status)}`} meta={formatDateTime(task.due_at)} />
-          ))}
-        </ListPanel>
+      {/* Who they are */}
+      <div className="flex min-w-0 flex-col gap-4">
+        <section className="flex items-center gap-3 rounded-2xl border border-line bg-surface p-4 shadow-xs">
+          <span className="grid h-12 w-12 shrink-0 place-items-center rounded-full bg-brand-50 text-[15px] font-bold text-brand-700 dark:bg-brand-950/40">{initialsOf(displayName)}</span>
+          <div className="min-w-0 flex-1">
+            <h1 className="truncate text-[18px] font-bold text-copy-strong">{displayName}</h1>
+            <div className="truncate text-[12.5px] text-copy-muted">{[stageText, person?.latest_lead_engagement_score != null ? `score ${person.latest_lead_engagement_score}` : null, value].filter(Boolean).join(" · ")}</div>
+          </div>
+          {activeLead.owner ? (
+            <span className="shrink-0 text-[13px] text-copy">{activeLead.owner}</span>
+          ) : (
+            <Link href={`/leads/${activeLead.id}`} className="shrink-0 text-[13px] font-semibold text-brand-700 hover:underline">+ Assign</Link>
+          )}
+        </section>
 
-        <ListPanel title="Payments" icon={<ReceiptText size={16} />} empty="No payment records for accessible opportunities.">
-          {payments.slice(0, 8).map((payment) => (
-            <ListRow key={payment.id} title={`${payment.currency} ${Number(payment.amount || 0).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`} detail={`${pretty(payment.payment_kind)} · ${pretty(payment.status)}`} meta={formatDate(payment.paid_at || payment.created_at)} />
-          ))}
-        </ListPanel>
-
-        <ListPanel title="Conversations" icon={<MessageCircle size={16} />} empty="No conversations for accessible opportunities.">
-          {conversations.slice(0, 8).map((conversation) => (
-            <div key={conversation.id} className="flex items-center justify-between gap-3 border-b border-line px-4 py-3 last:border-b-0">
-              <div>
-                <div className="text-[11px] font-semibold text-copy-strong">{pretty(conversation.channel)}</div>
-                <div className="mt-0.5 text-[10px] text-copy-subtle">{formatDateTime(conversation.last_message_at)}</div>
-              </div>
-              <Link href={`/conversations?lead=${conversation.lead_id}`} className="text-[11px] font-semibold text-brand-700 hover:underline">Open</Link>
+        {accessibleLeads.length > 1 ? (
+          <section className="rounded-2xl border border-line bg-surface p-4 shadow-xs">
+            <h2 className="text-[12px] font-semibold uppercase tracking-[0.08em] text-copy-muted">Enquiries</h2>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {accessibleLeads.map((lead) => lead ? (
+                <Link
+                  key={lead.id}
+                  href={`/customer-360/${personId}?opportunity=${lead.id}`}
+                  className={`rounded-lg border px-3 py-1.5 text-[12px] font-semibold transition ${lead.id === activeLead.id ? "border-brand-300 bg-brand-50 text-brand-700" : "border-line text-copy-muted hover:border-line-strong"}`}
+                >
+                  {lead.course || lead.leadCode} · {STAGE_LABEL[lead.stage] ?? pretty(lead.stage)}
+                </Link>
+              ) : null)}
             </div>
-          ))}
-        </ListPanel>
+          </section>
+        ) : null}
+
+        <section className="rounded-2xl border border-line bg-surface p-4 shadow-xs">
+          <h2 className="text-[12px] font-semibold uppercase tracking-[0.08em] text-copy-muted">What we know</h2>
+          <p className="mt-1 text-[12px] text-copy-muted">From their enquiry, messages and visits.</p>
+          <dl className="mt-2">
+            {facts.map((fact) => (
+              <div key={fact.label} className="grid grid-cols-[110px_minmax(0,1fr)] gap-3 border-t border-line py-2.5 first:border-t-0">
+                <dt className="text-[13px] text-copy-muted">{fact.label}</dt>
+                <dd className="min-w-0">
+                  <span className={`block truncate text-[13.5px] font-semibold ${fact.value ? "text-copy-strong" : "text-copy-subtle"}`}>{fact.value ?? "Not mentioned"}</span>
+                  {fact.source ? <span className="block text-[11.5px] text-copy-muted">{fact.source}</span> : null}
+                </dd>
+              </div>
+            ))}
+          </dl>
+        </section>
+
+        <InterestProfileCard profile={interestProfile} />
+
+        <section className="rounded-2xl border border-line bg-surface p-4 shadow-xs">
+          <h2 className="text-[12px] font-semibold uppercase tracking-[0.08em] text-copy-muted">Identity</h2>
+          <ul className="mt-2">
+            {identityRows.map((row) => (
+              <li key={row.label} className="flex items-center justify-between gap-3 border-t border-line py-2.5 text-[13px] first:border-t-0">
+                <span className="text-copy">{row.label}</span>
+                <span className={`rounded-lg px-2 py-0.5 text-[12px] font-semibold ${row.tone === "good" ? "bg-emerald-50 text-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-300" : "bg-surface-muted text-copy-muted"}`}>{row.status}</span>
+              </li>
+            ))}
+          </ul>
+          {person ? <p className="mt-2 text-[11.5px] text-copy-muted">Known since {formatDate(person.person_created_at)} · {Number(person.session_count ?? 0)} website sessions</p> : null}
+        </section>
       </div>
     </div>
   );
 }
 
-function Metric({ icon, label, value, note }: { icon: React.ReactNode; label: string; value: string; note: string }) {
-  return (
-    <div className="rounded-panel border border-line bg-surface p-4 shadow-xs">
-      <div className="flex items-center justify-between gap-3">
-        <span className="grid h-9 w-9 place-items-center rounded-ui bg-brand-50 text-brand-700">{icon}</span>
-        <span className="text-2xl font-semibold tracking-tight text-copy-strong">{value}</span>
-      </div>
-      <div className="mt-3 text-[11px] font-semibold text-copy-strong">{label}</div>
-      <div className="mt-1 text-[10px] leading-4 text-copy-subtle">{note}</div>
-    </div>
-  );
+const DOT: Record<TimelineKind, string> = {
+  web: "bg-blue-600", form: "bg-brand-600", message: "bg-brand-600", reply: "bg-slate-400",
+  stage: "bg-slate-500", ai: "bg-emerald-600", payment: "bg-emerald-600", warn: "bg-orange-600",
+};
+
+const IDENTITY_LABEL: Record<string, string> = {
+  email: "Email", phone: "Phone", whatsapp: "WhatsApp", instagram_id: "Instagram", instagram_igsid: "Instagram", instagram: "Instagram",
+};
+
+function identityList(view: Awaited<ReturnType<typeof getPersonViewData>>) {
+  const rows: { label: string; status: string; tone: "good" | "none" }[] = [];
+  const seen = new Set<string>();
+  for (const id of view?.identity ?? []) {
+    const label = IDENTITY_LABEL[id.type] ?? pretty(id.type);
+    if (seen.has(label)) continue;
+    seen.add(label);
+    rows.push({ label, status: id.verified ? "Confirmed" : "Not confirmed", tone: id.verified ? "good" : "none" });
+  }
+  rows.push({ label: "Website visitor", status: view?.websiteLinked ? "Linked" : "Not linked", tone: view?.websiteLinked ? "good" : "none" });
+  for (const channel of ["instagram", "whatsapp"]) {
+    const label = IDENTITY_LABEL[channel];
+    if (!seen.has(label)) rows.push({ label, status: view?.channels.includes(channel) ? "Chatting" : "Not found", tone: view?.channels.includes(channel) ? "good" : "none" });
+  }
+  return rows;
 }
 
-function RelationshipRow({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex items-center justify-between gap-4 border-b border-line pb-2.5 text-[11px] last:border-b-0">
-      <span className="text-copy-subtle">{label}</span>
-      <span className="text-right font-semibold text-copy-strong">{value}</span>
-    </div>
-  );
+/** People for the side list: newest leads the user can see, one row per person. */
+async function getPeopleList(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  organizationId: string,
+  q: string,
+): Promise<{ personId: string; leadId: string; name: string; stage: string; course: string | null }[]> {
+  try {
+    const needle = q.toLowerCase();
+    const leads = (await getLeads())
+      .filter((lead) => !needle || [lead.name, lead.email, lead.phone, lead.course].filter(Boolean).join(" ").toLowerCase().includes(needle))
+      .slice(0, 80);
+    if (!leads.length) return [];
+    const { data } = await supabase.from("person_leads").select("person_id, lead_id")
+      .eq("organization_id", organizationId).in("lead_id", leads.map((lead) => lead.id));
+    const personByLead = new Map(((data ?? []) as { person_id: string; lead_id: string }[]).map((row) => [row.lead_id, row.person_id]));
+    const seen = new Set<string>();
+    const out: { personId: string; leadId: string; name: string; stage: string; course: string | null }[] = [];
+    for (const lead of leads) {
+      const personId = personByLead.get(lead.id);
+      if (!personId || seen.has(personId)) continue;
+      seen.add(personId);
+      out.push({ personId, leadId: lead.id, name: lead.name || lead.leadCode, stage: lead.stage, course: lead.course && !/^(not selected|unknown)$/i.test(lead.course) ? lead.course : null });
+    }
+    return out.slice(0, 50);
+  } catch {
+    return [];
+  }
 }
+
+
 
 function ListPanel({ title, icon, empty, children }: { title: string; icon: React.ReactNode; empty: string; children: React.ReactNode }) {
   const hasChildren = Array.isArray(children) ? children.length > 0 : Boolean(children);
   return (
     <section className="overflow-hidden rounded-panel border border-line bg-surface shadow-xs">
-      <div className="flex items-center gap-2 border-b border-line px-4 py-3.5 text-sm font-semibold text-copy-strong">
+      <div className="flex items-center gap-2 border-b border-line px-4 py-3 text-[13px] font-semibold text-copy-strong">
         <span className="text-brand-700">{icon}</span>{title}
       </div>
-      {hasChildren ? children : <div className="px-4 py-8 text-center text-[11px] text-copy-subtle">{empty}</div>}
+      {hasChildren ? children : <div className="px-4 py-6 text-center text-[12px] text-copy-muted">{empty}</div>}
     </section>
   );
 }
@@ -373,17 +444,14 @@ function ListRow({ title, detail, meta }: { title: string; detail: string; meta:
   return (
     <div className="flex items-center justify-between gap-3 border-b border-line px-4 py-3 last:border-b-0">
       <div className="min-w-0">
-        <div className="truncate text-[11px] font-semibold text-copy-strong">{title}</div>
-        <div className="mt-0.5 truncate text-[10px] text-copy-subtle">{detail}</div>
+        <div className="truncate text-[13px] font-semibold text-copy-strong">{title}</div>
+        <div className="mt-0.5 truncate text-[12px] text-copy-muted">{detail}</div>
       </div>
-      <div className="shrink-0 text-[10px] text-copy-subtle">{meta}</div>
+      <div className="shrink-0 text-[12px] text-copy-muted">{meta}</div>
     </div>
   );
 }
 
-function Pill({ children }: { children: React.ReactNode }) {
-  return <span className="rounded-full bg-brand-50 px-2 py-1 text-[9px] font-semibold text-brand-700">{children}</span>;
-}
 
 function pretty(value: string) {
   return value.replace(/[_-]+/g, " ").replace(/\b\w/g, (character) => character.toUpperCase());
@@ -403,8 +471,17 @@ function formatDateTime(value: string | null | undefined) {
   return new Intl.DateTimeFormat("en-IN", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" }).format(date);
 }
 
-function formatMoneyMap(value: Record<string, number>) {
-  const entries = Object.entries(value);
-  if (!entries.length) return "No collected revenue";
-  return entries.map(([currency, amount]) => `${currency} ${amount.toLocaleString("en-IN", { maximumFractionDigits: 0 })}`).join(" · ");
+
+function formatWhen(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "—";
+  return new Intl.DateTimeFormat("en-IN", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit", timeZone: "Asia/Kolkata" }).format(date);
+}
+
+function formatMoney(amount: number, currency: string) {
+  try {
+    return new Intl.NumberFormat(currency === "INR" ? "en-IN" : "en-US", { style: "currency", currency, maximumFractionDigits: 0 }).format(amount);
+  } catch {
+    return `${currency} ${Math.round(amount).toLocaleString("en-IN")}`;
+  }
 }
