@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 
+import { requestGeoFromHeaders } from "@/lib/request-geo";
 import { classifyLinkRequest, fallbackDestination, isAllowedDestination, isAppHost, isLinkCode } from "@/lib/dm-links";
 import { findBusinessByLinkDomain, getOrgSalesAiSettings } from "@/lib/org-sales-ai-settings";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -42,8 +43,7 @@ async function handle(request: NextRequest, code: string) {
       userAgent: request.headers.get("user-agent"),
       purpose: request.headers.get("sec-purpose") || request.headers.get("purpose"),
     });
-    const country = (request.headers.get("x-vercel-ip-country") || "").toUpperCase() || null;
-    const region = request.headers.get("x-vercel-ip-country-region") || null;
+    const { country, region } = requestGeoFromHeaders(request.headers);
     const { data } = await admin.rpc("record_dm_link_visit_v1", {
       p_code: code, p_kind: kind, p_country: country, p_region: region, p_agent: agent,
     });

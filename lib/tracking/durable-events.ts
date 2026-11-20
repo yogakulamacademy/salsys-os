@@ -120,7 +120,19 @@ export function buildDurableTrustedEventEnvelope(input: {
   };
 }
 
+/**
+ * Off Vercel (SALSYS_EVENT_QUEUE=off) there is no Vercel Queue. Publishing
+ * then fails fast as a transient error, and /api/events/v1 already falls back
+ * to one direct, idempotent write to Supabase for exactly that case.
+ */
+export function durableEventQueueDisabled() {
+  return process.env.SALSYS_EVENT_QUEUE?.trim().toLowerCase() === 'off';
+}
+
 async function getQueueToken() {
+  if (durableEventQueueDisabled()) {
+    throw new DurableEventTransientError('Queue disabled on this host (SALSYS_EVENT_QUEUE=off).');
+  }
   try {
     return await getVercelOidcToken();
   } catch (error) {

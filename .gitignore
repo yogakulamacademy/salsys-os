@@ -9,3 +9,6 @@ playwright-report/
 .DS_Store
 
 *.tsbuildinfo
+# Self-hosting: production env file never goes in git.
+.env.production
+.env.*.local

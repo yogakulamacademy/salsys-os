@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+import { requestGeoFromHeaders } from '@/lib/request-geo';
 import { createAdminClient } from '@/lib/supabase/admin';
 import {
   consumeTrackingRateLimit,
@@ -106,36 +107,9 @@ async function readBoundedJson(request: NextRequest, maxBytes: number) {
   }
 }
 
-function decodeHeader(value: string | null) {
-  if (!value) return null;
-  try {
-    return decodeURIComponent(value);
-  } catch {
-    return value;
-  }
-}
 
 function requestGeo(request: NextRequest) {
-  return {
-    country:
-      request.headers.get('x-vercel-ip-country') ||
-      request.headers.get('cf-ipcountry') ||
-      request.headers.get('x-country-code') ||
-      null,
-    region:
-      request.headers.get('x-vercel-ip-country-region') ||
-      request.headers.get('x-region-code') ||
-      null,
-    city: decodeHeader(
-      request.headers.get('x-vercel-ip-city') ||
-        request.headers.get('x-city') ||
-        null,
-    ),
-    timezone:
-      request.headers.get('x-vercel-ip-timezone') ||
-      request.headers.get('x-timezone') ||
-      null,
-  };
+  return requestGeoFromHeaders(request.headers);
 }
 
 export async function OPTIONS(request: NextRequest) {

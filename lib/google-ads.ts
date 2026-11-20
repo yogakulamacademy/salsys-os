@@ -1,5 +1,7 @@
 import { getVercelOidcToken } from '@vercel/oidc';
 
+import { googleKeyAccessToken } from '@/lib/google-key-credentials';
+
 import {
 
   IdentityPoolClient,
@@ -640,6 +642,9 @@ implements SubjectTokenSupplier {
 
 
 async function getGoogleAdsAccessToken() {
+  const keyToken = await googleKeyAccessToken(GOOGLE_ADS_SCOPE);
+  if (keyToken) return keyToken;
+
 
   const projectNumber =
 

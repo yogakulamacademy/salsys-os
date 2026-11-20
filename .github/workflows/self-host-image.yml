@@ -1,0 +1,51 @@
+name: Self-host image
+
+# Proves the Docker image for self-hosting still builds and serves pages.
+# Runs only when the self-hosting files or the dependency/config set change,
+# plus on demand. Vercel deployments do not use this.
+on:
+  pull_request:
+    paths:
+      - Dockerfile
+      - .dockerignore
+      - docker-compose.yml
+      - next.config.ts
+      - package.json
+      - package-lock.json
+      - scripts/self-host/**
+      - .github/workflows/self-host-image.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  image:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build image
+        run: |
+          docker build \
+            --build-arg NEXT_PUBLIC_SUPABASE_URL=https://ci-placeholder.supabase.co \
+            --build-arg NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=ci-placeholder-key \
+            -t salsys-os:ci .
+      - name: Start container and check it serves
+        run: |
+          docker run -d --name crm -p 3000:3000 \
+            -e NEXT_PUBLIC_SUPABASE_URL=https://ci-placeholder.supabase.co \
+            -e NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=ci-placeholder-key \
+            -e CRON_RUNNER=on -e CRON_SECRET=ci-secret -e CRON_DRY_RUN=1 \
+            salsys-os:ci
+          for i in $(seq 1 30); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3000/login || true)
+            if [ "$code" != "000" ]; then echo "login -> $code"; break; fi
+            sleep 2
+          done
+          docker logs crm 2>&1 | tail -20
+          test "$code" != "000" && test "$code" -lt 500
+          docker logs crm 2>&1 | grep -q '"cron runner started"'
+      - name: Image size
+        if: always()
+        run: docker images salsys-os:ci
