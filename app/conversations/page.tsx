@@ -504,27 +504,10 @@ export default async function ConversationsPage({
 
   const context = selected ? (
     <div className="ibx-v2-context conversation-context-pane min-h-full bg-surface-soft">
-
-      <section className="ibx-v2-profile-card border-b border-line px-4 py-4">
-        <div className="ibx-v2-profile-heading">
-          <div className="ibx-v2-profile-avatar">{initials(selected.name)}</div>
-          <div className="ibx-v2-profile-name">
-            <strong>{selected.name}</strong>
-            <span className="ibx-v3-profile-email">
-              {selectedEmail ? <a href={`mailto:${selectedEmail}`}>{selectedEmail}</a> : "Email not recorded / unavailable"}
-            </span>
-          </div>
-          <Link href={`/leads/${selected.id}`} aria-label="Open customer profile"
-            title="Open customer profile" className="ibx-v2-profile-link">
-            <ArrowUpRight size={16}/>
-          </Link>
-        </div>
-        {hasTelephoneContact && selectedPhone ?
-          <a className="ibx-v2-profile-phone" href={`tel:${selectedPhone.replace(/[^0-9+]/g,"")}`}>
-            <Phone size={13}/> {selectedPhone}
-          </a> :
-          <span className="ibx-v2-profile-no-phone">Phone contact unavailable</span>}
-      </section>
+      {/* Owner-approved combined Inbox design (20 Nov 2026): one column, each fact once.
+          Order: what to do (intelligence), the course and enrolment, actions, the offer
+          folded, then lead details and contact. */}
+      {leadIntel ? <InboxLeadIntelligence intel={leadIntel} score={leadScore} source={leadSource} /> : null}
       {interestData ? (
         <InboxCourseInterests key={`int-${selected.id}`} leadId={selected.id} interests={interestData.interests} valueNote={interestData.valueNote} />
       ) : null}
@@ -533,17 +516,6 @@ export default async function ConversationsPage({
         <InboxCourseLink key={`link-${selected.id}`} leadId={selected.id}
           status={courseLink ? { ...courseLink, visitCountryName: countryName(courseLink.visitCountry) } : null} />
       ) : null}
-      {leadIntel ? <InboxLeadIntelligence intel={leadIntel} score={leadScore} source={leadSource} /> : null}
-      {/* key: remount per lead so the stage/owner selects never keep the previous conversation's value */}
-      <InboxLeadOverview key={selected.id} leadId={selected.id} stage={selected.stage}
-        ownerUserId={selected.ownerUserId} ownerName={selected.ownerName}
-        candidates={team.assignmentCandidates} canAssign={false}
-        mock={mock} channel={selected.currentContactChannel}
-        attributionSource={selectedAttribution?.firstTouchSource||"Not verified"} interest={selected.course}
-        country={selected.country}
-        lastContacted={selected.lastContactedAt?formatDateTime(selected.lastContactedAt):"No messages yet"}
-        state={conversationStatus}/>
-
       <section id="inbox-next-steps" className="ibx-v2-next-step-card border-b border-line px-3.5 py-4">
         <ConversationIntelligencePanel
           compact
@@ -555,26 +527,42 @@ export default async function ConversationsPage({
           waitingSince={selectedSummary?.waitingSince ?? null}
         />
       </section>
-
-
+      <InboxQuickActions key={`qa-${selected.id}`} phone={selectedPhone} canCall={Boolean(hasTelephoneContact)}
+        profileHref={`/leads/${selected.id}`} channel={selected.currentContactChannel}
+        replies={quickReplies!} logAction={interactionAction} stageAction={stageAction} mock={mock}/>
+      {autopilot?.followup ? <InboxFollowupDraftCard key={`fu-${autopilot.followup.taskId}`} followup={autopilot.followup} /> : null}
       {offerSuggestion ? (
+        <details className="ibx-v4-fold group border-b border-line bg-surface">
+          <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3">
+            <span className="flex flex-col">
+              <span className="text-[13px] font-bold text-copy-strong">AI offer · {offerSuggestion.confidence.percent}% chance it helps</span>
+              <span className="text-[12px] text-copy-muted">{offerSuggestion.confidence.verdictLabel}. Nothing is sent until you approve.</span>
+            </span>
+            <span className="shrink-0 rounded-lg border border-line px-2.5 py-1 text-[12px] font-semibold text-copy-strong group-open:hidden">Open</span>
+          </summary>
         <InboxOfferCard key={`offer-${selected.id}`} leadId={selected.id}
           firstName={selected.name.split(" ")[0] ?? ""} channel={selected.currentContactChannel}
           suggestion={offerSuggestion} canManage={team.canManageAssignments}/>
+        </details>
       ) : null}
-
       {!mock && process.env.AI_LEAD_INSIGHTS_ENABLED === "true" && process.env.AI_LEAD_INSIGHTS_UI_ENABLED === "true" && (
         <div className="border-b border-line px-3.5 py-3">
           <AILeadInsightPanel leadId={selected.id} compact />
         </div>
       )}
-
-      {autopilot?.followup ? <InboxFollowupDraftCard key={`fu-${autopilot.followup.taskId}`} followup={autopilot.followup} /> : null}
-
-      <InboxQuickActions key={`qa-${selected.id}`} phone={selectedPhone} canCall={Boolean(hasTelephoneContact)}
-        profileHref={`/leads/${selected.id}`} channel={selected.currentContactChannel}
-        replies={quickReplies!} logAction={interactionAction} stageAction={stageAction} mock={mock}/>
-
+      {/* Stage, owner, source and country, folded: the header and Lead intelligence already show the rest. */}
+      <details className="ibx-v4-fold group border-b border-line bg-surface">
+        <summary className="flex cursor-pointer list-none items-center justify-between px-4 py-3 text-[13px] font-bold text-copy-strong">Lead details <span className="text-[12px] font-semibold text-copy-muted group-open:hidden">Stage, owner, source, country</span></summary>
+      {/* key: remount per lead so the stage/owner selects never keep the previous conversation's value */}
+      <InboxLeadOverview key={selected.id} leadId={selected.id} stage={selected.stage}
+        ownerUserId={selected.ownerUserId} ownerName={selected.ownerName}
+        candidates={team.assignmentCandidates} canAssign={false}
+        mock={mock} channel={selected.currentContactChannel}
+        attributionSource={selectedAttribution?.firstTouchSource||"Not verified"} interest={selected.course}
+        country={selected.country}
+        lastContacted={selected.lastContactedAt?formatDateTime(selected.lastContactedAt):"No messages yet"}
+        state={conversationStatus}/>
+      </details>
       {leadContextAction ? (
         <section className="border-b border-line px-4 py-4">
           <details className="group rounded-ui border border-line bg-surface">
@@ -628,7 +616,26 @@ export default async function ConversationsPage({
           </details>
         </section>
       ) : null}
-
+      <section className="ibx-v2-profile-card border-b border-line px-4 py-4">
+        <div className="ibx-v2-profile-heading">
+          <div className="ibx-v2-profile-avatar">{initials(selected.name)}</div>
+          <div className="ibx-v2-profile-name">
+            <strong>{selected.name}</strong>
+            <span className="ibx-v3-profile-email">
+              {selectedEmail ? <a href={`mailto:${selectedEmail}`}>{selectedEmail}</a> : "Email not recorded / unavailable"}
+            </span>
+          </div>
+          <Link href={`/leads/${selected.id}`} aria-label="Open customer profile"
+            title="Open customer profile" className="ibx-v2-profile-link">
+            <ArrowUpRight size={16}/>
+          </Link>
+        </div>
+        {hasTelephoneContact && selectedPhone ?
+          <a className="ibx-v2-profile-phone" href={`tel:${selectedPhone.replace(/[^0-9+]/g,"")}`}>
+            <Phone size={13}/> {selectedPhone}
+          </a> :
+          <span className="ibx-v2-profile-no-phone">Phone contact unavailable</span>}
+      </section>
 
     </div>
   ) : null;

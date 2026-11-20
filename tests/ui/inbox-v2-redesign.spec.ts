@@ -47,6 +47,8 @@ test('Selected Inbox thread exposes real Notes, Activity and customer context',a
   await expect(page.getByRole('heading',{name:'Private team notes'})).toBeVisible();
   await expect(page.getByRole('button',{name:/Next step/})).toBeVisible();
   await expect(page.getByRole('button',{name:'Mark done'})).toBeDisabled();
+  // Lead details are folded in the combined design (20 Nov 2026).
+  await page.locator('summary',{hasText:'Lead details'}).click();
   await expect(page.getByRole('heading',{name:'Lead overview'})).toBeVisible();
   await expect(page.getByRole('combobox',{name:'Lead stage'})).toBeDisabled();
   await expect(page.getByRole('link',{name:'Open customer profile'})).toBeVisible();
