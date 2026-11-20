@@ -736,8 +736,13 @@
       return (window.location.pathname || '/').toLowerCase().replace(/[^a-z0-9/_-]/g, '').replace(/\/+$/, '').slice(0, 120) || '/';
     }
 
+    // When the optional behaviour extension (salsys-behavior-v1.js) is on the
+    // page it already sends scroll, price, CTA, brochure and FAQ events: only
+    // add what it doesn't cover (media and reading time), never duplicates.
+    var EXTENSION_COVERS = { 'web.scroll_depth_reached': 1, 'web.pricing_viewed': 1, 'web.cta_clicked': 1, 'web.cta_viewed': 1, 'web.brochure_clicked': 1, 'web.faq_expanded': 1 };
     function emit(name, props, key) {
       if (!analyticsGranted() || document.visibilityState === 'hidden') return;
+      if (window.__salsysBehaviorV1Installed && EXTENSION_COVERS[name]) return;
       if (key) { if (sent[key]) return; sent[key] = true; }
       if (sentCount >= MAX_PER_PAGE) return;
       sentCount++;
