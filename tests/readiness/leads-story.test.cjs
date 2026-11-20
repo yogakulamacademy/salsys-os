@@ -18,5 +18,5 @@ test('leads: story overview and says-paid panel', () => {
   assert.match(page, /<LeadsOverview summary=\{workspace\.summary\} story=\{story\} \/>/);
   const ov = read('components/leads/leads-overview.tsx');
   assert.match(ov, /id="says-paid"/);
-  assert.match(ov, /const ownersInUse = summary\.unassigned < summary\.all/);
+  assert.match(ov, /const ownersInUse = summary\.all - summary\.unassigned >= Math\.max\(5, Math\.ceil\(summary\.all \* 0\.1\)\)/);
 });

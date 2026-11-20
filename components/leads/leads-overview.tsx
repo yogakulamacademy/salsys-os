@@ -25,7 +25,8 @@ type LeadsOverviewProps = {
 export function LeadsOverview({ summary, story = null }: LeadsOverviewProps) {
   // Until the business assigns owners, "Unassigned" is every lead and says
   // nothing; show who is waiting for a reply instead.
-  const ownersInUse = summary.unassigned < summary.all;
+  // A handful of assigned leads is not an ownership workflow yet.
+  const ownersInUse = summary.all - summary.unassigned >= Math.max(5, Math.ceil(summary.all * 0.1));
   const cards = [
     {
       label: "Total leads",
