@@ -15,7 +15,7 @@ function draftKey(leadId: string, channel: string) {
 export function ReengageDraft({ leadId }: { leadId: string }) {
   const router = useRouter();
   const [draft, setDraft] = useState<string | null>(null);
-  const [channel, setChannel] = useState<"instagram" | "whatsapp">("instagram");
+  const [channel, setChannel] = useState<string>("instagram");
   const [handoff, setHandoff] = useState(false);
   const [pending, start] = useTransition();
 
@@ -48,7 +48,7 @@ export function ReengageDraft({ leadId }: { leadId: string }) {
   return (
     <div className="w-full rounded-xl border border-violet-200 bg-violet-50/60 p-3">
       <div className="flex items-center justify-between text-[10.5px] font-bold uppercase tracking-wide text-violet-700">
-        <span>AI draft · you approve · {channel === "whatsapp" ? "WhatsApp" : "Instagram"}</span>
+        <span>AI draft · you approve · {channel === "whatsapp" ? "WhatsApp" : channel === "website" ? "Email" : "Instagram"}</span>
         {handoff ? <span className="text-amber-700">Check before sending</span> : null}
       </div>
       <textarea

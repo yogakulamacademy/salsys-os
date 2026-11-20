@@ -8,7 +8,7 @@ import { createClient } from "@/lib/supabase/server";
 import { requireCurrentOrganizationId } from "@/lib/workspace";
 
 export type ReengageDraftResult =
-  | { ok: true; draft: string; channel: "instagram" | "whatsapp"; handoff: boolean; reason: string }
+  | { ok: true; draft: string; channel: string; handoff: boolean; reason: string }
   | { ok: false; error: string };
 
 /**
@@ -33,5 +33,5 @@ export async function draftReengageMessageAction(leadId: string): Promise<Reenga
     interestNote: profile ? interestNoteFor(profile) : null,
   });
   if (!result.ok) return { ok: false, error: result.error.replace(/^[A-Z_]+:\s*/, "") };
-  return { ok: true, draft: result.draft, channel: result.channel, handoff: result.nextAction === "handoff", reason: result.reason };
+  return { ok: true, draft: result.draft, channel: String(result.channel), handoff: result.nextAction === "handoff", reason: result.reason };
 }
