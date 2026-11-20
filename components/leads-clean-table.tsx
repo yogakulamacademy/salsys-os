@@ -302,8 +302,8 @@ export function LeadsCleanTable({
               )}
             </div>
 
-            <div className="flex min-w-0 flex-wrap items-center gap-2 2xl:justify-end">
-              <label className="relative min-w-[210px] flex-[1_1_260px] 2xl:max-w-[320px]">
+            <div className="flex min-w-0 flex-wrap items-center gap-2 2xl:flex-nowrap 2xl:justify-end">
+              <label className="relative min-w-[200px] flex-[1_1_240px] 2xl:max-w-[280px]">
                 <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-copy-subtle" />
                 <span className="sr-only">Search leads</span>
                 <input
@@ -473,10 +473,10 @@ export function LeadsCleanTable({
                               <div className="mt-0.5 truncate text-[10px] text-copy-subtle" title={tableEvidence[lead.id]?.countryInferred ? "Worked out from phone code, course-link visit, messages or rupee quotes" : undefined}>
                                 {[
                                   sourceLabel(lead.firstTouchSource || lead.currentContactChannel || ""),
-                                  (tableEvidence[lead.id]?.country ?? lead.country)
+                                  (tableEvidence[lead.id]?.country ?? lead.country) && !/^(—|-|unknown)$/i.test(String(tableEvidence[lead.id]?.country ?? lead.country).trim())
                                     ? `${tableEvidence[lead.id]?.country ?? lead.country}${tableEvidence[lead.id]?.countryInferred ? " (likely)" : ""}`
                                     : "",
-                                ].filter((part) => part && part !== "Unknown").join(" · ") || lead.leadCode}
+                                ].filter((part) => part && !/^(unknown|—|-)$/i.test(part.trim())).join(" · ") || lead.leadCode}
                               </div>
                             </div>
                           </div>
@@ -486,17 +486,13 @@ export function LeadsCleanTable({
                       {visibleColumns.includes("course") ? (
                         <td className="px-3 py-3">
                           <div className={`max-w-[240px] truncate text-[12.5px] font-medium ${hasCourse(lead.course) ? "text-copy-strong" : "text-amber-700 dark:text-amber-300"}`}>{hasCourse(lead.course) ? lead.course : "Not known yet"}</div>
-                          <div className="mt-0.5 max-w-[220px] truncate text-[10px] text-copy-subtle">
-                            {intel?.batch_code || lead.location || (tableEvidence[lead.id]?.value != null
+                          {(() => {
+                            const location = lead.location && !/^(—|-|unknown)$/i.test(lead.location.trim()) ? lead.location : null;
+                            const detail = intel?.batch_code || location || (tableEvidence[lead.id]?.value != null
                               ? `Worth about ${formatValue(tableEvidence[lead.id]!.value!, tableEvidence[lead.id]?.currency ?? "INR")}`
-                              : hasCourse(lead.course) ? "Batch not chosen" : "")}
-                          </div>
-                        </td>
-                      ) : null}
-
-                      {visibleColumns.includes("stage") ? (
-                        <td className="px-3 py-3">
-                          <div className="flex flex-wrap items-center gap-1.5"><StageBadge stage={lead.stage} />{lead.intent && lead.intent !== "unknown" ? <IntentLabel intent={lead.intent} /> : null}</div>
+                              : null);
+                            return detail ? <div className="mt-0.5 max-w-[240px] truncate text-[11px] text-copy-muted">{detail}</div> : null;
+                          })()}
                         </td>
                       ) : null}
 
@@ -534,8 +530,8 @@ export function LeadsCleanTable({
 
                       {visibleColumns.includes("owner") ? (
                         <td className="px-3 py-3">
-                          {intel?.owner_name || lead.owner ? (
-                            <div className="text-[12px] font-medium text-copy">{intel?.owner_name || lead.owner}</div>
+                          {realOwner(intel?.owner_name || lead.owner) ? (
+                            <div className="text-[12px] font-medium text-copy">{realOwner(intel?.owner_name || lead.owner)}</div>
                           ) : (
                             <span className="text-[12px] font-semibold text-brand-700 dark:text-brand-300" title="Open the lead to assign an owner">+ Assign</span>
                           )}
@@ -656,13 +652,13 @@ function PopoverLabel({ children }: { children: ReactNode }) {
 
 function ToolbarSelect({ label, value, options, onChange }: { label: string; value: string; options: string[]; onChange: (value: string) => void }) {
   return (
-    <label className="relative min-w-[105px]">
+    <label className="relative min-w-[96px] shrink-0">
       <span className="sr-only">{label}</span>
       <select
         aria-label={label}
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="h-10 max-w-[145px] rounded-ui border border-line bg-surface px-3 text-[11px] font-medium text-copy-muted outline-none transition hover:border-line-strong focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
+        className="h-10 max-w-[130px] rounded-ui border border-line bg-surface px-3 text-[12px] font-medium text-copy-muted outline-none transition hover:border-line-strong focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
       >
         <option value="all">{label}</option>
         {options.map((option) => <option key={option} value={option}>{pretty(option)}</option>)}
@@ -833,4 +829,10 @@ function formatDate(value: string) {
   const timestamp = Date.parse(value || "");
   if (!Number.isFinite(timestamp)) return "—";
   return new Intl.DateTimeFormat("en-IN", { day: "2-digit", month: "short", year: "numeric" }).format(new Date(timestamp));
+}
+
+/** The owner's name, or null when nobody owns the lead. */
+function realOwner(value: string | null | undefined) {
+  const name = (value ?? "").trim();
+  return name && !/^(unassigned|—|-|none)$/i.test(name) ? name : null;
 }
