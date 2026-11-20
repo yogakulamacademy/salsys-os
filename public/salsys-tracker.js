@@ -689,6 +689,264 @@
     window.addEventListener('popstate', onNavigation);
   }
 
+  // ---------------------------------------------------------------------------
+  // Interest signals (20 Nov 2026). Automatic, consent-gated, no visitor text:
+  // only categories, percentages and seconds are sent. Bounded per page so a
+  // busy page can never flood the CRM. Opt out with data-interest="false".
+  //   web.scroll_depth_reached  25 / 50 / 75 / 90 %
+  //   web.pricing_viewed        a price was on screen for 1 s
+  //   web.cta_clicked           enrol / pay / whatsapp / call / fees / dates / contact / email
+  //   web.brochure_clicked      brochure or PDF
+  //   web.faq_expanded          an FAQ / accordion item opened
+  //   web.media_interacted      video play / 25-50-75 % / complete, gallery and photo opens
+  //   web.engaged_time          seconds actually spent on the page (sent when leaving it)
+  // ---------------------------------------------------------------------------
+  var AUTO_INTEREST = !(script.dataset && script.dataset.interest === 'false');
+  var PRICE_TEXT = /(₹|rs\.?\s|inr|usd|us\$|\$|€|eur|£|gbp)\s?\d{1,3}([,.\s]?\d{2,3})+|\d{1,3}([,.]\d{3})+\s?(inr|usd|eur|gbp|rupees)/i;
+  var PRICE_SELECTOR = '[data-salsys-pricing-id],[class*="price" i],[id*="price" i],[class*="fee" i],[id*="fee" i],[class*="pricing" i],[class*="tuition" i]';
+  var GALLERY_SELECTOR = '[class*="gallery" i],[class*="lightbox" i],[class*="swiper" i],[class*="slick" i],[class*="carousel" i],[class*="fancybox" i],[class*="photo" i],[class*="glightbox" i],[data-salsys-gallery]';
+  var FAQ_SELECTOR = '[class*="faq" i],[id*="faq" i],[class*="accordion" i],[data-salsys-faq]';
+  var CTA_RULES = [
+    ['brochure', /brochure|prospectus|syllabus|download|\.pdf(\?|$)/i],
+    ['pay', /\bpay\b|payment|checkout|razorpay|stripe|paypal/i],
+    ['enrol', /enrol|enroll|register|apply|book\s?(now|your|a)|reserve|join\s?(now|the)|admission|sign\s?up/i],
+    ['whatsapp', /whatsapp|wa\.me|api\.whatsapp/i],
+    ['call', /^tel:|\bcall\b/i],
+    ['email', /^mailto:/i],
+    ['fees', /\bfee|price|pricing|cost|tuition/i],
+    ['dates', /\bdates?\b|batch|schedule|calendar|upcoming/i],
+    ['contact', /contact|enquir|inquir|talk to|ask a question|get in touch/i]
+  ];
+
+  function installInterestTracking() {
+    if (!AUTO_INTEREST || window.__salsysInterestV1) return;
+    window.__salsysInterestV1 = true;
+
+    var pageKey = window.location.pathname;
+    var sent = Object.create(null);
+    var sentCount = 0;
+    var MAX_PER_PAGE = 60;
+    var engagedMs = 0;
+    var lastActive = Date.now();
+    var lastTick = Date.now();
+    var priceObserver = null;
+    var priceTimers = [];
+
+    function pageSlug() {
+      return (window.location.pathname || '/').toLowerCase().replace(/[^a-z0-9/_-]/g, '').replace(/\/+$/, '').slice(0, 120) || '/';
+    }
+
+    function emit(name, props, key) {
+      if (!analyticsGranted() || document.visibilityState === 'hidden') return;
+      if (key) { if (sent[key]) return; sent[key] = true; }
+      if (sentCount >= MAX_PER_PAGE) return;
+      sentCount++;
+      track(name, props || {}, { keepalive: true }).catch(function () {});
+    }
+
+    // Reading time: counts only while the tab is visible and the visitor did
+    // something in the last 30 seconds (scroll, key, pointer, touch).
+    function tick() {
+      var now = Date.now();
+      if (document.visibilityState === 'visible' && now - lastActive < 30000) engagedMs += Math.min(now - lastTick, 5000);
+      lastTick = now;
+    }
+    function markActive() { tick(); lastActive = Date.now(); }
+    ['scroll', 'keydown', 'pointerdown', 'pointermove', 'touchstart', 'wheel'].forEach(function (type) {
+      window.addEventListener(type, markActive, { passive: true, capture: true });
+    });
+    window.setInterval(tick, 5000);
+
+    function flushEngaged() {
+      tick();
+      var seconds = Math.round(engagedMs / 1000);
+      if (seconds >= 5 && analyticsGranted()) {
+        track('web.engaged_time', { engaged_seconds: Math.min(seconds, 3600), page_slug: pageSlug(), max_scroll_percent: maxDepth }, { keepalive: true, queue: false }).catch(function () {});
+      }
+      engagedMs = 0;
+    }
+    document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'hidden') flushEngaged(); });
+    window.addEventListener('pagehide', flushEngaged);
+
+    // Scroll depth.
+    var maxDepth = 0;
+    function depth() {
+      var root = document.documentElement;
+      var viewport = window.innerHeight || (root && root.clientHeight) || 0;
+      var total = Math.max(root ? root.scrollHeight : 0, document.body ? document.body.scrollHeight : 0);
+      if (!viewport || total <= viewport) return 100;
+      return Math.max(0, Math.min(100, Math.floor(((window.scrollY || 0) + viewport) / total * 100)));
+    }
+    var scrollQueued = false;
+    window.addEventListener('scroll', function () {
+      if (scrollQueued) return;
+      scrollQueued = true;
+      window.setTimeout(function () {
+        scrollQueued = false;
+        var d = depth();
+        if (d > maxDepth) maxDepth = d;
+        [25, 50, 75, 90].forEach(function (t) {
+          if (d >= t) emit('web.scroll_depth_reached', { threshold_percent: t, page_slug: pageSlug() }, 'scroll:' + t);
+        });
+      }, 250);
+    }, { passive: true });
+
+    // Price on screen for 1 second.
+    function priceId(el) {
+      var explicit = el.getAttribute && el.getAttribute('data-salsys-pricing-id');
+      if (explicit && /^[a-z0-9][a-z0-9_:.-]{0,79}$/i.test(explicit)) return explicit.toLowerCase();
+      return 'auto:' + pageSlug();
+    }
+    function watchPrices() {
+      if (!priceObserver || !document.querySelectorAll) return;
+      var candidates = [];
+      try { candidates = Array.prototype.slice.call(document.querySelectorAll(PRICE_SELECTOR), 0, 80); } catch (_) {}
+      // Plain text prices (e.g. "₹30,000", "$750") in short elements.
+      try {
+        var nodes = document.querySelectorAll('h1,h2,h3,h4,p,span,strong,b,li,td,div');
+        for (var i = 0; i < nodes.length && candidates.length < 120; i++) {
+          var n = nodes[i];
+          if (n.children && n.children.length > 3) continue;
+          var t = (n.textContent || '');
+          if (t.length > 0 && t.length < 140 && PRICE_TEXT.test(t)) candidates.push(n);
+        }
+      } catch (_) {}
+      candidates.forEach(function (el) {
+        if (!el.__salsysPrice) { el.__salsysPrice = true; priceObserver.observe(el); }
+      });
+    }
+    if (typeof window.IntersectionObserver === 'function') {
+      priceObserver = new window.IntersectionObserver(function (entries) {
+        entries.forEach(function (entry) {
+          var el = entry.target;
+          if (entry.isIntersecting && entry.intersectionRatio >= 0.6) {
+            el.__salsysPriceTimer = window.setTimeout(function () {
+              emit('web.pricing_viewed', { pricing_id: priceId(el), page_slug: pageSlug() }, 'pricing:' + priceId(el));
+            }, 1000);
+            priceTimers.push(el.__salsysPriceTimer);
+          } else if (el.__salsysPriceTimer) {
+            window.clearTimeout(el.__salsysPriceTimer);
+            el.__salsysPriceTimer = null;
+          }
+        });
+      }, { threshold: [0, 0.6] });
+    }
+
+    // Clicks: CTA categories, brochure, FAQ, gallery / photo.
+    function closest(el, selector) {
+      while (el && el.nodeType === 1) {
+        try { if (el.matches && el.matches(selector)) return el; } catch (_) { return null; }
+        el = el.parentElement;
+      }
+      return null;
+    }
+    function hrefKind(href) {
+      if (!href) return 'none';
+      if (/^tel:/i.test(href)) return 'tel';
+      if (/^mailto:/i.test(href)) return 'mailto';
+      if (/wa\.me|whatsapp/i.test(href)) return 'whatsapp';
+      try { return new URL(href, window.location.href).host === window.location.host ? 'internal' : 'external'; } catch (_) { return 'other'; }
+    }
+    document.addEventListener('click', function (event) {
+      var target = event.target;
+      if (!target || !analyticsGranted()) return;
+
+      var control = closest(target, 'a,button,[role="button"],input[type="submit"],input[type="button"],summary');
+      // WhatsApp, phone and email links are already tracked by installDeclarativeTracking.
+      var declarative = control && closest(control, 'a[href^="tel:"],a[href^="mailto:"],a[href*="wa.me"],a[href*="whatsapp"]');
+      if (control && !declarative && !control.hasAttribute('data-salsys-event') && !control.hasAttribute('data-salsys-track')) {
+        var href = control.getAttribute('href') || '';
+        // Text is only matched here, never sent.
+        var label = ((control.innerText || control.value || '') + ' ' + (control.getAttribute('aria-label') || '') + ' ' + href).slice(0, 300);
+        var kind = null;
+        for (var i = 0; i < CTA_RULES.length; i++) { if (CTA_RULES[i][1].test(label)) { kind = CTA_RULES[i][0]; break; } }
+        if (kind === 'brochure') {
+          emit('web.brochure_clicked', { cta_kind: 'brochure', href_kind: hrefKind(href), page_slug: pageSlug() }, 'brochure:' + Math.floor(Date.now() / 2000));
+        } else if (kind) {
+          emit('web.cta_clicked', { cta_id: 'auto_' + kind, cta_kind: kind, href_kind: hrefKind(href), page_slug: pageSlug() }, 'cta:' + kind + ':' + Math.floor(Date.now() / 2000));
+        }
+      }
+
+      var faq = closest(target, 'summary,[aria-expanded],button,' + FAQ_SELECTOR);
+      if (faq && closest(faq, FAQ_SELECTOR + ',details')) {
+        var items = [];
+        try { items = Array.prototype.slice.call(document.querySelectorAll('details,' + FAQ_SELECTOR + ' [aria-expanded]')); } catch (_) {}
+        var index = items.indexOf(closest(target, 'details') || faq);
+        emit('web.faq_expanded', { faq_index: index >= 0 ? index : null, page_slug: pageSlug() }, 'faq:' + index);
+      }
+
+      var gallery = closest(target, GALLERY_SELECTOR);
+      var isImage = (target.tagName === 'IMG' && (target.clientWidth || 0) >= 120) || closest(target, 'picture,figure');
+      if (gallery || isImage) {
+        var next = closest(target, '[class*="next" i],[class*="prev" i],[class*="arrow" i],[aria-label*="next" i],[aria-label*="previous" i]');
+        var action = next ? 'browse' : 'open';
+        var media = gallery ? 'gallery' : 'photo';
+        emit('web.media_interacted', { media: media, action: action, page_slug: pageSlug() }, media + ':' + action + ':' + (action === 'browse' ? Math.floor(Date.now() / 3000) : 'once'));
+      }
+    }, true);
+
+    // Native videos: play, 25 / 50 / 75 %, complete.
+    function watchVideos() {
+      var videos = [];
+      try { videos = document.querySelectorAll('video'); } catch (_) {}
+      for (var v = 0; v < videos.length && v < 20; v++) {
+        (function (video, idx) {
+          if (video.__salsysVideo) return;
+          video.__salsysVideo = true;
+          video.addEventListener('play', function () { emit('web.media_interacted', { media: 'video', action: 'play', video_index: idx, page_slug: pageSlug() }, 'video:' + idx + ':play'); });
+          video.addEventListener('ended', function () { emit('web.media_interacted', { media: 'video', action: 'complete', percent: 100, video_index: idx, page_slug: pageSlug() }, 'video:' + idx + ':100'); });
+          video.addEventListener('timeupdate', function () {
+            if (!video.duration || !isFinite(video.duration)) return;
+            var pct = Math.floor(video.currentTime / video.duration * 100);
+            [25, 50, 75].forEach(function (p) {
+              if (pct >= p) emit('web.media_interacted', { media: 'video', action: 'progress', percent: p, video_index: idx, page_slug: pageSlug() }, 'video:' + idx + ':' + p);
+            });
+          });
+        })(videos[v], v);
+      }
+    }
+    // Embedded YouTube / Vimeo: clicks inside an iframe don't reach the page,
+    // but the page loses focus to that iframe when the visitor presses play.
+    window.addEventListener('blur', function () {
+      window.setTimeout(function () {
+        var active = document.activeElement;
+        if (active && active.tagName === 'IFRAME' && /youtube|youtu\.be|vimeo|wistia|loom/i.test(active.src || '')) {
+          var frames = Array.prototype.slice.call(document.querySelectorAll('iframe'));
+          var idx = frames.indexOf(active);
+          emit('web.media_interacted', { media: 'video', action: 'play', embed: /vimeo/i.test(active.src) ? 'vimeo' : 'youtube', video_index: idx, page_slug: pageSlug() }, 'embed:' + idx + ':play');
+        }
+      }, 0);
+    });
+
+    function scanPage() { watchPrices(); watchVideos(); }
+    function onPageChange() {
+      if (window.location.pathname === pageKey) return;
+      flushEngaged();
+      pageKey = window.location.pathname;
+      sent = Object.create(null);
+      sentCount = 0;
+      maxDepth = 0;
+      priceTimers.forEach(function (t) { window.clearTimeout(t); });
+      priceTimers = [];
+      window.setTimeout(scanPage, 600);
+    }
+    window.addEventListener('popstate', onPageChange);
+    ['pushState', 'replaceState'].forEach(function (method) {
+      var original = window.history && window.history[method];
+      if (typeof original !== 'function') return;
+      window.history[method] = function () {
+        var result = original.apply(this, arguments);
+        window.setTimeout(onPageChange, 0);
+        return result;
+      };
+    });
+
+    if (document.readyState === 'complete') window.setTimeout(scanPage, 600);
+    else window.addEventListener('load', function () { window.setTimeout(scanPage, 600); });
+    // Content that loads later (sliders, price tables): look again a few times.
+    [3000, 8000].forEach(function (ms) { window.setTimeout(scanPage, ms); });
+  }
+
   var api = {
     __eventIntelligenceV1: true,
     version: '1.1.0',
@@ -734,6 +992,7 @@
   decorateForms();
   installDeclarativeTracking();
   installSpaTracking();
+  installInterestTracking();
 
   if (gpcEnabled() && privacyState().sale_sharing !== 'opted_out') {
     consent({ sale_sharing: 'opted_out' }).catch(function () {});
