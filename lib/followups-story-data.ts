@@ -1,5 +1,6 @@
 import "server-only";
 
+import { saysTheyPaid } from "@/lib/home-story";
 import { buildFollowupsStory, type FollowupsStory, type StoryTask } from "@/lib/followups-story";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
@@ -102,6 +103,7 @@ export async function getFollowupsStory(now = new Date()): Promise<FollowupsStor
         value: value != null && Number.isFinite(value) && value > 0 ? value : null,
         currency: l.potential_currency,
         course: l.interested_course_id ? courseName.get(l.interested_course_id) ?? null : null,
+        saysPaid: !["enrolled", "closed_won"].includes(l.current_stage) && saysTheyPaid(lastText.get(t.lead_id) ?? null),
       });
     }
     return buildFollowupsStory(rows, now);

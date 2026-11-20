@@ -119,7 +119,7 @@ export default async function FollowUpsPage({ searchParams }: FollowUpsPageProps
         <p className="text-[13px] text-copy-muted">
           {story.dueNow.toLocaleString("en-IN")} due now
           {story.lateOverWeek ? ` · ${story.lateOverWeek.toLocaleString("en-IN")} over a week late` : ""}
-          {story.waiting ? ` · ${story.waiting.toLocaleString("en-IN")} of these people wrote last and are waiting for you` : ""}
+          {story.waiting ? ` · in ${story.waiting.toLocaleString("en-IN")} the lead wrote last and has no reply logged` : ""}
           {story.upcomingWeek ? ` · ${story.upcomingWeek.toLocaleString("en-IN")} more coming up this week` : ""}
         </p>
       </section>
@@ -263,7 +263,8 @@ function waitedText(since: string | null) {
   if (!since) return null;
   const days = Math.floor((Date.now() - Date.parse(since)) / 86_400_000);
   if (!Number.isFinite(days)) return null;
-  return days <= 0 ? "Waiting since today" : `Waiting ${days}d for you`;
+  if (days <= 0) return "Waiting since today";
+  return days > 14 ? `No reply logged · ${days}d` : `Waiting ${days}d for you`;
 }
 
 function TaskRow({ task, view }: { task: ShapedTask; view: View }) {
@@ -294,6 +295,9 @@ function TaskRow({ task, view }: { task: ShapedTask; view: View }) {
           <div className="flex min-w-0 flex-wrap items-center gap-2">
             <Link href={`/leads/${task.leadId}`} className="text-[15px] font-semibold text-copy-strong hover:underline">{task.leadName}</Link>
             <StageBadge stage={task.stage as PipelineStage} />
+            {task.saysPaid ? (
+              <span className="rounded-md bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-200">Says they paid</span>
+            ) : null}
             {task.taskType === "payment_check" ? (
               <span className="rounded-md bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-800 dark:bg-amber-950/50 dark:text-amber-200">Payment verification</span>
             ) : null}
