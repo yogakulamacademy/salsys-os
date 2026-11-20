@@ -141,7 +141,8 @@ export default async function ReEngagedPage({
     }
 
     if (activeView === "hot") {
-      return String(lead.behaviour_temperature || "").toLowerCase() === "hot";
+      // Hot or warm by the Interest score (the old temperature is no longer shown).
+      return ["hot", "warm"].includes(intelligence.profiles.get(lead.lead_id)?.interestBand ?? "");
     }
 
     if (activeView === "high_intent") {
@@ -387,11 +388,9 @@ export default async function ReEngagedPage({
           <ActivityViewTab
             href={activityViewHref("hot")}
             active={activeView === "hot"}
-            label={`Hot ${
-              leads.filter(
-                (lead) =>
-                  String(lead.behaviour_temperature || "").toLowerCase() ===
-                  "hot",
+            label={`Hot & warm ${
+              leads.filter((lead) =>
+                ["hot", "warm"].includes(intelligence.profiles.get(lead.lead_id)?.interestBand ?? ""),
               ).length
             }`}
           />
@@ -465,8 +464,6 @@ export default async function ReEngagedPage({
 
                   <th className="px-3 py-3">Stage</th>
 
-                  <th className="px-3 py-3">Temperature</th>
-
                   <th className="px-3 py-3">Interest</th>
 
                   <th className="px-3 py-3 text-right">7d visits</th>
@@ -501,10 +498,6 @@ export default async function ReEngagedPage({
 
                     <td className="px-3 py-3 text-slate-600">
                       {pretty(lead.current_stage)}
-                    </td>
-
-                    <td className="px-3 py-3">
-                      <TemperatureBadge value={lead.behaviour_temperature} />
                     </td>
 
                     <td className="px-3 py-3">
@@ -608,11 +601,7 @@ export default async function ReEngagedPage({
               </div>
 
               <div className="mt-4 flex flex-wrap gap-2">
-                <TemperatureBadge value={selectedLead.behaviour_temperature} />
-
-                <span className="inline-flex rounded-full bg-violet-50 px-2.5 py-1 text-xs font-semibold text-violet-700">
-                  Score {formatNumber(selectedLead.engagement_score)}/100
-                </span>
+                <InterestBadge profile={intelligence.profiles.get(selectedLead.lead_id)} />
 
                 <span className="inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">
                   {formatNumber(selectedLead.sessions_after_lead)} post-lead
@@ -743,86 +732,6 @@ function SummaryCard({
 
       <div className="mt-1 text-xs text-slate-400">{sub}</div>
     </div>
-  );
-}
-
-function TemperatureBadge({ value }: { value: string }) {
-  const normalized = String(value || "cold").toLowerCase();
-
-  const className =
-    normalized === "hot"
-      ? "bg-rose-50 text-rose-700 ring-rose-100"
-      : normalized === "warm"
-        ? "bg-orange-50 text-orange-700 ring-orange-100"
-        : normalized === "closed"
-          ? "bg-slate-100 text-slate-600 ring-slate-200"
-          : "bg-sky-50 text-sky-700 ring-sky-100";
-
-  const emoji =
-    normalized === "hot"
-      ? "🔥"
-      : normalized === "warm"
-        ? "🟠"
-        : normalized === "closed"
-          ? "⚫"
-          : "🔵";
-
-  return (
-    <span
-      className={`
-
-
-
-        inline-flex
-
-
-
-        items-center
-
-
-
-        gap-1.5
-
-
-
-        rounded-full
-
-
-
-        px-2.5
-
-
-
-        py-1
-
-
-
-        text-xs
-
-
-
-        font-bold
-
-
-
-        ring-1
-
-
-
-        ring-inset
-
-
-
-        ${className}
-
-
-
-      `}
-    >
-      <span>{emoji}</span>
-
-      {pretty(normalized)}
-    </span>
   );
 }
 
