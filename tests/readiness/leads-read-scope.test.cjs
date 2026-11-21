@@ -22,3 +22,11 @@ test('leads read rule: same checks as can_access_lead, once per query', () => {
   assert.match(sql, /\(select public\.lead_scope_role\(\)\) in \('owner', 'admin', 'manager'\)\s*or owner_user_id = \(select auth\.uid\(\)\)/);
   assert.match(sql, /revoke all on function public\.lead_scope_role\(\) from public, anon/);
 });
+
+test('read rules use the visible-leads check; write rules keep can_access_lead', () => {
+  const sql = read('supabase/migrations/20261121083000_read_policies_use_visible_leads_v1.sql');
+  assert.match(sql, /cmd = 'SELECT' and qual like '%can_access_lead\(%'/);
+  assert.match(sql, /\(\\1 IN \(SELECT visible_lead\.id FROM public\.leads visible_lead\)\)/);
+  assert.match(sql, /raise exception 'Could not rewrite/);
+  assert.doesNotMatch(sql, /cmd in \(|cmd = 'UPDATE'|cmd = 'DELETE'|cmd = 'ALL'/);
+});
