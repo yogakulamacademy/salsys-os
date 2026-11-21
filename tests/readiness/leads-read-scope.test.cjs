@@ -30,3 +30,11 @@ test('read rules use the visible-leads check; write rules keep can_access_lead',
   assert.match(sql, /raise exception 'Could not rewrite/);
   assert.doesNotMatch(sql, /cmd in \(|cmd = 'UPDATE'|cmd = 'DELETE'|cmd = 'ALL'/);
 });
+
+test('read rules list the user\'s businesses once per query', () => {
+  const sql = read('supabase/migrations/20261121084500_read_policies_member_orgs_initplan_v1.sql');
+  assert.match(sql, /public\.session_is_bound_to_organization\(om\.organization_id\)/);
+  assert.match(sql, /om\.active = true/);
+  assert.match(sql, /qual like '%visible_lead%'/);
+  assert.match(sql, /cmd = 'SELECT'/);
+});
