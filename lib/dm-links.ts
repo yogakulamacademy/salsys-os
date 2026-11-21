@@ -128,6 +128,27 @@ export function classifyLinkRequest(input: {
   return { kind: "open", agent };
 }
 
+/**
+ * Instagram and Meta check a link a few seconds after it is sent, using an
+ * ordinary browser signature (seen live: every "open" 2 s after sending, from
+ * the US). A person opening from the DM uses the in-app browser, or opens it
+ * later. Such scanner opens must not count as the lead opening the link.
+ */
+export const SCANNER_WINDOW_MS = 30_000;
+export function isLinkScannerOpen(input: { agent: string; sentAt: string | null | undefined; now?: Date }): boolean {
+  if (!input.sentAt) return false;
+  if (input.agent === "instagram_inapp" || input.agent === "facebook_inapp") return false;
+  const gap = (input.now ?? new Date()).getTime() - Date.parse(input.sentAt);
+  return Number.isFinite(gap) && gap >= -5_000 && gap < SCANNER_WINDOW_MS;
+}
+
+/** A link whose first recorded open came seconds after sending was opened by the scanner. */
+export function openedByScanner(sentAt: string | null | undefined, firstOpenedAt: string | null | undefined): boolean {
+  const sent = Date.parse(sentAt ?? "");
+  const opened = Date.parse(firstOpenedAt ?? "");
+  return Number.isFinite(sent) && Number.isFinite(opened) && opened - sent >= -5_000 && opened - sent < SCANNER_WINDOW_MS;
+}
+
 /** Short browser family for the visit log (never the full user agent). */
 export function agentFamily(ua: string): string {
   if (!ua) return "unknown";

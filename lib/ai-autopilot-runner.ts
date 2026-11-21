@@ -2,12 +2,12 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { draftCopilotReply, type CopilotReplyResult } from "@/lib/copilot-core";
-import { noOpenTaskDue, NO_OPEN_AFTER_MS } from "@/lib/dm-links";
+import { noOpenTaskDue, NO_OPEN_AFTER_MS, openedByScanner } from "@/lib/dm-links";
 import { listAutopilotBusinesses, type OrgSalesAiSettings } from "@/lib/org-sales-ai-settings";
 import { getInstagramRuntimeForOrganization } from "@/lib/integrations/instagram-connection";
 import {
   ASSESS_SCHEMA, assessSystemPrompt, assessUserPrompt, CLOSED_STAGES, eligibleNewLead, HANDOVER_LABELS,
-  batchStartsSoon, istDayStart, liveHardStop, nudgeDue, parseAssessment, sendDecision, windowOpen,
+  batchStartsSoon, istDayStart, linkFollowupDue, liveHardStop, nudgeDue, parseAssessment, sendDecision, windowOpen,
   type Assessment, type HandoverReason,
 } from "@/lib/autopilot-live";
 
@@ -18,7 +18,7 @@ const FOLLOWUP_SOURCE = "ai_followup_detection_v1";
 type Summary = {
   considered: number; sent: number; enrolled: number; handedOver: number; paused: number;
   skipped: number; nudges: number; followupDrafts: number; followupsSent: number; errors: number;
-  linkTasks: number;
+  linkTasks: number; linkFollowups: number;
 };
 
 /** businesses: the businesses with Autopilot switched on, and their settings. */
@@ -216,7 +216,7 @@ async function pauseIfTeamReplied(ctx: Ctx, state: { lead_id: string; enrolled_a
 }
 
 export async function runAutopilot(admin: SupabaseClient, now = new Date()): Promise<Summary> {
-  const summary: Summary = { considered: 0, sent: 0, enrolled: 0, handedOver: 0, paused: 0, skipped: 0, nudges: 0, followupDrafts: 0, followupsSent: 0, errors: 0, linkTasks: 0 };
+  const summary: Summary = { considered: 0, sent: 0, enrolled: 0, handedOver: 0, paused: 0, skipped: 0, nudges: 0, followupDrafts: 0, followupsSent: 0, errors: 0, linkTasks: 0, linkFollowups: 0 };
   // AI_AUTOPILOT_LIVE_ENABLED is the master switch for the whole CRM; each
   // business must also have Autopilot switched on in its own settings.
   const masterOn = process.env.AI_AUTOPILOT_LIVE_ENABLED === "true";
@@ -313,6 +313,11 @@ export async function runAutopilot(admin: SupabaseClient, now = new Date()): Pro
       }
     }
   }
+  // DM-LINK: they really opened their course link but haven't replied: one follow-up with their fee.
+  try { await followUpOpenedLinks(ctx); } catch (err) {
+    summary.errors += 1;
+    console.error("Opened link follow-up failed", { error: err instanceof Error ? err.message : "unknown" });
+  }
   // DM-LINK: a sent course link that wasn't opened in 12h (and no reply) becomes a team task.
   try { await queueUnopenedLinks(ctx); } catch (err) {
     summary.errors += 1;
@@ -386,6 +391,80 @@ async function queueUnopenedLinks(ctx: Ctx) {
     if (taskError || !task?.id) { ctx.summary.errors += 1; continue; }
     await ctx.admin.from("dm_tracked_links").update({ attention_task_id: task.id }).eq("id", link.id).is("attention_task_id", null);
     created += 1;
+    ctx.summary.linkTasks += 1;
+  }
+}
+
+/**
+ * Owner decision (21 Nov 2026): a lead who really opened their course link
+ * (scanner opens are not counted) and hasn't replied gets one follow-up with
+ * the fee for where they are and the next batch, 2–6 hours after the open.
+ * Sent by the AI only for leads it is handling, inside Instagram's 24-hour
+ * window and in daytime for the lead; otherwise (or if the AI's check stops
+ * it) the team gets one task. At most 5 per run.
+ */
+async function followUpOpenedLinks(ctx: Ctx) {
+  const from = new Date(ctx.now.getTime() - 6 * 3_600_000).toISOString();
+  const to = new Date(ctx.now.getTime() - 2 * 3_600_000).toISOString();
+  const { data: links, error } = await ctx.admin.from("dm_tracked_links")
+    .select("id, organization_id, lead_id, sent_at, first_opened_at, attention_task_id, courses(name)")
+    .not("sent_at", "is", null).is("revoked_at", null).is("attention_task_id", null)
+    .gte("first_opened_at", from).lte("first_opened_at", to)
+    .order("first_opened_at", { ascending: true }).limit(40);
+  if (error) throw new Error(error.message);
+  let done = 0;
+  for (const link of links ?? []) {
+    if (done >= 5) break;
+    // Instagram's scanner "opens" links seconds after sending: not the lead.
+    if (openedByScanner(link.sent_at as string, link.first_opened_at as string)) continue;
+    const leadId = String(link.lead_id);
+    const { data: lead } = await ctx.admin.from("leads").select("id, current_stage, timezone, owner_user_id, current_contact_channel").eq("id", leadId).maybeSingle();
+    if (!lead || CLOSED_STAGES.includes(String(lead.current_stage)) || lead.current_contact_channel !== "instagram") continue;
+    const { data: msgs } = await ctx.admin.from("messages").select("id, direction, created_at, received_at, conversation_id, conversations!inner(channel, external_account_id)")
+      .eq("lead_id", leadId).eq("conversations.channel", "instagram").order("created_at", { ascending: false }).limit(10);
+    const list = msgs ?? [];
+    const lastInbound = list.find((m) => m.direction === "inbound");
+    const lastOutbound = list.find((m) => m.direction === "outbound");
+    const due = linkFollowupDue({
+      sentAt: link.sent_at as string, firstOpenedAt: link.first_opened_at as string,
+      lastInboundAt: lastInbound ? String(lastInbound.received_at || lastInbound.created_at) : null,
+      lastOutboundAt: lastOutbound ? String(lastOutbound.created_at) : null,
+      timeZone: (lead.timezone as string | null) ?? null, now: ctx.now,
+    });
+    if (!due || !list[0]) continue;
+    done += 1;
+
+    const autopilotOn = ctx.businesses.has(String(link.organization_id));
+    const { data: state } = autopilotOn
+      ? await ctx.admin.from("ai_autopilot_leads").select("status").eq("lead_id", leadId).maybeSingle()
+      : { data: null };
+    if (state?.status === "active") {
+      const draft = await draftCopilotReply({ leadId, knowledgeClient: ctx.admin, purpose: "link_followup" })
+        .catch((e) => ({ ok: false as const, error: e instanceof Error ? e.message : "failed" }));
+      if (draft.ok) {
+        const conv = Array.isArray(list[0].conversations) ? list[0].conversations[0] : list[0].conversations;
+        const sent = await sendFollowup(ctx, {
+          leadId, organizationId: String(link.organization_id), conversationId: String(list[0].conversation_id),
+          accountId: String((conv as { external_account_id?: string })?.external_account_id ?? ""),
+          anchorMessageId: String(list[0].id), presetDraft: draft,
+        });
+        if (sent) { ctx.summary.linkFollowups += 1; continue; }
+      }
+    }
+
+    // Not with the AI, or the AI's check stopped it: one task for the team.
+    const course = Array.isArray(link.courses) ? link.courses[0] : link.courses;
+    const courseName = (course as { name?: string } | null)?.name ?? "course";
+    const { data: task, error: taskError } = await ctx.admin.from("tasks").insert({
+      organization_id: link.organization_id, lead_id: leadId, task_type: "human_review",
+      title: `Looked at the ${courseName} page but hasn't replied: send their fee`.slice(0, 240),
+      description: "They opened their course link a few hours ago and haven't written since. Send the fee for where they are and the next batch, and ask one easy question. Don't mention that they opened the link.",
+      status: "open", due_at: ctx.now.toISOString(), assigned_to: lead.owner_user_id ?? null,
+      created_by_type: "ai", created_by_id: "dm_link_opened_v1",
+      metadata: { source: "dm_link_opened_v1", link_id: link.id },
+    }).select("id").maybeSingle();
+    if (taskError || !task?.id) { ctx.summary.errors += 1; continue; }
+    await ctx.admin.from("dm_tracked_links").update({ attention_task_id: task.id }).eq("id", link.id).is("attention_task_id", null);
     ctx.summary.linkTasks += 1;
   }
 }

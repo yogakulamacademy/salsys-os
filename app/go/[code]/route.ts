@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 
 import { requestGeoFromHeaders } from "@/lib/request-geo";
-import { classifyLinkRequest, fallbackDestination, isAllowedDestination, isAppHost, isLinkCode, withLinkMarker } from "@/lib/dm-links";
+import { classifyLinkRequest, fallbackDestination, isAllowedDestination, isAppHost, isLinkCode, isLinkScannerOpen, withLinkMarker } from "@/lib/dm-links";
 import { findBusinessByLinkDomain, getOrgSalesAiSettings } from "@/lib/org-sales-ai-settings";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -32,17 +32,22 @@ async function handle(request: NextRequest, code: string) {
     if (brandedHost && !(domainOwner?.linkDomainVerified)) return redirect(domainFallback);
     if (!isLinkCode(code)) return redirect(domainFallback);
 
-    const { data: link } = await admin.from("dm_tracked_links").select("organization_id").eq("code", code).maybeSingle();
+    const { data: link } = await admin.from("dm_tracked_links").select("organization_id, sent_at").eq("code", code).maybeSingle();
     if (!link) return redirect(domainFallback);
     // A branded domain only serves its own business's links.
     if (domainOwner && domainOwner.organizationId !== String(link.organization_id)) return redirect(domainFallback);
 
     const settings = domainOwner ?? (await getOrgSalesAiSettings(admin, String(link.organization_id)));
-    const { kind, agent } = classifyLinkRequest({
+    const classified = classifyLinkRequest({
       method: request.method,
       userAgent: request.headers.get("user-agent"),
       purpose: request.headers.get("sec-purpose") || request.headers.get("purpose"),
     });
+    const agent = classified.agent;
+    // Instagram's link scanner opens it seconds after sending: not the lead.
+    const kind = classified.kind === "open" && isLinkScannerOpen({ agent, sentAt: (link.sent_at as string | null) ?? null })
+      ? "preview_or_bot"
+      : classified.kind;
     const { country, region } = requestGeoFromHeaders(request.headers);
     const { data } = await admin.rpc("record_dm_link_visit_v1", {
       p_code: code, p_kind: kind, p_country: country, p_region: region, p_agent: agent,

@@ -75,3 +75,24 @@ test('a lead whose course starts within 24 hours goes to the team', async () => 
   assert.equal(batchStartsSoon(null, new Date()), false);
   assert.match(HANDOVER_LABELS.batch_starting_soon, /24 hours/);
 });
+
+import { linkFollowupDue } from '../../lib/autopilot-live.ts';
+
+test('link follow-up: real open, no reply, 2–6 h later, window open, daytime, once', () => {
+  const base = {
+    sentAt: '2026-11-21T04:00:00Z',        // 9:30 IST
+    firstOpenedAt: '2026-11-21T04:30:00Z', // opened 30 min later
+    lastInboundAt: '2026-11-21T03:58:00Z', // asked the fee just before
+    lastOutboundAt: '2026-11-21T04:00:00Z',
+    timeZone: 'Asia/Kolkata',
+  };
+  const at = (iso) => new Date(iso);
+  assert.equal(linkFollowupDue({ ...base, now: at('2026-11-21T07:00:00Z') }), true);   // 2.5 h after open, 12:30 IST
+  assert.equal(linkFollowupDue({ ...base, now: at('2026-11-21T05:00:00Z') }), false);  // too soon
+  assert.equal(linkFollowupDue({ ...base, now: at('2026-11-21T11:00:00Z') }), false);  // over 6 h
+  assert.equal(linkFollowupDue({ ...base, lastInboundAt: '2026-11-21T05:00:00Z', now: at('2026-11-21T07:00:00Z') }), false); // they replied
+  assert.equal(linkFollowupDue({ ...base, lastOutboundAt: '2026-11-21T06:00:00Z', now: at('2026-11-21T07:00:00Z') }), false); // already followed up
+  assert.equal(linkFollowupDue({ ...base, firstOpenedAt: null, now: at('2026-11-21T07:00:00Z') }), false); // never opened
+  // Night in the lead's time zone (New York 2 am)
+  assert.equal(linkFollowupDue({ ...base, timeZone: 'America/New_York', now: at('2026-11-21T07:00:00Z') }), false);
+});
