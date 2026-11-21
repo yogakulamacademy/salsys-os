@@ -104,3 +104,19 @@ export function parseLocationAnswer(text: string): LocationClue | null {
     return null;
   }
 }
+
+/**
+ * A phone number the lead typed in a message (for example their WhatsApp
+ * number), or null. Needs 10+ digits so years, prices and dates don't count.
+ */
+export function phoneInText(text: string | null | undefined): string | null {
+  const t = (text ?? "").replace(/[‎‏]/g, "");
+  const match = t.match(/(?:\+|00)?\d[\d\s().-]{8,18}\d/g);
+  for (const candidate of match ?? []) {
+    const digits = candidate.replace(/[^\d]/g, "");
+    if (digits.length < 10 || digits.length > 15) continue;
+    if (/[₹$€£]|rs\.?$/i.test(t.slice(Math.max(0, t.indexOf(candidate) - 3), t.indexOf(candidate)))) continue;
+    return candidate.trim();
+  }
+  return null;
+}

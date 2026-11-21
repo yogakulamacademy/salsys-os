@@ -53,3 +53,14 @@ test('market: typed places and inferred country count', () => {
 test('location health explains inferred share', () => {
   assert.equal(locationHealth({ filled: 600, total: 1400, inferred: 480 }).note, '43% known · 34% from clues');
 });
+
+import { phoneInText } from '../../lib/lead-location.ts';
+
+test('a WhatsApp number typed in a message gives the country; prices and dates do not', () => {
+  assert.equal(countryFromPhone(phoneInText('Sure, my WhatsApp is +91 98765 43210')), 'India');
+  assert.equal(countryFromPhone(phoneInText('whatsapp 9876543210 please')), 'India');
+  assert.equal(countryFromPhone(phoneInText('Call me on +44 7911 123456')), 'United Kingdom');
+  assert.equal(phoneInText('The fee is ₹60,000 for 2026-12-07'), null);
+  assert.equal(phoneInText('I will join in December 2026'), null);
+  assert.equal(phoneInText(null), null);
+});

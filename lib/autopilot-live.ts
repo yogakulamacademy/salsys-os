@@ -185,3 +185,44 @@ export function batchStartsSoon(
   const at = batchStartAt(batch);
   return at !== null && at - now.getTime() < WINDOW_MS;
 }
+
+/** A real course-link open with no reply: follow up 2–6 hours after the open. */
+export const LINK_FOLLOWUP_AFTER_MS = 2 * 3_600_000;
+export const LINK_FOLLOWUP_LATEST_MS = 6 * 3_600_000;
+
+/** Local hour (0–23) in the lead's time zone, India time when unknown. */
+export function localHour(now: Date, timeZone: string | null | undefined): number {
+  try {
+    return Number(new Intl.DateTimeFormat("en-GB", { hour: "numeric", hourCycle: "h23", timeZone: timeZone || "Asia/Kolkata" }).format(now));
+  } catch {
+    return Number(new Intl.DateTimeFormat("en-GB", { hour: "numeric", hourCycle: "h23", timeZone: "Asia/Kolkata" }).format(now));
+  }
+}
+
+/**
+ * The lead opened their course link (a real open, not the scanner) and hasn't
+ * replied: one follow-up with their fee, 2–6 hours after the open, while
+ * Instagram still allows a message, not at night (9 pm – 8 am their time), and
+ * only if nothing has been sent since the open (so at most once).
+ */
+export function linkFollowupDue(input: {
+  sentAt: string | null;
+  firstOpenedAt: string | null;
+  lastInboundAt: string | null;
+  lastOutboundAt: string | null;
+  timeZone?: string | null;
+  now: Date;
+}): boolean {
+  const sent = Date.parse(input.sentAt ?? "");
+  const opened = Date.parse(input.firstOpenedAt ?? "");
+  if (!Number.isFinite(sent) || !Number.isFinite(opened) || opened < sent) return false;
+  const sinceOpen = input.now.getTime() - opened;
+  if (sinceOpen < LINK_FOLLOWUP_AFTER_MS || sinceOpen >= LINK_FOLLOWUP_LATEST_MS) return false;
+  const inbound = Date.parse(input.lastInboundAt ?? "");
+  if (Number.isFinite(inbound) && inbound > sent) return false; // they replied
+  const outbound = Date.parse(input.lastOutboundAt ?? "");
+  if (Number.isFinite(outbound) && outbound > opened) return false; // already followed up / team wrote
+  if (!windowOpen(input.lastInboundAt, input.now)) return false;
+  const hour = localHour(input.now, input.timeZone);
+  return hour >= 8 && hour < 21;
+}

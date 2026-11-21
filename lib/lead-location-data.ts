@@ -2,10 +2,11 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { openedByScanner } from "@/lib/dm-links";
 import { normalizeCountry } from "@/lib/home-command-center";
 import { isAdStarter } from "@/lib/lead-stages";
 import {
-  bestLocation, countryFromPhone, LOCATION_CONFIDENCE, LOCATION_SCHEMA, locationSystemPrompt, parseLocationAnswer,
+  bestLocation, countryFromPhone, phoneInText, LOCATION_CONFIDENCE, LOCATION_SCHEMA, locationSystemPrompt, parseLocationAnswer,
   teamQuotedRupeesOnly, type LeadLocation, type LocationClue,
 } from "@/lib/lead-location";
 
@@ -37,7 +38,7 @@ export async function locateLead(admin: SupabaseClient, leadId: string, now: Dat
 
   const [{ data: sessions }, { data: links }, { data: phones }, { data: msgs }] = await Promise.all([
     admin.from("web_sessions").select("geo_country, geo_city").eq("lead_id", leadId).not("geo_country", "is", null).limit(1),
-    admin.from("dm_tracked_links").select("visit_country").eq("lead_id", leadId).not("visit_country", "is", null).limit(1),
+    admin.from("dm_tracked_links").select("visit_country, sent_at, first_opened_at").eq("lead_id", leadId).not("visit_country", "is", null).limit(5),
     admin.from("lead_contacts").select("value").eq("lead_id", leadId).in("contact_type", ["phone", "whatsapp"]).limit(3),
     admin.from("messages").select("body, direction, created_at").eq("lead_id", leadId).order("created_at", { ascending: true }).limit(200),
   ]);
@@ -47,13 +48,24 @@ export async function locateLead(admin: SupabaseClient, leadId: string, now: Dat
   if (lead.geo_country) clues.push({ source: "website", country: String(lead.geo_country), city: lead.geo_city ?? null });
   const s = (sessions ?? [])[0] as { geo_country?: string; geo_city?: string } | undefined;
   if (s?.geo_country) clues.push({ source: "website", country: s.geo_country, city: s.geo_city ?? null });
-  const l = (links ?? [])[0] as { visit_country?: string } | undefined;
+  // Instagram's scanner "opens" links seconds after sending: not the lead.
+  const l = ((links ?? []) as Array<{ visit_country?: string; sent_at?: string | null; first_opened_at?: string | null }>)
+    .find((x) => !openedByScanner(x.sent_at, x.first_opened_at));
   if (l?.visit_country) clues.push({ source: "link_visit", country: l.visit_country });
   for (const p of phones ?? []) {
     const c = countryFromPhone((p as { value?: string }).value);
     if (c) { clues.push({ source: "phone", country: c }); break; }
   }
   const messages = (msgs ?? []) as Array<{ body: string | null; direction: string; created_at: string }>;
+  // A number they typed in a message (e.g. their WhatsApp number) tells us the country.
+  if (!clues.some((c) => c.source === "phone")) {
+    for (const m of [...messages].reverse()) {
+      if (m.direction !== "inbound") continue;
+      const typedPhone = phoneInText(m.body);
+      const c = typedPhone ? countryFromPhone(typedPhone) : null;
+      if (c) { clues.push({ source: "phone", country: c }); break; }
+    }
+  }
   if (teamQuotedRupeesOnly(messages.filter((m) => m.direction === "outbound").map((m) => m.body))) {
     clues.push({ source: "team_quote", country: "India", evidence: "Team quoted rupee prices" });
   }

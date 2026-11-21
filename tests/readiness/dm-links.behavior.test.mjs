@@ -78,3 +78,23 @@ test('tracked-link handoff: destination gets ?slk=<code>, and only valid codes a
   assert.equal(trackedLinkCodeFromEvent({ properties: {} }), null);
   assert.equal(trackedLinkCodeFromEvent(null), null);
 });
+
+import { isLinkScannerOpen } from '../../lib/dm-links.ts';
+
+test("Instagram's link scanner (opens seconds after sending) is not the lead", () => {
+  const sentAt = '2026-11-21T02:46:56.831Z';
+  const at = (s) => new Date(Date.parse(sentAt) + s * 1000);
+  assert.equal(isLinkScannerOpen({ agent: 'desktop_browser', sentAt, now: at(2) }), true);
+  assert.equal(isLinkScannerOpen({ agent: 'android_browser', sentAt, now: at(10) }), true);
+  assert.equal(isLinkScannerOpen({ agent: 'instagram_inapp', sentAt, now: at(5) }), false);
+  assert.equal(isLinkScannerOpen({ agent: 'desktop_browser', sentAt, now: at(120) }), false);
+  assert.equal(isLinkScannerOpen({ agent: 'desktop_browser', sentAt: null, now: at(2) }), false);
+});
+
+import { openedByScanner } from '../../lib/dm-links.ts';
+
+test('a link first opened seconds after sending was opened by the scanner', () => {
+  assert.equal(openedByScanner('2026-11-21T02:46:56.831Z', '2026-11-21T02:46:59.030Z'), true);
+  assert.equal(openedByScanner('2026-11-21T02:46:56.831Z', '2026-11-21T03:30:00.000Z'), false);
+  assert.equal(openedByScanner(null, '2026-11-21T03:30:00.000Z'), false);
+});
