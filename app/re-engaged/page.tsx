@@ -1,8 +1,7 @@
-import type { ReactNode } from "react";
 
 import Link from "next/link";
 
-import { ArrowRight, Flame, RefreshCw, Target, Users } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 
 import { LeadJourneyIntelligence } from "@/components/lead-journey-intelligence";
 
@@ -99,7 +98,7 @@ export default async function ReEngagedPage({
 
   const workspace = await getReEngagedWorkspace();
 
-  const { summary, distribution } = workspace;
+  const { distribution } = workspace;
 
   // Interest profiles from website events and their own messages (last 30 days).
   const intelligence = await getReEngagedIntelligence(workspace.leads.map((lead) => lead.lead_id));
@@ -153,22 +152,24 @@ export default async function ReEngagedPage({
     return true;
   });
 
-  const totalReengaged = summary.reduce(
-    (total, row) => total + toNumber(row.reengaged_count),
-    0,
-  );
-
-  const hot = summary.find((row) => row.behaviour_temperature === "hot");
-
-  const warm = summary.find((row) => row.behaviour_temperature === "warm");
-
-  const cold = summary.find((row) => row.behaviour_temperature === "cold");
-
   return (
     <>
       <PageHeader
-        title="Re-engaged Leads"
-        description="Recently active CRM leads, including re-engaged visitors, with website behaviour, repeat visits and high-intent signals."
+        title="Re-engaged"
+        description={
+          <span className="text-[15px] leading-7 text-copy">
+            {actNow.length ? (
+              <>
+                <strong className="font-semibold text-copy-strong">
+                  {actNow.length} {actNow.length === 1 ? "person is" : "people are"} worth contacting right now
+                </strong>
+                : their visits and messages show interest. Draft a message on each card and send it from the Inbox.
+              </>
+            ) : (
+              "Nobody stands out right now. People show here when their visits and messages show interest."
+            )}
+          </span>
+        }
       />
 
       {workspace.warning && (
@@ -178,61 +179,9 @@ export default async function ReEngagedPage({
         </div>
       )}
 
-      <div
-        className="
-
-
-
-          mt-6
-
-
-
-          grid
-
-
-
-          gap-3
-
-
-
-          sm:grid-cols-2
-
-
-
-          xl:grid-cols-4
-
-
-
-        "
-      >
-        <SummaryCard
-          icon={<Flame size={18} />}
-          label="Hot"
-          value={formatNumber(hot?.lead_count)}
-          sub={`${formatNumber(hot?.reengaged_count)} re-engaged`}
-        />
-
-        <SummaryCard
-          icon={<Target size={18} />}
-          label="Warm"
-          value={formatNumber(warm?.lead_count)}
-          sub={`${formatNumber(warm?.active_7d_count)} active in 7 days`}
-        />
-
-        <SummaryCard
-          icon={<Users size={18} />}
-          label="Cold"
-          value={formatNumber(cold?.lead_count)}
-          sub={`${formatNumber(cold?.reengaged_count)} re-engaged`}
-        />
-
-        <SummaryCard
-          icon={<RefreshCw size={18} />}
-          label="Re-engaged"
-          value={formatNumber(totalReengaged)}
-          sub="Returned after becoming a lead"
-        />
-      </div>
+      {intelligence.coverage ? (
+        <TrackingCoverage linked={intelligence.coverage.linked} total={intelligence.coverage.total} />
+      ) : null}
 
       <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1fr)_380px]">
         <div className="min-w-0">
@@ -257,9 +206,7 @@ export default async function ReEngagedPage({
         </div>
       </div>
 
-      {intelligence.coverage ? (
-        <TrackingCoverage linked={intelligence.coverage.linked} total={intelligence.coverage.total} />
-      ) : null}
+
 
       <section className="card-pad mt-4">
         <div className="eyebrow">Conversion behaviour</div>
@@ -728,37 +675,6 @@ export default async function ReEngagedPage({
   );
 }
 
-function SummaryCard({
-  icon,
-
-  label,
-
-  value,
-
-  sub,
-}: {
-  icon: ReactNode;
-
-  label: string;
-
-  value: string;
-
-  sub: string;
-}) {
-  return (
-    <div className="card-pad">
-      <div className="flex items-center gap-2 text-xs font-semibold text-slate-400">
-        {icon}
-
-        {label}
-      </div>
-
-      <div className="mt-2 text-2xl font-black text-slate-800">{value}</div>
-
-      <div className="mt-1 text-xs text-slate-400">{sub}</div>
-    </div>
-  );
-}
 
 function activityViewHref(view: string) {
   return view && view !== "all"
