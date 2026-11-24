@@ -56,6 +56,38 @@ export async function signupAction(formData: FormData) {
     redirect('/signup?error=Unable+to+register.+Please+try+again+later.');
   }
 
+  if (!error && data.user && !data.user.email_confirmed_at &&
+      data.user.identities?.length) {
+    const { error: acceptError } = await admin.rpc('accept_signup_intent_v1', {
+      p_id: intentId, p_user_id: data.user.id,
+    });
+    if (acceptError) redirect('/signup?error=Registration+is+temporarily+unavailable.');
+  }
+
   // Use a generic response for duplicate accounts to limit enumeration.
   redirect('/signup?notice=Check+your+email+for+verification+instructions.+If+you+already+have+an+account,+sign+in.');
+}
+
+export async function resendSignupVerificationAction(formData: FormData) {
+  if (useMockData || process.env.SALSYS_PUBLIC_SIGNUP_ENABLED !== 'true') {
+    redirect('/signup?error=Registration+is+not+open.');
+  }
+  const email = String(formData.get('email') ?? '').trim().toLowerCase();
+  const captchaToken = String(formData.get('cf-turnstile-response') ?? '');
+  if (email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ||
+      !await verifySignupCaptcha(captchaToken)) {
+    redirect('/signup?mode=resend&error=Check+your+email+and+security+verification.');
+  }
+  const admin = createAdminClient();
+  const { data: reserved, error } = await admin.rpc('reserve_signup_resend_v1', {
+    p_email: email,
+  });
+  if (!error && reserved === true) {
+    const supabase = await createClient();
+    await supabase.auth.resend({
+      type: 'signup', email,
+      options: { emailRedirectTo: 'https://salsysos.com/signup/verify' },
+    });
+  }
+  redirect('/signup?mode=resend&notice=If+an+eligible+registration+exists,+a+verification+email+may+be+sent.+If+already+verified,+sign+in.');
 }
