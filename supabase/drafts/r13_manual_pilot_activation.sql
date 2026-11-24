@@ -415,7 +415,18 @@ grant execute on function public.commercial_activate_manual_pilot_v1(uuid,uuid,t
 create function saas_governance.approve_and_activate_manual_pilot(
   p_actor uuid,p_request uuid,p_digest text,p_mode text,p_reference text,p_reason text,p_ends_at timestamptz
 ) returns uuid language plpgsql security definer set search_path=pg_catalog as $fn$
+declare v_org uuid;
 begin
+  perform saas_governance.require_pilot_approver(p_actor);
+  select organization_id into v_org from saas_governance.subscription_change_requests where id=p_request;
+  if not found then raise exception 'Request unavailable'; end if;
+  perform pg_advisory_xact_lock(hashtextextended('saas_manual_pilot_10',0));
+  perform pg_advisory_xact_lock(hashtextextended('saas_change:'||v_org::text,0));
+  -- Acquire usage and intent before the approval routine locks subscription.
+  perform 1 from public.signup_usage_counters where organization_id=v_org for update;
+  if not found then raise exception 'Verified signup usage required'; end if;
+  perform 1 from public.signup_registration_intents where organization_id=v_org for update;
+  if not found then raise exception 'Verified signup required'; end if;
   perform saas_governance.approve_manual_pilot_request(p_actor,p_request,p_digest,p_mode,p_reference,p_reason,p_ends_at);
   return saas_governance.activate_manual_pilot(p_actor,p_request,p_digest);
 end;
