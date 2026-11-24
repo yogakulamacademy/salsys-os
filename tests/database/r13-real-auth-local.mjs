@@ -102,6 +102,76 @@ try{
     if(state.state!=='pro_trial')throw Error('Tenant dashboard changed');
     denied(await rpc('commercial_list_manual_assignments_v1',{p_actor:randomUUID()},user.token,anon),'Customer operator endpoint');
   }
+  // The operator is a synthetic fixture identity, not an interactive admin login.
+  // Obtain only its UUID from the one disposable database container.
+  const containers=execFileSync('docker',['ps','--format','{{.Names}}'],{encoding:'utf8'}).trim().split('\n').filter(n=>/^supabase_db_[a-zA-Z0-9_-]+$/.test(n));
+  if(containers.length!==1)throw Error('Expected one disposable database container');
+  const sql=(query)=>execFileSync('docker',['exec',containers[0],'psql','-X','-v','ON_ERROR_STOP=1','-U','postgres','-d','postgres','-Atc',query],{encoding:'utf8',stdio:['ignore','pipe','pipe']}).trim();
+  const actor=sql('select user_id from saas_governance.operators where active and may_approve_pilot');
+  if(!/^[0-9a-f-]{36}$/i.test(actor))throw Error('Expected one synthetic pilot approver');
+  const opts=async user=>good(await rpc('get_current_plan_change_options_v1',{},user.token,anon),'Customer plan options');
+  const dashboard=async user=>good(await rpc('get_current_subscription_dashboard_v1',{},user.token,anon),'Customer subscription dashboard');
+  const assignments=async()=>good(await rpc('commercial_list_manual_assignments_v1',{p_actor:actor}),'Operator assignments');
+  const slots=()=>sql('select count(*) from saas_governance.manual_pilot_organizations');
+  assert.equal((await opts(a)).state,'unavailable');
+  assert.equal(slots(),'0');
+  const enroll={p_actor:actor,p_org:a.org,p_reason:'Synthetic local pilot enrollment'};
+  denied(await rpc('commercial_enable_manual_pilot_requests_v1',enroll,a.token,anon),'Customer enrollment endpoint');
+  assert.equal(good(await rpc('commercial_enable_manual_pilot_requests_v1',enroll),'Operator enrollment'),true);
+  assert.equal(good(await rpc('commercial_enable_manual_pilot_requests_v1',enroll),'Enrollment retry'),true);
+  assert.equal(slots(),'0');
+  assert.equal((await dashboard(a)).state,'pro_trial');
+  const choices=await opts(a);
+  assert.equal(choices.state,'available');
+  const basic=choices.offers.find(x=>x.code==='basic');
+  if(!basic)throw Error('Basic offer unavailable');
+  const requestArgs={p_idempotency_key:randomUUID(),p_target_plan:basic.plan_id,p_target_version:basic.version,
+    p_target_digest:basic.digest,p_expected_subscription_updated_at:choices.subscription_revision};
+  const req=good(await rpc('request_current_plan_change_v1',requestArgs,a.token,anon),'Customer Basic request');
+  assert.equal(good(await rpc('request_current_plan_change_v1',requestArgs,a.token,anon),'Request retry'),req);
+  assert.equal((await dashboard(a)).state,'pro_trial');
+  assert.equal((await opts(b)).requests.length,0);
+  assert.equal(good(await rpc('withdraw_current_plan_change_v1',{p_request:req},b.token,anon),'Cross-tenant withdrawal denial'),false);
+  const queue=await assignments();
+  const row=queue.organizations.find(x=>x.id===a.org);
+  if(row?.requested_code!=='basic'||row.pending_request_id!==req)throw Error('Customer request missing from operator queue');
+  const growth=queue.offers.find(x=>x.code==='growth');
+  if(!growth)throw Error('Growth offer unavailable');
+  const assign=async(code,days,mode)=>{
+    const q=await assignments();
+    const target=q.offers.find(x=>x.code===code);
+    const current=q.organizations.find(x=>x.id===a.org);
+    if(!target||!current)throw Error('Exact assignment unavailable');
+    const args={p_actor:actor,p_org:a.org,p_expected:current.revision,p_plan:target.id,p_version:target.version,
+      p_digest:target.digest,p_key:randomUUID(),p_mode:mode,p_reference:mode==='offline_confirmation'?'SYNTHETIC-LOCAL-ONLY':null,
+      p_reason:'Synthetic local subscription acceptance',p_ends_at:days===null?null:new Date(Date.now()+days*86400000).toISOString()};
+    denied(await rpc('commercial_assign_manual_plan_v1',args,a.token,anon),'Customer assignment endpoint');
+    const id=good(await rpc('commercial_assign_manual_plan_v1',args),'Operator '+code+' assignment');
+    assert.equal(good(await rpc('commercial_assign_manual_plan_v1',args),'Assignment retry'),id);
+    return id;
+  };
+  await assign('growth',10,'complimentary');
+  assert.equal((await dashboard(a)).plan_code,'growth');
+  assert.equal((await dashboard(a)).state,'manual_active');
+  const history=(await opts(a)).requests;
+  if(!history.some(x=>x.id===req&&x.status==='superseded'&&x.target_code==='basic')||
+     !history.some(x=>x.status==='activated'&&x.target_code==='growth'&&x.request_origin==='admin'))throw Error('Override audit history missing');
+  assert.equal(slots(),'1');
+  const beforeRenewal=(await dashboard(a)).access_ends_at;
+  await assign('growth',20,'offline_confirmation');
+  const renewed=await dashboard(a);
+  if(renewed.plan_code!=='growth'||!(Date.parse(renewed.access_ends_at)>Date.parse(beforeRenewal)))throw Error('Renewal did not extend access');
+  assert.equal(slots(),'1');
+  await assign('free',null,'free');
+  const downgraded=await dashboard(a);
+  assert.equal(downgraded.plan_code,'free');
+  assert.equal(downgraded.state,'free');
+  assert.equal(downgraded.named_users,1);
+  assert.equal(slots(),'1');
+  assert.equal((await dashboard(b)).state,'pro_trial');
+  assert.equal((await opts(b)).requests.length,0);
+  console.log('R13 actual customer JWT + service-role governed RPC lifecycle PASS: enrollment, request, override, renewal, downgrade, tenant isolation and one pilot slot. Interactive operator login not tested.');
+
   console.log('R13 actual local Auth + PostgREST smoke PASS; browser/CAPTCHA/HTTPS callback and production acceptance remain unverified.');
 }catch(error){
   // No response payloads, JWTs, credentials, emails or links in CI logs.
