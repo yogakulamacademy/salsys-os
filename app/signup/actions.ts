@@ -24,10 +24,11 @@ export async function signupAction(formData: FormData) {
 
   const intentId = randomUUID();
   const admin = createAdminClient();
-  const { error: intentError } = await admin.from('signup_registration_intents').insert({
-    id: intentId, email, full_name: fullName, business_name: businessName,
+  const { data: reserved, error: intentError } = await admin.rpc('reserve_signup_intent_v1', {
+    p_id: intentId, p_email: email, p_full_name: fullName, p_business_name: businessName,
   });
   if (intentError) redirect('/signup?error=Registration+is+temporarily+unavailable.');
+  if (reserved !== true) redirect('/signup?error=Registration+limit+reached.+Please+try+again+later.');
 
   const supabase = await createClient();
   const { data, error } = await supabase.auth.signUp({
