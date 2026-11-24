@@ -706,4 +706,21 @@ revoke all on function public.signup_integration_allowed_v1(uuid,text)
   from public, anon, authenticated, service_role;
 grant execute on function public.signup_integration_allowed_v1(uuid,text) to service_role;
 
+-- AI processing and advertising audience additions are independently
+-- governed; reporting/connection eligibility does not authorize them.
+-- No self-service tier is approved for these operations yet.
+create function public.signup_advanced_operation_allowed_v1(p_organization_id uuid,p_operation text)
+returns boolean language plpgsql security definer set search_path = ''
+as $advanced$
+begin
+  if auth.role() is distinct from 'service_role' or p_organization_id is null
+     or p_operation is null or p_operation not in ('ai_drafting','ai_autopilot','ad_audience_add') then return false; end if;
+  return exists(select 1 from public.organizations where id=p_organization_id and status='active')
+    and not exists(select 1 from public.signup_registration_intents where organization_id=p_organization_id);
+end;
+$advanced$;
+revoke all on function public.signup_advanced_operation_allowed_v1(uuid,text)
+  from public, anon, authenticated, service_role;
+grant execute on function public.signup_advanced_operation_allowed_v1(uuid,text) to service_role;
+
 commit;
