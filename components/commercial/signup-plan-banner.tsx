@@ -9,12 +9,12 @@ export async function SignupPlanBanner() {
   return (
     <section className="mb-4 rounded-xl border border-line bg-surface p-4" aria-label="Subscription status">
       <p className="text-sm font-semibold text-copy-strong">
-        {plan.state === "pro_trial" ? "Pro trial · " + remaining + " remaining" : "Free plan"}
+        {plan.state === "pro_trial" ? "Pro trial · " + remaining + " remaining" : plan.state === "manual_active" ? plan.planCode.charAt(0).toUpperCase()+plan.planCode.slice(1)+" plan" : "Free plan"}
       </p>
       <p className="mt-1 text-sm text-copy-muted">
         {plan.state === "pro_trial"
           ? "Your trial ends at " + new Date(plan.trialEndsAt).toISOString().replace("T", " ").slice(0, 16) + " UTC. Continue on Free afterward without automatic charges."
-          : "Your account remains free. Your existing records are preserved."}
+          : plan.state === "manual_active" && plan.accessEndsAt ? "Manually approved access ends at " + new Date(plan.accessEndsAt).toISOString().replace("T"," ").slice(0,16)+" UTC. Continue on Free without automatic charges." : "Your account remains free. Your existing records are preserved."}
       </p>
     </section>
   );
