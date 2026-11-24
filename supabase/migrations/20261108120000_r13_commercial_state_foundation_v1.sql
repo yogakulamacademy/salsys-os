@@ -111,20 +111,22 @@ revoke all on table
   public.saas_plan_entitlements,
   public.saas_organization_subscriptions,
   public.saas_subscription_events
-from public, anon, authenticated;
+from public, anon, authenticated, service_role;
 
-grant select,insert,update,delete on table
+-- Reset service-role default grants as well. Audit writes are exclusively
+-- produced by the protected trigger, not an ordinary service API insert.
+grant select,insert,update on table
   public.saas_plans,
   public.saas_plan_entitlements,
   public.saas_organization_subscriptions
 to service_role;
-grant select,insert on table public.saas_subscription_events to service_role;
+grant select on table public.saas_subscription_events to service_role;
 
 -- Event UPDATE/DELETE/TRUNCATE must fail even if executed by an internal
 -- elevated client. Database owner still has DDL authority as usual.
 create function public.saas_subscription_event_immutable_v1()
 returns trigger language plpgsql
-set search_path = public, pg_temp
+set search_path = pg_catalog, pg_temp
 as $function$
 begin
   raise exception 'SalsysOS SaaS subscription events are append-only'
@@ -143,7 +145,7 @@ create trigger saas_event_block_truncate_v1
 -- This is not a trial, payment, synthetic subscription or auto-activation.
 create function public.saas_subscription_audit_v1()
 returns trigger language plpgsql security definer
-set search_path = public, pg_temp
+set search_path = pg_catalog, pg_temp
 as $function$
 declare
   v_event_type text;
@@ -192,11 +194,7 @@ create trigger saas_subscriptions_updated_at_v1
 revoke all on function
   public.saas_subscription_event_immutable_v1(),
   public.saas_subscription_audit_v1()
-from public, anon, authenticated;
-grant execute on function
-  public.saas_subscription_event_immutable_v1(),
-  public.saas_subscription_audit_v1()
-to service_role;
+from public, anon, authenticated, service_role;
 
 -- Platform-operator diagnostic view only. Future customer-facing surfaces
 -- require their own tenant-bound authorization and explicit grants.
@@ -248,7 +246,7 @@ cross join lateral (
     ) as enabled_but_not_entitled
 ) d;
 
-revoke all on public.saas_commercial_readiness_v1 from public, anon, authenticated;
+revoke all on public.saas_commercial_readiness_v1 from public, anon, authenticated, service_role;
 grant select on public.saas_commercial_readiness_v1 to service_role;
 
 -- NEVER auto-populate plans, subscriptions, events, invoices or provider
