@@ -219,8 +219,7 @@ async function main(){
   await loginPage.getByRole('heading',{name:'Pro trial',exact:true}).waitFor();
   await loginPage.getByRole('link',{name:'Request plan change or renewal'}).waitFor();
   console.log('B09: actual local platform approver sign-in and enrollment server action, customer trial and pilot capacity unchanged');
-  await operatorContext.close();
-  await loginContext.close();
+  // Retain the isolated operator/customer sessions for post-expiry lifecycle acceptance.
 
 
   // A replay/missing-code test uses an independent browser with no cookies.
@@ -299,7 +298,68 @@ async function main(){
   check(sql("select count(*) from public.organization_members where organization_id in ('"+trialOrg+"','"+manualOrg+"')")===before,'Expiry changed membership count');
   check(sql("select count(*) from saas_governance.manual_subscription_contracts where organization_id='"+manualOrg+"'")==='1','Expiry removed immutable contract');
   console.log('B12 local HTTP: missing/invalid bearer denied, effective Free before reconciliation, both trial and manual converted, repeat no-op and member/contract retention PASS. Hosted scheduling not tested.');
-  console.log('R13 actual local browser/HTTPS/PKCE smoke PASS. Valid CAPTCHA signup and further operator assignment browser cases remain unverified.');
+  phase='B10 actual customer request and platform override';
+  // Trial fixture is now Free after B12; it remains enrolled for requests.
+  // Keep the separately expired manual tenant as the negative control.
+  const otherSnapshot=()=>sql("select jsonb_build_object('subscription',to_jsonb(s),'usage',to_jsonb(u),'history',(select count(*) from public.saas_subscription_events e where e.organization_id=s.organization_id),'requests',(select count(*) from saas_governance.subscription_change_requests r where r.organization_id=s.organization_id))::text from public.saas_organization_subscriptions s join public.signup_usage_counters u on u.organization_id=s.organization_id where s.organization_id='"+manualOrg+"'");
+  const otherBefore=otherSnapshot();
+  check(otherBefore.length>0,'Other tenant snapshot unavailable');
+  await loginPage.goto(origin+'/settings/subscription/changes',{waitUntil:'domcontentloaded'});
+  await loginPage.getByRole('heading',{name:'Plan change requests'}).waitFor();
+  const basicCard=loginPage.locator('article').filter({has:loginPage.getByRole('heading',{name:/Synthetic basic.*version/i})});
+  await basicCard.locator('input[name=confirm]').check();
+  await basicCard.getByRole('button',{name:'Request plan change'}).click();
+  await loginPage.waitForURL(u=>u.pathname==='/settings/subscription/changes'&&u.searchParams.get('result')==='requested');
+  await loginPage.getByRole('status').filter({hasText:'Request recorded'}).waitFor();
+  check(effective(trialOrg)==='free','Customer request changed current plan');
+  const requestId=sql("select r.id from saas_governance.subscription_change_requests r join public.saas_plans p on p.id=r.target_plan_id where r.organization_id='"+trialOrg+"' and r.request_origin='customer' and r.status='requested' and p.code='basic'");
+  check(/^[0-9a-f-]{36}$/.test(requestId),'Customer Basic request not persisted');
+  const assignFromBrowser=async(code,mode,days)=>{
+    await operatorPage.goto(operatorUrl,{waitUntil:'domcontentloaded'});
+    const card=operatorPage.locator('article').filter({has:operatorPage.getByRole('heading',{name:'Synthetic Browser Workspace',exact:true})});
+    await card.locator('select[name=offer]').selectOption({label:await card.locator('select[name=offer] option').filter({hasText:new RegExp('^'+code.toUpperCase()+' ·')}).textContent()});
+    await card.locator('select[name=mode]').selectOption(mode);
+    await card.locator('input[name=ends_at]').fill(days===null?'':new Date(Date.now()+days*86400000).toISOString().slice(0,16));
+    await card.locator('input[name=reference]').fill(mode==='offline_confirmation'?'SYNTHETIC-LOCAL-ONLY':'');
+    await card.locator('textarea[name=reason]').fill('Synthetic browser lifecycle acceptance');
+    await card.locator('input[name=confirmation]').fill('ASSIGN PLAN');
+    await card.getByRole('button',{name:'Assign and activate selected plan'}).click();
+    await operatorPage.waitForURL(u=>u.pathname==='/settings/commercial-plans/pilot'&&u.searchParams.get('result')==='activated');
+    await operatorPage.getByRole('status').filter({hasText:'Subscription activated'}).waitFor();
+  };
+  await operatorPage.goto(operatorUrl,{waitUntil:'domcontentloaded'});
+  await operatorPage.locator('article').filter({has:operatorPage.getByRole('heading',{name:'Synthetic Browser Workspace',exact:true})}).getByText('basic',{exact:true}).waitFor();
+  await assignFromBrowser('growth','complimentary',10);
+  await loginPage.goto(origin+'/settings/subscription',{waitUntil:'domcontentloaded'});
+  await loginPage.getByRole('heading',{name:'Growth',exact:true}).waitFor();
+  check(sql("select status from saas_governance.subscription_change_requests where id='"+requestId+"'")==='superseded','Original request not superseded');
+  check(sql("select count(*) from saas_governance.subscription_change_requests r join public.saas_plans p on p.id=r.target_plan_id where r.organization_id='"+trialOrg+"' and r.request_origin='admin' and r.status='activated' and p.code='growth'")==='1','Operator Growth assignment not audited');
+  console.log('B10: actual browser customer Basic request and platform Growth override preserved original request PASS');
+  phase='B11 actual renewal and permanent Free downgrade';
+  const accessEnd=()=>sql("select current_period_ends_at::text from public.saas_organization_subscriptions where organization_id='"+trialOrg+"'");
+  const priorEnd=accessEnd();
+  await assignFromBrowser('growth','offline_confirmation',20);
+  check(Date.parse(accessEnd())>Date.parse(priorEnd),'Renewal did not extend access');
+  // Synthetic CRM data is created only in this disposable database. The actual
+  // quota trigger is active. Two records exceed the Free fixture limit of one.
+  const lead1=randomUUID(),lead2=randomUUID();
+  sql("insert into public.leads(id,organization_id,first_name,first_touch_source,current_stage,status) values ('"+lead1+"','"+trialOrg+"','Synthetic retained A','direct','new','open'),('"+lead2+"','"+trialOrg+"','Synthetic retained B','direct','new','open');");
+  await assignFromBrowser('free','free',null);
+  await loginPage.goto(origin+'/settings/subscription',{waitUntil:'domcontentloaded'});
+  await loginPage.getByRole('heading',{name:'Free',exact:true}).waitFor();
+  await loginPage.getByText('Over limit. Existing records remain; additional usage is restricted.',{exact:true}).waitFor();
+  check(sql("select count(*) from public.leads where organization_id='"+trialOrg+"' and id in ('"+lead1+"','"+lead2+"')")==='2','Downgrade removed CRM records');
+  check(sql("select count(*) from saas_governance.manual_pilot_organizations where organization_id='"+trialOrg+"'")==='1','Customer consumed extra pilot slots');
+  check(sql("select count(*) from public.saas_organization_subscriptions s join public.saas_plans p on p.id=s.plan_id where s.organization_id='"+trialOrg+"' and s.status='active' and p.code='free' and s.current_period_ends_at is null")==='1','Permanent Free contract missing');
+  check(otherSnapshot()===otherBefore,'Unrelated managed tenant subscription or history changed');
+  console.log('B11: interactive renewal, permanent Free, retained CRM records, one distinct customer slot and unrelated tenant unchanged PASS');
+  await loginPage.goto(origin+'/settings/subscription/changes',{waitUntil:'domcontentloaded'});
+  await loginPage.getByText(/basic · version .*Your request/i).waitFor();
+  const original=loginPage.locator('article').filter({hasText:/basic · version .*Your request/i});
+  await original.getByText(/superseded/).waitFor();
+  await operatorContext.close();
+  await loginContext.close();
+  console.log('R13 local browser/HTTPS/PKCE, expiry and interactive plan lifecycle smoke PASS. Valid CAPTCHA, full two-browser CRM isolation and pause acceptance remain unverified.');
 }
 try{await main()}catch(e){console.error('R13 local browser failed at '+phase);process.exitCode=1}
 finally{if(browser)await browser.close();if(child)child.kill('SIGTERM');rmSync(temporary,{recursive:true,force:true})}
