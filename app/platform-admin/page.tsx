@@ -90,7 +90,8 @@ export default async function PlatformAdminPage() {
           </section>
           <section className="rounded-xl border border-line p-5">
             <h2 className="font-semibold">Platform reporting</h2>
-            <p className="mt-2 text-sm text-copy-muted">Subscription revenue, acquisition and platform usage reporting require separate verified read models. No estimated or fabricated metrics are shown.</p>
+            <div className="mt-3 flex flex-wrap gap-3"><Link href="/platform-admin/customer-success" className="text-sm underline">Customer onboarding monitoring</Link><Link href="/platform-admin/business" className="text-sm underline">Internal acquisition workspace</Link></div>
+            <p className="mt-3 text-sm text-copy-muted">SaaS MRR, ARR, collected revenue and outstanding invoices are unavailable pending verified billing evidence. Internal CRM revenue is separate. Product adoption and churn are not inferred from registry or subscription counts.</p>
           </section>
         </main>
     </PlatformAdminFrame>
