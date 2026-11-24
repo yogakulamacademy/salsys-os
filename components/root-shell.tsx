@@ -25,6 +25,7 @@ function isShelllessPath(pathname: string) {
   return (
     pathname === '/' ||
     pathname === '/platform-admin' ||
+    pathname === '/platform-admin/business' ||
     pathname === '/login' ||
     pathname === '/signup' ||
     pathname.startsWith('/signup/') ||
