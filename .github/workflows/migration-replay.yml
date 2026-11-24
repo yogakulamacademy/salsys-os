@@ -346,6 +346,15 @@ jobs:
             done
           fi
           docker exec -i "$db_containers" psql -X -v ON_ERROR_STOP=1 -U postgres -d postgres < tests/database/r13-manual-full-local.sql
+          if [ "$SALSYS_R13_VERSIONED_REHEARSAL" = "1" ]; then
+            # Simulate application rollback with commercial schema retained and
+            # unconfigured. Exercise unchanged legacy RPCs and actual lead/member
+            # writes again AFTER the commercial triggers are installed.
+            for fixture in r2-behavior-rpc-negative-auth-local r2-behavior-rpc-positive-tenant-local home-v1-rpc-auth-and-metrics-local; do
+              docker exec -i "$db_containers" psql -X -v ON_ERROR_STOP=1 -U postgres -d postgres < "tests/database/$fixture.sql"
+            done
+            docker exec -i "$db_containers" psql -X -v ON_ERROR_STOP=1 -U postgres -d postgres < tests/database/r13-dormant-schema-local.sql
+          fi
 
       - name: Show local migration state
         if: always()
