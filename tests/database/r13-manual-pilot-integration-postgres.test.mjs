@@ -354,7 +354,32 @@ test('R13 integrated manual pilot applies exact approved contract and expiry wit
     assert.equal((await currentPlan(user)).state,'free');
     assert.equal(await scalar("select count(*)::int as value from public.leads where organization_id=$1",[org]),4);
     assert.equal(await scalar("select enabled as value from public.organization_workspaces where organization_id=$1 and workspace_code='sales'",[org]),false);
+    // Customer requests Basic, admin independently chooses Growth.
+    const growthProposal=await scalar("select public.commercial_create_plan_request_v1($1,'growth',0,$2::jsonb,'Synthetic Growth for override test') as value",[operator,JSON.stringify({...terms,display_name:'Synthetic Growth',amount_minor:23400,named_users:5,lead_records:8})]);
+    const growthDigest=await scalar("select snapshot_sha256 as value from saas_governance.plan_requests where id=$1",[growthProposal]);
+    assert.equal(await scalar("select public.commercial_transition_plan_request_v1($1,$2,1,$3,'submit','Synthetic submit') as value",[operator,growthProposal,growthDigest]),true);
+    assert.equal(await scalar("select public.commercial_transition_plan_request_v1($1,$2,2,$3,'review','Synthetic review') as value",[reviewer,growthProposal,growthDigest]),true);
+    await db.query("insert into saas_governance.publication_authorizations(request_id,snapshot_sha256,authorized_publisher,commercial_approval_ref,release_approval_ref,expires_at) values($1,$2,$3,'synthetic commercial approval','synthetic release approval',clock_timestamp()+interval '1 hour')",[growthProposal,growthDigest,publisher]);
+    const growth=await scalar("select public.commercial_publish_initial_plan_v1($1,$2,3,$3) as value",[publisher,growthProposal,growthDigest]);
+    await db.query("select set_config('request.jwt.claim.role','authenticated',false),set_config('request.jwt.claim.sub',$1,false)",[user]);
+    const latest=await scalar("select public.get_current_plan_change_options_v1() as value");
+    const original=await scalar("select public.request_current_plan_change_v1($1,$2,1,$3,$4) as value",[randomUUID(),basic,digest,latest.subscription_revision]);
+    await db.query("select set_config('request.jwt.claim.role','service_role',false)");
+    const assignmentEnd=await scalar("select (clock_timestamp()+interval '20 days')::text as value");
+    const key=randomUUID();
+    const assign=(revision=latest.subscription_revision,offerDigest=growthDigest)=>scalar("select public.commercial_assign_manual_plan_v1($1,$2,$3,$4,1,$5,$6,'complimentary',null,'Synthetic admin plan override',$7) as value",[operator,org,revision,growth,offerDigest,key,assignmentEnd]);
+    await assert.rejects(assign('2000-01-01T00:00:00Z'),/Subscription changed/);
+    await assert.rejects(assign(latest.subscription_revision,'0'.repeat(64)),/Published offer unavailable/);
+    const assigned=await assign();
+    assert.equal(await assign(),assigned);
+    assert.equal(await scalar("select status as value from saas_governance.subscription_change_requests where id=$1",[original]),'superseded');
+    assert.equal(await scalar("select target_plan_id as value from saas_governance.subscription_change_requests where id=$1",[original]),basic);
+    assert.equal(await scalar("select request_origin as value from saas_governance.subscription_change_requests where supersedes_request_id=$1",[original]),'admin');
+    assert.equal((await currentPlan(user)).plan_code,'growth');
+    assert.equal((await dashboard(user)).lead_record_limit,8);
+    assert.equal(await scalar("select count(*)::int as value from saas_governance.manual_pilot_organizations"),1);
     for(const role of ['anon','authenticated','service_role']){
+      assert.equal(await scalar("select has_function_privilege($1,'public.commercial_assign_manual_plan_v1(uuid,uuid,timestamptz,uuid,integer,text,uuid,text,text,text,timestamptz)','EXECUTE') as value",[role]),role==='service_role');
       assert.equal(await scalar("select has_function_privilege($1,'saas_governance.activate_manual_pilot(uuid,uuid,text)','EXECUTE') as value",[role]),role==='service_role');
       assert.equal(await scalar("select has_function_privilege($1,'public.commercial_approve_activate_manual_pilot_v1(uuid,uuid,text,text,text,text,timestamptz)','EXECUTE') as value",[role]),role==='service_role');
       assert.equal(await scalar("select has_function_privilege($1,'public.reconcile_expired_manual_contracts_v1(integer)','EXECUTE') as value",[role]),role==='service_role');
