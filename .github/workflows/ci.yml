@@ -179,6 +179,9 @@ jobs:
       - name: Verify Conversations Final Closeout Contracts
         run: npm run verify:conversations-final-closeout
 
+      - name: Verify Public Signup Source Contracts
+        run: npm run test:public-signup
+
       - name: Verify Onboarding Foundation Contracts
         run: npm run verify:onboarding-foundation
 
