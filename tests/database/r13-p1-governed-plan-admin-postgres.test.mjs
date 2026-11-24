@@ -209,7 +209,7 @@ test('R13 P1 durable plan governance uses actual P0 DDL, immutable evidence and 
     const merchant=randomUUID(),otherMerchant=randomUUID();
     await db.query("insert into saas_governance.saas_payment_merchants(id,provider_code,merchant_ref,environment,enabled,approval_ref) values($1,'fixture','synthetic-merchant','test',true,'synthetic approval only'),($2,'fixture','other-merchant','test',true,'synthetic approval only')",[merchant,otherMerchant]);
     for(const role of ['anon','authenticated','service_role']){
-      for(const fn of ['prepare_payment_intent(uuid,text,uuid)','bind_payment_order(uuid,uuid,text,bigint,text)','record_verified_settlement(uuid)']){
+      for(const fn of ['prepare_payment_intent(uuid,text,uuid)','bind_payment_order(uuid,uuid,text,bigint,text)','record_verified_settlement(uuid)','payment_activation_preflight(uuid)']){
         assert.equal(await scalar("select has_function_privilege($1,$2,'EXECUTE') as value",[role,'saas_governance.'+fn]),false);
       }
       for(const table of ['saas_payment_merchants','saas_payment_intents','saas_payment_orders','saas_payment_attestations','saas_payment_settlements']){
@@ -244,12 +244,16 @@ test('R13 P1 durable plan governance uses actual P0 DDL, immutable evidence and 
       await assert.rejects(settle(await attest(wrong)),/Settlement evidence mismatch/);
     }
     assert.equal(await scalar("select count(*)::int as value from saas_governance.saas_payment_settlements"),0);
+    const preflight=()=>scalar('select saas_governance.payment_activation_preflight($1) as value',[paymentIntent]);
+    assert.equal(await preflight(),'awaiting_verified_settlement');
     const valid=await attest();
     assert.equal(await settle(valid),paymentIntent);
     assert.equal(await settle(valid),paymentIntent);
     assert.equal(await settle(await attest()),paymentIntent);
     await assert.rejects(settle(await attest({payment:'duplicate-charge'})),/Different payment already recorded/);
+    assert.equal(await preflight(),'merchant_review');
     await attest({status:'refunded'});
+    assert.equal(await preflight(),'adverse_payment_review');
     await assert.rejects(settle(valid),/adverse-event reconciliation/);
     assert.equal(await scalar("select count(*)::int as value from saas_governance.saas_payment_settlements"),1);
     await assert.rejects(db.query("delete from saas_governance.saas_payment_attestations where id=$1",[valid]),/immutable/);
