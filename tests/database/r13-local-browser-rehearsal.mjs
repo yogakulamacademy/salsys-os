@@ -82,7 +82,7 @@ async function main(){
       NEXT_PUBLIC_USE_MOCK_DATA:'false',NEXT_PUBLIC_SUPABASE_URL:api,NEXT_PUBLIC_SUPABASE_ANON_KEY:anon,
       SUPABASE_SERVICE_ROLE_KEY:service,SALSYSOS_APP_URL:origin,
       SALSYS_PUBLIC_SIGNUP_ENABLED:'true',SALSYS_COMMERCIAL_ACCESS_ENABLED:'true',
-      SALSYS_TRIAL_RECONCILIATION_ENABLED:'true',SALSYS_MANUAL_RECONCILIATION_ENABLED:'true',CRON_SECRET:cronSecret,SALSYS_SIGNUP_TURNSTILE_SITE_KEY:'local-negative-only',
+      SALSYS_TRIAL_RECONCILIATION_ENABLED:'true',SALSYS_MANUAL_RECONCILIATION_ENABLED:'true',SALSYS_MANUAL_PILOT_ENABLED:'true',SALSYS_MANUAL_ACTIVATION_ENABLED:'true',SALSYS_PLAN_CHANGE_REQUESTS_ENABLED:'true',CRON_SECRET:cronSecret,SALSYS_SIGNUP_TURNSTILE_SITE_KEY:'local-negative-only',
       SALSYS_SIGNUP_TURNSTILE_SECRET:'local-negative-only'},stdio:'ignore'});
   browser=await chromium.launch({headless:true});
   const context=await browser.newContext({ignoreHTTPSErrors:true});
@@ -138,6 +138,45 @@ async function main(){
   await page.goto(origin+'/settings/subscription',{waitUntil:'domcontentloaded'});
   await page.waitForURL(u=>u.origin===origin&&u.pathname==='/signup/onboarding');
   console.log('B06 partial: verified browser is routed to required onboarding');
+  phase='customer business and goals onboarding';
+  await page.locator('input[name=business_name]').fill('Synthetic Browser Workspace');
+  await page.locator('select[name=industry]').selectOption('professional_services');
+  await page.locator('select[name=country_code]').selectOption('IN');
+  await page.locator('select[name=timezone]').selectOption('Asia/Kolkata');
+  await page.getByRole('button',{name:'Save & continue'}).click();
+  await page.getByRole('heading',{name:'What do you want SalsysOS to improve?'}).waitFor();
+  await page.locator('input[name=goals][value=lead_management]').check({force:true});
+  await page.getByRole('button',{name:'Save priorities'}).click();
+  await page.getByRole('heading',{name:'Connect your website to SalsysOS.'}).waitFor();
+  phase='optional setup and finish';
+  await page.getByRole('button',{name:'Skip for now',exact:true}).click();
+  await page.waitForURL(u=>u.pathname.endsWith('/onboarding/channels'));
+  await page.getByRole('button',{name:'Skip for now',exact:true}).click();
+  await page.waitForURL(u=>u.pathname.endsWith('/onboarding/team'));
+  await page.getByRole('button',{name:/working solo for now/}).click();
+  await page.waitForURL(u=>u.pathname.endsWith('/onboarding/finish'));
+  await page.getByRole('button',{name:'Complete onboarding'}).click();
+  await page.waitForURL(u=>u.pathname.endsWith('/onboarding/finish')&&u.searchParams.get('completed')==='1');
+  await page.getByText('Workspace onboarding is complete.',{exact:true}).waitFor();
+  check(sql("select count(*) from public.organization_onboarding o join public.signup_registration_intents i on i.organization_id=o.organization_id where i.id='"+intent+"' and o.status='completed' and o.completed_steps @> array['business','goals','finish']::text[] and not(o.completed_steps && array['website','channels','team']::text[])")==='1','Optional setup was incorrectly marked complete');
+  console.log('B06: actual customer business/goals forms, optional setup skipped honestly, completion persisted');
+  phase='actual subscription browser';
+  await page.goto(origin+'/settings/subscription',{waitUntil:'domcontentloaded'});
+  await page.getByRole('heading',{name:'Subscription & Billing'}).waitFor();
+  await page.getByRole('heading',{name:'Pro trial',exact:true}).waitFor();
+  await page.getByRole('heading',{name:'Subscription history'}).waitFor();
+  await page.getByRole('heading',{name:'Active named users'}).waitFor();
+  await page.getByText('Self-service paid upgrades are not yet available.',{exact:false}).waitFor();
+  check(await page.getByRole('button',{name:/checkout|pay now/i}).count()===0,'Unexpected paid checkout');
+  console.log('B07: real subscription UI shows trial, usage, history, no checkout');
+  phase='customer operator route denial';
+  const operatorUrl=origin+'/settings/commercial-plans/pilot';
+  const deniedRoute=await page.goto(operatorUrl,{waitUntil:'domcontentloaded'});
+  check(deniedRoute?.status()===404||new URL(page.url()).pathname!=='/settings/commercial-plans/pilot','Customer operator route did not deny');
+  check(await page.getByRole('heading',{name:'Manual subscription approvals'}).count()===0,'Customer operator UI exposed');
+  check(sql('select count(*) from saas_governance.manual_pilot_organizations')==='0','Customer route changed pilot capacity');
+  console.log('B08 partial: actual customer direct operator page denied without pilot mutation; customer RPC denial covered separately');
+
   // A replay/missing-code test uses an independent browser with no cookies.
   const fresh=await browser.newContext({ignoreHTTPSErrors:true});
   await fresh.route('**/*',route=>new URL(route.request().url()).origin===origin?route.continue():route.abort());
@@ -214,7 +253,7 @@ async function main(){
   check(sql("select count(*) from public.organization_members where organization_id in ('"+trialOrg+"','"+manualOrg+"')")===before,'Expiry changed membership count');
   check(sql("select count(*) from saas_governance.manual_subscription_contracts where organization_id='"+manualOrg+"'")==='1','Expiry removed immutable contract');
   console.log('B12 local HTTP: missing/invalid bearer denied, effective Free before reconciliation, both trial and manual converted, repeat no-op and member/contract retention PASS. Hosted scheduling not tested.');
-  console.log('R13 actual local browser/HTTPS/PKCE smoke PASS. Valid CAPTCHA signup, full onboarding and operator browser remain unverified.');
+  console.log('R13 actual local browser/HTTPS/PKCE smoke PASS. Valid CAPTCHA signup, subsequent sign-in and interactive operator browser remain unverified.');
 }
 try{await main()}catch(e){console.error('R13 local browser failed at '+phase);process.exitCode=1}
 finally{if(browser)await browser.close();if(child)child.kill('SIGTERM');rmSync(temporary,{recursive:true,force:true})}
