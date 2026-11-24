@@ -182,6 +182,12 @@ export default async function SettingsPage({
         description="Manage your pipeline, forecast weights, aging thresholds and operational configuration."
       />
 
+      {admin && live && process.env.SALSYS_COMMERCIAL_ACCESS_ENABLED === 'true' ? (
+        <section className="cr-panel flex flex-wrap items-center justify-between gap-3 p-4">
+          <div><strong>Subscription &amp; Billing</strong><p className="text-sm">View your current plan, usage and subscription history.</p></div>
+          <Link href="/settings/subscription" className="cr-btn cr-btn-muted">View subscription <ArrowRight size={16}/></Link>
+        </section>
+      ) : null}
       {/* Results show as a toast that fades (20 Nov 2026), not a banner. */}
       <ToastOnLoad message={query.notice ?? null} error={query.error ?? null} />
       {settingsError ? <Notice tone="warning"
