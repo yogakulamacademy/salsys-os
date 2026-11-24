@@ -108,7 +108,7 @@ test('R13 public signup SQL fails closed and atomically provisions one scoped tr
     assert.equal(await scalar("select public.signup_trial_available_v1() as value"),false);
     assert.equal(await reserve(randomUUID(),'closed@example.invalid'),false);
     for (const role of ['anon','authenticated']) {
-      for (const fn of ['signup_trial_available_v1()','reserve_signup_intent_v1(uuid,text,text,text)','accept_signup_intent_v1(uuid,uuid)','reserve_signup_resend_v1(text)','provision_verified_signup_v1(uuid)','convert_expired_signup_trial_v1(uuid)','reconcile_expired_signup_trials_v1(integer)','signup_automation_allowed_v1(uuid,text)']) {
+      for (const fn of ['signup_trial_available_v1()','reserve_signup_intent_v1(uuid,text,text,text)','accept_signup_intent_v1(uuid,uuid)','reserve_signup_resend_v1(text)','provision_verified_signup_v1(uuid)','convert_expired_signup_trial_v1(uuid)','reconcile_expired_signup_trials_v1(integer)','signup_automation_allowed_v1(uuid,text)','signup_integration_allowed_v1(uuid,text)']) {
         assert.equal(await scalar("select has_function_privilege($1,$2,'EXECUTE') as value",[role,'public.'+fn]),false);
       }
     }
@@ -118,7 +118,7 @@ test('R13 public signup SQL fails closed and atomically provisions one scoped tr
     }
     const plan = randomUUID(), free = randomUUID();
     await db.query("insert into public.saas_plans values($1,'active',1,'pro'),($2,'active',1,'free')",[plan,free]);
-    await db.query("insert into public.signup_trial_policy(plan_id,plan_version,trial_days,allowed_workspace_codes,free_plan_id,free_plan_version,free_workspace_codes,pro_named_users,pro_lead_records,free_named_users,free_lead_records,approval_ref,approved_at,enabled) values($1,1,14,array['admin','sales'],$2,1,array['admin'],2,3,1,1,'synthetic test only',now(),true)",[plan,free]);
+    await db.query("insert into public.signup_trial_policy(plan_id,plan_version,trial_days,allowed_workspace_codes,free_plan_id,free_plan_version,free_workspace_codes,pro_integration_codes,free_integration_codes,pro_named_users,pro_lead_records,free_named_users,free_lead_records,approval_ref,approved_at,enabled) values($1,1,14,array['admin','sales'],$2,1,array['admin'],array['instagram','ga4','google_ads'],array[]::text[],2,3,1,1,'synthetic test only',now(),true)",[plan,free]);
     assert.equal(await scalar("select public.signup_trial_available_v1() as value"),true);
 
     const email='person@example.invalid', intent=randomUUID(), user=randomUUID();
@@ -174,6 +174,17 @@ test('R13 public signup SQL fails closed and atomically provisions one scoped tr
     await assert.rejects(db.query("insert into public.leads(organization_id) values($1)",[org]),/Commercial usage limit reached: lead_records/);
     await db.query("insert into public.saas_plan_entitlements values($1,'education_core',true),($1,'wellness_residential',true),($2,'education_core',false)",[plan,free]);
     await db.query("insert into public.organization_capabilities values($1,'education_core',true),($1,'wellness_residential',false)",[org]);
+    const integration = (tenant,code) => scalar("select public.signup_integration_allowed_v1($1,$2) as value",[tenant,code]);
+    assert.equal(await integration(org,'instagram'),true);
+    assert.equal(await integration(org,'ga4'),true);
+    assert.equal(await integration(org,'google_ads'),true);
+    assert.equal(await integration(org,'whatsapp'),false);
+    assert.equal(await integration(org,'gsc'),false);
+    assert.equal(await integration(org,'meta_ads'),false);
+    assert.equal(await integration(org,'unknown'),false);
+    await db.query("select set_config('request.jwt.claim.role','authenticated',false)");
+    assert.equal(await integration(org,'instagram'),false);
+    await db.query("select set_config('request.jwt.claim.role','service_role',false)");
     const automation = (tenant,channel) => scalar("select public.signup_automation_allowed_v1($1,$2) as value",[tenant,channel]);
     assert.equal(await automation(org,'whatsapp'),false);
     assert.equal(await automation(org,'instagram'),false);
@@ -209,6 +220,9 @@ test('R13 public signup SQL fails closed and atomically provisions one scoped tr
     await db.query("update public.saas_organization_subscriptions set trial_ends_at=(select trial_ends_at from public.signup_registration_intents where organization_id=$1) where organization_id=$1",[org]);
     const expired = await currentPlan(user);
     assert.equal(expired.state,'free_pending_reconciliation');
+    assert.equal(await integration(org,'instagram'),false);
+    assert.equal(await integration(org,'ga4'),false);
+    assert.equal(await integration(org,'google_ads'),false);
     assert.equal(await capability(org,'education_core'),false);
     assert.deepEqual(await usage(),{named_users:2,lead_records:3});
     await assert.rejects(db.query("insert into public.leads(organization_id) values($1)",[org]),/Commercial usage limit reached: lead_records/);
@@ -245,6 +259,9 @@ test('R13 public signup SQL fails closed and atomically provisions one scoped tr
     assert.equal(await capability(legacy,'education_core'),true);
     assert.equal(await automation(legacy,'whatsapp'),true);
     assert.equal(await automation(legacy,'instagram'),true);
+    assert.equal(await integration(legacy,'instagram'),true);
+    assert.equal(await integration(legacy,'gsc'),true);
+    assert.equal(await integration(randomUUID(),'ga4'),false);
     assert.equal(await automation(randomUUID(),'instagram'),false);
     await db.query("delete from public.organization_capabilities where organization_id=$1",[legacy]);
     await db.query("delete from public.organizations where id=$1",[legacy]);
