@@ -10,7 +10,7 @@
     {
       "name": "r13_verified_signup",
       "version": "20261124130002",
-      "blob": "362cec8fceb96255cc42a9c7e2a7da68217ce2c7"
+      "blob": "73c04bb77b1dfddf1ffb3cdcf50b4e65e08a5c06"
     },
     {
       "name": "r13_subscription_change_requests",
@@ -25,7 +25,7 @@
     {
       "name": "r13_manual_pilot_activation",
       "version": "20261124130005",
-      "blob": "664ae82e30b52b3fa9644d2b643515c7727d94d8"
+      "blob": "773242af49878b5f333393dd8296ba6d1009c475"
     }
   ]
 }
