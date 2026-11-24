@@ -1,6 +1,7 @@
 import "server-only";
 
 import { createClient } from "@/lib/supabase/server";
+import { getCurrentSignupPlan, signupPlanAllowsWorkspace } from "@/lib/commercial/signup-plan";
 
 export type CurrentWorkspaceAccess = {
   organizationId: string;
@@ -40,10 +41,15 @@ export async function getCurrentWorkspaceAccess(): Promise<CurrentWorkspaceAcces
 
   if (!organizationId || !role) return null;
 
+  // Intersect with commercial scope; never grant a role or workspace that
+  // was not independently permitted by the existing tenant resolver.
+  const plan = process.env.SALSYS_COMMERCIAL_ACCESS_ENABLED === 'true'
+    ? await getCurrentSignupPlan(supabase) : null;
+  if (plan?.state === 'unavailable') return null;
   return {
     organizationId,
     role,
-    workspaceCodes: Array.from(new Set(workspaceCodes)),
+    workspaceCodes: Array.from(new Set(workspaceCodes)).filter(code => !plan || signupPlanAllowsWorkspace(plan, code)),
   };
 }
 
