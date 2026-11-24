@@ -3,6 +3,7 @@ import crypto from 'crypto';
 import { NextRequest, NextResponse } from 'next/server';
 
 import { createAdminClient } from '@/lib/supabase/admin';
+import { commercialInboundAllowed } from '@/lib/commercial/inbound-access';
 import { recordInstagramConversationReadActivity } from '@/lib/integrations/message-read-activity';
 import { secretMatches } from '@/lib/security/machine-bearer-auth';
 import {
@@ -221,6 +222,7 @@ export async function POST(request: NextRequest) {
     let alreadyProcessed = 0;
     let duplicateMessages = 0;
     let unknownAccounts = 0;
+    let commerciallyIgnored = 0;
     let rawEventsCreated = 0;
     let automationsQueued = 0;
     let automationErrors = 0;
@@ -252,6 +254,11 @@ export async function POST(request: NextRequest) {
         console.warn('Ignoring Instagram webhook for unmapped account.', {
           instagramAccountId: event.accountId,
         });
+        continue;
+      }
+
+      if (!await commercialInboundAllowed(supabase, organizationId, 'instagram')) {
+        commerciallyIgnored += 1;
         continue;
       }
 
@@ -429,6 +436,11 @@ export async function POST(request: NextRequest) {
         continue;
       }
 
+      if (!await commercialInboundAllowed(supabase, organizationId, 'instagram')) {
+        commerciallyIgnored += 1;
+        continue;
+      }
+
       const sourceEventId = `comment:${event.commentId}`;
       const { data: rawIngestData, error: rawIngestError } = await supabase.rpc(
         'ingest_raw_event',
@@ -524,6 +536,7 @@ export async function POST(request: NextRequest) {
         already_processed: alreadyProcessed,
         duplicate_messages: duplicateMessages,
         unknown_accounts: unknownAccounts,
+        commercially_ignored: commerciallyIgnored,
         automations_queued: automationsQueued,
         automation_errors: automationErrors,
       },
