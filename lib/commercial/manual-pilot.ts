@@ -39,3 +39,30 @@ export async function activateApprovedPilot(request:string,digest:string){
   const {data,error}=await createAdminClient().rpc('commercial_activate_manual_pilot_v1',{p_actor:actor,p_request:request,p_digest:digest});
   if(error||typeof data!=='string'||!uuid.test(data))throw Error('Activation not completed.');
 }
+
+type AssignmentOrg={id:string;organization_name:string;revision:string;current_code:string;requested_code:string|null;pending_request_id:string|null};
+type AssignmentOffer={id:string;code:'free'|'basic'|'growth'|'pro';version:number;digest:string;amount_minor:number};
+export type AssignmentState={organizations:AssignmentOrg[];offers:AssignmentOffer[]};
+function assignmentEnabled(){
+  enabled();
+  if(process.env.SALSYS_MANUAL_ACTIVATION_ENABLED!=='true')throw Error('Assignment unavailable.');
+}
+export async function loadManualAssignments():Promise<AssignmentState>{
+  assignmentEnabled();
+  const actor=await requirePlanAdminActor();
+  const {data,error}=await createAdminClient().rpc('commercial_list_manual_assignments_v1',{p_actor:actor});
+  if(error||!data||!Array.isArray(data.organizations)||data.organizations.length>100||!Array.isArray(data.offers)||data.offers.length>4||
+    !data.organizations.every((r:AssignmentOrg)=>r&&uuid.test(r.id)&&typeof r.organization_name==='string'&&Number.isFinite(Date.parse(r.revision))&&['free','basic','growth','pro'].includes(r.current_code))||
+    !data.offers.every((r:AssignmentOffer)=>r&&uuid.test(r.id)&&['free','basic','growth','pro'].includes(r.code)&&Number.isInteger(r.version)&&r.version>0&&/^[a-f0-9]{64}$/.test(r.digest)&&Number.isSafeInteger(r.amount_minor)&&r.amount_minor>=0))throw Error('Assignment list unavailable.');
+  return data;
+}
+export async function assignManualPlan(input:{org:string;revision:string;plan:string;version:number;digest:string;key:string;mode:ManualMode;reference:string|null;reason:string;endsAt:string|null}){
+  assignmentEnabled();
+  if(!uuid.test(input.org)||!uuid.test(input.plan)||!uuid.test(input.key)||!Number.isFinite(Date.parse(input.revision))||!Number.isInteger(input.version)||input.version<1||! /^[a-f0-9]{64}$/.test(input.digest)||
+    !['free','complimentary','offline_confirmation'].includes(input.mode)||input.reason.trim().length<10||input.reason.length>2048||
+    (input.mode==='offline_confirmation'?(!input.reference||input.reference.trim().length<3||input.reference.length>256):input.reference!==null)||
+    (input.mode==='free'?input.endsAt!==null:!input.endsAt||!Number.isFinite(Date.parse(input.endsAt))))throw Error('Invalid assignment.');
+  const actor=await requirePlanAdminActor();
+  const {data,error}=await createAdminClient().rpc('commercial_assign_manual_plan_v1',{p_actor:actor,p_org:input.org,p_expected:input.revision,p_plan:input.plan,p_version:input.version,p_digest:input.digest,p_key:input.key,p_mode:input.mode,p_reference:input.reference,p_reason:input.reason,p_ends_at:input.endsAt});
+  if(error||typeof data!=='string'||!uuid.test(data))throw Error('Assignment not completed.');
+}
