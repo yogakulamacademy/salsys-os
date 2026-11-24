@@ -335,7 +335,7 @@ async function main(){
   check(/^[0-9a-f-]{36}$/.test(contract),'Manual contract not created');
   // Advance only disposable trial fixture timestamps, preserving trial duration.
   // Manual expiry occurs naturally; immutable contract records are never edited.
-  sql("begin; update public.signup_registration_intents set trial_ends_at=now()-interval '1 minute' where organization_id='"+trialOrg+"'; update public.saas_organization_subscriptions set trial_started_at=now()-interval '336 hours 1 minute',trial_ends_at=now()-interval '1 minute' where organization_id='"+trialOrg+"'; commit;");
+  sql("begin; update public.signup_registration_intents set trial_ends_at=now()-interval '1 minute' where organization_id='"+trialOrg+"'; update public.saas_organization_subscriptions set trial_started_at=now()-interval '720 hours 1 minute',trial_ends_at=now()-interval '1 minute' where organization_id='"+trialOrg+"'; commit;");
   const effective=org=>sql("select public.resolve_signup_plan_internal_v1('"+org+"')->>'state'");
   // Parenthesize concatenation operands in SQL (JSON operator precedence).
   const state=org=>sql("select status||':'||(metadata->>'origin') from public.saas_organization_subscriptions where organization_id='"+org+"'");
