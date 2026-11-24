@@ -620,4 +620,69 @@ returns boolean language sql security invoker set search_path=pg_catalog as $fn$
 $fn$;
 revoke all on function public.commercial_enable_manual_pilot_requests_v1(uuid,uuid,text) from public,anon,authenticated,service_role;
 grant execute on function public.commercial_enable_manual_pilot_requests_v1(uuid,uuid,text) to service_role;
+-- Read-only release preflight: compare actual published offers with the
+-- pinned signup policy. No seeds, approval, configuration or flag writes.
+create function saas_governance.manual_launch_readiness(p_actor uuid)
+returns jsonb language plpgsql security definer set search_path=pg_catalog as $fn$
+declare
+ v_missing text[]; v_blockers text[]:='{}'; v_policy public.signup_trial_policy%rowtype;
+ v_free saas_governance.published_plan_versions%rowtype;
+ v_pro saas_governance.published_plan_versions%rowtype;
+ v_has_policy boolean;
+begin
+ perform saas_governance.require_pilot_approver(p_actor);
+ select array(select code from unnest(array['free','basic','growth','pro']) x(code)
+   where not exists(select 1 from saas_governance.published_plan_versions p
+    join public.saas_plans c on c.id=p.plan_id and c.code=p.plan_code and c.version=p.version and c.status='active'
+    where p.plan_code=x.code and p.effective_from<=clock_timestamp())) into v_missing;
+ if cardinality(v_missing)>0 then v_blockers:=array_append(v_blockers,'missing_published_plans'); end if;
+ select * into v_policy from public.signup_trial_policy where singleton;
+ v_has_policy:=found;
+ if not v_has_policy then v_blockers:=array_append(v_blockers,'missing_trial_policy');
+ else
+   select p.* into v_free from saas_governance.published_plan_versions p
+    join public.saas_plans c on c.id=p.plan_id and c.code='free' and c.version=p.version and c.status='active'
+    where p.plan_id=v_policy.free_plan_id and p.version=v_policy.free_plan_version and p.plan_code='free'
+      and p.effective_from<=clock_timestamp();
+   if not found or v_free.amount_minor<>0 or not v_free.setup_optional
+     or (v_free.snapshot->>'named_users')::bigint is distinct from v_policy.free_named_users::bigint
+     or (v_free.snapshot->>'lead_records')::bigint is distinct from v_policy.free_lead_records::bigint
+     or not (array(select jsonb_array_elements_text(v_free.snapshot->'workspace_codes')) <@ v_policy.free_workspace_codes
+       and v_policy.free_workspace_codes <@ array(select jsonb_array_elements_text(v_free.snapshot->'workspace_codes')))
+     or not (array(select jsonb_array_elements_text(v_free.snapshot->'integration_codes')) <@ v_policy.free_integration_codes
+       and v_policy.free_integration_codes <@ array(select jsonb_array_elements_text(v_free.snapshot->'integration_codes')))
+     then v_blockers:=array_append(v_blockers,'free_policy_mismatch'); end if;
+   select p.* into v_pro from saas_governance.published_plan_versions p
+    join public.saas_plans c on c.id=p.plan_id and c.code='pro' and c.version=p.version and c.status='active'
+    where p.plan_id=v_policy.plan_id and p.version=v_policy.plan_version and p.plan_code='pro'
+      and p.effective_from<=clock_timestamp();
+   if not found or (v_pro.snapshot->>'named_users')::bigint is distinct from v_policy.pro_named_users::bigint
+     or (v_pro.snapshot->>'lead_records')::bigint is distinct from v_policy.pro_lead_records::bigint
+     or not (array(select jsonb_array_elements_text(v_pro.snapshot->'workspace_codes')) <@ v_policy.allowed_workspace_codes
+       and v_policy.allowed_workspace_codes <@ array(select jsonb_array_elements_text(v_pro.snapshot->'workspace_codes')))
+     or not (array(select jsonb_array_elements_text(v_pro.snapshot->'integration_codes')) <@ v_policy.pro_integration_codes
+       and v_policy.pro_integration_codes <@ array(select jsonb_array_elements_text(v_pro.snapshot->'integration_codes')))
+     then v_blockers:=array_append(v_blockers,'pro_policy_mismatch'); end if;
+   if not v_policy.enabled then v_blockers:=array_append(v_blockers,'trial_policy_disabled'); end if;
+   if v_policy.approved_at>clock_timestamp() then v_blockers:=array_append(v_blockers,'trial_policy_not_effective'); end if;
+ end if;
+ if exists(select 1 from saas_governance.published_plan_versions p
+   join public.saas_plans c on c.id=p.plan_id and c.version=p.version and c.status='active'
+   cross join lateral jsonb_array_elements_text(p.snapshot->'workspace_codes') as w(code)
+   where not exists(select 1 from public.workspace_catalog wc where wc.code=w.code and wc.status='active'))
+   then v_blockers:=array_append(v_blockers,'inactive_workspace_scope'); end if;
+ return jsonb_build_object('database_configuration_ready',cardinality(v_blockers)=0,
+   'missing_plan_codes',to_jsonb(v_missing),'blockers',to_jsonb(v_blockers),
+   'trial_days',14,'pilot_capacity',10,
+   'pilot_used',(select count(*) from saas_governance.manual_pilot_organizations));
+end;
+$fn$;
+revoke all on function saas_governance.manual_launch_readiness(uuid) from public,anon,authenticated,service_role;
+grant execute on function saas_governance.manual_launch_readiness(uuid) to service_role;
+create function public.commercial_manual_launch_readiness_v1(p_actor uuid)
+returns jsonb language sql security invoker set search_path=pg_catalog as $fn$
+ select saas_governance.manual_launch_readiness(p_actor);
+$fn$;
+revoke all on function public.commercial_manual_launch_readiness_v1(uuid) from public,anon,authenticated,service_role;
+grant execute on function public.commercial_manual_launch_readiness_v1(uuid) to service_role;
 commit;
