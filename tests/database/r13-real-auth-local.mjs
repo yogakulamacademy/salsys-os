@@ -113,6 +113,7 @@ try{
   const dashboard=async user=>good(await rpc('get_current_subscription_dashboard_v1',{},user.token,anon),'Customer subscription dashboard');
   const assignments=async()=>good(await rpc('commercial_list_manual_assignments_v1',{p_actor:actor}),'Operator assignments');
   const slots=()=>sql('select count(*) from saas_governance.manual_pilot_organizations');
+  console.log('R13 lifecycle checkpoint: eligibility before enrollment');
   assert.equal((await opts(a)).state,'unavailable');
   assert.equal(slots(),'0');
   const enroll={p_actor:actor,p_org:a.org,p_reason:'Synthetic local pilot enrollment'};
@@ -121,6 +122,7 @@ try{
   assert.equal(good(await rpc('commercial_enable_manual_pilot_requests_v1',enroll),'Enrollment retry'),true);
   assert.equal(slots(),'0');
   assert.equal((await dashboard(a)).state,'pro_trial');
+  console.log('R13 lifecycle checkpoint: enrollment and capacity');
   const choices=await opts(a);
   assert.equal(choices.state,'available');
   const basic=choices.offers.find(x=>x.code==='basic');
@@ -132,6 +134,7 @@ try{
   assert.equal((await dashboard(a)).state,'pro_trial');
   assert.equal((await opts(b)).requests.length,0);
   assert.equal(good(await rpc('withdraw_current_plan_change_v1',{p_request:req},b.token,anon),'Cross-tenant withdrawal denial'),false);
+  console.log('R13 lifecycle checkpoint: customer request, retry and cross-tenant withdrawal');
   const queue=await assignments();
   const row=queue.organizations.find(x=>x.id===a.org);
   if(row?.requested_code!=='basic'||row.pending_request_id!==req)throw Error('Customer request missing from operator queue');
@@ -153,21 +156,30 @@ try{
   await assign('growth',10,'complimentary');
   assert.equal((await dashboard(a)).plan_code,'growth');
   assert.equal((await dashboard(a)).state,'manual_active');
+  console.log('R13 lifecycle checkpoint: governed Growth activation');
   const history=(await opts(a)).requests;
   if(!history.some(x=>x.id===req&&x.status==='superseded'&&x.target_code==='basic')||
      !history.some(x=>x.status==='activated'&&x.target_code==='growth'&&x.request_origin==='admin'))throw Error('Override audit history missing');
   assert.equal(slots(),'1');
+  console.log('R13 lifecycle checkpoint: override audit and pilot capacity');
   const beforeRenewal=(await dashboard(a)).access_ends_at;
   await assign('growth',20,'offline_confirmation');
   const renewed=await dashboard(a);
   if(renewed.plan_code!=='growth'||!(Date.parse(renewed.access_ends_at)>Date.parse(beforeRenewal)))throw Error('Renewal did not extend access');
   assert.equal(slots(),'1');
+  console.log('R13 lifecycle checkpoint: renewal and preserved pilot capacity');
   await assign('free',null,'free');
   const downgraded=await dashboard(a);
   assert.equal(downgraded.plan_code,'free');
-  assert.equal(downgraded.state,'free');
+  // Explicit Free assignment is an immutable manual contract with no end date.
+  // Expiry reconciliation, in contrast, uses the canonical fallback state.
+  assert.equal(downgraded.state,'manual_active');
+  assert.equal(downgraded.access_ends_at,null);
+  assert.equal(downgraded.named_user_limit,1);
+  assert.equal(downgraded.lead_record_limit,1);
   assert.equal(downgraded.named_users,1);
   assert.equal(slots(),'1');
+  console.log('R13 lifecycle checkpoint: permanent Free contract and exact quotas');
   assert.equal((await dashboard(b)).state,'pro_trial');
   assert.equal((await opts(b)).requests.length,0);
   console.log('R13 actual customer JWT + service-role governed RPC lifecycle PASS: enrollment, request, override, renewal, downgrade, tenant isolation and one pilot slot. Interactive operator login not tested.');
