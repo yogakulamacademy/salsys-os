@@ -1,4 +1,5 @@
 import "server-only";
+import { requireCommercialIntegration } from '@/lib/commercial/integration-access';
 
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
@@ -438,6 +439,7 @@ export async function syncMetaAdsToSupabase({
   endDate,
   syncRunId,
 }: SyncMetaAdsOptions): Promise<MetaAdsSyncCounts> {
+  await requireCommercialIntegration(organizationId, 'meta_ads');
   const adAccountId = normalizeMetaAdAccountId(requestedAdAccountId);
 
   const supabase = createMetaAdsAdminClient();
