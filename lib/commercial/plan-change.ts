@@ -3,7 +3,7 @@ import { createClient } from '@/lib/supabase/server';
 import { useMockData } from '@/lib/config';
 
 export type PublishedOffer = {plan_id:string;version:number;digest:string;code:string;display_name:string;amount_minor:number;currency:'INR';billing_period:'month';setup_min_minor:number;setup_max_minor:number;setup_optional:boolean;tax_treatment:'inclusive'|'exclusive';named_users:number;lead_records:number};
-export type ChangeRequest = {id:string;status:'requested'|'withdrawn'|'activated';target_code:string;target_version:number;amount_minor:number;currency:'INR';requested_at:string;withdrawn_at:string|null};
+export type ChangeRequest = {id:string;status:'requested'|'withdrawn'|'activated'|'superseded';request_origin:'customer'|'admin';target_code:string;target_version:number;amount_minor:number;currency:'INR';requested_at:string;withdrawn_at:string|null};
 export type ChangeOptions = {state:'available';subscription_revision:string;offers:PublishedOffer[];requests:ChangeRequest[]}|{state:'unavailable';requests:ChangeRequest[]};
 const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const integer=(x:unknown,min=0)=>typeof x==='number'&&Number.isSafeInteger(x)&&x>=min;
@@ -22,7 +22,7 @@ function validOffer(o:PublishedOffer){
     typeof o.setup_optional==='boolean'&&['inclusive','exclusive'].includes(o.tax_treatment)&&integer(o.named_users,1)&&integer(o.lead_records,1);
 }
 function validRequest(r:ChangeRequest){
-  return r&&uuid.test(r.id)&&['requested','withdrawn','activated'].includes(r.status)&&code(r.target_code)&&integer(r.target_version,1)&&integer(r.amount_minor)&&r.currency==='INR'&&date(r.requested_at)&&(r.withdrawn_at===null||date(r.withdrawn_at));
+  return r&&uuid.test(r.id)&&['requested','withdrawn','activated','superseded'].includes(r.status)&&['customer','admin'].includes(r.request_origin)&&code(r.target_code)&&integer(r.target_version,1)&&integer(r.amount_minor)&&r.currency==='INR'&&date(r.requested_at)&&(r.withdrawn_at===null||date(r.withdrawn_at));
 }
 export async function loadChangeOptions():Promise<ChangeOptions>{
   const client=await session();
