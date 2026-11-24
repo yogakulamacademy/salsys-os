@@ -83,9 +83,10 @@ begin
   perform pg_advisory_xact_lock(hashtextextended('saas_change:'||v_org::text,0));
   select * into v_req from saas_governance.subscription_change_requests where id=p_request for update;
   if v_req.status<>'requested' or v_req.requested_by=p_actor
+    or not exists(select 1 from public.organizations where id=v_org and status='active')
     then raise exception 'Independent pending request required'; end if;
-  if not exists(select 1 from saas_governance.change_request_access where organization_id=v_org and enabled)
-    then raise exception 'Plan changes unavailable'; end if;
+  perform 1 from saas_governance.change_request_access where organization_id=v_org and enabled for share;
+  if not found then raise exception 'Plan changes unavailable'; end if;
   select * into v_sub from public.saas_organization_subscriptions where id=v_req.subscription_id and organization_id=v_org for update;
   if not found or v_sub.updated_at<>v_req.from_subscription_updated_at or v_sub.plan_id<>v_req.from_plan_id
     or v_sub.status not in ('trialing','active')
@@ -183,8 +184,8 @@ begin
   select * into v_quote from saas_governance.subscription_contract_quotes where id=p_quote and organization_id=v_org;
   if not found or v_quote.terms_digest is distinct from p_terms_digest or v_quote.quoted_by=auth.uid()
     then return false; end if;
-  if not exists(select 1 from saas_governance.change_request_access where organization_id=v_org and enabled)
-    then return false; end if;
+  perform 1 from saas_governance.change_request_access where organization_id=v_org and enabled for share;
+  if not found then return false; end if;
   select * into v_req from saas_governance.subscription_change_requests where id=v_quote.request_id for update;
   select * into v_sub from public.saas_organization_subscriptions where id=v_quote.subscription_id and organization_id=v_org for update;
   if not found or v_req.status<>'requested' or v_quote.expires_at<=clock_timestamp()
