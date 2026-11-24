@@ -3,6 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 
 const PUBLIC_EXACT_PATHS = new Set([
   "/",
+  "/signup",
   "/auth/callback",
   "/auth/recovery-confirm",
   "/forgot-password",
