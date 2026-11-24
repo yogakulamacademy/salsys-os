@@ -58,17 +58,22 @@ test('R13 P1 durable plan governance uses actual P0 DDL, immutable evidence and 
     for(const user of [author,reviewer,reviewer2,outsider]){
       await db.query("insert into public.profiles values($1,true)",[user]);
       await db.query("insert into public.organization_members values($1,$2,'owner',true)",[user===outsider?tenant:platform,user]);
-      await db.query("insert into saas_governance.operators values($1,true,true,true)",[user]);
+      await db.query("insert into saas_governance.operators values($1,$2,true,true,true)",[user,platform]);
     }
     const snapshot={display_name:'Synthetic Free',amount_minor:0,setup_min_minor:0,setup_max_minor:0,setup_optional:true,tax_treatment:'exclusive',named_users:1,lead_records:2,workspace_codes:['admin','sales'],integration_codes:[]};
-    const create=(actor=author,code='free',version=0,terms=snapshot)=>scalar("select saas_governance.create_plan_request($1,$2,$3,$4::jsonb,'Synthetic local proposal only') as value",[actor,code,version,JSON.stringify(terms)]);
-    const transition=(actor,id,rev,digest,action)=>scalar("select saas_governance.transition_plan_request($1,$2,$3,$4,$5,'Synthetic review reason') as value",[actor,id,rev,digest,action]);
+    const create=(actor=author,code='free',version=0,terms=snapshot)=>scalar("select public.commercial_create_plan_request_v1($1,$2,$3,$4::jsonb,'Synthetic local proposal only') as value",[actor,code,version,JSON.stringify(terms)]);
+    const transition=(actor,id,rev,digest,action)=>scalar("select public.commercial_transition_plan_request_v1($1,$2,$3,$4,$5,'Synthetic review reason') as value",[actor,id,rev,digest,action]);
     await db.query('set role service_role');
     await assert.rejects(create(outsider),/operator not authorized/);
     await assert.rejects(create(author,'free',0,{...snapshot,amount_minor:1}),/Invalid plan price/);
     await assert.rejects(create(author,'free',0,{...snapshot,workspace_codes:['admin','retired']}),/Invalid workspace/);
     await assert.rejects(create(author,'free',0,{...snapshot,provider_token:'not allowed'}),/Invalid commercial snapshot/);
     const id=await create();
+    await assert.rejects(scalar("select public.commercial_read_plan_requests_v1($1) as value",[outsider]),/operator not authorized/);
+    const listing=await scalar("select public.commercial_read_plan_requests_v1($1) as value",[author]);
+    assert.equal(listing.requests[0].id,id);
+    assert.equal(listing.may_author,true);
+    assert.deepEqual(listing.versions,{});
     const row=(await db.query("select snapshot::text as serialized,snapshot_sha256,revision,status from saas_governance.plan_requests where id=$1",[id])).rows[0];
     assert.equal(row.snapshot_sha256,createHash('sha256').update(row.serialized).digest('hex'));
     assert.equal(row.status,'draft');
