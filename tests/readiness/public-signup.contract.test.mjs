@@ -36,7 +36,7 @@ test('provisioning requires a server-bound identity', () => {
   assert.ok(sql.includes('exists (select 1 from public.organization_members where user_id = p_user_id)'));
 });
 test('registration tables and service RPCs have explicit restrictions', () => {
-  for (const name of ['signup_registration_intents', 'signup_resend_attempts']) {
+  for (const name of ['signup_registration_intents', 'signup_resend_attempts', 'signup_usage_counters']) {
     assert.ok(sql.includes(name + ' enable row level security'));
     assert.ok(sql.includes('revoke all on public.' + name + ' from public, anon, authenticated, service_role'));
   }
@@ -96,7 +96,7 @@ test('trial expiry cron is secret-protected and separately release-gated', () =>
 test('current plan projection is session-bound, expiry-aware and does not elevate workspace access', () => {
   assert.ok(sql.includes('v_context := public.get_current_workspace_context_v1()'));
   assert.ok(sql.includes('where organization_id = v_org'));
-  assert.ok(sql.includes('if now() < v_intent.trial_ends_at'));
+  assert.ok(sql.includes('if clock_timestamp() < v_intent.trial_ends_at'));
   assert.ok(sql.includes("'free_pending_reconciliation'"));
   assert.ok(sql.includes('grant execute on function public.get_current_signup_plan_v1() to authenticated'));
   const access = read('lib/workspace-access.ts');
@@ -104,4 +104,16 @@ test('current plan projection is session-bound, expiry-aware and does not elevat
   assert.ok(access.includes("plan?.state === 'unavailable'"));
   assert.ok(read('components/root-shell.tsx').includes("pathname.startsWith('/signup/')"));
   assert.ok(read('app/dashboard/page.tsx').includes('<SignupPlanBanner />'));
+});
+
+test('signup quotas use approved snapshots and transactional row guards', () => {
+  assert.ok(sql.includes('free_named_users between 1 and pro_named_users'));
+  assert.ok(sql.includes('free_lead_records between 1 and pro_lead_records'));
+  assert.ok(sql.includes('where organization_id=p_org for update'));
+  assert.ok(sql.includes('if v_used >= v_limit'));
+  assert.ok(sql.includes('after insert or update or delete on public.leads'));
+  assert.ok(sql.includes('after insert or update or delete on public.organization_members'));
+  assert.ok(sql.includes('revoke all on function public.adjust_signup_usage_internal_v1'));
+  assert.ok(sql.includes('revoke all on function public.resolve_signup_plan_internal_v1'));
+  assert.ok(sql.includes("if p_delta = 1 then"));
 });
