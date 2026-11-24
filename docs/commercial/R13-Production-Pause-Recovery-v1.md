@@ -1,0 +1,33 @@
+# R13 production pause and forward-recovery runbook — 2026-11-24
+
+Status: proposed, review required; no production execution authorization. Scope: manual-first registration pilot only. Existing CRM tenants are not commercial test subjects.
+
+## Recovery baseline and constraints
+
+Owner explicitly declined manual backup, paid PITR, extra staging and additional paid infrastructure. Dashboard evidence supplied 2026-11-24: scheduled physical backups 17–23 November, newest visible 2026-11-23 19:49:46 UTC; PITR add-on disabled. Database backup does not include Storage objects. Do not claim a proven restore or RTO. Fallback RPO may approach 24 hours with daily backup cadence, potentially longer if backup fails. Current recovery point must be rechecked before any approved production release. No production restore as rehearsal; no purchase, new hosted project or reuse of held R2 environment. The owner's cost decision is not independent DBA approval or acceptance of all data-loss risk.
+
+Read-only baseline: production healthy, 552 recorded migrations, latest 20261121031302, no R13 named entries/provisional collisions, commercial foundation and signup/governance objects absent, 4 active organizations. Recheck exact production schema and ledger before release: absence of name collisions alone does not prove dependency compatibility. P0 must also be installed; five candidate migrations depend on it. Do not replay unrelated historical migrations or repair the production ledger to match CI without a separate review.
+
+## Phase A — before accepting any new registrations
+
+1. Obtain approved exact consolidated application SHA, reviewed versioned SQL including P0, production drift and lock/timeout review, migration transaction semantics, deployment target and named rollback/incident authority. All commercial flags remain false, trial policy unseeded/disabled, no commercial operator grants, no active plan publication. Record known-good deployment SHA and baseline protected access, lead/member operations, key integrations, queue health and tenant isolation. Confirm current daily backup is available. If these checks fail, stop.
+2. Apply only reviewed ordered migrations under an explicitly authorized deployment window. Verify version ledger, exact objects and ACLs, no unplanned plan/customer/operator data and four preexisting organizations unaffected. No blind retries; inspect committed/failed versions and actual object state.
+3. Deploy the exact application with commercial switches false. Check protected pages and representative legacy writes/reads, including tenant isolation and integration behavior. Do not publish signup during this phase. The application-off flags do not disable database triggers, including signup_lead_usage_guard_v1, signup_member_usage_guard_v1, and the changed organization_has_capability function.
+4. If application regression occurs before any registration intent, customer, commercial contract or activation, keep all commercial intake/assignment disabled; consider returning the alias to the known-good application only after confirming it is compatible with the installed dormant schema. Retain schema and immutable ledger; do not run destructive down SQL. If legacy database behavior is broken, an independently reviewed forward repair is required; alias rollback alone is not sufficient. Stop release until read-back passes.
+5. After dormant checks, approve exact offers/terms and scoped test authorization; commercial access and reconciliation must be enabled before signup is available. A live signup test creates real production Auth/CRM state; use a designated synthetic organization/account, no real customer leads, explicit test identity/cleanup disposition, and controlled access. Current app has no proven private production-only signup gate; do not turn public signup on as a substitute for one. A restricted release mechanism requires review. Public launch remains separate.
+
+## Phase B — after any managed customer or pending registration exists
+
+Pause new signup (SALSYS_PUBLIC_SIGNUP_ENABLED=false), plan requests (SALSYS_PLAN_CHANGE_REQUESTS_ENABLED=false), pilot approvals (SALSYS_MANUAL_PILOT_ENABLED=false) and assignment (SALSYS_MANUAL_ACTIVATION_ENABLED=false) as incident scope requires. Keep SALSYS_COMMERCIAL_ACCESS_ENABLED, SALSYS_TRIAL_RECONCILIATION_ENABLED and SALSYS_MANUAL_RECONCILIATION_ENABLED true for existing managed customers unless incident authority approves a tested fail-closed alternative. Verify exact flags in deployed environment and actual behavior. Signup pause may also affect pending verification/onboarding; identify cases, preserve evidence and handle through approved support, not by bypassing verification.
+
+Do not return to a pre-commercial binary after managed customers exist: older code might omit entitlement enforcement and reconciliation. Preserve the compatible versioned database and forward-fix or deploy a reviewed compatible rollback build that retains all authorization, quotas, expiry and audit checks. Never delete trials, plans, customers, ledgers, triggers or counter rows to unblock. Do not weaken tenant binding, RLS or CAPTCHA. Never restore all production as a routine rollback.
+
+For irreversible data corruption, escalate under the existing Database Recovery Runbook. Any restore is a separately authorized incident action after selecting a known-good backup and assessing data loss across all tenants, queues, auth, integrations and Storage. No restore rehearsal or paid recovery is authorized.
+
+## Evidence and remaining verification
+
+- #833 original versioned disposable replay passed exact five candidate versions; this is not a production restore or proof of dormant application rollback. Extended regression checks rerun preexisting CRM fixtures after versioned SQL is installed, with no commercial activation; new CI must pass.
+- Required before release: independent security/DBA signoff on P0 + five migrations and forward recovery, actual old-binary/dormant-schema compatibility smoke, release exact-head tests, controlled signup gating, rollback/pause checks for existing managed accounts, scheduler monitoring, approved plan/support/legal terms, live test authorization.
+- Document named owner, release SHA, actual migration versions, backup timestamp, evidence, explicit go/no-go and exceptions. Never log secrets or customer data.
+
+No live DB writes, restores, purchases, deployments or customer activation authorized.
