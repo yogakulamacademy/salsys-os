@@ -117,6 +117,9 @@ jobs:
              supabase/migrations/20261014060700_legacy_crm_settings_helpers_prerequisite.sql
           cp supabase/recovery/20261014065500_legacy_global_crm_mutators_prerequisite.sql \
              supabase/migrations/20261014065500_legacy_global_crm_mutators_prerequisite.sql
+          # Existing production ledger entry, absent from source replay. Restore only in CI.
+          cp supabase/recovery/20261015022538_global_login_single_tenant_binding.sql \
+             supabase/migrations/20261015022538_global_login_single_tenant_binding.sql
           cp supabase/recovery/20261014091300_course_batch_admin_events_prerequisite.sql \
              supabase/migrations/20261014091300_course_batch_admin_events_prerequisite.sql
 
