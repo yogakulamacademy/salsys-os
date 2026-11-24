@@ -5,10 +5,10 @@ import { verifySignupCaptcha } from '@/lib/signup/captcha';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
-import { useMockData } from '@/lib/config';
+import { isPublicSignupAvailable } from '@/lib/signup/availability';
 
 export async function signupAction(formData: FormData) {
-  if (useMockData || process.env.SALSYS_PUBLIC_SIGNUP_ENABLED !== 'true') {
+  if (!await isPublicSignupAvailable()) {
     redirect('/signup?error=Registration+is+not+open.');
   }
 
@@ -73,7 +73,7 @@ export async function signupAction(formData: FormData) {
 }
 
 export async function resendSignupVerificationAction(formData: FormData) {
-  if (useMockData || process.env.SALSYS_PUBLIC_SIGNUP_ENABLED !== 'true') {
+  if (!await isPublicSignupAvailable()) {
     redirect('/signup?error=Registration+is+not+open.');
   }
   const email = String(formData.get('email') ?? '').trim().toLowerCase();
