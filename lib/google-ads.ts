@@ -1,3 +1,4 @@
+import { requireCommercialIntegration } from '@/lib/commercial/integration-access';
 import { getVercelOidcToken } from '@vercel/oidc';
 
 import { googleKeyAccessToken } from '@/lib/google-key-credentials';
@@ -1644,6 +1645,8 @@ export async function syncGoogleAdsToSupabase(
   const resolvedRuntime =
     runtime ??
     await resolveGoogleAdsRuntime();
+
+  await requireCommercialIntegration(resolvedRuntime.organizationId, 'google_ads');
 
   const customerId =
     resolvedRuntime.customerId;
