@@ -1,8 +1,10 @@
 import 'server-only';
+import { getSignupOrigin } from '@/lib/signup/origin';
 
 export async function verifySignupCaptcha(token: string): Promise<boolean> {
   const secret = process.env.SALSYS_SIGNUP_TURNSTILE_SECRET?.trim();
-  if (!secret || !token || token.length > 2048) return false;
+  const origin=getSignupOrigin();
+  if (!origin || !secret || !token || token.length > 2048) return false;
   try {
     const response = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
       method: 'POST',
@@ -13,7 +15,7 @@ export async function verifySignupCaptcha(token: string): Promise<boolean> {
     if (!response.ok) return false;
     const result = await response.json();
     return result.success === true &&
-      result.hostname === 'salsysos.com' &&
+      result.hostname === new URL(origin).hostname &&
       result.action === 'signup';
   } catch {
     return false;
