@@ -1,5 +1,7 @@
 "use server";
 
+import { requireCommercialIntegration } from "@/lib/commercial/integration-access";
+
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -279,6 +281,11 @@ export async function sendInstagramMessageAction(
     );
   }
 
+  try {
+    await requireCommercialIntegration(organizationId, 'instagram');
+  } catch {
+    redirect(conversationUrl(leadId, { error: 'Instagram is not available for your current subscription.' }));
+  }
   const version = instagramApiVersion();
   const response = await fetch(
     `https://graph.instagram.com/${version}/${encodeURIComponent(
