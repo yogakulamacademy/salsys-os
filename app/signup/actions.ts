@@ -1,6 +1,7 @@
 'use server';
 
 import { randomUUID } from 'node:crypto';
+import { verifySignupCaptcha } from '@/lib/signup/captcha';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
@@ -20,6 +21,11 @@ export async function signupAction(formData: FormData) {
       email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ||
       password.length < 12 || password.length > 128) {
     redirect('/signup?error=Check+your+details.+Use+at+least+12+password+characters.');
+  }
+
+  const captchaToken = String(formData.get('cf-turnstile-response') ?? '');
+  if (!await verifySignupCaptcha(captchaToken)) {
+    redirect('/signup?error=Security+verification+failed.+Please+try+again.');
   }
 
   const intentId = randomUUID();
