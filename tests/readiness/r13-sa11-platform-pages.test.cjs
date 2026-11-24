@@ -21,3 +21,27 @@ test('overview cards link only to existing routes and do not invent billing metr
   assert.match(overview,/not paying-customer or subscription metrics/);
   assert.doesNotMatch(overview,/createAdminClient|\.rpc\(|\.from\(|<form/);
 });
+
+test('remaining platform pages preserve guarded reads, truthful states and manual action gates',()=>{
+  const business=readFileSync('app/platform-admin/business/page.tsx','utf8');
+  assert.match(business,/readiness\.workspaceCodes\.includes\(workspace\.code\)/);
+  assert.match(business,/\{permitted &&/);
+  assert.match(business,/Stored connection status only/);
+  const success=readFileSync('app/platform-admin/customer-success/page.tsx','utf8');
+  assert.match(success,/summary\.registered>0/);
+  assert.match(success,/summary\.missingRecords/);
+  assert.match(success,/not paying-customer or adoption metrics/);
+  const health=readFileSync('app/platform-admin/health/page.tsx','utf8');
+  assert.match(health,/health\.critical\+health\.warning>0/);
+  assert.match(health,/internal tenant only/);
+  assert.match(health,/Credential values are never rendered/);
+  for(const page of [business,success,health]){
+    assert.ok(page.indexOf('await readPlanReviewState()')>=0);
+    assert.doesNotMatch(page,/createAdminClient|\.rpc\(|\.from\(|<form/);
+  }
+  const pilot=readFileSync('app/settings/commercial-plans/pilot/page.tsx','utf8');
+  assert.match(pilot,/max=\{state\.max_slots\}/);
+  assert.match(pilot,/activationEnabled&&<section/);
+  assert.match(pilot,/Approvals are recorded here; activation is disabled/);
+  for(const action of ['approvePilotAction','activatePilotAction','assignPlanAction','enablePilotAction'])assert.ok(pilot.includes('action={'+action+'}'));
+});
