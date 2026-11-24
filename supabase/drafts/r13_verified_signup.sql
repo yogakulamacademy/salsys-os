@@ -8,11 +8,19 @@ create table public.signup_trial_policy (
   singleton boolean primary key default true check (singleton),
   plan_id uuid not null references public.saas_plans(id) on delete restrict,
   plan_version integer not null check (plan_version > 0),
-  trial_days integer not null check (trial_days between 1 and 365),
+  trial_days integer not null default 14 check (trial_days = 14),
+  free_plan_id uuid not null references public.saas_plans(id) on delete restrict,
+  free_plan_version integer not null check (free_plan_version > 0),
+  free_workspace_codes text[] not null
+    check (cardinality(free_workspace_codes) > 0
+      and array_position(free_workspace_codes, null) is null
+      and 'admin' = any(free_workspace_codes)),
   allowed_workspace_codes text[] not null
     check (cardinality(allowed_workspace_codes) > 0
       and array_position(allowed_workspace_codes, null) is null
       and 'admin' = any(allowed_workspace_codes)),
+  check (free_plan_id <> plan_id),
+  check (free_workspace_codes <@ allowed_workspace_codes),
   approval_ref text not null check (char_length(trim(approval_ref)) between 3 and 250),
   approved_at timestamptz not null,
   enabled boolean not null default false
@@ -27,7 +35,9 @@ as $policy$
   select exists (
     select 1 from public.signup_trial_policy t
     join public.saas_plans p on p.id = t.plan_id
-    where t.singleton and t.enabled and p.status = 'active'
+    join public.saas_plans fp on fp.id = t.free_plan_id
+    where t.singleton and t.enabled and p.status = 'active' and p.code = 'pro'
+      and fp.status = 'active' and fp.code = 'free' and fp.version = t.free_plan_version
       and p.version = t.plan_version and t.approved_at <= now()
       and not exists (
         select 1 from unnest(t.allowed_workspace_codes) as w(code)
@@ -51,8 +61,16 @@ create table public.signup_registration_intents (
   expires_at timestamptz not null default (now() + interval '7 days'),
   accepted_user_id uuid unique references auth.users(id),
   user_id uuid unique references auth.users(id),
+  fallback_plan_id uuid references public.saas_plans(id) on delete restrict,
+  fallback_plan_version integer,
+  fallback_workspace_codes text[],
+  trial_plan_id uuid references public.saas_plans(id) on delete restrict,
+  trial_ends_at timestamptz,
+  trial_converted_at timestamptz,
   organization_id uuid unique references public.organizations(id),
-  check ((user_id is null) = (organization_id is null))
+  check ((user_id is null) = (organization_id is null)),
+  check (user_id is null or (fallback_plan_id is not null and fallback_plan_version is not null
+    and fallback_workspace_codes is not null and trial_plan_id is not null and trial_ends_at is not null))
 );
 alter table public.signup_registration_intents enable row level security;
 revoke all on public.signup_registration_intents from public, anon, authenticated, service_role;
@@ -169,6 +187,7 @@ declare
   v_intent public.signup_registration_intents%rowtype;
   v_org uuid;
   v_slug text;
+  v_trial_end timestamptz;
   v_policy public.signup_trial_policy%rowtype;
 begin
   if auth.role() is distinct from 'service_role' or p_user_id is null then
@@ -216,9 +235,11 @@ begin
   -- advance the version for every commercially material plan change.
   select t.* into v_policy from public.signup_trial_policy t
     join public.saas_plans p on p.id = t.plan_id
-    where t.singleton and t.enabled and p.status = 'active'
+    join public.saas_plans fp on fp.id = t.free_plan_id
+    where t.singleton and t.enabled and p.status = 'active' and p.code = 'pro'
+      and fp.status = 'active' and fp.code = 'free' and fp.version = t.free_plan_version
       and p.version = t.plan_version and t.approved_at <= now()
-    for share of t, p;
+    for share of t, p, fp;
   if not found or not public.signup_trial_available_v1() then
     raise exception 'Approved trial policy unavailable';
   end if;
@@ -237,17 +258,21 @@ begin
     where organization_id = v_org
       and not (workspace_code = any(v_policy.allowed_workspace_codes));
 
+  v_trial_end := now() + interval '336 hours';
   -- Commercial assignment and its P0 audit are atomic with organization creation.
   insert into public.saas_organization_subscriptions(
     organization_id, plan_id, status, source, trial_started_at, trial_ends_at, metadata
   ) values (
     v_org, v_policy.plan_id, 'trialing', 'manual', now(),
-    now() + make_interval(days => v_policy.trial_days),
+    v_trial_end,
     jsonb_build_object('origin','verified_self_signup','plan_version',v_policy.plan_version,
       'approval_ref',v_policy.approval_ref)
   );
   update public.signup_registration_intents
-    set user_id = p_user_id, organization_id = v_org
+    set user_id = p_user_id, organization_id = v_org,
+      fallback_plan_id = v_policy.free_plan_id, fallback_plan_version = v_policy.free_plan_version,
+      fallback_workspace_codes = v_policy.free_workspace_codes,
+      trial_plan_id = v_policy.plan_id, trial_ends_at = v_trial_end
     where id = v_intent.id;
   -- Trusted routing hint only; membership remains the authorization boundary.
   update auth.users
@@ -260,5 +285,51 @@ $$;
 revoke all on function public.provision_verified_signup_v1(uuid)
   from public, anon, authenticated, service_role;
 grant execute on function public.provision_verified_signup_v1(uuid) to service_role;
+
+-- Idempotent, tenant-scoped conversion. A separately reviewed scheduler and
+-- request-time enforcement must invoke/check this boundary before public launch.
+-- No billing, deletion, suspension or re-enabling disabled workspaces.
+create function public.convert_expired_signup_trial_v1(p_organization_id uuid)
+returns boolean language plpgsql security definer set search_path = ''
+as $convert$
+declare
+  v_intent public.signup_registration_intents%rowtype;
+  v_changed uuid;
+begin
+  if auth.role() is distinct from 'service_role' or p_organization_id is null then
+    raise exception 'Trial conversion not authorized';
+  end if;
+  select * into v_intent from public.signup_registration_intents
+    where organization_id = p_organization_id for update;
+  if not found or v_intent.trial_converted_at is not null
+     or v_intent.trial_ends_at > now() then return false; end if;
+
+  -- Do not overwrite an independently changed or paid subscription.
+  perform 1 from public.saas_plans
+    where id = v_intent.fallback_plan_id and code = 'free' and status = 'active'
+      and version = v_intent.fallback_plan_version for share;
+  if not found then raise exception 'Approved Free fallback unavailable'; end if;
+  update public.saas_organization_subscriptions
+    set plan_id = v_intent.fallback_plan_id, status = 'active',
+      metadata = metadata || jsonb_build_object('origin','verified_self_signup_free_fallback',
+        'plan_version',v_intent.fallback_plan_version,'trial_converted_at',now())
+    where organization_id = p_organization_id
+      and plan_id = v_intent.trial_plan_id and status = 'trialing'
+      and source = 'manual' and trial_ends_at = v_intent.trial_ends_at
+      and trial_ends_at <= now()
+      and metadata->>'origin' = 'verified_self_signup'
+    returning organization_id into v_changed;
+  if not found then return false; end if;
+  update public.organization_workspaces set enabled = false
+    where organization_id = p_organization_id
+      and not (workspace_code = any(v_intent.fallback_workspace_codes));
+  update public.signup_registration_intents set trial_converted_at = now()
+    where id = v_intent.id;
+  return true;
+end;
+$convert$;
+revoke all on function public.convert_expired_signup_trial_v1(uuid)
+  from public, anon, authenticated, service_role;
+grant execute on function public.convert_expired_signup_trial_v1(uuid) to service_role;
 
 commit;
