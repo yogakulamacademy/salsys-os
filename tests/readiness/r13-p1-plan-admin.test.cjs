@@ -104,3 +104,20 @@ test('payment evidence is isolated, exact and private, with no activation or che
   assert.ok(sql.includes("'settled_pending_activation_review'"));
   assert.doesNotMatch(sql,/create function public\.|grant execute on function|update public\.saas_organization_subscriptions|insert into public\.saas_organization_subscriptions|update public\.organization_workspaces/i);
 });
+
+test('manual-first pilot preserves gateway separation and caps distinct approved organizations',()=>{
+  const sql=readFileSync('supabase/drafts/r13_manual_pilot_approvals.sql','utf8');
+  const page=readFileSync('app/settings/commercial-plans/pilot/page.tsx','utf8');
+  const action=readFileSync('app/settings/commercial-plans/pilot/actions.ts','utf8');
+  assert.ok(sql.includes('slot between 1 and 10'));
+  assert.ok(sql.includes("hashtextextended('saas_manual_pilot_10',0)"));
+  assert.ok(sql.includes('Manual pilot capacity reached'));
+  assert.ok(sql.includes('may_approve_pilot'));
+  assert.ok(sql.includes('v_req.target_digest is distinct from p_digest'));
+  assert.ok(sql.includes('manual_pilot_approvals'));
+  assert.ok(sql.includes("p_mode='offline_confirmation'"));
+  assert.doesNotMatch(sql,/insert into saas_governance\.saas_payment|update public\.saas_organization_subscriptions|insert into public\.saas_organization_subscriptions/i);
+  assert.ok(page.includes('Access has not changed.'));
+  assert.ok(page.includes('Free registration is separate.'));
+  assert.ok(action.includes("!=='APPROVE PILOT'"));
+});
