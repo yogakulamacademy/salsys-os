@@ -2,7 +2,7 @@ import 'server-only';
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 
-type PlatformSection = 'overview' | 'plans' | 'pilot' | 'customers';
+type PlatformSection = 'overview' | 'plans' | 'pilot' | 'customers' | 'business';
 
 // Presentation only. Callers must authorize each page and its data before
 // rendering. Server actions retain their own independent authorization.
@@ -10,6 +10,7 @@ export function PlatformAdminFrame({ section, children }: { section: PlatformSec
   if (process.env.SALSYS_PLATFORM_ADMIN_ENABLED !== 'true') return <>{children}</>;
   const links = [
     { id: 'overview', label: 'Overview', href: '/platform-admin' },
+    { id: 'business', label: 'Business operations', href: '/platform-admin/business' },
     { id: 'customers', label: 'Customer organizations', href: '/settings/organizations' },
     { id: 'plans', label: 'Plans and governance', href: '/settings/commercial-plans' },
     ...(process.env.SALSYS_MANUAL_PILOT_ENABLED === 'true'
@@ -31,7 +32,7 @@ export function PlatformAdminFrame({ section, children }: { section: PlatformSec
     <div className="min-h-screen bg-surface text-copy-strong">
       <header className="flex flex-wrap items-center justify-between gap-4 border-b border-line px-6 py-4">
         <div><p className="font-semibold">SalsysOS</p><p className="text-xs text-copy-muted">Platform administration</p></div>
-        <Link href="/home" className="rounded-lg border border-line px-4 py-2 text-sm font-semibold">Open business workspace</Link>
+        <Link href="/platform-admin/business" className="rounded-lg border border-line px-4 py-2 text-sm font-semibold">Open business operations</Link>
       </header>
       <div className="mx-auto grid max-w-7xl gap-6 px-4 py-6 md:grid-cols-[220px_minmax(0,1fr)]">
         <nav aria-label="Platform administration" className="self-start space-y-2 rounded-xl border border-line p-3">
