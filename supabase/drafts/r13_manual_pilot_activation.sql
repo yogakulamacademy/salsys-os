@@ -136,8 +136,69 @@ revoke all on function saas_governance.activate_manual_pilot(uuid,uuid,text) fro
 
 -- Exact effective entitlement calculation at request time, including expiry.
 -- Retain the original resolver for existing signup and legacy paths.
-alter function public.resolve_signup_plan_internal_v1(uuid) rename to resolve_signup_plan_base_v1;
-create function public.resolve_signup_plan_internal_v1(v_org uuid)
+create function public.resolve_signup_plan_base_v1(v_org uuid)
+returns jsonb language plpgsql security definer set search_path = ''
+as $current_plan$
+declare
+  v_intent public.signup_registration_intents%rowtype;
+  v_sub public.saas_organization_subscriptions%rowtype;
+  v_plan uuid;
+  v_version integer;
+  v_code text;
+  v_scope text[];
+  v_status text;
+begin
+  if v_org is null then raise exception 'Workspace access denied'; end if;
+  select * into v_intent from public.signup_registration_intents where organization_id = v_org;
+  if not found then
+    -- Do not alter existing manually provisioned organizations.
+    return jsonb_build_object('state','not_self_signup');
+  end if;
+  select * into v_sub from public.saas_organization_subscriptions where organization_id = v_org;
+  if not found then return jsonb_build_object('state','unavailable'); end if;
+  if v_sub.plan_id = v_intent.trial_plan_id and v_sub.status = 'trialing'
+     and v_sub.source = 'manual' and v_sub.trial_ends_at = v_intent.trial_ends_at
+     and v_sub.metadata->>'origin' = 'verified_self_signup'
+     and v_intent.trial_converted_at is null then
+    if clock_timestamp() < v_intent.trial_ends_at then
+      v_plan := v_intent.trial_plan_id;
+      v_version := v_intent.trial_plan_version;
+      v_scope := v_intent.trial_workspace_codes;
+      v_status := 'pro_trial';
+      v_code := 'pro';
+    else
+      v_plan := v_intent.fallback_plan_id;
+      v_version := v_intent.fallback_plan_version;
+      v_scope := v_intent.fallback_workspace_codes;
+      v_status := 'free_pending_reconciliation';
+      v_code := 'free';
+    end if;
+  elsif v_sub.plan_id = v_intent.fallback_plan_id and v_sub.status = 'active'
+     and v_sub.source = 'manual' and v_intent.trial_converted_at is not null
+     and v_sub.metadata->>'origin' = 'verified_self_signup_free_fallback' then
+    v_plan := v_intent.fallback_plan_id;
+    v_version := v_intent.fallback_plan_version;
+    v_scope := v_intent.fallback_workspace_codes;
+    v_status := 'free';
+    v_code := 'free';
+  else
+    -- Paid upgrades are not overwritten or treated as a trial. Their
+    -- authorization needs independently approved P1/P3 governance.
+    return jsonb_build_object('state','unavailable');
+  end if;
+  if not exists(select 1 from public.saas_plans where id=v_plan and code=v_code
+    and version=v_version and status='active') then
+    return jsonb_build_object('state','unavailable');
+  end if;
+  return jsonb_build_object('state',v_status,'plan_code',v_code,
+    'trial_ends_at',v_intent.trial_ends_at,
+    'remaining_seconds',case when v_status='pro_trial' then
+      greatest(0,ceil(extract(epoch from (v_intent.trial_ends_at-clock_timestamp())))) else 0 end,
+    'workspace_codes',to_jsonb(v_scope));
+end;
+$current_plan$;
+revoke all on function public.resolve_signup_plan_base_v1(uuid) from public,anon,authenticated,service_role;
+create or replace function public.resolve_signup_plan_internal_v1(v_org uuid)
 returns jsonb language plpgsql security definer set search_path=''
 as $fn$
 declare v_sub public.saas_organization_subscriptions%rowtype;
@@ -339,5 +400,70 @@ $fn$;
 revoke all on function saas_governance.reconcile_expired_manual_contract(uuid) from public,anon,authenticated,service_role;
 
 -- Existing capability guard denies manual_active by default until separately approved.
--- No service-role activation grant until integrated application validation.
+
+-- Service-only server adapter, never an authenticated customer RPC.
+grant execute on function saas_governance.activate_manual_pilot(uuid,uuid,text) to service_role;
+create function public.commercial_activate_manual_pilot_v1(p_actor uuid,p_request uuid,p_digest text)
+returns uuid language sql security invoker set search_path=pg_catalog as $fn$
+  select saas_governance.activate_manual_pilot(p_actor,p_request,p_digest);
+$fn$;
+revoke all on function public.commercial_activate_manual_pilot_v1(uuid,uuid,text) from public,anon,authenticated,service_role;
+grant execute on function public.commercial_activate_manual_pilot_v1(uuid,uuid,text) to service_role;
+
+-- Atomic approve and activate for new requests. Failed activation rolls
+-- back the approval and capacity allocation, not just the contract.
+create function saas_governance.approve_and_activate_manual_pilot(
+  p_actor uuid,p_request uuid,p_digest text,p_mode text,p_reference text,p_reason text,p_ends_at timestamptz
+) returns uuid language plpgsql security definer set search_path=pg_catalog as $fn$
+begin
+  perform saas_governance.approve_manual_pilot_request(p_actor,p_request,p_digest,p_mode,p_reference,p_reason,p_ends_at);
+  return saas_governance.activate_manual_pilot(p_actor,p_request,p_digest);
+end;
+$fn$;
+revoke all on function saas_governance.approve_and_activate_manual_pilot(uuid,uuid,text,text,text,text,timestamptz)
+from public,anon,authenticated,service_role;
+grant execute on function saas_governance.approve_and_activate_manual_pilot(uuid,uuid,text,text,text,text,timestamptz) to service_role;
+create function public.commercial_approve_activate_manual_pilot_v1(
+  p_actor uuid,p_request uuid,p_digest text,p_mode text,p_reference text,p_reason text,p_ends_at timestamptz
+) returns uuid language sql security invoker set search_path=pg_catalog as $fn$
+  select saas_governance.approve_and_activate_manual_pilot(p_actor,p_request,p_digest,p_mode,p_reference,p_reason,p_ends_at);
+$fn$;
+revoke all on function public.commercial_approve_activate_manual_pilot_v1(uuid,uuid,text,text,text,text,timestamptz)
+from public,anon,authenticated,service_role;
+grant execute on function public.commercial_approve_activate_manual_pilot_v1(uuid,uuid,text,text,text,text,timestamptz) to service_role;
+
+-- Pilot bounded to ten distinct tenants. Try the tenant lock first instead
+-- of locking a subscription before usage/intent rows. A failed tenant must
+-- not prevent the other nine from reconciling.
+create function saas_governance.reconcile_expired_manual_contracts(p_limit integer)
+returns jsonb language plpgsql security definer set search_path=pg_catalog as $fn$
+declare v_org uuid; v_checked integer:=0; v_converted integer:=0; v_failed integer:=0;
+begin
+  if p_limit is null or p_limit<1 or p_limit>10 then raise exception 'Invalid manual reconciliation batch size'; end if;
+  for v_org in
+    select s.organization_id from public.saas_organization_subscriptions s
+    join saas_governance.manual_pilot_organizations p on p.organization_id=s.organization_id
+    where s.metadata->>'origin'='manual_pilot_contract' and s.status='active' and s.source='manual'
+      and s.current_period_ends_at<=clock_timestamp()
+    order by s.current_period_ends_at,s.organization_id limit p_limit
+  loop
+    if not pg_try_advisory_xact_lock(hashtextextended('saas_change:'||v_org::text,0)) then continue; end if;
+    v_checked:=v_checked+1;
+    begin
+      if saas_governance.reconcile_expired_manual_contract(v_org) then v_converted:=v_converted+1;
+      else v_failed:=v_failed+1; end if;
+    exception when others then v_failed:=v_failed+1;
+    end;
+  end loop;
+  return jsonb_build_object('checked',v_checked,'converted',v_converted,'failed',v_failed);
+end;
+$fn$;
+revoke all on function saas_governance.reconcile_expired_manual_contracts(integer) from public,anon,authenticated,service_role;
+grant execute on function saas_governance.reconcile_expired_manual_contracts(integer) to service_role;
+create function public.reconcile_expired_manual_contracts_v1(p_limit integer)
+returns jsonb language sql security invoker set search_path=pg_catalog as $fn$
+  select saas_governance.reconcile_expired_manual_contracts(p_limit);
+$fn$;
+revoke all on function public.reconcile_expired_manual_contracts_v1(integer) from public,anon,authenticated,service_role;
+grant execute on function public.reconcile_expired_manual_contracts_v1(integer) to service_role;
 commit;
