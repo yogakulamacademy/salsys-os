@@ -67,6 +67,7 @@ create table public.signup_registration_intents (
   trial_plan_id uuid references public.saas_plans(id) on delete restrict,
   trial_ends_at timestamptz,
   trial_converted_at timestamptz,
+  trial_conversion_retry_at timestamptz,
   organization_id uuid unique references public.organizations(id),
   check ((user_id is null) = (organization_id is null)),
   check (user_id is null or (fallback_plan_id is not null and fallback_plan_version is not null
@@ -331,5 +332,59 @@ $convert$;
 revoke all on function public.convert_expired_signup_trial_v1(uuid)
   from public, anon, authenticated, service_role;
 grant execute on function public.convert_expired_signup_trial_v1(uuid) to service_role;
+
+-- Bounded scheduled reconciliation; skip locked rows across concurrent runs.
+-- Existing paid upgrades and unrelated subscriptions are excluded.
+create index signup_trial_expiry_pending_idx
+  on public.signup_registration_intents(trial_ends_at)
+  where organization_id is not null and trial_converted_at is null;
+
+create function public.reconcile_expired_signup_trials_v1(p_limit integer default 100)
+returns jsonb language plpgsql security definer set search_path = ''
+as $reconcile$
+declare
+  v_org uuid;
+  v_checked integer := 0;
+  v_converted integer := 0;
+  v_failed integer := 0;
+begin
+  if auth.role() is distinct from 'service_role' then
+    raise exception 'Trial reconciliation not authorized';
+  end if;
+  if p_limit is null or p_limit < 1 or p_limit > 100 then
+    raise exception 'Invalid reconciliation batch size';
+  end if;
+  for v_org in
+    select i.organization_id
+    from public.signup_registration_intents i
+    join public.saas_organization_subscriptions s on s.organization_id = i.organization_id
+    where i.trial_converted_at is null and i.trial_ends_at <= now()
+      and (i.trial_conversion_retry_at is null or i.trial_conversion_retry_at <= now())
+      and s.status = 'trialing' and s.source = 'manual'
+      and s.plan_id = i.trial_plan_id and s.trial_ends_at = i.trial_ends_at
+      and s.metadata->>'origin' = 'verified_self_signup'
+    order by i.trial_ends_at, i.organization_id
+    limit p_limit for update of i skip locked
+  loop
+    v_checked := v_checked + 1;
+    begin
+      if public.convert_expired_signup_trial_v1(v_org) then
+        v_converted := v_converted + 1;
+      end if;
+    exception when others then
+      -- Roll back only the failed conversion, leave its customer data intact,
+      -- and postpone retry so one broken plan cannot starve the queue.
+      update public.signup_registration_intents
+        set trial_conversion_retry_at = now() + interval '15 minutes'
+        where organization_id = v_org;
+      v_failed := v_failed + 1;
+    end;
+  end loop;
+  return jsonb_build_object('checked',v_checked,'converted',v_converted,'failed',v_failed);
+end;
+$reconcile$;
+revoke all on function public.reconcile_expired_signup_trials_v1(integer)
+  from public, anon, authenticated, service_role;
+grant execute on function public.reconcile_expired_signup_trials_v1(integer) to service_role;
 
 commit;
