@@ -1,6 +1,6 @@
 'use server';
 import { redirect } from 'next/navigation';
-import { PLAN_CODES, createPlanProposal, transitionPlanProposal, type PlanCode, type PlanSnapshot } from '@/lib/commercial/plan-admin';
+import { PLAN_CODES, createPlanProposal, transitionPlanProposal, publishInitialPlan, type PlanCode, type PlanSnapshot } from '@/lib/commercial/plan-admin';
 
 const ROUTE='/settings/commercial-plans';
 function value(form:FormData,key:string,max=2048) {
@@ -44,4 +44,12 @@ export async function transitionPlanAction(form:FormData) {
     await transitionPlanProposal(value(form,'id',36),integer(form,'revision',2),value(form,'digest',64),action,value(form,'reason'));
   } catch { redirect(ROUTE+'?result=error'); }
   redirect(ROUTE+'?result=review_saved');
+}
+
+export async function publishInitialPlanAction(form:FormData) {
+  try {
+    if(value(form,'confirmation',64)!=='PUBLISH INITIAL PLAN') throw Error('Explicit confirmation required.');
+    await publishInitialPlan(value(form,'id',36),integer(form,'revision',3),value(form,'digest',64));
+  } catch { redirect(ROUTE+'?result=error'); }
+  redirect(ROUTE+'?result=published');
 }
