@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { notFound } from 'next/navigation';
+import Link from 'next/link';
 import { requireAdminWorkspaceAccess } from '@/lib/route-access';
 import { loadChangeOptions, type ChangeOptions } from '@/lib/commercial/plan-change';
 import { requestChangeAction, withdrawChangeAction } from './actions';
@@ -18,6 +19,7 @@ export default async function PlanChangesPage({searchParams}:{searchParams:Promi
   return <main className="space-y-5">
     <header><h1 className="text-2xl font-semibold">Plan change requests</h1><p className="mt-2 text-sm">Review published offers. Requesting a change does not charge you, renew your subscription or change your access.</p></header>
     {result==='error'?<p role="alert">Request not completed. Refresh and verify current terms.</p>:result==='requested'?<p role="status">Request recorded. Your subscription is unchanged.</p>:result==='withdrawn'?<p role="status">Request withdrawn.</p>:null}
+    {process.env.SALSYS_CONTRACT_QUOTES_ENABLED==='true'&&<Link href="/settings/subscription/changes/quotes" className="text-sm underline">Review subscription quotes</Link>}
     {state.state==='available'?<section className="grid gap-3 md:grid-cols-2">
       {state.offers.length===0?<p>No other published offers available.</p>:state.offers.map(o=><article key={o.plan_id} className="space-y-3 rounded-xl border border-line p-4">
         <h2 className="font-semibold">{o.display_name} · version {o.version}</h2>
