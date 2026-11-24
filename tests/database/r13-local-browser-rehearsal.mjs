@@ -365,6 +365,21 @@ async function main(){
     check(await rpc('signup_automation_allowed_v1',{p_organization_id:org,p_channel:'instagram'})===false,'Free unexpectedly enabled Instagram automation');
   }
   console.log('Owner policy: Instagram retained on Free after expiry; automation still denied');
+  phase='Free website lead ingestion and quota';
+  // Use the existing credential-bound ingestion RPC on a synthetic registered
+  // site, not direct lead insertion. This exercises the underlying database
+  // pipeline and quota guard, not a live browser form or provider connection.
+  const site='r13-'+randomUUID()+'.example.invalid';
+  sql("insert into public.organization_sites(organization_id,hostname,status,environment,settings,updated_at) values ('"+manualOrg+"','"+site+"','active','production','{}'::jsonb,now());");
+  const formArgs=()=>({p_organization_id:manualOrg,p_external_event_id:randomUUID(),p_site:site,p_form_name:'Synthetic R13 form',p_first_name:'Synthetic form lead',p_email:'r13-'+randomUUID()+'@example.invalid'});
+  const lead=await rpc('ingest_website_lead_for_organization',formArgs());
+  check(lead?.organization_id===manualOrg,'Free website lead was not bound to registered tenant');
+  check(sql("select count(*) from public.leads where organization_id='"+manualOrg+"'")==='1','Free website lead not persisted');
+  const excess=await fetch(api+'/rest/v1/rpc/ingest_website_lead_for_organization',{method:'POST',headers:{apikey:service,authorization:'Bearer '+service,'content-type':'application/json'},body:JSON.stringify(formArgs()),redirect:'error',signal:AbortSignal.timeout(10000)});
+  const quotaError=await excess.json();
+  check(!excess.ok&&String(quotaError.message??'').includes('Commercial usage limit reached'),'Free website quota was not enforced');
+  check(sql("select count(*) from public.leads where organization_id='"+manualOrg+"'")==='1','Rejected website lead changed retained records');
+  console.log('Owner policy: Free credential-bound website ingestion allowed within quota; excess rejected');
   const second=await call(),repeat=await second.json();
   check(second.status()===200&&repeat.ok===true&&repeat.checked===0&&repeat.converted===0&&repeat.failed===0,'Expiry HTTP repeat not idempotent');
   check(sql("select count(*) from public.organization_members where organization_id in ('"+trialOrg+"','"+manualOrg+"')")===before,'Expiry changed membership count');
