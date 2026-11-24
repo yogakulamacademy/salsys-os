@@ -65,13 +65,16 @@ create table public.signup_registration_intents (
   fallback_plan_version integer,
   fallback_workspace_codes text[],
   trial_plan_id uuid references public.saas_plans(id) on delete restrict,
+  trial_plan_version integer,
+  trial_workspace_codes text[],
   trial_ends_at timestamptz,
   trial_converted_at timestamptz,
   trial_conversion_retry_at timestamptz,
   organization_id uuid unique references public.organizations(id),
   check ((user_id is null) = (organization_id is null)),
   check (user_id is null or (fallback_plan_id is not null and fallback_plan_version is not null
-    and fallback_workspace_codes is not null and trial_plan_id is not null and trial_ends_at is not null))
+    and fallback_workspace_codes is not null and trial_plan_id is not null
+    and trial_plan_version is not null and trial_workspace_codes is not null and trial_ends_at is not null))
 );
 alter table public.signup_registration_intents enable row level security;
 revoke all on public.signup_registration_intents from public, anon, authenticated, service_role;
@@ -273,7 +276,8 @@ begin
     set user_id = p_user_id, organization_id = v_org,
       fallback_plan_id = v_policy.free_plan_id, fallback_plan_version = v_policy.free_plan_version,
       fallback_workspace_codes = v_policy.free_workspace_codes,
-      trial_plan_id = v_policy.plan_id, trial_ends_at = v_trial_end
+      trial_plan_id = v_policy.plan_id, trial_plan_version = v_policy.plan_version,
+      trial_workspace_codes = v_policy.allowed_workspace_codes, trial_ends_at = v_trial_end
     where id = v_intent.id;
   -- Trusted routing hint only; membership remains the authorization boundary.
   update auth.users
@@ -386,5 +390,80 @@ $reconcile$;
 revoke all on function public.reconcile_expired_signup_trials_v1(integer)
   from public, anon, authenticated, service_role;
 grant execute on function public.reconcile_expired_signup_trials_v1(integer) to service_role;
+
+-- No caller-selected tenant. Return only current session's minimum commercial
+-- state. This projection is also the basis for request-time commercial checks.
+-- Independent runtime role/capability/provider checks remain mandatory.
+create function public.get_current_signup_plan_v1()
+returns jsonb language plpgsql security definer set search_path = ''
+as $current_plan$
+declare
+  v_context jsonb;
+  v_org uuid;
+  v_intent public.signup_registration_intents%rowtype;
+  v_sub public.saas_organization_subscriptions%rowtype;
+  v_plan uuid;
+  v_version integer;
+  v_code text;
+  v_scope text[];
+  v_status text;
+begin
+  if auth.role() is distinct from 'authenticated' or auth.uid() is null then
+    raise exception 'Authenticated session required';
+  end if;
+  v_context := public.get_current_workspace_context_v1();
+  v_org := nullif(v_context->>'organization_id','')::uuid;
+  if v_org is null then raise exception 'Workspace access denied'; end if;
+  select * into v_intent from public.signup_registration_intents where organization_id = v_org;
+  if not found then
+    -- Do not alter existing manually provisioned organizations.
+    return jsonb_build_object('state','not_self_signup');
+  end if;
+  select * into v_sub from public.saas_organization_subscriptions where organization_id = v_org;
+  if not found then return jsonb_build_object('state','unavailable'); end if;
+  if v_sub.plan_id = v_intent.trial_plan_id and v_sub.status = 'trialing'
+     and v_sub.source = 'manual' and v_sub.trial_ends_at = v_intent.trial_ends_at
+     and v_sub.metadata->>'origin' = 'verified_self_signup'
+     and v_intent.trial_converted_at is null then
+    if now() < v_intent.trial_ends_at then
+      v_plan := v_intent.trial_plan_id;
+      v_version := v_intent.trial_plan_version;
+      v_scope := v_intent.trial_workspace_codes;
+      v_status := 'pro_trial';
+      v_code := 'pro';
+    else
+      v_plan := v_intent.fallback_plan_id;
+      v_version := v_intent.fallback_plan_version;
+      v_scope := v_intent.fallback_workspace_codes;
+      v_status := 'free_pending_reconciliation';
+      v_code := 'free';
+    end if;
+  elsif v_sub.plan_id = v_intent.fallback_plan_id and v_sub.status = 'active'
+     and v_sub.source = 'manual' and v_intent.trial_converted_at is not null
+     and v_sub.metadata->>'origin' = 'verified_self_signup_free_fallback' then
+    v_plan := v_intent.fallback_plan_id;
+    v_version := v_intent.fallback_plan_version;
+    v_scope := v_intent.fallback_workspace_codes;
+    v_status := 'free';
+    v_code := 'free';
+  else
+    -- Paid upgrades are not overwritten or treated as a trial. Their
+    -- authorization needs independently approved P1/P3 governance.
+    return jsonb_build_object('state','unavailable');
+  end if;
+  if not exists(select 1 from public.saas_plans where id=v_plan and code=v_code
+    and version=v_version and status='active') then
+    return jsonb_build_object('state','unavailable');
+  end if;
+  return jsonb_build_object('state',v_status,'plan_code',v_code,
+    'trial_ends_at',v_intent.trial_ends_at,
+    'remaining_seconds',case when v_status='pro_trial' then
+      greatest(0,ceil(extract(epoch from (v_intent.trial_ends_at-now())))) else 0 end,
+    'workspace_codes',to_jsonb(v_scope));
+end;
+$current_plan$;
+revoke all on function public.get_current_signup_plan_v1()
+  from public, anon, authenticated, service_role;
+grant execute on function public.get_current_signup_plan_v1() to authenticated;
 
 commit;
