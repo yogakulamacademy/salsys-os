@@ -117,3 +117,23 @@ test('signup quotas use approved snapshots and transactional row guards', () => 
   assert.ok(sql.includes('revoke all on function public.resolve_signup_plan_internal_v1'));
   assert.ok(sql.includes("if p_delta = 1 then"));
 });
+
+test('commercial eligibility intersects existing capability authorization and does not grant capabilities', () => {
+  assert.ok(sql.includes('public.session_is_bound_to_organization(p_organization_id)'));
+  assert.ok(sql.includes('public.is_organization_member(p_organization_id)'));
+  assert.ok(sql.includes('and oc.enabled'));
+  assert.ok(sql.includes('and public.signup_capability_allowed_internal_v1'));
+  assert.ok(sql.includes('from public.saas_plan_entitlements'));
+  assert.ok(sql.includes('revoke all on function public.signup_capability_allowed_internal_v1'));
+});
+test('self-service automation stays blocked before provider send or claim', () => {
+  assert.ok(sql.includes('grant execute on function public.signup_automation_allowed_v1(uuid,text) to service_role'));
+  assert.ok(sql.includes('and not exists(select 1 from public.signup_registration_intents where organization_id=p_organization_id)'));
+  const whatsapp = read('lib/automation/whatsapp-broadcast-runner.ts');
+  const instagram = read('lib/automation/instagram-operations.ts');
+  ordered(whatsapp, "commercialAutomationAllowed(organizationId, 'whatsapp')", "'prepare_whatsapp_broadcast_provider_send_v1'");
+  ordered(instagram, "commercialAutomationAllowed(organizationId, 'instagram')", "'claim_instagram_automation_run_v1'");
+  const guard = read('lib/commercial/automation-access.ts');
+  assert.ok(guard.includes("rpc('signup_automation_allowed_v1'"));
+  assert.ok(guard.includes('return !error && data === true'));
+});
