@@ -53,16 +53,31 @@ async function classifyWithClaude(lines: Array<{ who: "lead" | "team"; text: str
   return parseStageAnswer(payload.content?.find((b) => typeof b.text === "string")?.text ?? "");
 }
 
+// Fail closed before reading message content, invoking a model or writing.
+// This is a point-in-time check, not a transactional suspension fence.
+async function organizationActive(admin: SupabaseClient, organizationId: unknown): Promise<boolean> {
+  if (typeof organizationId !== "string" || !organizationId.trim()) return false;
+  const { data, error } = await admin.from("organizations").select("id,status")
+    .eq("id", organizationId).maybeSingle();
+  if (error) throw new Error("Stage scan organization authorization unavailable.");
+  return data?.id === organizationId && data.status === "active";
+}
+
 export async function scanLeadStage(admin: SupabaseClient, leadId: string, mode: StageMode, now: Date): Promise<StageDecisionLog | null> {
-  const { data: lead } = await admin
+  if (mode === "off") return null;
+  const { data: lead, error: leadError } = await admin
     .from("leads")
     .select("id, organization_id, current_stage, interested_course_id, owner_user_id, metadata")
     .eq("id", leadId)
     .maybeSingle();
-  if (!lead) return null;
+  if (leadError) throw new Error("Stage scan lead unavailable.");
+  if (!lead || lead.id !== leadId || !await organizationActive(admin, lead.organization_id)) return null;
   const meta = (lead.metadata ?? {}) as Record<string, unknown>;
   const markScanned = async () => {
-    if (mode === "live") await admin.from("leads").update({ metadata: { ...meta, stage_scanned_at: now.toISOString() } }).eq("id", leadId);
+    if (mode === "live" && await organizationActive(admin, lead.organization_id)) {
+      await admin.from("leads").update({ metadata: { ...meta, stage_scanned_at: now.toISOString() } })
+        .eq("id", leadId).eq("organization_id", lead.organization_id);
+    }
   };
   const current = String(lead.current_stage);
   if (FINAL.includes(current)) { await markScanned(); return null; }
@@ -90,6 +105,7 @@ export async function scanLeadStage(admin: SupabaseClient, leadId: string, mode:
   let ai: { stage: AiStageSignal; confidence: number; evidence: string } | null = null;
   if (lastInboundAt && (!scannedAt || Date.parse(lastInboundAt) > Date.parse(scannedAt))) {
     const lines = msgs.filter((m) => m.body?.trim()).slice(-10).map((m) => ({ who: (m.direction === "inbound" ? "lead" : "team") as "lead" | "team", text: m.body ?? "" }));
+    if (!await organizationActive(admin, lead.organization_id)) return null;
     ai = await classifyWithClaude(lines).catch(() => null);
   }
 
@@ -105,12 +121,14 @@ export async function scanLeadStage(admin: SupabaseClient, leadId: string, mode:
     action: decision.action, why: decision.action === "none" ? decision.why : "", evidence, method: fromAi ? "ai" : "rule",
   };
 
+  if (!await organizationActive(admin, lead.organization_id)) return null;
   if (mode === "live" && decision.action === "move") {
     const reason = `AI moved from ${STAGE_LABEL[current] ?? current} to ${STAGE_LABEL[decision.to] ?? decision.to}${evidence ? `: ${evidence}` : ""}`.slice(0, 480);
     const { error } = await admin.rpc("set_lead_stage", {
       p_lead_id: leadId, p_new_stage: decision.to, p_changed_by_type: "ai", p_changed_by_id: ACTOR_ID, p_reason: reason,
     });
     if (error) throw new Error(`Stage move failed: ${error.message}`);
+    if (!await organizationActive(admin, lead.organization_id)) return null;
     await admin.from("activities").insert({
       lead_id: leadId, activity_type: "ai_stage_move", actor_type: "ai", actor_id: ACTOR_ID,
       title: `Stage moved to ${STAGE_LABEL[decision.to] ?? decision.to} automatically`,
@@ -122,6 +140,7 @@ export async function scanLeadStage(admin: SupabaseClient, leadId: string, mode:
   if (mode === "live" && decision.action === "suggest_lost") {
     const { data: open } = await admin.from("tasks").select("id").eq("lead_id", leadId).eq("created_by_id", LOST_TASK_ID).eq("status", "open").limit(1);
     if (!open?.length) {
+      if (!await organizationActive(admin, lead.organization_id)) return null;
       await admin.from("tasks").insert({
         organization_id: lead.organization_id, lead_id: leadId, task_type: "human_review",
         title: "AI suggests marking this lead Lost: please confirm",
