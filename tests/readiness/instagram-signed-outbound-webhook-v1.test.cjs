@@ -157,6 +157,7 @@ function harness(options = {}) {
         json(data, options = {}) { return { status: options.status ?? 200, data }; },
       },
     },
+    '@/lib/commercial/inbound-access': { commercialInboundAllowed: async () => true },
     '@/lib/supabase/admin': {
       createAdminClient: () => {
         calls.createAdminClient += 1;
