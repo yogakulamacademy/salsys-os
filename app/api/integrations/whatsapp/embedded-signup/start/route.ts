@@ -1,3 +1,4 @@
+import { requireCommercialConnection } from '@/lib/commercial/integration-access';
 import {
   NextRequest,
   NextResponse,
@@ -89,6 +90,11 @@ export async function POST(request: NextRequest) {
     return jsonError('This workspace is not active.', 403);
   }
 
+  try {
+    await requireCommercialConnection(organizationId, 'whatsapp');
+  } catch {
+    return jsonError('WhatsApp is not available for your current subscription.', 403);
+  }
   const intent = createOAuthState();
   const intentHash = hashOAuthState(intent);
   const now = new Date();
