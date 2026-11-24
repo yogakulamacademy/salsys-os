@@ -215,6 +215,15 @@ begin
         from saas_governance.plan_requests order by created_at desc,id limit 100
       ) r
     ),'[]'::jsonb),
+    'authorized_request_ids',coalesce((
+      select jsonb_agg(a.request_id) from saas_governance.publication_authorizations a
+      join saas_governance.plan_requests r on r.id=a.request_id and r.snapshot_sha256=a.snapshot_sha256
+      where a.authorized_publisher=p_actor and g.may_publish and a.revoked_at is null
+        and a.expires_at>clock_timestamp() and r.status='reviewed_for_design'
+        and r.author_user_id<>p_actor and r.reviewer_user_id<>p_actor
+        and r.expected_plan_version=0
+        and not exists(select 1 from public.saas_plans p where p.code=r.plan_code)
+    ),'[]'::jsonb),
     'published_request_ids',coalesce((select jsonb_agg(request_id) from saas_governance.published_plan_versions),'[]'::jsonb),
     'versions',coalesce((
       select jsonb_object_agg(code,version) from public.saas_plans
