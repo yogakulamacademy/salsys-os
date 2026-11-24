@@ -1,3 +1,4 @@
+import { PlatformAdminFrame } from '@/components/platform-admin-frame';
 import {randomUUID} from 'node:crypto';
 import {notFound} from 'next/navigation';
 import Link from 'next/link';
@@ -14,7 +15,7 @@ export default async function ManualPilotPage({searchParams}:{searchParams:Promi
   if(activationEnabled){try{assignments=await loadManualAssignments();}catch{/* Keep approval queue usable, but never guess available plans. */}}
   let readiness:ManualLaunchReadiness|null=null;
   try{readiness=await loadManualLaunchReadiness();}catch{/* Never infer release readiness from missing evidence. */}
-  return <main className="space-y-4">
+  return <PlatformAdminFrame section="pilot"><main className="space-y-4">
     <Link href="/settings/commercial-plans" className="text-sm underline">Commercial plans</Link>
     <h1 className="text-2xl font-semibold">Manual subscription approvals</h1>
     <section className="rounded-xl border border-line p-4">
@@ -70,5 +71,5 @@ export default async function ManualPilotPage({searchParams}:{searchParams:Promi
         <button type="submit" className="rounded border border-line p-2 font-semibold">{activationEnabled?'Approve and activate':'Record manual approval'}</button>
       </form>}
     </article>)}
-  </main>;
+  </main></PlatformAdminFrame>;
 }
