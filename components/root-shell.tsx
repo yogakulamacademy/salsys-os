@@ -24,6 +24,7 @@ const InvestigationContextBar = dynamic(() =>
 function isShelllessPath(pathname: string) {
   return (
     pathname === '/' ||
+    pathname === '/platform-admin' ||
     pathname === '/login' ||
     pathname === '/signup' ||
     pathname.startsWith('/signup/') ||
@@ -64,10 +65,15 @@ function hasInvestigationContext(pathname: string) {
   );
 }
 
-export function RootShell({ children }: { children: ReactNode }) {
+export function RootShell({ children, platformAdminEnabled = false }: { children: ReactNode; platformAdminEnabled?: boolean }) {
   const pathname = usePathname();
 
-  if (isShelllessPath(pathname)) {
+  const platformCommercialPath = platformAdminEnabled && (
+    pathname === '/settings/organizations' ||
+    pathname === '/settings/commercial-plans' ||
+    pathname === '/settings/commercial-plans/pilot'
+  );
+  if (isShelllessPath(pathname) || platformCommercialPath) {
     return <>{children}</>;
   }
 

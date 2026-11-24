@@ -9,6 +9,7 @@ import {
 
 import { provisionCustomerOrganizationAction } from '@/app/settings/organizations/actions';
 import { PageHeader } from '@/components/ui';
+import { PlatformAdminFrame } from '@/components/platform-admin-frame';
 import { requirePlatformAdminAccess } from '@/lib/platform-admin-access';
 import { createAdminClient } from '@/lib/supabase/admin';
 
@@ -70,6 +71,7 @@ export default async function OrganizationsPage({
   );
 
   return (
+    <PlatformAdminFrame section="customers">
     <div className="space-y-4">
       <PageHeader
         eyebrow="Platform administration"
@@ -244,5 +246,6 @@ export default async function OrganizationsPage({
         </div>
       </section>
     </div>
+    </PlatformAdminFrame>
   );
 }
