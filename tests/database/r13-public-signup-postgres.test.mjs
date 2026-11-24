@@ -63,7 +63,7 @@ test('R13 public signup SQL fails closed and atomically provisions one scoped tr
         organization_id uuid primary key references public.organizations(id),
         status text,current_step text,goals text[],completed_steps text[],enforce_on_sign_in boolean
       );
-      create table public.saas_plans(id uuid primary key,status text,version integer);
+      create table public.saas_plans(id uuid primary key,status text,version integer,code text unique);
       create table public.saas_organization_subscriptions(
         organization_id uuid primary key references public.organizations(id),
         plan_id uuid references public.saas_plans(id),status text,source text,
@@ -84,7 +84,7 @@ test('R13 public signup SQL fails closed and atomically provisions one scoped tr
     assert.equal(await scalar("select public.signup_trial_available_v1() as value"),false);
     assert.equal(await reserve(randomUUID(),'closed@example.invalid'),false);
     for (const role of ['anon','authenticated']) {
-      for (const fn of ['signup_trial_available_v1()','reserve_signup_intent_v1(uuid,text,text,text)','accept_signup_intent_v1(uuid,uuid)','reserve_signup_resend_v1(text)','provision_verified_signup_v1(uuid)']) {
+      for (const fn of ['signup_trial_available_v1()','reserve_signup_intent_v1(uuid,text,text,text)','accept_signup_intent_v1(uuid,uuid)','reserve_signup_resend_v1(text)','provision_verified_signup_v1(uuid)','convert_expired_signup_trial_v1(uuid)']) {
         assert.equal(await scalar("select has_function_privilege($1,$2,'EXECUTE') as value",[role,'public.'+fn]),false);
       }
     }
@@ -92,9 +92,9 @@ test('R13 public signup SQL fails closed and atomically provisions one scoped tr
       assert.equal(await scalar("select has_table_privilege($1,'public.signup_trial_policy','INSERT') as value",[role]),false);
       assert.equal(await scalar("select has_table_privilege($1,'public.signup_registration_intents','SELECT') as value",[role]),false);
     }
-    const plan = randomUUID();
-    await db.query("insert into public.saas_plans values($1,'active',1)",[plan]);
-    await db.query("insert into public.signup_trial_policy(plan_id,plan_version,trial_days,allowed_workspace_codes,approval_ref,approved_at,enabled) values($1,1,14,array['admin','sales'],'synthetic test only',now(),true)",[plan]);
+    const plan = randomUUID(), free = randomUUID();
+    await db.query("insert into public.saas_plans values($1,'active',1,'pro'),($2,'active',1,'free')",[plan,free]);
+    await db.query("insert into public.signup_trial_policy(plan_id,plan_version,trial_days,allowed_workspace_codes,free_plan_id,free_plan_version,free_workspace_codes,approval_ref,approved_at,enabled) values($1,1,14,array['admin','sales'],$2,1,array['admin'],'synthetic test only',now(),true)",[plan,free]);
     assert.equal(await scalar("select public.signup_trial_available_v1() as value"),true);
 
     const email='person@example.invalid', intent=randomUUID(), user=randomUUID();
@@ -119,6 +119,19 @@ test('R13 public signup SQL fails closed and atomically provisions one scoped tr
     assert.equal(await scalar("select count(*)::int as value from public.saas_organization_subscriptions where organization_id=$1 and plan_id=$2 and status='trialing' and trial_ends_at-trial_started_at=interval '14 days'",[org,plan]),1);
     assert.equal(await scalar("select raw_app_meta_data->>'self_signup_organization_id' as value from auth.users where id=$1",[user]),org);
     assert.equal(await scalar("select public.reserve_signup_resend_v1($1) as value",[email]),false);
+
+    const convert = () => scalar("select public.convert_expired_signup_trial_v1($1) as value",[org]);
+    assert.equal(await convert(),false);
+    // Simulate clock passage only in the disposable fixture.
+    await db.query("update public.signup_registration_intents set trial_ends_at=now()-interval '1 second' where organization_id=$1",[org]);
+    await db.query("update public.saas_organization_subscriptions set trial_ends_at=(select trial_ends_at from public.signup_registration_intents where organization_id=$1) where organization_id=$1",[org]);
+    assert.equal(await convert(),true);
+    assert.equal(await convert(),false);
+    assert.equal(await scalar("select count(*)::int as value from public.saas_organization_subscriptions where organization_id=$1 and plan_id=$2 and status='active'",[org,free]),1);
+    assert.equal(await scalar("select enabled as value from public.organization_workspaces where organization_id=$1 and workspace_code='sales'",[org]),false);
+    assert.equal(await scalar("select status as value from public.organizations where id=$1",[org]),'active');
+    assert.equal(await scalar("select count(*)::int as value from public.organization_members where organization_id=$1 and user_id=$2",[org,user]),1);
+    assert.equal(await provision(user),org);
 
     const auto=randomUUID(), autoIntent=randomUUID();
     assert.equal(await reserve(autoIntent,'auto@example.invalid'),true);
