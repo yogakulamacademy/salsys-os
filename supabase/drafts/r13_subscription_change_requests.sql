@@ -36,7 +36,7 @@ create unique index subscription_one_pending_change_v1
   on saas_governance.subscription_change_requests(organization_id) where status='requested';
 create table saas_governance.subscription_change_events (
   request_id uuid not null references saas_governance.subscription_change_requests(id) on delete restrict,
-  action text not null check(action in ('requested','withdrawn','activated')),
+  action text not null check(action in ('requested','withdrawn','activated','superseded')),
   actor_user_id uuid not null,
   occurred_at timestamptz not null default clock_timestamp(),
   primary key(request_id,action)
