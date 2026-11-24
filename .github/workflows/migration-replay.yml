@@ -10,6 +10,7 @@ on:
       - 'tests/database/r2-behavior-rpc-negative-auth-local.sql'
       - 'tests/database/r2-behavior-rpc-positive-tenant-local.sql'
       - 'tests/database/r13-commercial-state-full-local.sql'
+      - 'tests/database/r13-manual-full-local.sql'
       - '.github/workflows/migration-replay.yml'
   workflow_dispatch:
 
@@ -318,6 +319,18 @@ jobs:
           db_containers="$(docker ps --format '{{.Names}}' | grep '^supabase_db_' || true)"
           test "$(printf '%s\n' "$db_containers" | grep -c .)" -eq 1
           docker exec -i "$db_containers" psql -X -v ON_ERROR_STOP=1 -U postgres -d postgres < tests/database/r13-commercial-state-full-local.sql
+
+      - name: Apply manual-first R13 candidates to full disposable schema
+        shell: bash
+        run: |
+          set -euo pipefail
+          # CI-local database only; no remote connection or migration ledger write.
+          db_containers="$(docker ps --format '{{.Names}}' | grep '^supabase_db_' || true)"
+          test "$(printf '%s\n' "$db_containers" | grep -c .)" -eq 1
+          for candidate in r13_governed_plan_admin r13_verified_signup r13_subscription_change_requests r13_manual_pilot_approvals r13_manual_pilot_activation; do
+            docker exec -i "$db_containers" psql -X -v ON_ERROR_STOP=1 -U postgres -d postgres < "supabase/drafts/$candidate.sql"
+          done
+          docker exec -i "$db_containers" psql -X -v ON_ERROR_STOP=1 -U postgres -d postgres < tests/database/r13-manual-full-local.sql
 
       - name: Show local migration state
         if: always()
