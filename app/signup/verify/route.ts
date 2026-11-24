@@ -41,6 +41,12 @@ export async function GET(request: NextRequest) {
     await supabase.auth.signOut({ scope: 'local' });
     return go('/login?error=Workspace+setup+requires+another+sign-in.');
   }
+  // Refresh after provisioning so trusted app_metadata is present in the JWT.
+  const { error: refreshError } = await supabase.auth.refreshSession();
+  if (refreshError) {
+    await supabase.auth.signOut({ scope: 'local' });
+    return go('/login?error=Please+sign+in+to+continue+workspace+setup.');
+  }
   const response = go('/signup/onboarding');
   response.cookies.set(ACTIVE_WORKSPACE_COOKIE, provisioned.organizationId, {
     httpOnly: true, sameSite: 'lax', secure: true, path: '/', maxAge: 60 * 60 * 24 * 30,
