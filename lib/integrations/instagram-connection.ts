@@ -1,4 +1,5 @@
 import "server-only";
+import { requireCommercialIntegration } from '@/lib/commercial/integration-access';
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { decryptIntegrationSecret } from "@/lib/integrations/crypto";
@@ -43,6 +44,7 @@ export async function getInstagramRuntimeForOrganization(
   );
   const resolvedAccountId = required(accountId, "Instagram accountId");
 
+  await requireCommercialIntegration(resolvedOrganizationId, "instagram");
   const admin = createAdminClient();
 
   const { data: rawConnections, error } = await admin
