@@ -299,6 +299,15 @@ test('R13 integrated manual pilot applies exact approved contract and expiry wit
     assert.equal(await scalar("select public.commercial_transition_plan_request_v1($1,$2,2,$3,'review','Synthetic review') as value",[reviewer,proposal,digest]),true);
     await db.query("insert into saas_governance.publication_authorizations(request_id,snapshot_sha256,authorized_publisher,commercial_approval_ref,release_approval_ref,expires_at) values($1,$2,$3,'synthetic commercial approval','synthetic release approval',clock_timestamp()+interval '1 hour')",[proposal,digest,publisher]);
     const basic=await scalar("select public.commercial_publish_initial_plan_v1($1,$2,3,$3) as value",[publisher,proposal,digest]);
+    const readiness=()=>scalar("select public.commercial_manual_launch_readiness_v1($1) as value",[operator]);
+    const beforeReadiness=await readiness();
+    assert.equal(beforeReadiness.database_configuration_ready,false);
+    assert.deepEqual(beforeReadiness.missing_plan_codes,['free','growth','pro']);
+    assert.ok(beforeReadiness.blockers.includes('free_policy_mismatch'));
+    assert.ok(beforeReadiness.blockers.includes('pro_policy_mismatch'));
+    assert.equal(beforeReadiness.trial_days,14);
+    assert.equal(beforeReadiness.pilot_capacity,10);
+    await assert.rejects(scalar("select public.commercial_manual_launch_readiness_v1($1) as value",[user]),/operator not authorized/);
     const enrollment=()=>scalar("select public.commercial_enable_manual_pilot_requests_v1($1,$2,'Synthetic customer enrollment') as value",[operator,org]);
     const beforeEnrollment=await scalar("select public.commercial_list_manual_assignments_v1($1) as value",[operator]);
     assert.equal(beforeEnrollment.organizations.find(o=>o.id===org).pilot_enabled,false);
@@ -372,6 +381,26 @@ test('R13 integrated manual pilot applies exact approved contract and expiry wit
     assert.equal(await scalar("select public.commercial_transition_plan_request_v1($1,$2,2,$3,'review','Synthetic review') as value",[reviewer,growthProposal,growthDigest]),true);
     await db.query("insert into saas_governance.publication_authorizations(request_id,snapshot_sha256,authorized_publisher,commercial_approval_ref,release_approval_ref,expires_at) values($1,$2,$3,'synthetic commercial approval','synthetic release approval',clock_timestamp()+interval '1 hour')",[growthProposal,growthDigest,publisher]);
     const growth=await scalar("select public.commercial_publish_initial_plan_v1($1,$2,3,$3) as value",[publisher,growthProposal,growthDigest]);
+    assert.deepEqual((await readiness()).missing_plan_codes,['free','pro']);
+    // Existing fixture Free/Pro rows predate governance. Attach synthetic
+    // version evidence in this disposable database only to exercise equality.
+    for(const [id,code,offer] of [
+      [free,'free',{...terms,display_name:'Synthetic Free',amount_minor:0,named_users:1,lead_records:1,workspace_codes:['admin'],integration_codes:[]}],
+      [plan,'pro',{...terms,display_name:'Synthetic Pro',amount_minor:34500,named_users:2,lead_records:3,workspace_codes:['admin','sales'],integration_codes:['instagram','ga4','google_ads']}]
+    ]){
+      const rq=await scalar("select public.commercial_create_plan_request_v1($1,$2,1,$3::jsonb,'Synthetic readiness fixture') as value",[operator,code,JSON.stringify(offer)]);
+      const hash=await scalar("select snapshot_sha256 as value from saas_governance.plan_requests where id=$1",[rq]);
+      assert.equal(await scalar("select public.commercial_transition_plan_request_v1($1,$2,1,$3,'submit','Synthetic submit') as value",[operator,rq,hash]),true);
+      assert.equal(await scalar("select public.commercial_transition_plan_request_v1($1,$2,2,$3,'review','Synthetic review') as value",[reviewer,rq,hash]),true);
+      await db.query("insert into saas_governance.published_plan_versions(plan_id,version,request_id,plan_code,snapshot,snapshot_sha256,currency,billing_period,amount_minor,setup_min_minor,setup_max_minor,setup_optional,tax_treatment,published_by,commercial_approval_ref,release_approval_ref) select $1,1,r.id,r.plan_code,r.snapshot,r.snapshot_sha256,p.currency,p.billing_period,p.amount_minor,p.setup_min_minor,p.setup_max_minor,p.setup_optional,p.tax_treatment,$3,'synthetic fixture only','synthetic fixture only' from saas_governance.plan_requests r join saas_governance.price_proposals p on p.request_id=r.id where r.id=$2",[id,rq,publisher]);
+    }
+    assert.equal((await readiness()).database_configuration_ready,true);
+    await db.query("update public.signup_trial_policy set free_lead_records=2");
+    assert.ok((await readiness()).blockers.includes('free_policy_mismatch'));
+    await db.query("update public.signup_trial_policy set free_lead_records=1,enabled=false");
+    assert.ok((await readiness()).blockers.includes('trial_policy_disabled'));
+    await db.query("update public.signup_trial_policy set enabled=true");
+    assert.equal((await readiness()).database_configuration_ready,true);
     await db.query("select set_config('request.jwt.claim.role','authenticated',false),set_config('request.jwt.claim.sub',$1,false)",[user]);
     const latest=await scalar("select public.get_current_plan_change_options_v1() as value");
     const original=await scalar("select public.request_current_plan_change_v1($1,$2,1,$3,$4) as value",[randomUUID(),basic,digest,latest.subscription_revision]);
