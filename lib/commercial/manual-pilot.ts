@@ -74,3 +74,17 @@ export async function enablePilotRequests(org:string,reason:string){
   const {data,error}=await createAdminClient().rpc('commercial_enable_manual_pilot_requests_v1',{p_actor:actor,p_org:org,p_reason:reason});
   if(error||data!==true)throw Error('Enrollment unavailable.');
 }
+
+export type ManualLaunchReadiness={database_configuration_ready:boolean;missing_plan_codes:string[];blockers:string[];trial_days:14;pilot_capacity:10;pilot_used:number};
+const readinessBlockers=['missing_published_plans','missing_trial_policy','free_policy_mismatch','pro_policy_mismatch','trial_policy_disabled','trial_policy_not_effective','inactive_workspace_scope'];
+export async function loadManualLaunchReadiness():Promise<ManualLaunchReadiness>{
+  enabled();
+  const actor=await requirePlanAdminActor();
+  const {data,error}=await createAdminClient().rpc('commercial_manual_launch_readiness_v1',{p_actor:actor});
+  if(error||!data||typeof data.database_configuration_ready!=='boolean'||data.trial_days!==14||data.pilot_capacity!==10||
+    !Number.isInteger(data.pilot_used)||data.pilot_used<0||data.pilot_used>10||
+    !Array.isArray(data.missing_plan_codes)||data.missing_plan_codes.length>4||!data.missing_plan_codes.every((x:unknown)=>typeof x==='string'&&['free','basic','growth','pro'].includes(x))||
+    !Array.isArray(data.blockers)||!data.blockers.every((x:unknown)=>typeof x==='string'&&readinessBlockers.includes(x))||
+    data.database_configuration_ready!==(data.blockers.length===0))throw Error('Launch readiness unavailable.');
+  return data;
+}
