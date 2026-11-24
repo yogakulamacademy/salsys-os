@@ -23,9 +23,19 @@ export async function approveManualPilot(input:{request:string;digest:string;mod
     ||(input.mode!=='offline_confirmation'&&input.reference!==null)
     ||(input.mode==='free'?input.endsAt!==null:!input.endsAt||!Number.isFinite(Date.parse(input.endsAt))))throw Error('Invalid approval terms.');
   const actor=await requirePlanAdminActor();
-  const {data,error}=await createAdminClient().rpc('commercial_approve_manual_pilot_v1',{
+  const activate=process.env.SALSYS_MANUAL_ACTIVATION_ENABLED==='true';
+  const {data,error}=await createAdminClient().rpc(activate?'commercial_approve_activate_manual_pilot_v1':'commercial_approve_manual_pilot_v1',{
     p_actor:actor,p_request:input.request,p_digest:input.digest,p_mode:input.mode,
     p_reference:input.reference,p_reason:input.reason,p_ends_at:input.endsAt,
   });
-  if(error||data!==input.request)throw Error('Approval not recorded. Check current request and pilot capacity.');
+  if(error||typeof data!=='string'||(activate?!uuid.test(data):data!==input.request))throw Error('Approval not completed. Check current request and pilot capacity.');
+  return activate?'activated':'approved';
+}
+
+export async function activateApprovedPilot(request:string,digest:string){
+  enabled();
+  if(process.env.SALSYS_MANUAL_ACTIVATION_ENABLED!=='true'||!uuid.test(request)||! /^[a-f0-9]{64}$/.test(digest))throw Error('Activation unavailable.');
+  const actor=await requirePlanAdminActor();
+  const {data,error}=await createAdminClient().rpc('commercial_activate_manual_pilot_v1',{p_actor:actor,p_request:request,p_digest:digest});
+  if(error||typeof data!=='string'||!uuid.test(data))throw Error('Activation not completed.');
 }
