@@ -477,4 +477,95 @@ returns jsonb language sql security invoker set search_path=pg_catalog as $fn$
 $fn$;
 revoke all on function public.reconcile_expired_manual_contracts_v1(integer) from public,anon,authenticated,service_role;
 grant execute on function public.reconcile_expired_manual_contracts_v1(integer) to service_role;
+-- Dashboard assignment: independent admin decision, not an impersonated
+-- customer request. Original customer preference remains in history.
+create function saas_governance.assign_manual_plan(
+ p_actor uuid,p_org uuid,p_expected timestamptz,p_plan uuid,p_version integer,p_digest text,
+ p_key uuid,p_mode text,p_reference text,p_reason text,p_ends_at timestamptz
+) returns uuid language plpgsql security definer set search_path=pg_catalog as $fn$
+declare v_sub public.saas_organization_subscriptions%rowtype;
+ v_old saas_governance.subscription_change_requests%rowtype; v_req uuid; v_pending uuid;
+begin
+ perform saas_governance.require_pilot_approver(p_actor);
+ if p_org is null or p_key is null or p_expected is null then raise exception 'Exact assignment required'; end if;
+ perform pg_advisory_xact_lock(hashtextextended('saas_manual_pilot_10',0));
+ perform pg_advisory_xact_lock(hashtextextended('saas_change:'||p_org::text,0));
+ perform 1 from public.signup_usage_counters where organization_id=p_org for update;
+ if not found then raise exception 'Verified signup usage required'; end if;
+ perform 1 from public.signup_registration_intents where organization_id=p_org for update;
+ if not found then raise exception 'Verified signup required'; end if;
+ select * into v_old from saas_governance.subscription_change_requests where organization_id=p_org and idempotency_key=p_key;
+ if found then
+   if v_old.request_origin<>'admin' or v_old.requested_by<>p_actor or v_old.target_plan_id is distinct from p_plan
+     or v_old.target_version is distinct from p_version or v_old.target_digest is distinct from p_digest
+     or v_old.from_subscription_updated_at is distinct from p_expected then raise exception 'Assignment key already used'; end if;
+   return saas_governance.approve_and_activate_manual_pilot(p_actor,v_old.id,p_digest,p_mode,p_reference,p_reason,p_ends_at);
+ end if;
+ perform 1 from saas_governance.change_request_access where organization_id=p_org and enabled for share;
+ if not found then raise exception 'Pilot access unavailable'; end if;
+ select * into v_sub from public.saas_organization_subscriptions where organization_id=p_org for update;
+ if not found or v_sub.updated_at is distinct from p_expected or v_sub.source<>'manual'
+   then raise exception 'Subscription changed; refresh dashboard'; end if;
+ perform 1 from saas_governance.published_plan_versions p join public.saas_plans c
+   on c.id=p.plan_id and c.version=p.version and c.code=p.plan_code and c.status='active'
+   where p.plan_id=p_plan and p.version=p_version and p.snapshot_sha256=p_digest and p.effective_from<=clock_timestamp() for share of c;
+ if not found then raise exception 'Published offer unavailable'; end if;
+ select id into v_pending from saas_governance.subscription_change_requests where organization_id=p_org and status='requested' for update;
+ if found then
+   -- Do not supersede a request that has entered the future billing pipeline.
+   if to_regclass('saas_governance.subscription_contract_quotes') is not null then
+     declare v_has_quote boolean;
+     begin
+       execute 'select exists(select 1 from saas_governance.subscription_contract_quotes where request_id=$1)' into v_has_quote using v_pending;
+       if v_has_quote then raise exception 'Existing quote requires separate reconciliation'; end if;
+     end;
+   end if;
+   update saas_governance.subscription_change_requests set status='superseded' where id=v_pending;
+   insert into saas_governance.subscription_change_events(request_id,action,actor_user_id) values(v_pending,'superseded',p_actor);
+ end if;
+ insert into saas_governance.subscription_change_requests(organization_id,subscription_id,requested_by,request_origin,supersedes_request_id,idempotency_key,from_plan_id,from_subscription_updated_at,target_plan_id,target_version,target_digest)
+ values(p_org,v_sub.id,p_actor,'admin',v_pending,p_key,v_sub.plan_id,v_sub.updated_at,p_plan,p_version,p_digest) returning id into v_req;
+ insert into saas_governance.subscription_change_events(request_id,action,actor_user_id) values(v_req,'requested',p_actor);
+ return saas_governance.approve_and_activate_manual_pilot(p_actor,v_req,p_digest,p_mode,p_reference,p_reason,p_ends_at);
+end;
+$fn$;
+revoke all on function saas_governance.assign_manual_plan(uuid,uuid,timestamptz,uuid,integer,text,uuid,text,text,text,timestamptz) from public,anon,authenticated,service_role;
+grant execute on function saas_governance.assign_manual_plan(uuid,uuid,timestamptz,uuid,integer,text,uuid,text,text,text,timestamptz) to service_role;
+create function public.commercial_assign_manual_plan_v1(p_actor uuid,p_org uuid,p_expected timestamptz,p_plan uuid,p_version integer,p_digest text,p_key uuid,p_mode text,p_reference text,p_reason text,p_ends_at timestamptz)
+returns uuid language sql security invoker set search_path=pg_catalog as $fn$
+ select saas_governance.assign_manual_plan(p_actor,p_org,p_expected,p_plan,p_version,p_digest,p_key,p_mode,p_reference,p_reason,p_ends_at);
+$fn$;
+revoke all on function public.commercial_assign_manual_plan_v1(uuid,uuid,timestamptz,uuid,integer,text,uuid,text,text,text,timestamptz) from public,anon,authenticated,service_role;
+grant execute on function public.commercial_assign_manual_plan_v1(uuid,uuid,timestamptz,uuid,integer,text,uuid,text,text,text,timestamptz) to service_role;
+
+create function saas_governance.list_manual_assignments(p_actor uuid) returns jsonb
+language plpgsql security definer set search_path=pg_catalog as $fn$
+begin
+ perform saas_governance.require_pilot_approver(p_actor);
+ return jsonb_build_object('organizations',coalesce((
+ select jsonb_agg(to_jsonb(x) order by x.organization_name,x.id) from (
+ select o.id,o.name as organization_name,s.updated_at as revision,
+ public.resolve_signup_plan_internal_v1(o.id)->>'plan_code' as current_code,
+ p.code as requested_code, r.id as pending_request_id
+ from public.organizations o join public.signup_registration_intents i on i.organization_id=o.id
+ join public.signup_usage_counters u on u.organization_id=o.id
+ join saas_governance.change_request_access a on a.organization_id=o.id and a.enabled
+ join public.saas_organization_subscriptions s on s.organization_id=o.id and s.source='manual'
+ left join saas_governance.subscription_change_requests r on r.organization_id=o.id and r.status='requested'
+ left join public.saas_plans p on p.id=r.target_plan_id
+ where o.status='active' and public.resolve_signup_plan_internal_v1(o.id)->>'state' in ('free','pro_trial','manual_active')
+ order by o.name,o.id limit 100) x),'[]'::jsonb),
+ 'offers',coalesce((select jsonb_agg(jsonb_build_object('id',p.plan_id,'code',p.plan_code,'version',p.version,'digest',p.snapshot_sha256,'amount_minor',p.amount_minor) order by p.amount_minor,p.plan_code)
+ from saas_governance.published_plan_versions p join public.saas_plans c on c.id=p.plan_id and c.version=p.version and c.code=p.plan_code and c.status='active'
+ where p.effective_from<=clock_timestamp()),'[]'::jsonb));
+end;
+$fn$;
+revoke all on function saas_governance.list_manual_assignments(uuid) from public,anon,authenticated,service_role;
+grant execute on function saas_governance.list_manual_assignments(uuid) to service_role;
+create function public.commercial_list_manual_assignments_v1(p_actor uuid) returns jsonb
+language sql security invoker set search_path=pg_catalog as $fn$
+ select saas_governance.list_manual_assignments(p_actor);
+$fn$;
+revoke all on function public.commercial_list_manual_assignments_v1(uuid) from public,anon,authenticated,service_role;
+grant execute on function public.commercial_list_manual_assignments_v1(uuid) to service_role;
 commit;
