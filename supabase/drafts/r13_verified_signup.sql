@@ -11,6 +11,10 @@ create table public.signup_trial_policy (
   trial_days integer not null default 14 check (trial_days = 14),
   free_plan_id uuid not null references public.saas_plans(id) on delete restrict,
   free_plan_version integer not null check (free_plan_version > 0),
+  pro_named_users integer not null check (pro_named_users between 1 and 1000000),
+  pro_lead_records integer not null check (pro_lead_records between 1 and 100000000),
+  free_named_users integer not null check (free_named_users between 1 and pro_named_users),
+  free_lead_records integer not null check (free_lead_records between 1 and pro_lead_records),
   free_workspace_codes text[] not null
     check (cardinality(free_workspace_codes) > 0
       and array_position(free_workspace_codes, null) is null
@@ -81,6 +85,20 @@ revoke all on public.signup_registration_intents from public, anon, authenticate
 -- All intent creation goes through the serialized quota boundary.
 create index signup_intents_email_created_idx on public.signup_registration_intents(email, created_at);
 create index signup_intents_created_idx on public.signup_registration_intents(created_at);
+
+-- Per-tenant counters updated in the same transaction as actual row writes.
+-- Only self-signup tenants receive a counter. Existing tenants are untouched.
+create table public.signup_usage_counters (
+  organization_id uuid primary key references public.organizations(id) on delete restrict,
+  named_users bigint not null check (named_users >= 0),
+  lead_records bigint not null check (lead_records >= 0),
+  pro_named_users integer not null check (pro_named_users > 0),
+  pro_lead_records integer not null check (pro_lead_records > 0),
+  free_named_users integer not null check (free_named_users between 1 and pro_named_users),
+  free_lead_records integer not null check (free_lead_records between 1 and pro_lead_records)
+);
+alter table public.signup_usage_counters enable row level security;
+revoke all on public.signup_usage_counters from public, anon, authenticated, service_role;
 
 create function public.reserve_signup_intent_v1(
   p_id uuid, p_email text, p_full_name text, p_business_name text
@@ -279,6 +297,16 @@ begin
       trial_plan_id = v_policy.plan_id, trial_plan_version = v_policy.plan_version,
       trial_workspace_codes = v_policy.allowed_workspace_codes, trial_ends_at = v_trial_end
     where id = v_intent.id;
+  -- Snapshot the approved limits, counting the initial owner. The tenant is
+  -- not visible to concurrent requests until this whole transaction commits.
+  insert into public.signup_usage_counters(
+    organization_id,named_users,lead_records,pro_named_users,pro_lead_records,free_named_users,free_lead_records
+  ) values (
+    v_org,
+    (select count(*) from public.organization_members where organization_id=v_org and active),
+    (select count(*) from public.leads where organization_id=v_org),
+    v_policy.pro_named_users,v_policy.pro_lead_records,v_policy.free_named_users,v_policy.free_lead_records
+  );
   -- Trusted routing hint only; membership remains the authorization boundary.
   update auth.users
     set raw_app_meta_data = coalesce(raw_app_meta_data, '{}'::jsonb)
@@ -394,12 +422,10 @@ grant execute on function public.reconcile_expired_signup_trials_v1(integer) to 
 -- No caller-selected tenant. Return only current session's minimum commercial
 -- state. This projection is also the basis for request-time commercial checks.
 -- Independent runtime role/capability/provider checks remain mandatory.
-create function public.get_current_signup_plan_v1()
+create function public.resolve_signup_plan_internal_v1(v_org uuid)
 returns jsonb language plpgsql security definer set search_path = ''
 as $current_plan$
 declare
-  v_context jsonb;
-  v_org uuid;
   v_intent public.signup_registration_intents%rowtype;
   v_sub public.saas_organization_subscriptions%rowtype;
   v_plan uuid;
@@ -408,11 +434,6 @@ declare
   v_scope text[];
   v_status text;
 begin
-  if auth.role() is distinct from 'authenticated' or auth.uid() is null then
-    raise exception 'Authenticated session required';
-  end if;
-  v_context := public.get_current_workspace_context_v1();
-  v_org := nullif(v_context->>'organization_id','')::uuid;
   if v_org is null then raise exception 'Workspace access denied'; end if;
   select * into v_intent from public.signup_registration_intents where organization_id = v_org;
   if not found then
@@ -425,7 +446,7 @@ begin
      and v_sub.source = 'manual' and v_sub.trial_ends_at = v_intent.trial_ends_at
      and v_sub.metadata->>'origin' = 'verified_self_signup'
      and v_intent.trial_converted_at is null then
-    if now() < v_intent.trial_ends_at then
+    if clock_timestamp() < v_intent.trial_ends_at then
       v_plan := v_intent.trial_plan_id;
       v_version := v_intent.trial_plan_version;
       v_scope := v_intent.trial_workspace_codes;
@@ -458,12 +479,126 @@ begin
   return jsonb_build_object('state',v_status,'plan_code',v_code,
     'trial_ends_at',v_intent.trial_ends_at,
     'remaining_seconds',case when v_status='pro_trial' then
-      greatest(0,ceil(extract(epoch from (v_intent.trial_ends_at-now())))) else 0 end,
+      greatest(0,ceil(extract(epoch from (v_intent.trial_ends_at-clock_timestamp())))) else 0 end,
     'workspace_codes',to_jsonb(v_scope));
 end;
 $current_plan$;
+revoke all on function public.resolve_signup_plan_internal_v1(uuid)
+  from public, anon, authenticated, service_role;
+
+create function public.get_current_signup_plan_v1()
+returns jsonb language plpgsql security definer set search_path = ''
+as $session_plan$
+declare
+  v_context jsonb;
+  v_org uuid;
+begin
+  if auth.role() is distinct from 'authenticated' or auth.uid() is null then
+    raise exception 'Authenticated session required';
+  end if;
+  v_context := public.get_current_workspace_context_v1();
+  v_org := nullif(v_context->>'organization_id','')::uuid;
+  return public.resolve_signup_plan_internal_v1(v_org);
+end;
+$session_plan$;
 revoke all on function public.get_current_signup_plan_v1()
   from public, anon, authenticated, service_role;
 grant execute on function public.get_current_signup_plan_v1() to authenticated;
+
+-- Private transactional counter boundary. Row locks serialize increases even
+-- for service-role ingestion and concurrent bulk writes. Decreases remain
+-- possible after downgrade; existing records are never removed by quotas.
+create function public.adjust_signup_usage_internal_v1(p_org uuid, p_metric text, p_delta integer)
+returns void language plpgsql security definer set search_path = ''
+as $usage$
+declare
+  v_usage public.signup_usage_counters%rowtype;
+  v_state text;
+  v_limit bigint;
+  v_used bigint;
+begin
+  if p_metric not in ('named_users','lead_records') or p_metric is null
+     or p_delta not in (-1,1) or p_delta is null then
+    raise exception 'Invalid quota adjustment';
+  end if;
+  select * into v_usage from public.signup_usage_counters
+    where organization_id=p_org for update;
+  if not found then
+    if exists(select 1 from public.signup_registration_intents where organization_id=p_org) then
+      raise exception 'Commercial usage state unavailable';
+    end if;
+    return;
+  end if;
+  if p_delta = 1 then
+    v_state := public.resolve_signup_plan_internal_v1(p_org)->>'state';
+    if v_state not in ('pro_trial','free','free_pending_reconciliation') or v_state is null then
+      raise exception 'Commercial usage state unavailable';
+    end if;
+    if p_metric='named_users' then
+      v_used := v_usage.named_users;
+      v_limit := case when v_state='pro_trial' then v_usage.pro_named_users else v_usage.free_named_users end;
+    else
+      v_used := v_usage.lead_records;
+      v_limit := case when v_state='pro_trial' then v_usage.pro_lead_records else v_usage.free_lead_records end;
+    end if;
+    if v_used >= v_limit then
+      raise exception 'Commercial usage limit reached: %',p_metric using errcode='P0001';
+    end if;
+  end if;
+  update public.signup_usage_counters
+    set named_users = named_users + case when p_metric='named_users' then p_delta else 0 end,
+        lead_records = lead_records + case when p_metric='lead_records' then p_delta else 0 end
+    where organization_id=p_org;
+end;
+$usage$;
+revoke all on function public.adjust_signup_usage_internal_v1(uuid,text,integer)
+  from public, anon, authenticated, service_role;
+
+-- AFTER triggers count only actual changes, including INSERT ON CONFLICT,
+-- reactivation, and tenant reassignment. Any rejection rolls back the write.
+create function public.signup_usage_row_guard_v1()
+returns trigger language plpgsql security definer set search_path = ''
+as $guard$
+declare
+  v_old uuid;
+  v_new uuid;
+  v_metric text;
+begin
+  if tg_table_schema <> 'public' then raise exception 'Invalid quota source'; end if;
+  if tg_table_name='leads' then
+    v_metric := 'lead_records';
+    if tg_op <> 'INSERT' then v_old:=old.organization_id; end if;
+    if tg_op <> 'DELETE' then v_new:=new.organization_id; end if;
+  elsif tg_table_name='organization_members' then
+    v_metric := 'named_users';
+    if tg_op <> 'INSERT' then
+      if old.active then v_old:=old.organization_id; end if;
+    end if;
+    if tg_op <> 'DELETE' then
+      if new.active then v_new:=new.organization_id; end if;
+    end if;
+  else
+    raise exception 'Invalid quota source';
+  end if;
+  if v_old is not distinct from v_new then return null; end if;
+  -- Stable tenant lock order for a move; transaction rollback preserves both.
+  if v_old is not null and v_new is not null and v_old < v_new then
+    perform public.adjust_signup_usage_internal_v1(v_old,v_metric,-1);
+    perform public.adjust_signup_usage_internal_v1(v_new,v_metric,1);
+  else
+    if v_new is not null then perform public.adjust_signup_usage_internal_v1(v_new,v_metric,1); end if;
+    if v_old is not null then perform public.adjust_signup_usage_internal_v1(v_old,v_metric,-1); end if;
+  end if;
+  return null;
+end;
+$guard$;
+revoke all on function public.signup_usage_row_guard_v1()
+  from public, anon, authenticated, service_role;
+create trigger signup_lead_usage_guard_v1
+  after insert or update or delete on public.leads
+  for each row execute function public.signup_usage_row_guard_v1();
+create trigger signup_member_usage_guard_v1
+  after insert or update or delete on public.organization_members
+  for each row execute function public.signup_usage_row_guard_v1();
 
 commit;
