@@ -1,5 +1,7 @@
 import 'server-only';
 
+import { commercialAutomationAllowed } from '@/lib/commercial/automation-access';
+
 import { executePreparedWhatsAppProviderSend } from '@/lib/integrations/whatsapp-provider-send';
 import { createAdminClient } from '@/lib/supabase/admin';
 
@@ -110,6 +112,11 @@ export async function runWhatsAppBroadcasts(options: {
   for (const campaign of campaigns) {
     const organizationId = String(campaign.organization_id);
     const campaignId = String(campaign.id);
+    if (!await commercialAutomationAllowed(organizationId, 'whatsapp')) {
+      result.skippedCampaigns += 1;
+      result.campaignResults.push({ campaignId, organizationId, action: 'skipped', reason: 'commercial_automation_unavailable' });
+      continue;
+    }
 
     const [{ data: policyData, error: policyError }, { data: providerData, error: providerError }] =
       await Promise.all([
@@ -263,6 +270,7 @@ export async function runWhatsAppBroadcasts(options: {
     let failed = 0;
 
     for (const recipient of recipients) {
+      if (!await commercialAutomationAllowed(organizationId, 'whatsapp')) break;
       processed += 1;
       result.processedRecipients += 1;
 
