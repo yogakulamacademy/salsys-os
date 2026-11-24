@@ -41,3 +41,13 @@ The SaaS payment evidence draft is not an installed production ledger. Before en
 ## SA-07 customer success monitoring
 
 The protected customer-success page exposes only exact organization/onboarding counts, including not started, in progress, completed, dismissed, missing records and enforcement-configured incomplete records. Missing records are a legacy/not-enrolled possibility, not a failure. These counts include demos; do not call them paying customers or infer product adoption, support satisfaction or churn. Add isolated tests of zero rows, inconsistent concurrent reads, revoked operators and authorized access. No new customer data, tracking or support writes are enabled.
+
+## SA-08 operations and security
+
+The new protected health page reads the existing internal-tenant v_system_health_summary with exact tenant filtering and returns only validated counts and source check time. Configuration booleans describe server switches, not actual registration availability, job execution, uptime or security approval. The scheduler credential is shown only as configured/not configured. No other tenant's monitoring detail, raw logs, credentials or customer records are exposed. Missing, malformed or inconsistent data must render unavailable, never healthy by default.
+
+## SA-09 release candidate checklist
+
+Use the consolidated PR #838; do not merge #837 and #838 independently. Freeze the reviewed commit and require its own full CI, CodeQL and readiness suite. Verify the new pages with feature flag off, unauthenticated session, ordinary customer administrator, employee, wrong platform tenant, revoked operator, and valid active platform operator. Test direct existing commercial/provisioning actions separately. Verify desktop/mobile navigation and business routes, provider permissions, legacy customer behavior, and unavailable monitoring/count states. Retain production signup closed, trial policy disabled and staging on hold unless separately authorized. A rollback of presentation can turn off SALSYS_PLATFORM_ADMIN_ENABLED; this is not rollback of separately activated subscriptions or billing. Do not treat flag rollback as revocation of pre-existing legacy provisioning rights.
+
+The platform foundation is a release candidate only. SaaS billing and settlement, effective contract history, live provider onboarding, support ticketing, adoption/churn, platform-wide API/queue/cron and AI telemetry remain deferred, not implemented by these monitoring surfaces. No production release, schema migration or provider mutation is authorized by this document.
