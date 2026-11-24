@@ -93,7 +93,7 @@ test('R13 integrated manual pilot applies exact approved contract and expiry wit
     // Exact P0 #827 DDL (pinned fixture, not a duplicate migration).
     await db.query(readFileSync('supabase/migrations/20261108120000_r13_commercial_state_foundation_v1.sql','utf8'));
     await db.query(readFileSync('supabase/migrations/20261023184246_customer_organization_provisioning_v1.sql','utf8'));
-    await db.query(readFileSync('tests/database/fixtures/r13-p2-verified-signup.sql','utf8'));
+    await db.query(readFileSync('supabase/drafts/r13_verified_signup.sql','utf8'));
     await db.query("select set_config('request.jwt.claim.role','service_role',false)");
     const scalar = async (sql, params=[]) => (await db.query(sql,params)).rows[0]?.value;
     const reserve = (id,email) => scalar("select public.reserve_signup_intent_v1($1,$2,'Fixture Person','Fixture Company') as value",[id,email]);
