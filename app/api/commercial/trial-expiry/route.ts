@@ -11,18 +11,34 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ ok: false, error: 'Unauthorized' }, { status: 401 });
   }
   // Separate from signup: existing trials must still expire if signup is paused.
-  if (process.env.SALSYS_TRIAL_RECONCILIATION_ENABLED !== 'true') {
+  const trialsEnabled=process.env.SALSYS_TRIAL_RECONCILIATION_ENABLED==='true';
+  const manualEnabled=process.env.SALSYS_MANUAL_RECONCILIATION_ENABLED==='true';
+  if (!trialsEnabled&&!manualEnabled) {
     return NextResponse.json({ ok: true, skipped: 'Trial reconciliation disabled' });
   }
   try {
-    const { data, error } = await createAdminClient().rpc('reconcile_expired_signup_trials_v1', { p_limit: 100 });
-    if (error || !data || typeof data !== 'object' ||
-        !Number.isInteger(data.checked) || !Number.isInteger(data.converted) || !Number.isInteger(data.failed)) {
-      return NextResponse.json({ ok: false, error: 'Trial reconciliation unavailable' }, { status: 503 });
-    }
-    const summary = { checked: data.checked, converted: data.converted, failed: data.failed };
-    console.info('trial_reconciliation', summary);
-    return NextResponse.json({ ok: summary.failed === 0, ...summary }, { status: summary.failed === 0 ? 200 : 503 });
+    const admin=createAdminClient();
+    const reconcile=async(name:string,limit:number)=>{
+      const {data,error}=await admin.rpc(name,{p_limit:limit});
+      if(error||!data||typeof data!=='object'||
+        ![data.checked,data.converted,data.failed].every(n=>Number.isInteger(n)&&n>=0)||
+        data.checked>limit||data.converted+data.failed>data.checked)throw Error('Reconciliation unavailable');
+      return {checked:data.checked as number,converted:data.converted as number,failed:data.failed as number};
+    };
+    const results=await Promise.allSettled([
+      trialsEnabled?reconcile('reconcile_expired_signup_trials_v1',100):Promise.resolve({checked:0,converted:0,failed:0}),
+      manualEnabled?reconcile('reconcile_expired_manual_contracts_v1',10):Promise.resolve({checked:0,converted:0,failed:0}),
+    ]);
+    const [trial,manual]=results;
+    const unavailable=trial.status==='rejected'||manual.status==='rejected';
+    const summary=results.reduce((acc,result)=>{
+      if(result.status==='fulfilled'){acc.checked+=result.value.checked;acc.converted+=result.value.converted;acc.failed+=result.value.failed;}
+      return acc;
+    },{checked:0,converted:0,failed:0});
+    console.info('commercial_reconciliation',{...summary,unavailable});
+    const ok=!unavailable&&summary.failed===0;
+    return NextResponse.json({ok,...summary,...(unavailable?{error:'Commercial reconciliation unavailable'}:{})},{status:ok?200:503});
+
   } catch {
     return NextResponse.json({ ok: false, error: 'Trial reconciliation unavailable' }, { status: 503 });
   }
