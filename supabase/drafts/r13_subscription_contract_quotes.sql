@@ -157,6 +157,9 @@ begin
       when q.expires_at<=clock_timestamp() then 'expired'
       when s.updated_at<>r.from_subscription_updated_at or s.plan_id<>r.from_plan_id then 'stale'
       when a.quote_id is not null then 'accepted_not_activated'
+      when not exists(select 1 from saas_governance.change_request_access x where x.organization_id=v_org and x.enabled)
+        or s.status not in ('active','trialing') or (s.status='trialing' and (s.trial_ends_at is null or s.trial_ends_at<=clock_timestamp()))
+        or not exists(select 1 from public.saas_plans c where c.id=q.plan_id and c.version=q.plan_version and c.status='active') then 'unavailable'
       else 'awaiting_acceptance' end) order by q.created_at desc,q.id),'[]'::jsonb)
   into v_result from (
     select * from saas_governance.subscription_contract_quotes
@@ -198,5 +201,43 @@ $fn$;
 revoke all on function public.get_current_contract_quotes_v1(),public.accept_current_contract_quote_v1(uuid,text)
 from public,anon,authenticated,service_role;
 grant execute on function public.get_current_contract_quotes_v1(),public.accept_current_contract_quote_v1(uuid,text) to authenticated;
+-- Quote operator queue is deliberately narrow: no leads, user email, tokens,
+-- subscription provider references or arbitrary customer data.
+create function saas_governance.list_pending_contract_quotes(p_actor uuid)
+returns jsonb language plpgsql security definer set search_path=pg_catalog as $fn$
+declare v_result jsonb;
+begin
+  perform saas_governance.require_operator(p_actor,null);
+  if not exists(select 1 from saas_governance.operators where user_id=p_actor and active and may_quote)
+    then raise exception 'Quote permission required' using errcode='42501'; end if;
+  select coalesce(jsonb_agg(to_jsonb(x) order by x.requested_at,x.id),'[]'::jsonb)
+  into v_result from (
+    select r.id,o.name as organization_name,p.plan_code,p.version,p.amount_minor,p.setup_min_minor,
+      p.setup_max_minor,p.setup_optional,p.tax_treatment,r.requested_at
+    from saas_governance.subscription_change_requests r
+    join public.organizations o on o.id=r.organization_id and o.status='active'
+    join saas_governance.change_request_access a on a.organization_id=r.organization_id and a.enabled
+    join public.saas_organization_subscriptions s on s.id=r.subscription_id and s.organization_id=r.organization_id
+      and s.updated_at=r.from_subscription_updated_at and s.plan_id=r.from_plan_id
+    join saas_governance.published_plan_versions p on p.plan_id=r.target_plan_id and p.version=r.target_version
+      and p.snapshot_sha256=r.target_digest
+    join public.saas_plans c on c.id=p.plan_id and c.version=p.version and c.status='active'
+    where r.status='requested' and r.requested_by<>p_actor and p.effective_from<=clock_timestamp()
+      and s.status in ('active','trialing') and (s.status<>'trialing' or s.trial_ends_at>clock_timestamp())
+      and not exists(select 1 from saas_governance.subscription_contract_quotes q where q.request_id=r.id)
+    order by r.requested_at,r.id limit 100
+  ) x;
+  return v_result;
+end;
+$fn$;
+revoke all on function saas_governance.list_pending_contract_quotes(uuid) from public,anon,authenticated,service_role;
+grant execute on function saas_governance.list_pending_contract_quotes(uuid) to service_role;
+create function public.commercial_list_pending_contract_quotes_v1(p_actor uuid) returns jsonb
+language sql security invoker set search_path=pg_catalog as $fn$
+  select saas_governance.list_pending_contract_quotes(p_actor);
+$fn$;
+revoke all on function public.commercial_list_pending_contract_quotes_v1(uuid) from public,anon,authenticated,service_role;
+grant execute on function public.commercial_list_pending_contract_quotes_v1(uuid) to service_role;
+
 -- Acceptance is not payment, subscription activation, or a renewal mandate.
 commit;
