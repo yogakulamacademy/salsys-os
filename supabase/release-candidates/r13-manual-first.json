@@ -1,0 +1,31 @@
+{
+  "status": "candidate only; versions provisional pending production ledger and DBA review",
+  "baseline": "eec8a45f8f98f256ef630cac4742698ede1f5a16",
+  "entries": [
+    {
+      "name": "r13_governed_plan_admin",
+      "version": "20261124130001",
+      "blob": "420fc01176662b173e938b807ead6fcd7b12c26f"
+    },
+    {
+      "name": "r13_verified_signup",
+      "version": "20261124130002",
+      "blob": "362cec8fceb96255cc42a9c7e2a7da68217ce2c7"
+    },
+    {
+      "name": "r13_subscription_change_requests",
+      "version": "20261124130003",
+      "blob": "1f958fea1e34d9301ed44537335d31b15ff8614e"
+    },
+    {
+      "name": "r13_manual_pilot_approvals",
+      "version": "20261124130004",
+      "blob": "795c8d94ce22229681c765837831b8fab6da05bb"
+    },
+    {
+      "name": "r13_manual_pilot_activation",
+      "version": "20261124130005",
+      "blob": "664ae82e30b52b3fa9644d2b643515c7727d94d8"
+    }
+  ]
+}
