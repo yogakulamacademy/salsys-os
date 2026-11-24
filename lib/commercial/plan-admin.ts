@@ -17,7 +17,8 @@ export type PlanRequest = {
   reviewer_user_id:string|null; status:'draft'|'under_review'|'reviewed_for_design'|'rejected';
   revision:number; created_at:string;
 };
-export type PlanReviewState = { actorId:string; may_author:boolean; may_review:boolean;
+export type PlanReviewState = { actorId:string; may_author:boolean; may_review:boolean; may_publish:boolean;
+  authorized_request_ids:string[]; published_request_ids:string[]; publicationEnabled:boolean;
   requests:PlanRequest[]; versions:Partial<Record<PlanCode,number>> };
 
 export async function requirePlanAdminActor(): Promise<string> {
@@ -48,9 +49,10 @@ export async function readPlanReviewState(): Promise<PlanReviewState> {
   const actorId = await requirePlanAdminActor();
   const {data,error} = await createAdminClient().rpc('commercial_read_plan_requests_v1',{p_actor:actorId});
   if (error || !data || typeof data.may_author !== 'boolean' || typeof data.may_review !== 'boolean' ||
-      (!data.may_author && !data.may_review) || !Array.isArray(data.requests) ||
+      typeof data.may_publish !== 'boolean' || (!data.may_author && !data.may_review && !data.may_publish) || !Array.isArray(data.requests) ||
+      !Array.isArray(data.authorized_request_ids) || !Array.isArray(data.published_request_ids) ||
       !data.versions || typeof data.versions !== 'object' || Array.isArray(data.versions)) throw new Error('Commercial review unavailable.');
-  return {...data,actorId};
+  return {...data,actorId,publicationEnabled:process.env.SALSYS_PLAN_PUBLICATION_ENABLED === 'true'};
 }
 
 export async function createPlanProposal(code:PlanCode, expected:number, snapshot:PlanSnapshot, rationale:string) {
@@ -69,4 +71,15 @@ export async function transitionPlanProposal(id:string,revision:number,digest:st
     p_actor:actorId,p_request:id,p_revision:revision,p_digest:digest,p_action:action,p_reason:reason,
   });
   if(error || data!==true) throw new Error('Review could not be saved. Refresh the proposal.');
+}
+
+export async function publishInitialPlan(id:string,revision:number,digest:string) {
+  if(process.env.SALSYS_PLAN_PUBLICATION_ENABLED !== 'true') throw Error('Publication unavailable.');
+  if(!UUID.test(id)||revision!==3||! /^[a-f0-9]{64}$/.test(digest)) throw Error('Invalid proposal reference.');
+  const actorId=await requirePlanAdminActor();
+  const {data,error}=await createAdminClient().rpc('commercial_publish_initial_plan_v1',{
+    p_actor:actorId,p_request:id,p_revision:revision,p_digest:digest,
+  });
+  if(error||typeof data!=='string'||!UUID.test(data)) throw Error('Publication not authorized or unavailable.');
+  return data;
 }
