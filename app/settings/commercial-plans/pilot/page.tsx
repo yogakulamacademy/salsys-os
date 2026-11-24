@@ -28,7 +28,7 @@ export default async function ManualPilotPage({searchParams}:{searchParams:Promi
         <p className="text-sm font-semibold">{readiness.database_configuration_ready?'Published plan and trial configuration checks passed':'Configuration incomplete'}</p>
         {readiness.missing_plan_codes.length>0&&<p className="text-sm">Unpublished plans: {readiness.missing_plan_codes.join(', ')}</p>}
         {readiness.blockers.length>0&&<ul className="list-disc pl-5 text-sm">{readiness.blockers.map(b=><li key={b}>{b.replaceAll('_',' ')}</li>)}</ul>}
-        <p className="text-sm">14-day Pro trial · Free fallback · 10-organization manual pilot</p>
+        <p className="text-sm">30-day Pro trial · Free fallback · 10-organization manual pilot</p>
       </>}
       <p className="text-xs">Database configuration only. This does not verify deployment, real authentication, provider access, or release approval and never enables signup.</p>
     </section>
