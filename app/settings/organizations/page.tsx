@@ -245,7 +245,7 @@ export default async function OrganizationsPage({
                 return (
                   <tr key={organization.id}>
                     <td className="border-b border-slate-100 px-3 py-4">
-                      <div className="font-semibold text-slate-900">{organization.name}</div>
+                      <div className="font-semibold text-slate-900">{process.env.SALSYS_PLATFORM_ADMIN_ENABLED === 'true' ? <Link href={'/platform-admin/organization?org='+encodeURIComponent(organization.id)} className="text-brand-700 hover:underline">{organization.name}</Link> : organization.name}</div>
                       <div className="mt-1 font-mono text-[11px] text-slate-400">{organization.slug}</div>
                     </td>
                     <td className="border-b border-slate-100 px-3 py-4">
