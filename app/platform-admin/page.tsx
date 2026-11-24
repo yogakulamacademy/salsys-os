@@ -2,6 +2,7 @@ import 'server-only';
 import Link from 'next/link';
 import { PlatformAdminFrame } from '@/components/platform-admin-frame';
 import { loadPlatformOrganizationSummary } from '@/lib/platform-organization-summary';
+import { loadPlatformSubscriptionSummary } from '@/lib/platform-subscription-summary';
 import { notFound } from 'next/navigation';
 import { PLAN_CODES, readPlanReviewState } from '@/lib/commercial/plan-admin';
 import { loadManualLaunchReadiness, type ManualLaunchReadiness } from '@/lib/commercial/manual-pilot';
@@ -25,6 +26,7 @@ export default async function PlatformAdminPage() {
     readiness = await loadManualLaunchReadiness().catch(() => null);
   }
   const organizations = await loadPlatformOrganizationSummary().catch(() => null);
+  const subscriptions = await loadPlatformSubscriptionSummary().catch(() => null);
   const publishedCount = PLAN_CODES.filter(code => (state.versions[code] ?? 0) > 0).length;
 
   return (
@@ -67,6 +69,24 @@ export default async function PlatformAdminPage() {
               </>
             ) : <p className="mt-2 text-sm">Configuration evidence unavailable.</p>}
             <p className="mt-3 text-xs text-copy-muted">Database checks are not release approval, live scheduler evidence, or proof of public registration availability.</p>
+          </section>
+          <section className="rounded-xl border border-line p-5" aria-label="Subscription monitoring">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <h2 className="font-semibold">Subscription monitoring</h2>
+              {pilotEnabled && <Link href="/settings/commercial-plans/pilot" className="text-sm underline">Manage manual subscriptions</Link>}
+            </div>
+            {subscriptions ? <>
+              <p className="mt-2 text-sm">Recorded subscriptions: <strong>{subscriptions.total}</strong></p>
+              <div className="mt-3 grid gap-3 sm:grid-cols-3">
+                {Object.entries(subscriptions.recorded).map(([status, count]) => <article key={status} className="rounded-lg border border-line p-3"><h3 className="text-sm capitalize">{status.replaceAll('_', ' ')} records</h3><p className="mt-2 text-2xl font-bold">{count}</p></article>)}
+              </div>
+              <div className="mt-4 space-y-2 text-sm">
+                <p>Trialing records with deadline reached: <strong>{subscriptions.trialDeadlinePassed}</strong></p>
+                <p>Active records with period end reached: <strong>{subscriptions.activePeriodEnded}</strong></p>
+                <p className="text-xs text-copy-muted">Deadline cutoff: {subscriptions.observedAt}</p>
+              </div>
+            </> : <p role="status" className="mt-3 text-sm">Subscription monitoring unavailable.</p>}
+            <p className="mt-3 text-xs text-copy-muted">Recorded database statuses exclude the internal platform organization. They are not effective access decisions or evidence of payment. Deadline counts are operational review signals, not proof of a reconciliation failure. Counts are separate reads and may change during concurrent updates.</p>
           </section>
           <section className="rounded-xl border border-line p-5">
             <h2 className="font-semibold">Platform reporting</h2>
