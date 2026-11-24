@@ -65,6 +65,9 @@ jobs:
       - name: Verify governed plan proposals on disposable PostgreSQL
         run: node --test tests/database/r13-p1-governed-plan-admin-postgres.test.mjs
 
+      - name: Verify integrated manual pilot activation
+        run: node --test tests/database/r13-manual-pilot-integration-postgres.test.mjs
+
   validate:
     # Pin the tested runner image: ubuntu-latest resolved to resolute and
     # apt font downloads stalled the browser setup until the job was cancelled.
