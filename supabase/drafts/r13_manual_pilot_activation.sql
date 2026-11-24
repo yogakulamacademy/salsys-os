@@ -304,6 +304,40 @@ begin
 end;
 $billing$;
 
+-- Expiry applies the pinned Free state without deleting records or charging.
+-- Reconciliation is deliberately private until the scheduler is integrated.
+create function saas_governance.reconcile_expired_manual_contract(p_org uuid)
+returns boolean language plpgsql security definer set search_path=pg_catalog as $fn$
+declare v_intent public.signup_registration_intents%rowtype;
+  v_sub public.saas_organization_subscriptions%rowtype;
+  v_contract saas_governance.manual_subscription_contracts%rowtype;
+begin
+  perform pg_advisory_xact_lock(hashtextextended('saas_change:'||p_org::text,0));
+  perform 1 from public.signup_usage_counters where organization_id=p_org for update;
+  if not found then return false; end if;
+  select * into v_intent from public.signup_registration_intents where organization_id=p_org for update;
+  if not found then return false; end if;
+  select * into v_sub from public.saas_organization_subscriptions where organization_id=p_org for update;
+  if not found or v_sub.metadata->>'origin' is distinct from 'manual_pilot_contract' or v_sub.status<>'active'
+    or v_sub.source<>'manual' then return false; end if;
+  select * into v_contract from saas_governance.manual_subscription_contracts
+    where id::text=v_sub.metadata->>'manual_contract_id' and organization_id=p_org and subscription_id=v_sub.id;
+  if not found or v_contract.plan_id<>v_sub.plan_id or v_contract.ends_at is null
+    or v_contract.ends_at is distinct from v_sub.current_period_ends_at or v_contract.ends_at>clock_timestamp()
+    then return false; end if;
+  perform 1 from public.saas_plans where id=v_intent.fallback_plan_id and code='free'
+    and version=v_intent.fallback_plan_version and status='active' for share;
+  if not found then raise exception 'Pinned Free fallback unavailable'; end if;
+  update public.saas_organization_subscriptions set plan_id=v_intent.fallback_plan_id,status='active',
+    current_period_started_at=clock_timestamp(),current_period_ends_at=null,
+    metadata=(metadata-'manual_contract_id')||jsonb_build_object('origin','verified_self_signup_free_fallback','plan_version',v_intent.fallback_plan_version,'expired_manual_contract_id',v_contract.id)
+    where id=v_sub.id and organization_id=p_org;
+  update public.organization_workspaces set enabled=false where organization_id=p_org and not(workspace_code=any(v_intent.fallback_workspace_codes));
+  return true;
+end;
+$fn$;
+revoke all on function saas_governance.reconcile_expired_manual_contract(uuid) from public,anon,authenticated,service_role;
+
 -- Existing capability guard denies manual_active by default until separately approved.
 -- No service-role activation grant until integrated application validation.
 commit;
