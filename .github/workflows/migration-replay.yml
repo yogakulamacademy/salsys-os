@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - feat/r13-manual-pilot-integrated
+      - test/r13-local-auth-rehearsal
     paths:
       - 'supabase/**'
       - 'scripts/build-migration-recovery-manifest.mjs'
@@ -13,6 +14,7 @@ on:
       - 'tests/database/r13-commercial-state-full-local.sql'
       - 'tests/database/r13-manual-full-local.sql'
       - 'tests/database/r13-real-auth-local*'
+      - 'tests/database/r13-local-browser-rehearsal.mjs'
       - '.github/workflows/migration-replay.yml'
   workflow_dispatch:
 
@@ -26,10 +28,11 @@ concurrency:
 jobs:
   clean-replay:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
     env:
       SUPABASE_TELEMETRY_DISABLED: '1'
-      SALSYS_R13_DISPOSABLE_AUTH_TEST: ${{ github.head_ref == 'test/r13-local-auth-rehearsal' && '1' || '0' }}
+      SALSYS_R13_DISPOSABLE_AUTH_TEST: ${{ (github.head_ref == 'test/r13-local-auth-rehearsal' || github.head_ref == 'test/r13-local-browser-rehearsal') && '1' || '0' }}
+      SALSYS_R13_BROWSER_TEST: ${{ github.head_ref == 'test/r13-local-browser-rehearsal' && '1' || '0' }}
     steps:
       - name: Checkout
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
@@ -272,7 +275,11 @@ jobs:
           if [ "$SALSYS_R13_DISPOSABLE_AUTH_TEST" = "1" ]; then
             test "$GITHUB_ACTIONS" = true && test "$RUNNER_ENVIRONMENT" = github-hosted
             # Modify only the ephemeral checkout; confirmation mail stays inside the local stack.
-            printf '\n[auth]\nsite_url = "http://127.0.0.1:3000"\n[auth.email]\nenable_confirmations = true\n' >> supabase/config.toml
+            if [ "$SALSYS_R13_BROWSER_TEST" = "1" ]; then
+              printf '\n[auth]\nsite_url = "https://localhost:3000"\nadditional_redirect_urls = ["https://localhost:3000/signup/verify"]\n[auth.email]\nenable_confirmations = true\n' >> supabase/config.toml
+            else
+              printf '\n[auth]\nsite_url = "http://127.0.0.1:3000"\n[auth.email]\nenable_confirmations = true\n' >> supabase/config.toml
+            fi
             # CLI status can include keys; never send its output to logs/artifacts.
             supabase start > /tmp/r13-local-start.log 2>&1 || { echo "Local Auth stack failed to start"; exit 1; }
           else
@@ -343,7 +350,7 @@ jobs:
           done
           docker exec -i "$db_containers" psql -X -v ON_ERROR_STOP=1 -U postgres -d postgres < tests/database/r13-manual-full-local.sql
 
-      - name: Real Auth email and JWT acceptance on disposable runner
+      - name: Prepare disposable Auth fixture and run API smoke when selected
         if: env.SALSYS_R13_DISPOSABLE_AUTH_TEST == '1'
         shell: bash
         run: |
@@ -352,7 +359,23 @@ jobs:
           db_containers="$(docker ps --format '{{.Names}}' | grep '^supabase_db_' || true)"
           test "$(printf '%s\n' "$db_containers" | grep -c .)" -eq 1
           docker exec -i "$db_containers" psql -X -v ON_ERROR_STOP=1 -U postgres -d postgres < tests/database/r13-real-auth-local-setup.sql
-          node tests/database/r13-real-auth-local.mjs
+          if [ "$SALSYS_R13_BROWSER_TEST" != "1" ]; then node tests/database/r13-real-auth-local.mjs; fi
+
+      - name: Setup Node for local browser acceptance
+        if: env.SALSYS_R13_BROWSER_TEST == '1'
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 22
+
+      - name: Install app dependencies and browser for disposable test
+        if: env.SALSYS_R13_BROWSER_TEST == '1'
+        run: |
+          npm ci
+          npx playwright install --only-shell chromium
+
+      - name: Verify actual local HTTPS browser and PKCE callback
+        if: env.SALSYS_R13_BROWSER_TEST == '1'
+        run: node tests/database/r13-local-browser-rehearsal.mjs
 
       - name: Show local migration state
         if: always()
