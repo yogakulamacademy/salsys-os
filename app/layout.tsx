@@ -57,7 +57,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
       <body>
         <InteractionFeedbackBridge />
         <MotionRouteSurface>
-          <RootShell>{children}</RootShell>
+          <RootShell platformAdminEnabled={process.env.SALSYS_PLATFORM_ADMIN_ENABLED === 'true'}>{children}</RootShell>
         </MotionRouteSurface>
         <AppToastHost />
       </body>
