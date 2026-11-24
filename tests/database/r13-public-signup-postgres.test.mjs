@@ -77,7 +77,17 @@ test('R13 public signup SQL fails closed and atomically provisions one scoped tr
         organization_id uuid primary key references public.organizations(id),
         status text,current_step text,goals text[],completed_steps text[],enforce_on_sign_in boolean
       );
+      create table public.capability_catalog(code text primary key,status text);
+      insert into public.capability_catalog values ('education_core','active'),('wellness_residential','active');
+      create table public.organization_capabilities(organization_id uuid references public.organizations(id),capability_code text references public.capability_catalog(code),enabled boolean,primary key(organization_id,capability_code));
+      create function public.session_is_bound_to_organization(p_org uuid) returns boolean language sql as $fn$
+        select exists(select 1 from public.organization_members where organization_id=p_org and user_id=auth.uid() and active);
+      $fn$;
+      create function public.is_organization_member(p_org uuid) returns boolean language sql as $fn$
+        select exists(select 1 from public.organization_members where organization_id=p_org and user_id=auth.uid() and active);
+      $fn$;
       create table public.saas_plans(id uuid primary key,status text,version integer,code text unique);
+      create table public.saas_plan_entitlements(plan_id uuid references public.saas_plans(id),capability_code text references public.capability_catalog(code),allowed boolean,primary key(plan_id,capability_code));
       create table public.saas_organization_subscriptions(
         organization_id uuid primary key references public.organizations(id),
         plan_id uuid references public.saas_plans(id),status text,source text,
@@ -162,6 +172,22 @@ test('R13 public signup SQL fails closed and atomically provisions one scoped tr
     } finally { await peer.end(); }
     assert.deepEqual(await usage(),{named_users:2,lead_records:3});
     await assert.rejects(db.query("insert into public.leads(organization_id) values($1)",[org]),/Commercial usage limit reached: lead_records/);
+    await db.query("insert into public.saas_plan_entitlements values($1,'education_core',true),($1,'wellness_residential',true),($2,'education_core',false)",[plan,free]);
+    await db.query("insert into public.organization_capabilities values($1,'education_core',true),($1,'wellness_residential',false)",[org]);
+    const capability = (tenant,code) => scalar("select public.organization_has_capability($1,$2) as value",[tenant,code]);
+    assert.equal(await capability(org,'education_core'),true);
+    assert.equal(await capability(org,'wellness_residential'),false);
+    assert.equal(await capability(org,'unknown'),false);
+    await db.query("select set_config('request.jwt.claim.role','authenticated',false),set_config('request.jwt.claim.sub',$1,false)",[user]);
+    assert.equal(await capability(org,'education_core'),true);
+    await db.query("select set_config('request.jwt.claim.sub',$1,false)",[extraUser]);
+    assert.equal(await capability(org,'education_core'),false);
+    await db.query("select set_config('request.jwt.claim.role','anon',false)");
+    assert.equal(await capability(org,'education_core'),false);
+    await db.query("select set_config('request.jwt.claim.role','service_role',false)");
+    for(const role of ['anon','authenticated','service_role']) {
+      assert.equal(await scalar("select has_function_privilege($1,'public.signup_capability_allowed_internal_v1(uuid,text)','EXECUTE') as value",[role]),false);
+    }
     const trial = await currentPlan(user);
     assert.equal(trial.state,'pro_trial');
     assert.equal(trial.plan_code,'pro');
@@ -179,6 +205,7 @@ test('R13 public signup SQL fails closed and atomically provisions one scoped tr
     await db.query("update public.saas_organization_subscriptions set trial_ends_at=(select trial_ends_at from public.signup_registration_intents where organization_id=$1) where organization_id=$1",[org]);
     const expired = await currentPlan(user);
     assert.equal(expired.state,'free_pending_reconciliation');
+    assert.equal(await capability(org,'education_core'),false);
     assert.deepEqual(await usage(),{named_users:2,lead_records:3});
     await assert.rejects(db.query("insert into public.leads(organization_id) values($1)",[org]),/Commercial usage limit reached: lead_records/);
     await db.query("update public.organization_members set active=false where organization_id=$1 and user_id=$2",[org,teamUser]);
@@ -210,6 +237,9 @@ test('R13 public signup SQL fails closed and atomically provisions one scoped tr
     await db.query("insert into public.leads(organization_id) values($1),($1),($1),($1)",[legacy]);
     assert.equal(await scalar("select count(*)::int as value from public.leads where organization_id=$1",[legacy]),4);
     await db.query("delete from public.leads where organization_id=$1",[legacy]);
+    await db.query("insert into public.organization_capabilities values($1,'education_core',true)",[legacy]);
+    assert.equal(await capability(legacy,'education_core'),true);
+    await db.query("delete from public.organization_capabilities where organization_id=$1",[legacy]);
     await db.query("delete from public.organizations where id=$1",[legacy]);
 
     const auto=randomUUID(), autoIntent=randomUUID();
