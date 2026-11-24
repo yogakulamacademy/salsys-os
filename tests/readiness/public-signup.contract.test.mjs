@@ -67,3 +67,17 @@ test('signup remains disabled without explicitly approved matching trial policy'
   assert.ok(sql.includes('where organization_id = v_org'));
   assert.ok(sql.includes('workspace_code = any(v_policy.allowed_workspace_codes)'));
 });
+
+test('14-day Pro trial has an approved permanent Free fallback and no automatic billing', () => {
+  assert.ok(sql.includes('check (trial_days = 14)'));
+  assert.ok(sql.includes("p.code = 'pro'"));
+  assert.ok(sql.includes("fp.code = 'free'"));
+  assert.ok(sql.includes("interval '336 hours'"));
+  assert.ok(sql.includes('free_workspace_codes <@ allowed_workspace_codes'));
+  assert.ok(sql.includes('convert_expired_signup_trial_v1'));
+  assert.ok(sql.includes("and source = 'manual'"));
+  assert.ok(sql.includes("and status = 'trialing'"));
+  assert.ok(sql.includes("trial_converted_at is not null"));
+  assert.ok(!sql.includes('delete from public.organizations'));
+  assert.ok(page.includes('Free forever, with 14 days of Pro trial access'));
+});
