@@ -9,6 +9,7 @@ grant usage on schema saas_governance to service_role;
 -- requires separate security approval. A platform admin role alone is insufficient.
 create table saas_governance.operators (
   user_id uuid primary key,
+  platform_organization_id uuid not null references public.organizations(id) on delete restrict,
   may_author boolean not null default false,
   may_review boolean not null default false,
   active boolean not null default false,
@@ -84,14 +85,14 @@ for each statement execute function saas_governance.block_immutable();
 create function saas_governance.require_operator(p_actor uuid,p_review boolean) returns void
 language plpgsql security definer set search_path=pg_catalog as $fn$
 begin
-  if p_actor is null or p_review is null or not exists (
+  if p_actor is null or not exists (
     select 1 from saas_governance.operators g
     join public.profiles p on p.id=g.user_id and p.active
-    join public.organization_members m on m.user_id=g.user_id and m.active
+    join public.organization_members m on m.user_id=g.user_id and m.organization_id=g.platform_organization_id and m.active
       and m.role in ('owner','admin')
     join public.organizations o on o.id=m.organization_id and o.status='active' and o.slug='salsysos'
     where g.user_id=p_actor and g.active
-      and case when p_review then g.may_review else g.may_author end
+      and case when p_review is null then (g.may_author or g.may_review) when p_review then g.may_review else g.may_author end
   ) then raise exception 'Commercial operator not authorized' using errcode='42501'; end if;
 end;
 $fn$;
@@ -190,6 +191,54 @@ revoke all on all functions in schema saas_governance from public, anon, authent
 grant execute on function
   saas_governance.create_plan_request(uuid,text,integer,jsonb,text),
   saas_governance.transition_plan_request(uuid,uuid,integer,text,text,text)
+to service_role;
+-- Narrow service-only bridge: the private schema need not be exposed through
+-- PostgREST. The caller must derive the actor from a fresh verified session.
+create function saas_governance.read_plan_requests(p_actor uuid)
+returns jsonb language plpgsql security definer set search_path=pg_catalog as $fn$
+declare v_result jsonb;
+begin
+  perform saas_governance.require_operator(p_actor,null);
+  select jsonb_build_object(
+    'may_author',g.may_author,'may_review',g.may_review,
+    'requests',coalesce((
+      select jsonb_agg(to_jsonb(r) order by r.created_at desc,r.id)
+      from (
+        select id,plan_code,expected_plan_version,snapshot,snapshot_sha256,rationale,
+          author_user_id,reviewer_user_id,status,revision,created_at
+        from saas_governance.plan_requests order by created_at desc,id limit 100
+      ) r
+    ),'[]'::jsonb),
+    'versions',coalesce((
+      select jsonb_object_agg(code,version) from public.saas_plans
+        where code in ('free','basic','growth','pro')
+    ),'{}'::jsonb)
+  ) into v_result from saas_governance.operators g where g.user_id=p_actor;
+  return v_result;
+end;
+$fn$;
+revoke all on function saas_governance.read_plan_requests(uuid) from public,anon,authenticated,service_role;
+grant execute on function saas_governance.read_plan_requests(uuid) to service_role;
+
+create function public.commercial_read_plan_requests_v1(p_actor uuid)
+returns jsonb language sql security invoker set search_path=pg_catalog as $fn$
+  select saas_governance.read_plan_requests(p_actor);
+$fn$;
+create function public.commercial_create_plan_request_v1(p_actor uuid,p_code text,p_expected integer,p_snapshot jsonb,p_rationale text)
+returns uuid language sql security invoker set search_path=pg_catalog as $fn$
+  select saas_governance.create_plan_request(p_actor,p_code,p_expected,p_snapshot,p_rationale);
+$fn$;
+create function public.commercial_transition_plan_request_v1(p_actor uuid,p_request uuid,p_revision integer,p_digest text,p_action text,p_reason text)
+returns boolean language sql security invoker set search_path=pg_catalog as $fn$
+  select saas_governance.transition_plan_request(p_actor,p_request,p_revision,p_digest,p_action,p_reason);
+$fn$;
+revoke all on function public.commercial_read_plan_requests_v1(uuid),
+  public.commercial_create_plan_request_v1(uuid,text,integer,jsonb,text),
+  public.commercial_transition_plan_request_v1(uuid,uuid,integer,text,text,text)
+from public,anon,authenticated,service_role;
+grant execute on function public.commercial_read_plan_requests_v1(uuid),
+  public.commercial_create_plan_request_v1(uuid,text,integer,jsonb,text),
+  public.commercial_transition_plan_request_v1(uuid,uuid,integer,text,text,text)
 to service_role;
 -- No publish function, no subscription mutation, no active price book yet.
 commit;
