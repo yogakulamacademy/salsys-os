@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import Script from 'next/script';
 import { BrandIdentity, BrandMark } from '@/components/brand';
 import { SALSYSOS_VERSION_LABEL } from '@/lib/product-version';
 import { useMockData } from '@/lib/config';
@@ -10,7 +11,9 @@ export default async function SignupPage({ searchParams }: {
   searchParams: Promise<{ error?: string; notice?: string }>;
 }) {
   const params = await searchParams;
-  const enabled = !useMockData && process.env.SALSYS_PUBLIC_SIGNUP_ENABLED === 'true';
+  const siteKey = process.env.SALSYS_SIGNUP_TURNSTILE_SITE_KEY?.trim();
+  const enabled = !useMockData && process.env.SALSYS_PUBLIC_SIGNUP_ENABLED === 'true' &&
+    Boolean(siteKey && process.env.SALSYS_SIGNUP_TURNSTILE_SECRET?.trim());
   return (
     <main className="grid min-h-screen place-items-center bg-mist px-4 py-10">
       <section className="w-full max-w-md rounded-[20px] border border-line bg-surface p-7 shadow-panel sm:p-9">
@@ -28,6 +31,8 @@ export default async function SignupPage({ searchParams }: {
             <label className="block"><span className="field-label block">Business name</span><input className="input w-full" name="business_name" autoComplete="organization" required minLength={2} maxLength={180} /></label>
             <label className="block"><span className="field-label block">Email</span><input className="input w-full" name="email" type="email" autoComplete="email" required maxLength={254} /></label>
             <label className="block"><span className="field-label block">Password</span><input className="input w-full" name="password" type="password" autoComplete="new-password" required minLength={12} maxLength={128} /><span className="text-xs text-copy-muted">At least 12 characters.</span></label>
+            <Script src="https://challenges.cloudflare.com/turnstile/v0/api.js" strategy="afterInteractive" />
+            <div className="cf-turnstile" data-sitekey={siteKey} data-action="signup" data-size="flexible" />
             <button className="btn-primary w-full" type="submit">Create account</button>
           </form>
         ) : <p className="mt-5 text-sm text-copy-muted">Self-service registration is not open yet.</p>}
