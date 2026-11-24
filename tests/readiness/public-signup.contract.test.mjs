@@ -184,3 +184,21 @@ test('provider connection setup rechecks plan eligibility at OAuth start, exchan
   ordered(complete, 'await requireCommercialConnection(state.organization_id,', 'await completeWhatsAppEmbeddedSignup(');
   assert.equal(read('lib/integrations/whatsapp-connect.ts').split("await requireCommercialConnection(organizationId, 'whatsapp')").length-1,3);
 });
+
+test('advanced operations need separate approval and preserve privacy removals', () => {
+  assert.ok(sql.includes('grant execute on function public.signup_advanced_operation_allowed_v1(uuid,text) to service_role'));
+  assert.ok(sql.includes("p_operation not in ('ai_drafting','ai_autopilot','ad_audience_add')"));
+  const core = read('lib/copilot-core.ts').split('export async function draftCopilotReply')[1];
+  ordered(core, "commercialAdvancedAllowed(organizationId, 'ai_drafting')", ".from('conversations')");
+  const runner = read('lib/ai-autopilot-runner.ts');
+  const send = runner.split('async function sendInstagram(')[1].split('async function handover(')[0];
+  ordered(send, "commercialAdvancedAllowed(input.organizationId, 'ai_autopilot')", 'await fetch(');
+  assert.ok(send.includes("commercialAutomationAllowed(input.organizationId, 'instagram')"));
+  assert.ok(runner.includes("commercialAdvancedAllowed(String(task.organization_id), 'ai_drafting')"));
+  assert.ok(runner.includes("businesses.delete(organizationId)"));
+  const dry = read('lib/ad-activation/provider-dry-run.ts');
+  ordered(dry, "delivery.action === 'add' && !await commercialAdvancedAllowed", 'await resolveHashedAdActivationIdentifiers(');
+  const transport = read('lib/ad-activation/provider-transport-boundary.ts');
+  ordered(transport, "isAdd && !await commercialAdvancedAllowed", 'return adapter.send(');
+  ordered(transport, 'AD_ACTIVATION_TRANSPORT_ENABLED === false', 'return adapter.send(');
+});
