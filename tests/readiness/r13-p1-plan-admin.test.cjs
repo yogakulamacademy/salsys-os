@@ -54,3 +54,18 @@ test('initial publication requires a separate gate and exact approval without ch
   assert.ok(sql.includes('published_plan_immutable'));
   assert.doesNotMatch(sql,/update public\.saas_plans|insert into public\.saas_organization_subscriptions|update public\.saas_organization_subscriptions|insert into public\.saas_plan_entitlements/i);
 });
+
+test('plan change requests are session-bound non-binding requests, not activation or billing',()=>{
+  const sql=readFileSync('supabase/drafts/r13_subscription_change_requests.sql','utf8');
+  const page=readFileSync('app/settings/subscription/changes/page.tsx','utf8');
+  const actions=readFileSync('app/settings/subscription/changes/actions.ts','utf8');
+  assert.ok(sql.includes("m.role='owner'"));
+  assert.ok(sql.includes('v_sub.updated_at is distinct from p_expected_subscription_updated_at'));
+  assert.ok(sql.includes('p.snapshot_sha256=p_target_digest'));
+  assert.ok(sql.includes('subscription_one_pending_change_v1'));
+  assert.ok(sql.includes('where id=p_request and organization_id=v_org'));
+  assert.doesNotMatch(sql,/update public\.saas_organization_subscriptions|insert into public\.saas_organization_subscriptions|delete from public\./i);
+  assert.ok(page.includes("workspace.role!=='owner'"));
+  assert.ok(page.includes('non-binding request'));
+  assert.ok(actions.includes("!=='request_only'"));
+});
