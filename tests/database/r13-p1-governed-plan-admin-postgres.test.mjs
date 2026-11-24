@@ -27,9 +27,17 @@ test('R13 P1 durable plan governance uses actual P0 DDL, immutable evidence and 
     await admin.query('create database "'+database+'"');created=true;
     db=new pg.Client({connectionString:dbUrl.href});await db.connect();
     await db.query(`
+      create schema auth;
+      create table auth.users(id uuid primary key,email_confirmed_at timestamptz,is_anonymous boolean default false);
+      create function auth.role() returns text language sql stable as 'select current_setting(''request.jwt.claim.role'',true)';
+      create function auth.uid() returns uuid language sql stable as 'select nullif(current_setting(''request.jwt.claim.sub'',true),'''')::uuid';
       create table public.organizations(id uuid primary key,name text not null,slug text unique not null,status text not null);
       create table public.profiles(id uuid primary key,active boolean not null);
       create table public.organization_members(organization_id uuid references public.organizations(id),user_id uuid references public.profiles(id),role text not null,active boolean not null,primary key(organization_id,user_id));
+      create function public.get_current_workspace_context_v1() returns jsonb language sql as $ctx$
+        select jsonb_build_object('organization_id',m.organization_id,'role',m.role)
+        from public.organization_members m where m.user_id=auth.uid() and m.active limit 1;
+      $ctx$;
       create table public.workspace_catalog(code text primary key,status text not null);
       insert into public.workspace_catalog values('admin','active'),('sales','active'),('retired','inactive');
       create table public.capability_catalog(code text primary key,name text not null);
@@ -38,6 +46,7 @@ test('R13 P1 durable plan governance uses actual P0 DDL, immutable evidence and 
     `);
     await db.query(readFileSync('supabase/migrations/20261108120000_r13_commercial_state_foundation_v1.sql','utf8'));
     await db.query(readFileSync('supabase/drafts/r13_governed_plan_admin.sql','utf8'));
+    await db.query(readFileSync('supabase/drafts/r13_subscription_change_requests.sql','utf8'));
     const scalar=async(sql,args=[]) => (await db.query(sql,args)).rows[0].value;
     for(const table of ['operators','plan_requests','price_proposals','review_events','publication_authorizations','published_plan_versions']){
       assert.equal(await scalar("select relrowsecurity as value from pg_class where oid=$1::regclass",['saas_governance.'+table]),true);
@@ -140,6 +149,50 @@ test('R13 P1 durable plan governance uses actual P0 DDL, immutable evidence and 
     await db.query('set role service_role');
     await assert.rejects(transition(author,stale,1,staleHash,'submit'),/version changed/);
     assert.equal(await scalar("select revision as value from saas_governance.plan_requests where id=$1",[stale]),1);
+    await db.query('reset role');
+    const free=await scalar("select id as value from public.saas_plans where code='free'");
+    const customer=outsider;
+    await db.query("insert into auth.users values($1,now(),false),($2,now(),false)",[customer,author]);
+    await db.query("insert into public.saas_organization_subscriptions(organization_id,plan_id,status) values($1,$2,'active'),($3,$2,'active')",[tenant,free,platform]);
+    const before=await scalar("select count(*)::int as value from public.saas_subscription_events");
+    await db.query("select set_config('request.jwt.claim.role','authenticated',false),set_config('request.jwt.claim.sub',$1,false)",[customer]);
+    await db.query('set role authenticated');
+    const options=()=>scalar("select public.get_current_plan_change_options_v1() as value");
+    const request=(key,version,digest,revision)=>scalar("select public.request_current_plan_change_v1($1,$2,$3,$4,$5) as value",[key,planId,version,digest,revision]);
+    assert.equal((await options()).state,'unavailable');
+    await db.query('reset role');
+    await db.query("insert into saas_governance.change_request_access values($1,true,'synthetic approval only'),($2,true,'synthetic approval only')",[tenant,platform]);
+    await db.query('set role authenticated');
+    const offer=await options();
+    assert.equal(offer.state,'available');
+    assert.equal(offer.offers.length,1);
+    assert.equal(offer.offers[0].amount_minor,12300);
+    const key=randomUUID();
+    await assert.rejects(request(key,1,'0'.repeat(64),offer.subscription_revision),/Offer changed/);
+    await assert.rejects(request(key,1,pubHash,'2000-01-01T00:00:00Z'),/Subscription changed/);
+    const change=await request(key,1,pubHash,offer.subscription_revision);
+    assert.equal(await request(key,1,pubHash,offer.subscription_revision),change);
+    await assert.rejects(request(key,2,pubHash,offer.subscription_revision),/Request key already used/);
+    await assert.rejects(request(randomUUID(),1,pubHash,offer.subscription_revision),/subscription_one_pending_change_v1/);
+    assert.equal((await options()).requests[0].id,change);
+    await db.query("select set_config('request.jwt.claim.sub',$1,false)",[author]);
+    assert.deepEqual((await options()).requests,[]);
+    assert.equal(await scalar("select public.withdraw_current_plan_change_v1($1) as value",[change]),false);
+    await db.query("select set_config('request.jwt.claim.sub',$1,false)",[customer]);
+    await db.query('reset role');
+    await db.query("update saas_governance.change_request_access set enabled=false where organization_id=$1",[tenant]);
+    await db.query('set role authenticated');
+    assert.equal(await scalar("select public.withdraw_current_plan_change_v1($1) as value",[change]),true);
+    assert.equal(await scalar("select public.withdraw_current_plan_change_v1($1) as value",[change]),false);
+    assert.equal((await options()).requests[0].status,'withdrawn');
+    await db.query('reset role');
+    assert.equal(await scalar("select plan_id as value from public.saas_organization_subscriptions where organization_id=$1",[tenant]),free);
+    assert.equal(await scalar("select count(*)::int as value from public.saas_subscription_events"),before);
+    assert.equal(await scalar("select count(*)::int as value from saas_governance.subscription_change_events where request_id=$1",[change]),2);
+    await assert.rejects(db.query("delete from saas_governance.subscription_change_events where request_id=$1",[change]),/immutable/);
+    for(const role of ['anon','service_role']){
+      assert.equal(await scalar("select has_function_privilege($1,'public.request_current_plan_change_v1(uuid,uuid,integer,text,timestamptz)','EXECUTE') as value",[role]),false);
+    }
   } finally {
     if(peer)await peer.end().catch(()=>{});
     if(db)await db.end().catch(()=>{});
