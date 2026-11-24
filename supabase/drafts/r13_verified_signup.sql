@@ -7,7 +7,8 @@ create table public.signup_registration_intents (
   full_name text not null check (char_length(full_name) between 2 and 180),
   business_name text not null check (char_length(business_name) between 2 and 180),
   created_at timestamptz not null default now(),
-  expires_at timestamptz not null default (now() + interval '24 hours'),
+  expires_at timestamptz not null default (now() + interval '7 days'),
+  accepted_user_id uuid unique references auth.users(id),
   user_id uuid unique references auth.users(id),
   organization_id uuid unique references public.organizations(id),
   check ((user_id is null) = (organization_id is null))
@@ -44,6 +45,73 @@ $quota$;
 revoke all on function public.reserve_signup_intent_v1(uuid,text,text,text)
   from public, anon, authenticated, service_role;
 grant execute on function public.reserve_signup_intent_v1(uuid,text,text,text) to service_role;
+
+-- Bind only a genuinely unconfirmed identity returned by the signup request.
+create function public.accept_signup_intent_v1(p_id uuid, p_user_id uuid)
+returns boolean language plpgsql security definer set search_path = ''
+as $accept$
+declare v_user auth.users%rowtype;
+begin
+  if auth.role() is distinct from 'service_role' then
+    raise exception 'Registration not authorized';
+  end if;
+  select * into v_user from auth.users where id = p_user_id for update;
+  if not found or v_user.email_confirmed_at is not null
+     or coalesce(v_user.is_anonymous,false) then return false; end if;
+  update public.signup_registration_intents
+    set accepted_user_id = p_user_id
+    where id = p_id and accepted_user_id is null and user_id is null
+      and email = lower(v_user.email)
+      and id::text = v_user.raw_user_meta_data->>'signup_intent_id'
+      and created_at <= v_user.created_at and expires_at > now();
+  return found;
+end;
+$accept$;
+revoke all on function public.accept_signup_intent_v1(uuid,uuid)
+  from public, anon, authenticated, service_role;
+grant execute on function public.accept_signup_intent_v1(uuid,uuid) to service_role;
+
+create table public.signup_resend_attempts (
+  id bigint generated always as identity primary key,
+  intent_id uuid not null references public.signup_registration_intents(id) on delete cascade,
+  created_at timestamptz not null default now()
+);
+alter table public.signup_resend_attempts enable row level security;
+revoke all on public.signup_resend_attempts from public, anon, authenticated, service_role;
+create index signup_resend_intent_created_idx on public.signup_resend_attempts(intent_id,created_at);
+create index signup_resend_created_idx on public.signup_resend_attempts(created_at);
+
+create function public.reserve_signup_resend_v1(p_email text)
+returns boolean language plpgsql security definer set search_path = ''
+as $resend$
+declare v_id uuid;
+begin
+  if auth.role() is distinct from 'service_role' then
+    raise exception 'Registration not authorized';
+  end if;
+  perform pg_catalog.pg_advisory_xact_lock(138130827);
+  select i.id into v_id
+    from public.signup_registration_intents i
+    join auth.users u on u.id = i.accepted_user_id
+    where i.email = lower(trim(p_email)) and i.user_id is null
+      and i.expires_at > now() and u.email_confirmed_at is null
+      and lower(u.email) = i.email
+    order by i.created_at desc limit 1;
+  if not found then return false; end if;
+  if (select count(*) from public.signup_resend_attempts
+      where created_at > now() - interval '1 hour') >= 100
+     or (select count(*) from public.signup_resend_attempts
+      where intent_id = v_id and created_at > now() - interval '1 hour') >= 3
+     or exists (select 1 from public.signup_resend_attempts
+      where intent_id = v_id and created_at > now() - interval '1 minute')
+  then return false; end if;
+  insert into public.signup_resend_attempts(intent_id) values(v_id);
+  return true;
+end;
+$resend$;
+revoke all on function public.reserve_signup_resend_v1(text)
+  from public, anon, authenticated, service_role;
+grant execute on function public.reserve_signup_resend_v1(text) to service_role;
 
 create function public.provision_verified_signup_v1(p_user_id uuid)
 returns uuid
@@ -85,7 +153,7 @@ begin
   -- Metadata is merely a locator: the trusted service-created record, verified
   -- email, creation time and absence of any membership determine eligibility.
   select * into v_intent from public.signup_registration_intents
-    where id::text = v_user.raw_user_meta_data->>'signup_intent_id'
+    where accepted_user_id = p_user_id
       and email = lower(v_user.email)
       and created_at <= v_user.created_at
       and expires_at > now()
