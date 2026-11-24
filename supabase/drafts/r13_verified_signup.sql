@@ -11,6 +11,13 @@ create table public.signup_trial_policy (
   trial_days integer not null default 14 check (trial_days = 14),
   free_plan_id uuid not null references public.saas_plans(id) on delete restrict,
   free_plan_version integer not null check (free_plan_version > 0),
+  -- No integrations are implicitly enabled by Pro eligibility.
+  pro_integration_codes text[] not null default '{}'::text[]
+    check (array_position(pro_integration_codes,null) is null
+      and pro_integration_codes <@ array['whatsapp','instagram','ga4','gsc','google_ads','meta_ads']::text[]),
+  free_integration_codes text[] not null default '{}'::text[]
+    check (array_position(free_integration_codes,null) is null
+      and free_integration_codes <@ pro_integration_codes),
   pro_named_users integer not null check (pro_named_users between 1 and 1000000),
   pro_lead_records integer not null check (pro_lead_records between 1 and 100000000),
   free_named_users integer not null check (free_named_users between 1 and pro_named_users),
@@ -71,6 +78,8 @@ create table public.signup_registration_intents (
   trial_plan_id uuid references public.saas_plans(id) on delete restrict,
   trial_plan_version integer,
   trial_workspace_codes text[],
+  trial_integration_codes text[],
+  fallback_integration_codes text[],
   trial_ends_at timestamptz,
   trial_converted_at timestamptz,
   trial_conversion_retry_at timestamptz,
@@ -78,7 +87,8 @@ create table public.signup_registration_intents (
   check ((user_id is null) = (organization_id is null)),
   check (user_id is null or (fallback_plan_id is not null and fallback_plan_version is not null
     and fallback_workspace_codes is not null and trial_plan_id is not null
-    and trial_plan_version is not null and trial_workspace_codes is not null and trial_ends_at is not null))
+    and trial_plan_version is not null and trial_workspace_codes is not null
+    and trial_integration_codes is not null and fallback_integration_codes is not null and trial_ends_at is not null))
 );
 alter table public.signup_registration_intents enable row level security;
 revoke all on public.signup_registration_intents from public, anon, authenticated, service_role;
@@ -295,7 +305,9 @@ begin
       fallback_plan_id = v_policy.free_plan_id, fallback_plan_version = v_policy.free_plan_version,
       fallback_workspace_codes = v_policy.free_workspace_codes,
       trial_plan_id = v_policy.plan_id, trial_plan_version = v_policy.plan_version,
-      trial_workspace_codes = v_policy.allowed_workspace_codes, trial_ends_at = v_trial_end
+      trial_workspace_codes = v_policy.allowed_workspace_codes, trial_ends_at = v_trial_end,
+      trial_integration_codes = v_policy.pro_integration_codes,
+      fallback_integration_codes = v_policy.free_integration_codes
     where id = v_intent.id;
   -- Snapshot the approved limits, counting the initial owner. The tenant is
   -- not visible to concurrent requests until this whole transaction commits.
@@ -669,5 +681,29 @@ $automation$;
 revoke all on function public.signup_automation_allowed_v1(uuid,text)
   from public, anon, authenticated, service_role;
 grant execute on function public.signup_automation_allowed_v1(uuid,text) to service_role;
+
+-- Trusted server lookup only; the policy is pinned during verified signup.
+-- This check NEVER connects a provider or grants its scopes.
+create function public.signup_integration_allowed_v1(p_organization_id uuid,p_code text)
+returns boolean language plpgsql security definer set search_path = ''
+as $integration$
+declare
+  v_state text;
+  v_scope text[];
+begin
+  if auth.role() is distinct from 'service_role' or p_organization_id is null
+     or p_code is null or p_code not in ('whatsapp','instagram','ga4','gsc','google_ads','meta_ads') then return false; end if;
+  if not exists(select 1 from public.organizations where id=p_organization_id and status='active') then return false; end if;
+  v_state := public.resolve_signup_plan_internal_v1(p_organization_id)->>'state';
+  if v_state='not_self_signup' then return true; end if;
+  if v_state is null or v_state not in ('pro_trial','free','free_pending_reconciliation') then return false; end if;
+  select case when v_state='pro_trial' then trial_integration_codes else fallback_integration_codes end
+    into v_scope from public.signup_registration_intents where organization_id=p_organization_id;
+  return coalesce(p_code=any(v_scope),false);
+end;
+$integration$;
+revoke all on function public.signup_integration_allowed_v1(uuid,text)
+  from public, anon, authenticated, service_role;
+grant execute on function public.signup_integration_allowed_v1(uuid,text) to service_role;
 
 commit;
