@@ -292,6 +292,28 @@ test('R13 integrated manual pilot applies exact approved contract and expiry wit
       await db.query("insert into public.organization_members values($1,$2,'owner',true)",[platform,actor]);
       await db.query("insert into saas_governance.operators(user_id,platform_organization_id,may_author,may_review,may_publish,may_approve_pilot,active) values($1,$2,true,true,true,true,true)",[actor,platform]);
     }
+    await db.query(readFileSync('supabase/drafts/r13_sa12_platform_effective_quota.sql','utf8'));
+    const quota=async(target=org)=>scalar("select saas_governance.platform_effective_quota_preview($1) as value",[target]);
+    const assertQuota=async()=> {
+      const q=await quota(); const customer=await dashboard(user);
+      for(const k of ['state','plan_code','named_users','named_user_limit','lead_records','lead_record_limit'])assert.equal(q[k],customer[k],k);
+      assert.equal(q.named_users_over_limit,q.named_users>q.named_user_limit);
+      assert.equal(q.lead_records_over_limit,q.lead_records>q.lead_record_limit);
+      assert.deepEqual(Object.keys(q).sort(),['state','plan_code','named_users','named_user_limit','lead_records','lead_record_limit','named_users_over_limit','lead_records_over_limit'].sort());
+      return q;
+    };
+    assert.deepEqual(await quota(platform),{state:'unavailable'});
+    assert.deepEqual(await quota(randomUUID()),{state:'unavailable'});
+    assert.deepEqual(await quota(null),{state:'unavailable'});
+    const legacy=randomUUID();
+    await db.query("insert into public.organizations values($1,'Legacy','legacy-quota-fixture','active')",[legacy]);
+    assert.deepEqual(await quota(legacy),{state:'managed_separately'});
+    await db.query("update public.organizations set status='suspended' where id=$1",[legacy]);
+    assert.deepEqual(await quota(legacy),{state:'organization_inactive'});
+    for(const role of ['anon','authenticated','service_role']){
+      assert.equal(await scalar("select has_function_privilege($1,'saas_governance.platform_effective_quota_preview(uuid)','EXECUTE') as value",[role]),false);
+    }
+    assert.equal((await assertQuota()).state,'free');
     const terms={display_name:'Synthetic Basic',amount_minor:12300,setup_min_minor:0,setup_max_minor:0,setup_optional:true,tax_treatment:'exclusive',named_users:3,lead_records:4,workspace_codes:['admin','sales'],integration_codes:['instagram']};
     const proposal=await scalar("select public.commercial_create_plan_request_v1($1,'basic',0,$2::jsonb,'Synthetic offer for combined test') as value",[operator,JSON.stringify(terms)]);
     const digest=await scalar("select snapshot_sha256 as value from saas_governance.plan_requests where id=$1",[proposal]);
@@ -348,6 +370,7 @@ test('R13 integrated manual pilot applies exact approved contract and expiry wit
     assert.equal(paid.state,'manual_active');
     assert.equal(paid.named_user_limit,3);
     assert.equal(paid.lead_record_limit,4);
+    assert.equal((await assertQuota()).state,'manual_active');
     assert.equal(await integration(org,'instagram'),true);
     assert.equal(await integration(org,'ga4'),false);
     assert.equal(await capability(org,'education_core'),false);
@@ -366,6 +389,7 @@ test('R13 integrated manual pilot applies exact approved contract and expiry wit
     await db.query("update public.saas_organization_subscriptions set current_period_started_at=now()-interval '21 days',current_period_ends_at=(select ends_at from saas_governance.manual_subscription_contracts where id=$1) where organization_id=$2",[contract,org]);
     assert.equal((await currentPlan(user)).state,'free_pending_reconciliation');
     assert.equal((await dashboard(user)).lead_record_limit,1);
+    const fallbackQuota=await assertQuota();assert.equal(fallbackQuota.state,'free_pending_reconciliation');assert.equal(fallbackQuota.lead_records_over_limit,true);
     assert.equal(await integration(org,'instagram'),false);
     await assert.rejects(db.query("insert into public.leads(organization_id) values($1)",[org]),/Commercial usage limit reached: lead_records/);
     assert.deepEqual(await scalar("select public.reconcile_expired_manual_contracts_v1(10) as value"),{checked:1,converted:1,failed:0});
@@ -440,6 +464,7 @@ test('R13 integrated manual pilot applies exact approved contract and expiry wit
     assert.equal(await scalar("select request_origin as value from saas_governance.subscription_change_requests where supersedes_request_id=$1",[original]),'admin');
     assert.equal((await currentPlan(user)).plan_code,'growth');
     assert.equal((await dashboard(user)).lead_record_limit,8);
+    assert.equal((await assertQuota()).plan_code,'growth');
     assert.equal(await scalar("select count(*)::int as value from saas_governance.manual_pilot_organizations"),1);
     for(const role of ['anon','authenticated','service_role']){
       assert.equal(await scalar("select has_function_privilege($1,'public.commercial_assign_manual_plan_v1(uuid,uuid,timestamptz,uuid,integer,text,uuid,text,text,text,timestamptz)','EXECUTE') as value",[role]),role==='service_role');
