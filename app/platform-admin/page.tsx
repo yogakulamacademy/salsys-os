@@ -1,6 +1,7 @@
 import 'server-only';
 import Link from 'next/link';
 import { PlatformAdminFrame } from '@/components/platform-admin-frame';
+import { loadPlatformOrganizationSummary } from '@/lib/platform-organization-summary';
 import { notFound } from 'next/navigation';
 import { PLAN_CODES, readPlanReviewState } from '@/lib/commercial/plan-admin';
 import { loadManualLaunchReadiness, type ManualLaunchReadiness } from '@/lib/commercial/manual-pilot';
@@ -23,6 +24,7 @@ export default async function PlatformAdminPage() {
   if (pilotEnabled) {
     readiness = await loadManualLaunchReadiness().catch(() => null);
   }
+  const organizations = await loadPlatformOrganizationSummary().catch(() => null);
   const publishedCount = PLAN_CODES.filter(code => (state.versions[code] ?? 0) > 0).length;
 
   return (
@@ -36,6 +38,18 @@ export default async function PlatformAdminPage() {
             <article className="rounded-xl border border-line p-4"><h2 className="text-sm">Published catalog plans</h2><p className="mt-2 text-2xl font-bold">{publishedCount} / {PLAN_CODES.length}</p></article>
             <article className="rounded-xl border border-line p-4"><h2 className="text-sm">Manual pilot organizations</h2><p className="mt-2 text-2xl font-bold">{readiness ? readiness.pilot_used + ' / ' + readiness.pilot_capacity : 'Unavailable'}</p></article>
             <article className="rounded-xl border border-line p-4"><h2 className="text-sm">Database configuration</h2><p className="mt-2 text-lg font-bold">{readiness ? (readiness.database_configuration_ready ? 'Checks passed' : 'Incomplete') : 'Unavailable'}</p></article>
+          </section>
+          <section className="rounded-xl border border-line p-5">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <h2 className="font-semibold">Organization registry</h2>
+              <Link href="/settings/organizations" className="text-sm underline">Manage organizations</Link>
+            </div>
+            <div className="mt-4 grid gap-3 sm:grid-cols-3">
+              <article className="rounded-lg border border-line p-3"><h3 className="text-sm">Registered organizations</h3><p className="mt-2 text-2xl font-bold">{organizations?.registeredNonPlatformOrganizations ?? 'Unavailable'}</p></article>
+              <article className="rounded-lg border border-line p-3"><h3 className="text-sm">Active organizations</h3><p className="mt-2 text-2xl font-bold">{organizations?.activeNonPlatformOrganizations ?? 'Unavailable'}</p></article>
+              <article className="rounded-lg border border-line p-3"><h3 className="text-sm">Completed onboarding records</h3><p className="mt-2 text-2xl font-bold">{organizations?.completedNonPlatformOnboardingRecords ?? 'Unavailable'}</p></article>
+            </div>
+            <p className="mt-3 text-xs text-copy-muted">Exact registry counts exclude the SalsysOS platform workspace but include demo and legacy organizations. These are not paying-customer or subscription metrics.</p>
           </section>
           <section className="rounded-xl border border-line p-5">
             <h2 className="font-semibold">Published catalog versions</h2>
@@ -56,7 +70,7 @@ export default async function PlatformAdminPage() {
           </section>
           <section className="rounded-xl border border-line p-5">
             <h2 className="font-semibold">Platform reporting</h2>
-            <p className="mt-2 text-sm text-copy-muted">Customer lifecycle, subscription revenue, acquisition and platform usage reporting require separate verified read models. No estimated or fabricated metrics are shown.</p>
+            <p className="mt-2 text-sm text-copy-muted">Subscription revenue, acquisition and platform usage reporting require separate verified read models. No estimated or fabricated metrics are shown.</p>
           </section>
         </main>
     </PlatformAdminFrame>
