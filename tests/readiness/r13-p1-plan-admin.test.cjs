@@ -69,3 +69,24 @@ test('plan change requests are session-bound non-binding requests, not activatio
   assert.ok(page.includes('non-binding request'));
   assert.ok(actions.includes("!=='request_only'"));
 });
+
+test('exact subscription quote terms and acceptance remain non-binding and immutable',()=>{
+  const sql=readFileSync('supabase/drafts/r13_subscription_contract_quotes.sql','utf8');
+  const adapter=readFileSync('lib/commercial/contract-quotes.ts','utf8');
+  const page=readFileSync('app/settings/subscription/changes/quotes/page.tsx','utf8');
+  const action=readFileSync('app/settings/subscription/changes/quotes/actions.ts','utf8');
+  assert.ok(sql.includes('active and may_quote'));
+  assert.ok(sql.includes('v_offer.amount_minor+p_setup_minor'));
+  assert.ok(sql.includes('v_req.from_subscription_updated_at'));
+  assert.ok(sql.includes('where id=p_quote and organization_id=v_org'));
+  assert.ok(sql.includes('v_quote.terms_digest is distinct from p_terms_digest'));
+  assert.ok(sql.includes('contract_quotes_immutable'));
+  assert.ok(sql.includes('contract_acceptances_immutable'));
+  assert.ok(sql.includes("'automatic_renewal',false"));
+  assert.doesNotMatch(sql,/update public\.saas_organization_subscriptions|insert into public\.saas_organization_subscriptions|update public\.organization_workspaces/i);
+  assert.ok(adapter.includes('await requirePlanAdminActor()'));
+  assert.ok(adapter.includes("rpc('accept_current_contract_quote_v1',{p_quote:id,p_terms_digest:termsDigest})"));
+  assert.ok(page.includes("workspace.role!=='owner'"));
+  assert.ok(action.includes("form.get('confirm')!=='review_only'"));
+  assert.ok(page.includes('does not initiate a payment'));
+});
