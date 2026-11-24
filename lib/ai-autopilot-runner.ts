@@ -1,4 +1,6 @@
 import "server-only";
+import { commercialAdvancedAllowed } from '@/lib/commercial/advanced-access';
+import { commercialAutomationAllowed } from '@/lib/commercial/automation-access';
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { draftCopilotReply, type CopilotReplyResult } from "@/lib/copilot-core";
@@ -52,6 +54,10 @@ async function assess(contextText: string, latestInbound: string, draft: string,
 
 /** Sends one Instagram text as the business and logs it as an AI message. Policy-checked first. */
 async function sendInstagram(admin: SupabaseClient, input: { organizationId: string; leadId: string; conversationId: string; accountId: string; body: string; runId: string }) {
+  if (!await commercialAdvancedAllowed(input.organizationId, 'ai_autopilot') ||
+      !await commercialAutomationAllowed(input.organizationId, 'instagram')) {
+    return { ok: false as const, error: 'Commercial automation unavailable.' };
+  }
   const { data: policyData, error: policyError } = await admin.rpc("evaluate_instagram_dm_send_policy_v1", {
     p_organization_id: input.organizationId, p_conversation_id: input.conversationId, p_now: new Date().toISOString(),
     p_automated: false, p_human_approved: true,
@@ -62,6 +68,10 @@ async function sendInstagram(admin: SupabaseClient, input: { organizationId: str
   }
   const runtime = await getInstagramRuntimeForOrganization(input.organizationId, input.accountId);
   const version = /^v\d+\.\d+$/.test(process.env.INSTAGRAM_API_VERSION?.trim() ?? "") ? process.env.INSTAGRAM_API_VERSION!.trim() : "v26.0";
+  if (!await commercialAdvancedAllowed(input.organizationId, 'ai_autopilot') ||
+      !await commercialAutomationAllowed(input.organizationId, 'instagram')) {
+    return { ok: false as const, error: 'Commercial automation unavailable.' };
+  }
   const response = await fetch(`https://graph.instagram.com/${version}/${encodeURIComponent(runtime.accountId)}/messages`, {
     method: "POST",
     headers: { Authorization: `Bearer ${runtime.accessToken}`, "Content-Type": "application/json" },
@@ -221,6 +231,9 @@ export async function runAutopilot(admin: SupabaseClient, now = new Date()): Pro
   // business must also have Autopilot switched on in its own settings.
   const masterOn = process.env.AI_AUTOPILOT_LIVE_ENABLED === "true";
   const businesses = masterOn ? await listAutopilotBusinesses(admin) : new Map<string, OrgSalesAiSettings>();
+  for (const organizationId of businesses.keys()) {
+    if (!await commercialAdvancedAllowed(organizationId, 'ai_autopilot')) businesses.delete(organizationId);
+  }
   const ctx: Ctx = { admin, now, summary, businesses };
   const live = businesses.size > 0;
   const liveOrgs = [...businesses.keys()];
@@ -288,6 +301,7 @@ export async function runAutopilot(admin: SupabaseClient, now = new Date()): Pro
       .eq("created_by_id", FOLLOWUP_SOURCE).eq("status", "open").lte("due_at", now.toISOString()).order("due_at", { ascending: true }).limit(40);
     const { data: due } = await t;
     for (const task of due ?? []) {
+      if (!await commercialAdvancedAllowed(String(task.organization_id), 'ai_drafting')) continue;
       const meta = (task.metadata ?? {}) as Record<string, unknown>;
       if (meta.ai_draft || meta.ai_draft_error) continue;
       if (summary.followupDrafts >= MAX_FOLLOWUP_DRAFTS_PER_RUN) break;
@@ -369,6 +383,7 @@ async function queueUnopenedLinks(ctx: Ctx) {
   const leadById = new Map((leads ?? []).map((l) => [String(l.id), l]));
   let created = 0;
   for (const link of links) {
+    if (!await commercialAdvancedAllowed(String(link.organization_id), 'ai_autopilot')) continue;
     if (created >= 10) break;
     const lead = leadById.get(String(link.lead_id));
     if (!lead) continue;
@@ -414,6 +429,7 @@ async function followUpOpenedLinks(ctx: Ctx) {
   if (error) throw new Error(error.message);
   let done = 0;
   for (const link of links ?? []) {
+    if (!await commercialAdvancedAllowed(String(link.organization_id), 'ai_autopilot')) continue;
     if (done >= 5) break;
     // Instagram's scanner "opens" links seconds after sending: not the lead.
     if (openedByScanner(link.sent_at as string, link.first_opened_at as string)) continue;
