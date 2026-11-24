@@ -1,3 +1,4 @@
+import { requireCommercialConnection } from '@/lib/commercial/integration-access';
 import {
   revalidatePath,
 } from 'next/cache';
@@ -610,6 +611,7 @@ export async function GET(
 
 
   try {
+    await requireCommercialConnection(stateRow.organization_id, 'instagram');
     const redirectUri =
       instagramRedirectUri(
         request,
@@ -700,6 +702,7 @@ export async function GET(
       instagramOAuthScopes();
 
 
+    await requireCommercialConnection(stateRow.organization_id, 'instagram');
     const payload = {
       organization_id:
         stateRow.organization_id,
