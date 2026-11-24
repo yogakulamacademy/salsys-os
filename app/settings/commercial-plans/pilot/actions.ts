@@ -1,6 +1,6 @@
 'use server';
 import { redirect } from 'next/navigation';
-import { approveManualPilot, activateApprovedPilot, assignManualPlan } from '@/lib/commercial/manual-pilot';
+import { approveManualPilot, activateApprovedPilot, assignManualPlan, enablePilotRequests } from '@/lib/commercial/manual-pilot';
 const route='/settings/commercial-plans/pilot';
 function field(form:FormData,key:string,max=2048){
   const v=form.get(key);if(typeof v!=='string'||v.length>max)throw Error('Invalid input.');return v.trim();
@@ -38,4 +38,11 @@ export async function assignPlanAction(form:FormData){
     await assignManualPlan({org:field(form,'org',36),revision:field(form,'revision',64),plan,version:Number(version),digest,key:field(form,'key',36),mode,reference:field(form,'reference',256)||null,reason:field(form,'reason'),endsAt:end?end+':00Z':null});
   }catch{redirect(route+'?result=error');}
   redirect(route+'?result=activated');
+}
+
+export async function enablePilotAction(form:FormData){
+  try{
+    await enablePilotRequests(field(form,'org',36),field(form,'reason',512));
+  }catch{redirect(route+'?result=error');}
+  redirect(route+'?result=enrolled');
 }
