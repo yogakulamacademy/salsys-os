@@ -40,6 +40,8 @@ test('R13 public signup SQL fails closed and atomically provisions one scoped tr
       );
       create function auth.role() returns text language sql stable as
         'select current_setting(''request.jwt.claim.role'', true)';
+      create function auth.uid() returns uuid language sql stable as
+        'select nullif(current_setting(''request.jwt.claim.sub'',true),'''')::uuid';
       create table public.organizations(
         id uuid primary key default gen_random_uuid(), name text not null,
         slug text unique not null, status text not null
@@ -53,6 +55,17 @@ test('R13 public signup SQL fails closed and atomically provisions one scoped tr
         user_id uuid references auth.users(id), role text, active boolean,
         primary key(organization_id,user_id)
       );
+      -- Minimal session-bound context fixture, NOT the real session-binding RPC.
+      create function public.get_current_workspace_context_v1() returns jsonb language plpgsql as $ctx$
+      declare v_org uuid;
+      begin
+        select m.organization_id into v_org from public.organization_members m
+          join public.organizations o on o.id=m.organization_id
+          where m.user_id=auth.uid() and m.active and o.status='active' and auth.role()='authenticated';
+        if v_org is null then raise exception 'Workspace access denied'; end if;
+        return jsonb_build_object('organization_id',v_org);
+      end;
+      $ctx$;
       create table public.workspace_catalog(code text primary key,status text);
       insert into public.workspace_catalog values ('admin','active'),('sales','active'),('finance','active');
       create table public.organization_workspaces(
@@ -120,11 +133,31 @@ test('R13 public signup SQL fails closed and atomically provisions one scoped tr
     assert.equal(await scalar("select raw_app_meta_data->>'self_signup_organization_id' as value from auth.users where id=$1",[user]),org);
     assert.equal(await scalar("select public.reserve_signup_resend_v1($1) as value",[email]),false);
 
+    const currentPlan = async (actor) => {
+      await db.query("select set_config('request.jwt.claim.role','authenticated',false), set_config('request.jwt.claim.sub',$1,false)",[actor]);
+      try { return await scalar("select public.get_current_signup_plan_v1() as value"); }
+      finally { await db.query("select set_config('request.jwt.claim.role','service_role',false)"); }
+    };
+    const trial = await currentPlan(user);
+    assert.equal(trial.state,'pro_trial');
+    assert.equal(trial.plan_code,'pro');
+    assert.ok(trial.remaining_seconds > 0 && trial.remaining_seconds <= 1209600);
+    assert.deepEqual(trial.workspace_codes,['admin','sales']);
+    await assert.rejects(currentPlan(randomUUID()),/Workspace access denied/);
+    assert.equal(await scalar("select has_function_privilege('anon','public.get_current_signup_plan_v1()','EXECUTE') as value"),false);
+    assert.equal(await scalar("select has_function_privilege('authenticated','public.get_current_signup_plan_v1()','EXECUTE') as value"),true);
+    await assert.rejects(scalar("select public.get_current_signup_plan_v1() as value"),/Authenticated session required/);
+
     const convert = () => scalar("select public.convert_expired_signup_trial_v1($1) as value",[org]);
     assert.equal(await convert(),false);
     // Simulate clock passage only in the disposable fixture.
     await db.query("update public.signup_registration_intents set trial_ends_at=now()-interval '1 second' where organization_id=$1",[org]);
     await db.query("update public.saas_organization_subscriptions set trial_ends_at=(select trial_ends_at from public.signup_registration_intents where organization_id=$1) where organization_id=$1",[org]);
+    const expired = await currentPlan(user);
+    assert.equal(expired.state,'free_pending_reconciliation');
+    assert.equal(expired.plan_code,'free');
+    assert.equal(expired.remaining_seconds,0);
+    assert.deepEqual(expired.workspace_codes,['admin']);
     assert.deepEqual(await scalar('select public.reconcile_expired_signup_trials_v1(100) as value'),{checked:1,converted:1,failed:0});
     assert.deepEqual(await scalar('select public.reconcile_expired_signup_trials_v1(100) as value'),{checked:0,converted:0,failed:0});
     await assert.rejects(scalar('select public.reconcile_expired_signup_trials_v1(101) as value'),/Invalid reconciliation batch size/);
@@ -134,6 +167,7 @@ test('R13 public signup SQL fails closed and atomically provisions one scoped tr
     assert.equal(await scalar("select status as value from public.organizations where id=$1",[org]),'active');
     assert.equal(await scalar("select count(*)::int as value from public.organization_members where organization_id=$1 and user_id=$2",[org,user]),1);
     assert.equal(await provision(user),org);
+    assert.equal((await currentPlan(user)).state,'free');
 
     const auto=randomUUID(), autoIntent=randomUUID();
     assert.equal(await reserve(autoIntent,'auto@example.invalid'),true);
