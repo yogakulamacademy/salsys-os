@@ -16,7 +16,14 @@ test('subscription adapter derives session, preserves over-limit usage and strip
     assert.equal(state.state,'free_pending_reconciliation');
     assert.equal('other_tenant' in state,false);
     assert.equal('provider_customer_ref' in state.history[0],false);
-    response={...response,lead_record_limit:0};
+    response={...response,state:'manual_active',plan_code:'growth',access_ends_at:'2026-12-20T00:00:00Z',named_user_limit:5,lead_record_limit:8};
+    const manual=await mod.loadSubscriptionDashboard();
+    assert.equal(manual.state,'manual_active');
+    assert.equal(manual.plan_code,'growth');
+    assert.equal(manual.access_ends_at,'2026-12-20T00:00:00Z');
+    response={...response,access_ends_at:null};
+    assert.deepEqual(await mod.loadSubscriptionDashboard(),{state:'unavailable'});
+    response={...response,access_ends_at:'2026-12-20T00:00:00Z',lead_record_limit:0};
     assert.deepEqual(await mod.loadSubscriptionDashboard(),{state:'unavailable'});
     response={state:'managed_separately'};
     assert.deepEqual(await mod.loadSubscriptionDashboard(),{state:'managed_separately'});
@@ -26,7 +33,7 @@ test('subscription adapter derives session, preserves over-limit usage and strip
     assert.deepEqual(await mod.loadSubscriptionDashboard(),{state:'unavailable'});
     process.env.SALSYS_COMMERCIAL_ACCESS_ENABLED='false';
     assert.deepEqual(await mod.loadSubscriptionDashboard(),{state:'unavailable'});
-    assert.equal(calls,4);
+    assert.equal(calls,6);
   }finally{if(old===undefined)delete process.env.SALSYS_COMMERCIAL_ACCESS_ENABLED;else process.env.SALSYS_COMMERCIAL_ACCESS_ENABLED=old;}
 });
 test('subscription page is read-only with tenant-scoped history and no payment initiation',()=>{
