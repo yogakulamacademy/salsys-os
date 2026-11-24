@@ -43,6 +43,7 @@ declare v_org uuid;
   v_intent public.signup_registration_intents%rowtype;
   v_offer saas_governance.published_plan_versions%rowtype;
   v_scope text[]; v_integrations text[]; v_id uuid; v_now timestamptz;
+  v_usage public.signup_usage_counters%rowtype;
 begin
   perform saas_governance.require_pilot_approver(p_actor);
   select organization_id into v_org from saas_governance.manual_pilot_approvals where request_id=p_request;
@@ -65,7 +66,7 @@ begin
   if not found then raise exception 'Plan changes unavailable'; end if;
   -- Usage row first, then signup intent, then subscription. Existing quota
   -- writes lock usage; expiry locks intent then subscription. No reverse order.
-  perform 1 from public.signup_usage_counters where organization_id=v_org for update;
+  select * into v_usage from public.signup_usage_counters where organization_id=v_org for update;
   if not found then raise exception 'Verified signup usage required'; end if;
   select * into v_intent from public.signup_registration_intents where organization_id=v_org for update;
   if not found then raise exception 'Verified signup required'; end if;
@@ -75,7 +76,7 @@ begin
     or v_sub.status not in ('active','trialing')
     or (v_sub.status='trialing' and (v_sub.trial_ends_at is null or v_sub.trial_ends_at<=clock_timestamp()))
     or v_sub.source<>'manual' then raise exception 'Subscription changed; new approval required'; end if;
-  if public.resolve_signup_plan_internal_v1(v_org)->>'state' not in ('free','pro_trial','manual_active')
+  if coalesce(public.resolve_signup_plan_internal_v1(v_org)->>'state','unavailable') not in ('free','pro_trial','manual_active')
     then raise exception 'Current subscription not eligible'; end if;
   select p.* into v_offer from saas_governance.published_plan_versions p
     join public.saas_plans c on c.id=p.plan_id and c.code=p.plan_code and c.version=p.version and c.status='active'
@@ -98,6 +99,17 @@ begin
   if not (v_intent.fallback_workspace_codes <@ v_scope)
     or exists(select 1 from unnest(v_scope) w(code) where not exists(select 1 from public.workspace_catalog c where c.code=w.code and c.status='active'))
     then raise exception 'Plan must preserve approved Free workspace scope'; end if;
+  if v_offer.plan_code='free' and (
+    not (v_scope <@ v_intent.fallback_workspace_codes and v_intent.fallback_workspace_codes <@ v_scope)
+    or not (v_integrations <@ v_intent.fallback_integration_codes and v_intent.fallback_integration_codes <@ v_integrations)
+    or (v_offer.snapshot->>'named_users')::bigint<>v_usage.free_named_users
+    or (v_offer.snapshot->>'lead_records')::bigint<>v_usage.free_lead_records
+  ) then raise exception 'Published Free terms differ from pinned fallback'; end if;
+  -- Renewal before expiry extends the period without forfeiting remaining days.
+  if v_sub.metadata->>'origin'='manual_pilot_contract' and v_sub.plan_id=v_offer.plan_id
+    and v_sub.current_period_ends_at>v_now and v_offer.plan_code<>'free'
+    and v_approval.access_ends_at<=v_sub.current_period_ends_at
+    then raise exception 'Renewal must extend current access'; end if;
   insert into saas_governance.manual_subscription_contracts(request_id,organization_id,subscription_id,plan_id,
     plan_version,offer_digest,snapshot,workspace_codes,integration_codes,named_user_limit,lead_record_limit,started_at,ends_at,activated_by)
   values(p_request,v_org,v_sub.id,v_offer.plan_id,v_offer.version,p_digest,v_offer.snapshot,v_scope,v_integrations,
@@ -114,6 +126,9 @@ begin
   -- Mark the original trial consumed; the trial scheduler cannot overwrite the contract.
   update public.signup_registration_intents set trial_converted_at=coalesce(trial_converted_at,v_now)
     where organization_id=v_org;
+  update saas_governance.subscription_change_requests set status='activated' where id=p_request;
+  insert into saas_governance.subscription_change_events(request_id,action,actor_user_id)
+    values(p_request,'activated',p_actor);
   return v_id;
 end;
 $fn$;
