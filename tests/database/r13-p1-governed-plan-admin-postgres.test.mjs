@@ -49,6 +49,7 @@ test('R13 P1 durable plan governance uses actual P0 DDL, immutable evidence and 
     await db.query(readFileSync('supabase/drafts/r13_subscription_change_requests.sql','utf8'));
     await db.query(readFileSync('supabase/drafts/r13_subscription_contract_quotes.sql','utf8'));
     await db.query(readFileSync('supabase/drafts/r13_saas_payment_evidence.sql','utf8'));
+    await db.query(readFileSync('supabase/drafts/r13_manual_pilot_approvals.sql','utf8'));
     const scalar=async(sql,args=[]) => (await db.query(sql,args)).rows[0].value;
     for(const table of ['operators','plan_requests','price_proposals','review_events','publication_authorizations','published_plan_versions']){
       assert.equal(await scalar("select relrowsecurity as value from pg_class where oid=$1::regclass",['saas_governance.'+table]),true);
@@ -224,6 +225,25 @@ test('R13 P1 durable plan governance uses actual P0 DDL, immutable evidence and 
     await db.query("select set_config('request.jwt.claim.sub',$1,false)",[author]);
     await assert.rejects(prepare(),/Payable quote unavailable/);
     await db.query("select set_config('request.jwt.claim.sub',$1,false)",[customer]);
+    // Manual approval does not depend on quote acceptance or payment evidence.
+    await db.query("update saas_governance.operators set may_approve_pilot=true where user_id=$1",[publisher]);
+    const ends=(await scalar("select (clock_timestamp()+interval '20 days')::text as value"));
+    const approve=(actor=publisher,requestId=change,digest=pubHash,mode='complimentary',ref=null,end=ends)=>scalar("select public.commercial_approve_manual_pilot_v1($1,$2,$3,$4,$5,'Synthetic manual pilot approval',$6) as value",[actor,requestId,digest,mode,ref,end]);
+    await db.query('set role service_role');
+    await assert.rejects(approve(author),/Manual pilot approval permission required/);
+    await assert.rejects(approve(publisher,change,'0'.repeat(64)),/Current independent plan request required/);
+    await assert.rejects(approve(publisher,change,pubHash,'offline_confirmation'),/Explicit approval terms required/);
+    await assert.rejects(approve(publisher,change,pubHash,'complimentary',null,null),/explicit period/);
+    assert.equal(await approve(),change);
+    assert.equal(await approve(),change);
+    const manualQueue=await scalar("select public.commercial_list_manual_pilot_v1($1) as value",[publisher]);
+    assert.equal(manualQueue.used_slots,1);
+    assert.equal(manualQueue.max_slots,10);
+    assert.equal(manualQueue.requests.find(r=>r.id===change).approval_mode,'complimentary');
+    await assert.rejects(approve(publisher,change,pubHash,'offline_confirmation','other reference'),/different terms/);
+    await db.query('reset role');
+    assert.equal(await scalar("select count(*)::int as value from saas_governance.saas_payment_intents"),0);
+    assert.equal(await scalar("select count(*)::int as value from public.saas_subscription_events"),before);
     const paymentIntent=await prepare();
     assert.equal(await prepare(),paymentIntent);
     await assert.rejects(prepare(quoted.terms_digest,otherMerchant),/different consent/);
@@ -279,6 +299,24 @@ test('R13 P1 durable plan governance uses actual P0 DDL, immutable evidence and 
     assert.equal(await scalar("select count(*)::int as value from saas_governance.subscription_contract_acceptances where quote_id=$1",[quoteId]),1);
     await assert.rejects(db.query("delete from saas_governance.subscription_contract_acceptances where quote_id=$1",[quoteId]),/immutable/);
     await assert.rejects(db.query("delete from saas_governance.subscription_change_events where request_id=$1",[change]),/immutable/);
+    // Ten distinct organizations maximum, independent of the number of requests.
+    for(let i=2;i<=11;i++){
+      const org=randomUUID(),sub=randomUUID(),req=randomUUID(),who=randomUUID();
+      await db.query("insert into public.organizations(id,name,slug,status) values($1,$2,$3,'active')",[org,'Synthetic pilot '+i,'synthetic-pilot-'+i]);
+      await db.query("insert into saas_governance.change_request_access values($1,true,'synthetic pilot enrollment')",[org]);
+      await db.query("insert into public.saas_organization_subscriptions(id,organization_id,plan_id,status) values($1,$2,$3,'active')",[sub,org,free]);
+      await db.query("insert into saas_governance.subscription_change_requests(id,organization_id,subscription_id,requested_by,idempotency_key,from_plan_id,from_subscription_updated_at,target_plan_id,target_version,target_digest) select $1,$2,id,$3,$4,plan_id,updated_at,$5,1,$6 from public.saas_organization_subscriptions where id=$7",[req,org,who,randomUUID(),planId,pubHash,sub]);
+      await db.query('set role service_role');
+      if(i<=10) assert.equal(await approve(publisher,req),req);
+      else await assert.rejects(approve(publisher,req),/Manual pilot capacity reached/);
+      await db.query('reset role');
+    }
+    assert.equal(await scalar("select count(*)::int as value from saas_governance.manual_pilot_organizations"),10);
+    assert.equal(await scalar("select count(*)::int as value from saas_governance.manual_pilot_approvals"),10);
+    await assert.rejects(db.query("delete from saas_governance.manual_pilot_approvals where request_id=$1",[change]),/immutable/);
+    for(const role of ['anon','authenticated']){
+      assert.equal(await scalar("select has_function_privilege($1,'public.commercial_approve_manual_pilot_v1(uuid,uuid,text,text,text,text,timestamptz)','EXECUTE') as value",[role]),false);
+    }
     for(const role of ['anon','service_role']){
       assert.equal(await scalar("select has_function_privilege($1,'public.request_current_plan_change_v1(uuid,uuid,integer,text,timestamptz)','EXECUTE') as value",[role]),false);
     }
