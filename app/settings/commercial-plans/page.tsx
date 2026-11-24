@@ -1,3 +1,4 @@
+import { PlatformAdminFrame } from '@/components/platform-admin-frame';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { readPlanReviewState, PLAN_CODES, type PlanReviewState } from '@/lib/commercial/plan-admin';
@@ -13,7 +14,7 @@ export default async function CommercialPlansPage({searchParams}:{searchParams:P
   let state:PlanReviewState;
   try { state=await readPlanReviewState(); } catch { notFound(); }
   const result=(await searchParams).result;
-  return <main className="mx-auto max-w-6xl space-y-6 p-6">
+  return <PlatformAdminFrame section="plans"><main className="mx-auto max-w-6xl space-y-6 p-6">
     <header><h1 className="text-2xl font-bold">Commercial plan proposals</h1>
     <p className="mt-2 text-sm">Internal plan administration. Initial publication requires separate approval and authorization. No customer subscription change or charge is possible here.</p></header>
     {result==='error'?<p role="alert" className="rounded border border-line p-3 text-sm">Operation not completed. Check permissions, approval, and catalog version, then retry.</p>:['created','review_saved','published'].includes(result??'')?<p role="status" className="rounded border border-line p-3 text-sm">{result==='published'?'Initial catalog plan published. Customer subscriptions remain unchanged.':result==='created'?'Draft proposal saved.':'Review decision saved.'}</p>:null}
@@ -66,5 +67,5 @@ export default async function CommercialPlansPage({searchParams}:{searchParams:P
           </form>}
       </article>)}
     </section>
-  </main>;
+  </main></PlatformAdminFrame>;
 }
