@@ -40,7 +40,7 @@ export async function activateApprovedPilot(request:string,digest:string){
   if(error||typeof data!=='string'||!uuid.test(data))throw Error('Activation not completed.');
 }
 
-type AssignmentOrg={id:string;organization_name:string;revision:string;current_code:string;requested_code:string|null;pending_request_id:string|null};
+type AssignmentOrg={id:string;organization_name:string;revision:string;current_code:string;requested_code:string|null;pending_request_id:string|null;pilot_enabled:boolean};
 type AssignmentOffer={id:string;code:'free'|'basic'|'growth'|'pro';version:number;digest:string;amount_minor:number};
 export type AssignmentState={organizations:AssignmentOrg[];offers:AssignmentOffer[]};
 function assignmentEnabled(){
@@ -52,7 +52,7 @@ export async function loadManualAssignments():Promise<AssignmentState>{
   const actor=await requirePlanAdminActor();
   const {data,error}=await createAdminClient().rpc('commercial_list_manual_assignments_v1',{p_actor:actor});
   if(error||!data||!Array.isArray(data.organizations)||data.organizations.length>100||!Array.isArray(data.offers)||data.offers.length>4||
-    !data.organizations.every((r:AssignmentOrg)=>r&&uuid.test(r.id)&&typeof r.organization_name==='string'&&Number.isFinite(Date.parse(r.revision))&&['free','basic','growth','pro'].includes(r.current_code))||
+    !data.organizations.every((r:AssignmentOrg)=>r&&uuid.test(r.id)&&typeof r.organization_name==='string'&&Number.isFinite(Date.parse(r.revision))&&typeof r.pilot_enabled==='boolean'&&['free','basic','growth','pro'].includes(r.current_code))||
     !data.offers.every((r:AssignmentOffer)=>r&&uuid.test(r.id)&&['free','basic','growth','pro'].includes(r.code)&&Number.isInteger(r.version)&&r.version>0&&/^[a-f0-9]{64}$/.test(r.digest)&&Number.isSafeInteger(r.amount_minor)&&r.amount_minor>=0))throw Error('Assignment list unavailable.');
   return data;
 }
@@ -65,4 +65,12 @@ export async function assignManualPlan(input:{org:string;revision:string;plan:st
   const actor=await requirePlanAdminActor();
   const {data,error}=await createAdminClient().rpc('commercial_assign_manual_plan_v1',{p_actor:actor,p_org:input.org,p_expected:input.revision,p_plan:input.plan,p_version:input.version,p_digest:input.digest,p_key:input.key,p_mode:input.mode,p_reference:input.reference,p_reason:input.reason,p_ends_at:input.endsAt});
   if(error||typeof data!=='string'||!uuid.test(data))throw Error('Assignment not completed.');
+}
+
+export async function enablePilotRequests(org:string,reason:string){
+  assignmentEnabled();
+  if(!uuid.test(org)||reason.trim().length<10||reason.length>512)throw Error('Invalid enrollment.');
+  const actor=await requirePlanAdminActor();
+  const {data,error}=await createAdminClient().rpc('commercial_enable_manual_pilot_requests_v1',{p_actor:actor,p_org:org,p_reason:reason});
+  if(error||data!==true)throw Error('Enrollment unavailable.');
 }
