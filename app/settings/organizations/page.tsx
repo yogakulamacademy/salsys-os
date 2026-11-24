@@ -51,22 +51,27 @@ export default async function OrganizationsPage({
   await requirePlatformAdminAccess();
 
   const admin = createAdminClient();
-  const page = parseOrganizationPage(query.page);
+  const countResult = await admin.from('organizations').select('id', { count: 'exact', head: true });
+  const total = countResult.count;
+  if (countResult.error || typeof total !== 'number' || !Number.isSafeInteger(total) || total < 0) {
+    throw new Error('Organization registry count unavailable.');
+  }
+  const lastPage = Math.max(1, Math.ceil(total / ORGANIZATION_PAGE_SIZE));
+  const page = Math.min(parseOrganizationPage(query.page), lastPage);
   const { from, to } = organizationPageRange(page);
-  const organizationsResult = await admin
+  const organizationsResult = total > 0 ? await admin
     .from('organizations')
-    .select('id,name,slug,status,created_at', { count: 'exact' })
+    .select('id,name,slug,status,created_at')
     .order('created_at', { ascending: false })
     .order('id', { ascending: false })
-    .range(from, to);
+    .range(from, to) : { data: [], error: null };
 
-  if (organizationsResult.error || organizationsResult.count === null || !Array.isArray(organizationsResult.data)) {
-    throw new Error('Organization registry unavailable.');
+  if (organizationsResult.error || !Array.isArray(organizationsResult.data) ||
+      organizationsResult.data.length > ORGANIZATION_PAGE_SIZE) {
+    throw new Error('Organization registry unavailable. Refresh the page.');
   }
 
   const organizations = organizationsResult.data as OrganizationRow[];
-  const total = organizationsResult.count;
-  const lastPage = Math.max(1, Math.ceil(total / ORGANIZATION_PAGE_SIZE));
   const organizationIds = organizations.map(organization => organization.id);
   const onboardingResult = organizationIds.length
     ? await admin.from('organization_onboarding')
