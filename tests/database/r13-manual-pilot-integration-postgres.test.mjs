@@ -465,6 +465,48 @@ test('R13 integrated manual pilot applies exact approved contract and expiry wit
     assert.equal((await currentPlan(user)).plan_code,'growth');
     assert.equal((await dashboard(user)).lead_record_limit,8);
     assert.equal((await assertQuota()).plan_code,'growth');
+    // Rehearse the separate reader authority with synthetic session metadata.
+    await db.query(`
+      create table auth.sessions(id uuid primary key,user_id uuid not null,not_after timestamptz);
+      create table public.tenant_session_bindings(session_id uuid,user_id uuid,organization_id uuid);
+      create function auth.jwt() returns jsonb language sql stable as $claims$
+        select jsonb_build_object('role',auth.role(),'sub',auth.uid(),
+          'session_id',current_setting('test.quota_session',true))
+      $claims$;
+    `);
+    const quotaSession=randomUUID();
+    await db.query("insert into auth.sessions values($1,$2,null)",[quotaSession,operator]);
+    await db.query("insert into public.tenant_session_bindings values($1,$2,$3)",[quotaSession,operator,platform]);
+    const setQuotaClaims=async(actor=operator,session=quotaSession,role='authenticated')=>
+      db.query("select set_config('request.jwt.claim.role',$1,false),set_config('request.jwt.claim.sub',$2,false),set_config('test.quota_session',$3,false)",[role,actor,session]);
+    const readQuota=async(target=org,platformId=platform)=>scalar("select saas_governance.read_platform_effective_quota_preview($1,$2) as value",[platformId,target]);
+    const quotaDenied=async(...args)=>assert.rejects(readQuota(...args),e=>e.code==='42501');
+    await setQuotaClaims();
+    await quotaDenied(); // Existing commercial operator permission is insufficient.
+    await db.query("insert into saas_governance.platform_quota_readers(user_id,platform_organization_id,active) values($1,$2,true)",[operator,platform]);
+    assert.deepEqual(await readQuota(),await quota());
+    assert.deepEqual(await readQuota(platform),{state:'unavailable'});
+    await quotaDenied(org,legacy);
+    await setQuotaClaims(user);await quotaDenied();
+    await setQuotaClaims(operator,'malformed');await quotaDenied();
+    await setQuotaClaims(operator,randomUUID());await quotaDenied();
+    await setQuotaClaims(operator,quotaSession,'service_role');await quotaDenied();
+    await setQuotaClaims();
+    await db.query("update auth.sessions set not_after=now()-interval '1 second' where id=$1",[quotaSession]);await quotaDenied();
+    await db.query("update auth.sessions set not_after=null where id=$1",[quotaSession]);
+    await db.query("update public.tenant_session_bindings set organization_id=$1 where session_id=$2",[org,quotaSession]);await quotaDenied();
+    await db.query("update public.tenant_session_bindings set organization_id=$1 where session_id=$2",[platform,quotaSession]);
+    await db.query("update saas_governance.platform_quota_readers set active=false where user_id=$1",[operator]);await quotaDenied();
+    for(const role of ['anon','authenticated','service_role']){
+      for(const fn of ['require_platform_quota_reader(uuid)','read_platform_effective_quota_preview(uuid,uuid)']){
+        assert.equal(await scalar("select has_function_privilege($1,$2,'EXECUTE') as value",[role,'saas_governance.'+fn]),false);
+      }
+      for(const perm of ['SELECT','INSERT','UPDATE','DELETE']){
+        assert.equal(await scalar("select has_table_privilege($1,'saas_governance.platform_quota_readers',$2) as value",[role,perm]),false);
+      }
+    }
+    await db.query("select set_config('request.jwt.claim.role','service_role',false)");
+
     assert.equal(await scalar("select count(*)::int as value from saas_governance.manual_pilot_organizations"),1);
     for(const role of ['anon','authenticated','service_role']){
       assert.equal(await scalar("select has_function_privilege($1,'public.commercial_assign_manual_plan_v1(uuid,uuid,timestamptz,uuid,integer,text,uuid,text,text,text,timestamptz)','EXECUTE') as value",[role]),role==='service_role');
