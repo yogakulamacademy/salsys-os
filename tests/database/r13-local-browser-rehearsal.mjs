@@ -257,14 +257,19 @@ async function main(){
   check(sql("select count(*) from public.signup_registration_intents where id='"+intent+"' and organization_id is not null")==='1','Sign-in duplicated workspace');
   console.log('B06: separate actual browser sign-in reaches subscription after completed onboarding');
   phase='interactive platform approver';
-  const operatorId=sql('select user_id from saas_governance.operators where active and may_approve_pilot');
-  check(/^[0-9a-f-]{36}$/.test(operatorId),'Local approver fixture missing');
   const opEmail='r13-operator-'+randomUUID()+'@example.com',opPassword='Aa9!'+randomBytes(24).toString('hex');
-  // Assign fresh credentials only to the synthetic pre-authorized local operator.
-  const changed=await json(api+'/auth/v1/admin/users/'+operatorId,{method:'PUT',
+  // The SQL-created publisher has no guaranteed Auth identity row. Use a new
+  // Auth-created operator and transfer only the pilot-approval permission in
+  // this disposable fixture, preserving original authorship/publication audit.
+  phase='B09 create actual local Auth operator';
+  const created=await json(api+'/auth/v1/admin/users',{method:'POST',
     headers:{apikey:service,authorization:'Bearer '+service,'content-type':'application/json'},
     body:JSON.stringify({email:opEmail,password:opPassword,email_confirm:true})});
-  check((changed.user||changed).id===operatorId,'Local operator credentials not configured');
+  const operatorId=(created.user||created).id;
+  check(/^[0-9a-f-]{36}$/.test(operatorId),'Local Auth-created operator missing');
+  phase='B09 bind synthetic operator governance';
+  sql("begin; insert into public.profiles(id,full_name,role,active) values ('"+operatorId+"','Synthetic browser operator','admin',true) on conflict(id) do update set active=true,role='admin'; insert into public.organization_members(organization_id,user_id,role,active) values ('"+platform+"','"+operatorId+"','owner',true) on conflict(organization_id,user_id) do update set role='owner',active=true; update saas_governance.operators set may_approve_pilot=false where active and may_approve_pilot; insert into saas_governance.operators(user_id,platform_organization_id,may_author,may_review,may_publish,may_approve_pilot,active) values ('"+operatorId+"','"+platform+"',false,false,true,true,true); commit;");
+  check(sql('select user_id from saas_governance.operators where active and may_approve_pilot')===operatorId,'Expected single local pilot approver');
   const operatorContext=await browser.newContext({ignoreHTTPSErrors:true});
   await operatorContext.route('**/*',route=>[origin,api,'http://localhost:54321','http://127.0.0.1:54321'].includes(new URL(route.request().url()).origin)?route.continue():route.abort());
   const operatorPage=await operatorContext.newPage();
@@ -355,6 +360,11 @@ async function main(){
   const first=await call(),summary=await first.json();
   check(first.status()===200&&summary.ok===true&&summary.checked===2&&summary.converted===2&&summary.failed===0,'Expiry HTTP reconciliation failed');
   for(const org of [trialOrg,manualOrg])check(effective(org)==='free'&&state(org)==='active:verified_self_signup_free_fallback','Canonical Free state missing');
+  for(const org of [trialOrg,manualOrg]){
+    check(await rpc('signup_integration_allowed_v1',{p_organization_id:org,p_code:'instagram'})===true,'Free lost Instagram after expiry');
+    check(await rpc('signup_automation_allowed_v1',{p_organization_id:org,p_channel:'instagram'})===false,'Free unexpectedly enabled Instagram automation');
+  }
+  console.log('Owner policy: Instagram retained on Free after expiry; automation still denied');
   const second=await call(),repeat=await second.json();
   check(second.status()===200&&repeat.ok===true&&repeat.checked===0&&repeat.converted===0&&repeat.failed===0,'Expiry HTTP repeat not idempotent');
   check(sql("select count(*) from public.organization_members where organization_id in ('"+trialOrg+"','"+manualOrg+"')")===before,'Expiry changed membership count');
