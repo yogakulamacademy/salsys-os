@@ -118,7 +118,7 @@ async function main(){
   check(sql('select count(*) from public.signup_registration_intents')==='0','Missing CAPTCHA created an intent');
   console.log('B02 partial: actual browser server action rejects missing CAPTCHA without registration intent');
   phase='trusted PKCE signup fixture';
-  const email='r13-browser-'+randomUUID()+'@example.com',password=randomBytes(24).toString('hex'),intent=randomUUID();
+  const email='r13-browser-'+randomUUID()+'@example.com',password='Aa9!'+randomBytes(24).toString('hex'),intent=randomUUID();
   check(await rpc('reserve_signup_intent_v1',{p_id:intent,p_email:email,p_full_name:'Synthetic Browser',p_business_name:'Synthetic Browser Workspace'})===true,'Intent reservation failed');
   const jar=new Map();
   const ssr=createServerClient(api,anon,{cookies:{getAll:()=>[...jar].map(([name,value])=>({name,value})),
@@ -205,21 +205,61 @@ async function main(){
   await loginContext.route('**/*',route=>[origin,api,'http://localhost:54321','http://127.0.0.1:54321'].includes(new URL(route.request().url()).origin)?route.continue():route.abort());
   const loginPage=await loginContext.newPage();
   loginPage.setDefaultTimeout(90000);
-  const login=async(p,e,pw,next)=>{
+  const login=async(p,e,pw,next,label)=>{
+    // Independent local Auth API preflight using the SAME auto-binding RPC as
+    // signInAction. Tokens remain in memory; never log raw responses or errors.
+    phase=label+' password grant';
+    const authHeaders={apikey:anon,authorization:'Bearer '+anon,'content-type':'application/json'};
+    const grant=await json(api+'/auth/v1/token?grant_type=password',{method:'POST',headers:authHeaders,body:JSON.stringify({email:e,password:pw})});
+    check(typeof grant.access_token==='string'&&grant.user?.email_confirmed_at,'Local confirmed password grant failed');
+    phase=label+' automatic tenant binding';
+    const bearer={...authHeaders,authorization:'Bearer '+grant.access_token};
+    const bound=await json(api+'/rest/v1/rpc/bind_current_tenant_session_for_current_user',{method:'POST',headers:bearer,body:'{}'});
+    check(/^[0-9a-f-]{36}$/.test(bound),'Automatic tenant binding missing');
+    const workspace=await json(api+'/rest/v1/rpc/get_current_workspace_context_v1',{method:'POST',headers:bearer,body:'{}'});
+    check((workspace.active_organization_id??workspace.organization_id)===bound,'Automatic binding context mismatch');
+    console.log(label+': actual password grant and automatic tenant binding PASS');
+    phase=label+' browser form';
     await p.goto(origin+'/login?next='+encodeURIComponent(next),{waitUntil:'domcontentloaded'});
     await p.locator('input[name=email]').fill(e);
     await p.locator('input[name=password]').fill(pw);
+    check(await p.locator('input[name=next]').inputValue()===next,'Login destination lost');
+    phase=label+' browser sign-in submission';
     await p.getByRole('button',{name:'Sign in',exact:true}).click();
-    await p.waitForURL(u=>u.pathname===next);
+    phase=label+' browser destination';
+    try{
+      await p.waitForURL(u=>u.origin===origin&&(
+        u.pathname===next||u.pathname==='/login'&&u.searchParams.has('error')||
+        ['/onboarding/security','/signup/onboarding','/onboarding','/workspace'].includes(u.pathname)
+      ),{timeout:30000});
+    }catch{
+      // Report only a fixed classification; never log URLs, form values or response text.
+      const u=new URL(p.url());
+      const known=['/login','/dashboard','/home','/workspace','/signup/onboarding','/onboarding','/onboarding/security',next];
+      console.log(label+' destination classification: '+(u.origin===origin&&known.includes(u.pathname)?u.pathname:'unexpected route'));
+      throw Error('Expected browser destination not reached');
+    }
+    const u=new URL(p.url());
+    if(u.pathname!==next){
+      const error=u.searchParams.get('error')??'';
+      const category=/Invalid email or password/.test(error)?'invalid credentials':
+        /password must be changed/.test(error)?'password policy':
+        /not assigned|multiple organizations/.test(error)?'membership':
+        /establish your organization session/.test(error)?'tenant binding':
+        /temporarily unavailable/.test(error)?'dependency unavailable':'other or no login error';
+      const known=['/login','/workspace','/onboarding/security','/signup/onboarding','/onboarding'];
+      console.log(label+' denied/redirected: '+(known.includes(u.pathname)?u.pathname:'unexpected route')+'; '+category);
+      throw Error('Unexpected sign-in route');
+    }
   };
-  await login(loginPage,email,password,'/settings/subscription');
+  await login(loginPage,email,password,'/settings/subscription','B06 customer');
   await loginPage.getByRole('heading',{name:'Pro trial',exact:true}).waitFor();
   check(sql("select count(*) from public.signup_registration_intents where id='"+intent+"' and organization_id is not null")==='1','Sign-in duplicated workspace');
   console.log('B06: separate actual browser sign-in reaches subscription after completed onboarding');
   phase='interactive platform approver';
   const operatorId=sql('select user_id from saas_governance.operators where active and may_approve_pilot');
   check(/^[0-9a-f-]{36}$/.test(operatorId),'Local approver fixture missing');
-  const opEmail='r13-operator-'+randomUUID()+'@example.com',opPassword=randomBytes(24).toString('hex');
+  const opEmail='r13-operator-'+randomUUID()+'@example.com',opPassword='Aa9!'+randomBytes(24).toString('hex');
   // Assign fresh credentials only to the synthetic pre-authorized local operator.
   const changed=await json(api+'/auth/v1/admin/users/'+operatorId,{method:'PUT',
     headers:{apikey:service,authorization:'Bearer '+service,'content-type':'application/json'},
@@ -229,7 +269,7 @@ async function main(){
   await operatorContext.route('**/*',route=>[origin,api,'http://localhost:54321','http://127.0.0.1:54321'].includes(new URL(route.request().url()).origin)?route.continue():route.abort());
   const operatorPage=await operatorContext.newPage();
   operatorPage.setDefaultTimeout(90000);
-  await login(operatorPage,opEmail,opPassword,'/settings/commercial-plans/pilot');
+  await login(operatorPage,opEmail,opPassword,'/settings/commercial-plans/pilot','B09 approver');
   await operatorPage.getByRole('heading',{name:'Manual subscription approvals'}).waitFor();
   const customerCard=operatorPage.locator('article').filter({has:operatorPage.getByRole('heading',{name:'Synthetic Browser Workspace',exact:true})});
   await customerCard.locator('input[name=reason]').fill('Synthetic local browser enrollment');
