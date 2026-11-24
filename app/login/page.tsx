@@ -4,6 +4,7 @@ import { LockKeyhole, ShieldCheck, Sparkles } from 'lucide-react';
 
 import { signInAction } from '@/app/actions/auth';
 import { useMockData } from '@/lib/config';
+import { isPublicSignupAvailable } from '@/lib/signup/availability';
 import { SALSYSOS_VERSION_LABEL } from '@/lib/product-version';
 
 export default async function LoginPage({
@@ -107,7 +108,7 @@ export default async function LoginPage({
           </button>
         </form>
 
-        {!useMockData && process.env.SALSYS_PUBLIC_SIGNUP_ENABLED === 'true' && (
+        {await isPublicSignupAvailable() && (
           <p className="mt-5 text-center text-sm text-copy-muted">
             New to SalsysOS? <Link href="/signup" className="font-semibold text-brand-700 hover:underline">Create an account</Link>
           </p>
