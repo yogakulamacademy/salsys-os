@@ -65,6 +65,10 @@ jobs:
 
       - name: Verify integrated manual pilot activation
         run: node --test tests/database/r13-manual-pilot-integration-postgres.test.mjs
+      - name: Rehearse SA-12 organization write boundary on disposable PostgreSQL
+        run: node --test tests/database/r13-sa12-organization-write-boundary.test.mjs
+      - name: Rehearse SA-12 private lifecycle authorization on disposable PostgreSQL
+        run: node --test tests/database/r13-sa12-lifecycle-authority.test.mjs
 
   validate:
     # Pin the tested runner image: ubuntu-latest resolved to resolute and
