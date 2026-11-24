@@ -653,4 +653,21 @@ $r11$;
 revoke all on function public.organization_has_capability(uuid,text) from public,anon,authenticated,service_role;
 grant execute on function public.organization_has_capability(uuid,text) to authenticated,service_role;
 
+-- Current commercial proposal excludes automated customer messaging on all
+-- self-signup tiers. Keep this independent of connection eligibility and
+-- existing human approval/provider safety gates. No customer-facing RPC.
+create function public.signup_automation_allowed_v1(p_organization_id uuid,p_channel text)
+returns boolean language plpgsql security definer set search_path = ''
+as $automation$
+begin
+  if auth.role() is distinct from 'service_role' or p_organization_id is null
+     or p_channel is null or p_channel not in ('whatsapp','instagram') then return false; end if;
+  return exists(select 1 from public.organizations where id=p_organization_id and status='active')
+    and not exists(select 1 from public.signup_registration_intents where organization_id=p_organization_id);
+end;
+$automation$;
+revoke all on function public.signup_automation_allowed_v1(uuid,text)
+  from public, anon, authenticated, service_role;
+grant execute on function public.signup_automation_allowed_v1(uuid,text) to service_role;
+
 commit;
