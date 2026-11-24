@@ -395,6 +395,29 @@ test('R13 integrated manual pilot applies exact approved contract and expiry wit
       await db.query("insert into saas_governance.published_plan_versions(plan_id,version,request_id,plan_code,snapshot,snapshot_sha256,currency,billing_period,amount_minor,setup_min_minor,setup_max_minor,setup_optional,tax_treatment,published_by,commercial_approval_ref,release_approval_ref) select $1,1,r.id,r.plan_code,r.snapshot,r.snapshot_sha256,p.currency,p.billing_period,p.amount_minor,p.setup_min_minor,p.setup_max_minor,p.setup_optional,p.tax_treatment,$3,'synthetic fixture only','synthetic fixture only' from saas_governance.plan_requests r join saas_governance.price_proposals p on p.request_id=r.id where r.id=$2",[id,rq,publisher]);
     }
     assert.equal((await readiness()).database_configuration_ready,true);
+    const freeDigest=await scalar("select snapshot_sha256 as value from saas_governance.published_plan_versions where plan_code='free'");
+    const proDigest=await scalar("select snapshot_sha256 as value from saas_governance.published_plan_versions where plan_code='pro'");
+    const preparePolicy=(fd=freeDigest,pd=proDigest)=>scalar("select saas_governance.prepare_initial_trial_policy($1,$2,'Synthetic approved policy') as value",[fd,pd]);
+    await assert.rejects(preparePolicy(),/empty signup state/);
+    // Only in a rolled-back disposable test transaction, simulate an empty signup
+    // state while retaining synthetic published offers. Never remove real signup rows.
+    await db.query("begin");
+    try {
+      await db.query("delete from public.signup_trial_policy");
+      await db.query("delete from public.signup_registration_intents");
+      await db.query("savepoint bad_digest");
+      await assert.rejects(preparePolicy('0'.repeat(64)),/Approved Free offer unavailable/);
+      await db.query("rollback to savepoint bad_digest");
+      assert.equal(await preparePolicy(),true);
+      assert.equal(await scalar("select enabled as value from public.signup_trial_policy"),false);
+      assert.equal(await scalar("select public.signup_trial_available_v1() as value"),false);
+      assert.equal(await scalar("select free_lead_records as value from public.signup_trial_policy"),1);
+      assert.equal(await scalar("select pro_lead_records as value from public.signup_trial_policy"),3);
+      assert.deepEqual((await readiness()).blockers,['trial_policy_disabled']);
+    } finally { await db.query("rollback"); }
+    for(const role of ['anon','authenticated','service_role']){
+      assert.equal(await scalar("select has_function_privilege($1,'saas_governance.prepare_initial_trial_policy(text,text,text)','EXECUTE') as value",[role]),false);
+    }
     await db.query("update public.signup_trial_policy set free_lead_records=2");
     assert.ok((await readiness()).blockers.includes('free_policy_mismatch'));
     await db.query("update public.signup_trial_policy set free_lead_records=1,enabled=false");
