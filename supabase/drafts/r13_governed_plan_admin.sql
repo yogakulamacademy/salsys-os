@@ -198,7 +198,48 @@ to service_role;
 -- role can create these records; no approvals or operators are seeded.
 create table saas_governance.publication_authorizations (
   request_id uuid primary key references saas_governance.plan_requests(id) on delete restrict,
-  snapshot_sha256 text not null check(snapshot_sha256 ~ '^[0-9a-f]{64} the private schema need not be exposed through
+  snapshot_sha256 text not null check(snapshot_sha256 ~ '^[0-9a-f]{64}$'),
+  authorized_publisher uuid not null references saas_governance.operators(user_id) on delete restrict,
+  commercial_approval_ref text not null check(char_length(btrim(commercial_approval_ref)) between 10 and 512),
+  release_approval_ref text not null check(char_length(btrim(release_approval_ref)) between 10 and 512),
+  expires_at timestamptz not null,
+  revoked_at timestamptz,
+  created_at timestamptz not null default clock_timestamp(),
+  check(expires_at>created_at)
+);
+-- Published snapshots retain the precise offer; no mutable price or
+-- terms are used as evidence for a historical contract.
+create table saas_governance.published_plan_versions (
+  plan_id uuid not null references public.saas_plans(id) on delete restrict,
+  version integer not null check(version>0),
+  request_id uuid not null unique references saas_governance.plan_requests(id) on delete restrict,
+  plan_code text not null check(plan_code in ('free','basic','growth','pro')),
+  snapshot jsonb not null check(jsonb_typeof(snapshot)='object'),
+  snapshot_sha256 text not null check(snapshot_sha256 ~ '^[0-9a-f]{64}$'),
+  currency text not null check(currency='INR'),
+  billing_period text not null check(billing_period='month'),
+  amount_minor bigint not null check(amount_minor>=0),
+  setup_min_minor bigint not null check(setup_min_minor>=0),
+  setup_max_minor bigint not null check(setup_max_minor>=setup_min_minor),
+  setup_optional boolean not null,
+  tax_treatment text not null check(tax_treatment in ('exclusive','inclusive')),
+  published_by uuid not null,
+  commercial_approval_ref text not null,
+  release_approval_ref text not null,
+  effective_from timestamptz not null default clock_timestamp(),
+  primary key(plan_id,version),
+  unique(plan_code,version)
+);
+alter table saas_governance.publication_authorizations enable row level security;
+alter table saas_governance.published_plan_versions enable row level security;
+revoke all on saas_governance.publication_authorizations,saas_governance.published_plan_versions from public,anon,authenticated,service_role;
+grant select on saas_governance.published_plan_versions to service_role;
+create trigger published_plan_immutable before update or delete on saas_governance.published_plan_versions
+for each row execute function saas_governance.block_immutable();
+create trigger published_plan_no_truncate before truncate on saas_governance.published_plan_versions
+for each statement execute function saas_governance.block_immutable();
+
+-- Narrow service-only bridge: the private schema need not be exposed through
 -- PostgREST. The caller must derive the actor from a fresh verified session.
 create function saas_governance.read_plan_requests(p_actor uuid)
 returns jsonb language plpgsql security definer set search_path=pg_catalog as $fn$
@@ -316,147 +357,4 @@ $fn$;
 revoke all on function public.commercial_publish_initial_plan_v1(uuid,uuid,integer,text) from public,anon,authenticated,service_role;
 grant execute on function public.commercial_publish_initial_plan_v1(uuid,uuid,integer,text) to service_role;
 -- No subscription mutation, charge, capability or signup policy enablement.
-commit;
-),
-  authorized_publisher uuid not null references saas_governance.operators(user_id) on delete restrict,
-  commercial_approval_ref text not null check(char_length(btrim(commercial_approval_ref)) between 10 and 512),
-  release_approval_ref text not null check(char_length(btrim(release_approval_ref)) between 10 and 512),
-  expires_at timestamptz not null,
-  revoked_at timestamptz,
-  created_at timestamptz not null default clock_timestamp(),
-  check(expires_at>created_at)
-);
--- Published snapshots retain the precise offer; no mutable price or
--- terms are used as evidence for a historical contract.
-create table saas_governance.published_plan_versions (
-  plan_id uuid not null references public.saas_plans(id) on delete restrict,
-  version integer not null check(version>0),
-  request_id uuid not null unique references saas_governance.plan_requests(id) on delete restrict,
-  plan_code text not null check(plan_code in ('free','basic','growth','pro')),
-  snapshot jsonb not null check(jsonb_typeof(snapshot)='object'),
-  snapshot_sha256 text not null check(snapshot_sha256 ~ '^[0-9a-f]{64} the private schema need not be exposed through
--- PostgREST. The caller must derive the actor from a fresh verified session.
-create function saas_governance.read_plan_requests(p_actor uuid)
-returns jsonb language plpgsql security definer set search_path=pg_catalog as $fn$
-declare v_result jsonb;
-begin
-  perform saas_governance.require_operator(p_actor,null);
-  select jsonb_build_object(
-    'may_author',g.may_author,'may_review',g.may_review,'may_publish',g.may_publish,
-    'requests',coalesce((
-      select jsonb_agg(to_jsonb(r) order by r.created_at desc,r.id)
-      from (
-        select id,plan_code,expected_plan_version,snapshot,snapshot_sha256,rationale,
-          author_user_id,reviewer_user_id,status,revision,created_at
-        from saas_governance.plan_requests order by created_at desc,id limit 100
-      ) r
-    ),'[]'::jsonb),
-    'published_request_ids',coalesce((select jsonb_agg(request_id) from saas_governance.published_plan_versions),'[]'::jsonb),
-    'versions',coalesce((
-      select jsonb_object_agg(code,version) from public.saas_plans
-        where code in ('free','basic','growth','pro')
-    ),'{}'::jsonb)
-  ) into v_result from saas_governance.operators g where g.user_id=p_actor;
-  return v_result;
-end;
-$fn$;
-revoke all on function saas_governance.read_plan_requests(uuid) from public,anon,authenticated,service_role;
-grant execute on function saas_governance.read_plan_requests(uuid) to service_role;
-
-create function public.commercial_read_plan_requests_v1(p_actor uuid)
-returns jsonb language sql security invoker set search_path=pg_catalog as $fn$
-  select saas_governance.read_plan_requests(p_actor);
-$fn$;
-create function public.commercial_create_plan_request_v1(p_actor uuid,p_code text,p_expected integer,p_snapshot jsonb,p_rationale text)
-returns uuid language sql security invoker set search_path=pg_catalog as $fn$
-  select saas_governance.create_plan_request(p_actor,p_code,p_expected,p_snapshot,p_rationale);
-$fn$;
-create function public.commercial_transition_plan_request_v1(p_actor uuid,p_request uuid,p_revision integer,p_digest text,p_action text,p_reason text)
-returns boolean language sql security invoker set search_path=pg_catalog as $fn$
-  select saas_governance.transition_plan_request(p_actor,p_request,p_revision,p_digest,p_action,p_reason);
-$fn$;
-revoke all on function public.commercial_read_plan_requests_v1(uuid),
-  public.commercial_create_plan_request_v1(uuid,text,integer,jsonb,text),
-  public.commercial_transition_plan_request_v1(uuid,uuid,integer,text,text,text)
-from public,anon,authenticated,service_role;
-grant execute on function public.commercial_read_plan_requests_v1(uuid),
-  public.commercial_create_plan_request_v1(uuid,text,integer,jsonb,text),
-  public.commercial_transition_plan_request_v1(uuid,uuid,integer,text,text,text)
-to service_role;
--- No publish function, no subscription mutation, no active price book yet.
-commit;
-),
-  currency text not null check(currency='INR'),
-  billing_period text not null check(billing_period='month'),
-  amount_minor bigint not null check(amount_minor>=0),
-  setup_min_minor bigint not null check(setup_min_minor>=0),
-  setup_max_minor bigint not null check(setup_max_minor>=setup_min_minor),
-  setup_optional boolean not null,
-  tax_treatment text not null check(tax_treatment in ('exclusive','inclusive')),
-  published_by uuid not null,
-  commercial_approval_ref text not null,
-  release_approval_ref text not null,
-  effective_from timestamptz not null default clock_timestamp(),
-  primary key(plan_id,version),
-  unique(plan_code,version)
-);
-alter table saas_governance.publication_authorizations enable row level security;
-alter table saas_governance.published_plan_versions enable row level security;
-revoke all on saas_governance.publication_authorizations,saas_governance.published_plan_versions from public,anon,authenticated,service_role;
-grant select on saas_governance.published_plan_versions to service_role;
-create trigger published_plan_immutable before update or delete on saas_governance.published_plan_versions
-for each row execute function saas_governance.block_immutable();
-create trigger published_plan_no_truncate before truncate on saas_governance.published_plan_versions
-for each statement execute function saas_governance.block_immutable();
-
--- Narrow service-only bridge: the private schema need not be exposed through
--- PostgREST. The caller must derive the actor from a fresh verified session.
-create function saas_governance.read_plan_requests(p_actor uuid)
-returns jsonb language plpgsql security definer set search_path=pg_catalog as $fn$
-declare v_result jsonb;
-begin
-  perform saas_governance.require_operator(p_actor,null);
-  select jsonb_build_object(
-    'may_author',g.may_author,'may_review',g.may_review,'may_publish',g.may_publish,
-    'requests',coalesce((
-      select jsonb_agg(to_jsonb(r) order by r.created_at desc,r.id)
-      from (
-        select id,plan_code,expected_plan_version,snapshot,snapshot_sha256,rationale,
-          author_user_id,reviewer_user_id,status,revision,created_at
-        from saas_governance.plan_requests order by created_at desc,id limit 100
-      ) r
-    ),'[]'::jsonb),
-    'published_request_ids',coalesce((select jsonb_agg(request_id) from saas_governance.published_plan_versions),'[]'::jsonb),
-    'versions',coalesce((
-      select jsonb_object_agg(code,version) from public.saas_plans
-        where code in ('free','basic','growth','pro')
-    ),'{}'::jsonb)
-  ) into v_result from saas_governance.operators g where g.user_id=p_actor;
-  return v_result;
-end;
-$fn$;
-revoke all on function saas_governance.read_plan_requests(uuid) from public,anon,authenticated,service_role;
-grant execute on function saas_governance.read_plan_requests(uuid) to service_role;
-
-create function public.commercial_read_plan_requests_v1(p_actor uuid)
-returns jsonb language sql security invoker set search_path=pg_catalog as $fn$
-  select saas_governance.read_plan_requests(p_actor);
-$fn$;
-create function public.commercial_create_plan_request_v1(p_actor uuid,p_code text,p_expected integer,p_snapshot jsonb,p_rationale text)
-returns uuid language sql security invoker set search_path=pg_catalog as $fn$
-  select saas_governance.create_plan_request(p_actor,p_code,p_expected,p_snapshot,p_rationale);
-$fn$;
-create function public.commercial_transition_plan_request_v1(p_actor uuid,p_request uuid,p_revision integer,p_digest text,p_action text,p_reason text)
-returns boolean language sql security invoker set search_path=pg_catalog as $fn$
-  select saas_governance.transition_plan_request(p_actor,p_request,p_revision,p_digest,p_action,p_reason);
-$fn$;
-revoke all on function public.commercial_read_plan_requests_v1(uuid),
-  public.commercial_create_plan_request_v1(uuid,text,integer,jsonb,text),
-  public.commercial_transition_plan_request_v1(uuid,uuid,integer,text,text,text)
-from public,anon,authenticated,service_role;
-grant execute on function public.commercial_read_plan_requests_v1(uuid),
-  public.commercial_create_plan_request_v1(uuid,text,integer,jsonb,text),
-  public.commercial_transition_plan_request_v1(uuid,uuid,integer,text,text,text)
-to service_role;
--- No publish function, no subscription mutation, no active price book yet.
 commit;
