@@ -1,5 +1,6 @@
 'use server';
 
+import { getSignupOrigin } from '@/lib/signup/origin';
 import { randomUUID } from 'node:crypto';
 import { verifySignupCaptcha } from '@/lib/signup/captcha';
 import { createAdminClient } from '@/lib/supabase/admin';
@@ -8,7 +9,8 @@ import { createClient } from '@/lib/supabase/server';
 import { isPublicSignupAvailable } from '@/lib/signup/availability';
 
 export async function signupAction(formData: FormData) {
-  if (!await isPublicSignupAvailable()) {
+  const origin=getSignupOrigin();
+  if (!origin || !await isPublicSignupAvailable()) {
     redirect('/signup?error=Registration+is+not+open.');
   }
 
@@ -41,7 +43,7 @@ export async function signupAction(formData: FormData) {
     email,
     password,
     options: {
-      emailRedirectTo: 'https://salsysos.com/signup/verify',
+      emailRedirectTo: new URL('/signup/verify',origin).href,
       data: { signup_intent_id: intentId },
     },
   });
@@ -73,7 +75,8 @@ export async function signupAction(formData: FormData) {
 }
 
 export async function resendSignupVerificationAction(formData: FormData) {
-  if (!await isPublicSignupAvailable()) {
+  const origin=getSignupOrigin();
+  if (!origin || !await isPublicSignupAvailable()) {
     redirect('/signup?error=Registration+is+not+open.');
   }
   const email = String(formData.get('email') ?? '').trim().toLowerCase();
@@ -90,7 +93,7 @@ export async function resendSignupVerificationAction(formData: FormData) {
     const supabase = await createClient();
     await supabase.auth.resend({
       type: 'signup', email,
-      options: { emailRedirectTo: 'https://salsysos.com/signup/verify' },
+      options: { emailRedirectTo: new URL('/signup/verify',origin).href },
     });
   }
   redirect('/signup?mode=resend&notice=If+an+eligible+registration+exists,+a+verification+email+may+be+sent.+If+already+verified,+sign+in.');
