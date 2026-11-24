@@ -47,6 +47,7 @@ const PUBLIC_EXACT_PATHS = new Set([
   "/api/ai/autopilot",
   "/api/instagram/history-sync",
   "/api/course-batches/close-started",
+  "/api/commercial/trial-expiry",
   "/api/leads/interests/scan",
   "/api/leads/stages/scan",
   "/api/leads/location/scan",
