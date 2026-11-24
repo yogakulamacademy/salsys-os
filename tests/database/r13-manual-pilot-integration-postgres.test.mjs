@@ -307,9 +307,17 @@ test('R13 integrated manual pilot applies exact approved contract and expiry wit
     await assert.rejects(activate(),/Manual approval required/);
     await db.query("select set_config('request.jwt.claim.role','service_role',false)");
     const endAt=await scalar("select (clock_timestamp()+interval '20 days')::text as value");
-    await scalar("select public.commercial_approve_manual_pilot_v1($1,$2,$3,'complimentary',null,'Synthetic manual pilot approval',$4) as value",[operator,request,digest,endAt]);
+    const atomic=()=>scalar("select public.commercial_approve_activate_manual_pilot_v1($1,$2,$3,'complimentary',null,'Synthetic manual pilot approval',$4) as value",[operator,request,digest,endAt]);
     assert.equal((await currentPlan(user)).state,'free');
-    const contract=await activate();
+    // Force a late failure to prove the approval and pilot slot roll back too.
+    await db.query("alter table public.saas_organization_subscriptions add constraint fixture_activation_failure check (plan_id <> '"+basic+"')");
+    await assert.rejects(atomic(),/fixture_activation_failure/);
+    assert.equal(await scalar("select count(*)::int as value from saas_governance.manual_pilot_approvals"),0);
+    assert.equal(await scalar("select count(*)::int as value from saas_governance.manual_pilot_organizations"),0);
+    assert.equal((await currentPlan(user)).state,'free');
+    await db.query("alter table public.saas_organization_subscriptions drop constraint fixture_activation_failure");
+    const contract=await atomic();
+    assert.equal(await atomic(),contract);
     assert.equal(await activate(),contract);
     assert.equal(await scalar("select status as value from saas_governance.subscription_change_requests where id=$1",[request]),'activated');
     const active=await currentPlan(user);
@@ -340,13 +348,16 @@ test('R13 integrated manual pilot applies exact approved contract and expiry wit
     assert.equal((await dashboard(user)).lead_record_limit,1);
     assert.equal(await integration(org,'instagram'),false);
     await assert.rejects(db.query("insert into public.leads(organization_id) values($1)",[org]),/Commercial usage limit reached: lead_records/);
-    assert.equal(await scalar("select saas_governance.reconcile_expired_manual_contract($1) as value",[org]),true);
-    assert.equal(await scalar("select saas_governance.reconcile_expired_manual_contract($1) as value",[org]),false);
+    assert.deepEqual(await scalar("select public.reconcile_expired_manual_contracts_v1(10) as value"),{checked:1,converted:1,failed:0});
+    assert.deepEqual(await scalar("select public.reconcile_expired_manual_contracts_v1(10) as value"),{checked:0,converted:0,failed:0});
+    await assert.rejects(scalar("select public.reconcile_expired_manual_contracts_v1(11) as value"),/Invalid manual reconciliation batch size/);
     assert.equal((await currentPlan(user)).state,'free');
     assert.equal(await scalar("select count(*)::int as value from public.leads where organization_id=$1",[org]),4);
     assert.equal(await scalar("select enabled as value from public.organization_workspaces where organization_id=$1 and workspace_code='sales'",[org]),false);
     for(const role of ['anon','authenticated','service_role']){
-      assert.equal(await scalar("select has_function_privilege($1,'saas_governance.activate_manual_pilot(uuid,uuid,text)','EXECUTE') as value",[role]),false);
+      assert.equal(await scalar("select has_function_privilege($1,'saas_governance.activate_manual_pilot(uuid,uuid,text)','EXECUTE') as value",[role]),role==='service_role');
+      assert.equal(await scalar("select has_function_privilege($1,'public.commercial_approve_activate_manual_pilot_v1(uuid,uuid,text,text,text,text,timestamptz)','EXECUTE') as value",[role]),role==='service_role');
+      assert.equal(await scalar("select has_function_privilege($1,'public.reconcile_expired_manual_contracts_v1(integer)','EXECUTE') as value",[role]),role==='service_role');
     }
   } finally {
     if(db) await db.end().catch(()=>{});
