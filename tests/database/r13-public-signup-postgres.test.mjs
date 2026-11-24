@@ -58,13 +58,13 @@ test('R13 public signup SQL fails closed and atomically provisions one scoped tr
       );
       -- Minimal session-bound context fixture, NOT the real session-binding RPC.
       create function public.get_current_workspace_context_v1() returns jsonb language plpgsql as $ctx$
-      declare v_org uuid;
+      declare v_org uuid; v_role text;
       begin
-        select m.organization_id into v_org from public.organization_members m
+        select m.organization_id,m.role into v_org,v_role from public.organization_members m
           join public.organizations o on o.id=m.organization_id
           where m.user_id=auth.uid() and m.active and o.status='active' and auth.role()='authenticated';
         if v_org is null then raise exception 'Workspace access denied'; end if;
-        return jsonb_build_object('organization_id',v_org);
+        return jsonb_build_object('organization_id',v_org,'role',v_role);
       end;
       $ctx$;
       create table public.workspace_catalog(code text primary key,status text);
@@ -86,14 +86,12 @@ test('R13 public signup SQL fails closed and atomically provisions one scoped tr
       create function public.is_organization_member(p_org uuid) returns boolean language sql as $fn$
         select exists(select 1 from public.organization_members where organization_id=p_org and user_id=auth.uid() and active);
       $fn$;
-      create table public.saas_plans(id uuid primary key,status text,version integer,code text unique);
-      create table public.saas_plan_entitlements(plan_id uuid references public.saas_plans(id),capability_code text references public.capability_catalog(code),allowed boolean,primary key(plan_id,capability_code));
-      create table public.saas_organization_subscriptions(
-        organization_id uuid primary key references public.organizations(id),
-        plan_id uuid references public.saas_plans(id),status text,source text,
-        trial_started_at timestamptz,trial_ends_at timestamptz,metadata jsonb
-      );
+      create function public.set_updated_at() returns trigger language plpgsql as $f$
+      begin new.updated_at=now();return new;end;
+      $f$;
     `);
+    // Exact P0 #827 DDL (pinned fixture, not a duplicate migration).
+    await db.query(readFileSync('tests/database/fixtures/r13-p0-commercial-foundation.sql','utf8'));
     await db.query(readFileSync('supabase/migrations/20261023184246_customer_organization_provisioning_v1.sql','utf8'));
     await db.query(readFileSync('supabase/drafts/r13_verified_signup.sql','utf8'));
     await db.query("select set_config('request.jwt.claim.role','service_role',false)");
@@ -117,7 +115,7 @@ test('R13 public signup SQL fails closed and atomically provisions one scoped tr
       assert.equal(await scalar("select has_table_privilege($1,'public.signup_registration_intents','SELECT') as value",[role]),false);
     }
     const plan = randomUUID(), free = randomUUID();
-    await db.query("insert into public.saas_plans values($1,'active',1,'pro'),($2,'active',1,'free')",[plan,free]);
+    await db.query("insert into public.saas_plans(id,status,version,code,display_name) values($1,'active',1,'pro','Synthetic Pro'),($2,'active',1,'free','Synthetic Free')",[plan,free]);
     await db.query("insert into public.signup_trial_policy(plan_id,plan_version,trial_days,allowed_workspace_codes,free_plan_id,free_plan_version,free_workspace_codes,pro_integration_codes,free_integration_codes,pro_named_users,pro_lead_records,free_named_users,free_lead_records,approval_ref,approved_at,enabled) values($1,1,14,array['admin','sales'],$2,1,array['admin'],array['instagram','ga4','google_ads'],array[]::text[],2,3,1,1,'synthetic test only',now(),true)",[plan,free]);
     assert.equal(await scalar("select public.signup_trial_available_v1() as value"),true);
 
@@ -172,7 +170,7 @@ test('R13 public signup SQL fails closed and atomically provisions one scoped tr
     } finally { await peer.end(); }
     assert.deepEqual(await usage(),{named_users:2,lead_records:3});
     await assert.rejects(db.query("insert into public.leads(organization_id) values($1)",[org]),/Commercial usage limit reached: lead_records/);
-    await db.query("insert into public.saas_plan_entitlements values($1,'education_core',true),($1,'wellness_residential',true),($2,'education_core',false)",[plan,free]);
+    await db.query("insert into public.saas_plan_entitlements(plan_id,capability_code,allowed) values($1,'education_core',true),($1,'wellness_residential',true),($2,'education_core',false)",[plan,free]);
     await db.query("insert into public.organization_capabilities values($1,'education_core',true),($1,'wellness_residential',false)",[org]);
     const integration = (tenant,code) => scalar("select public.signup_integration_allowed_v1($1,$2) as value",[tenant,code]);
     assert.equal(await integration(org,'instagram'),true);
@@ -205,6 +203,27 @@ test('R13 public signup SQL fails closed and atomically provisions one scoped tr
     for(const role of ['anon','authenticated','service_role']) {
       assert.equal(await scalar("select has_function_privilege($1,'public.signup_capability_allowed_internal_v1(uuid,text)','EXECUTE') as value",[role]),false);
     }
+    const dashboard = async (actor) => {
+      await db.query("select set_config('request.jwt.claim.role','authenticated',false),set_config('request.jwt.claim.sub',$1,false)",[actor]);
+      try { return await scalar("select public.get_current_subscription_dashboard_v1() as value"); }
+      finally { await db.query("select set_config('request.jwt.claim.role','service_role',false)"); }
+    };
+    const billing=await dashboard(user);
+    assert.equal(billing.state,'pro_trial');
+    assert.equal(billing.named_users,2);
+    assert.equal(billing.named_user_limit,2);
+    assert.equal(billing.lead_records,3);
+    assert.equal(billing.lead_record_limit,3);
+    assert.equal(billing.history.length,1);
+    assert.equal(billing.history[0].event_type,'subscription_created');
+    assert.equal(billing.history[0].plan_code,'pro');
+    assert.deepEqual(Object.keys(billing.history[0]).sort(),['event_type','new_status','occurred_at','plan_code','previous_status']);
+    await db.query("insert into public.profiles(id,role,active) values($1,'employee',true)",[teamUser]);
+    await assert.rejects(dashboard(teamUser),/Subscription access denied/);
+    await assert.rejects(dashboard(randomUUID()),/Authenticated active account required/);
+    assert.equal(await scalar("select has_function_privilege('anon','public.get_current_subscription_dashboard_v1()','EXECUTE') as value"),false);
+    assert.equal(await scalar("select has_function_privilege('service_role','public.get_current_subscription_dashboard_v1()','EXECUTE') as value"),false);
+    assert.equal(await scalar("select has_function_privilege('authenticated','public.get_current_subscription_dashboard_v1()','EXECUTE') as value"),true);
     const trial = await currentPlan(user);
     assert.equal(trial.state,'pro_trial');
     assert.equal(trial.plan_code,'pro');
@@ -219,9 +238,15 @@ test('R13 public signup SQL fails closed and atomically provisions one scoped tr
     assert.equal(await convert(),false);
     // Simulate clock passage only in the disposable fixture.
     await db.query("update public.signup_registration_intents set trial_ends_at=now()-interval '1 second' where organization_id=$1",[org]);
-    await db.query("update public.saas_organization_subscriptions set trial_ends_at=(select trial_ends_at from public.signup_registration_intents where organization_id=$1) where organization_id=$1",[org]);
+    await db.query("update public.saas_organization_subscriptions set trial_started_at=now()-interval '15 days',trial_ends_at=(select trial_ends_at from public.signup_registration_intents where organization_id=$1) where organization_id=$1",[org]);
     const expired = await currentPlan(user);
     assert.equal(expired.state,'free_pending_reconciliation');
+    const expiredBilling=await dashboard(user);
+    assert.equal(expiredBilling.state,'free_pending_reconciliation');
+    assert.equal(expiredBilling.named_user_limit,1);
+    assert.equal(expiredBilling.lead_record_limit,1);
+    assert.equal(expiredBilling.lead_records,3);
+    assert.ok(!expiredBilling.history.some(e=>e.new_status==='active'));
     assert.equal(await integration(org,'instagram'),false);
     assert.equal(await integration(org,'ga4'),false);
     assert.equal(await integration(org,'google_ads'),false);
@@ -247,6 +272,10 @@ test('R13 public signup SQL fails closed and atomically provisions one scoped tr
     assert.equal(await scalar("select count(*)::int as value from public.organization_members where organization_id=$1 and user_id=$2",[org,user]),1);
     assert.equal(await provision(user),org);
     assert.equal((await currentPlan(user)).state,'free');
+    const freeBilling=await dashboard(user);
+    assert.equal(freeBilling.state,'free');
+    assert.ok(freeBilling.history.some(e=>e.new_status==='active'&&e.plan_code==='free'));
+    assert.equal(freeBilling.lead_records,3);
     await db.query("delete from public.leads where organization_id=$1",[org]);
     assert.deepEqual(await usage(),{named_users:1,lead_records:0});
     await db.query("insert into public.leads(organization_id) values($1)",[org]);
