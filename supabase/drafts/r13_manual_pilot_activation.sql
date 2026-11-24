@@ -546,10 +546,10 @@ begin
  select jsonb_agg(to_jsonb(x) order by x.organization_name,x.id) from (
  select o.id,o.name as organization_name,s.updated_at as revision,
  public.resolve_signup_plan_internal_v1(o.id)->>'plan_code' as current_code,
- p.code as requested_code, r.id as pending_request_id
+ p.code as requested_code, r.id as pending_request_id, coalesce(a.enabled,false) as pilot_enabled
  from public.organizations o join public.signup_registration_intents i on i.organization_id=o.id
  join public.signup_usage_counters u on u.organization_id=o.id
- join saas_governance.change_request_access a on a.organization_id=o.id and a.enabled
+ left join saas_governance.change_request_access a on a.organization_id=o.id
  join public.saas_organization_subscriptions s on s.organization_id=o.id and s.source='manual'
  left join saas_governance.subscription_change_requests r on r.organization_id=o.id and r.status='requested'
  left join public.saas_plans p on p.id=r.target_plan_id
@@ -568,4 +568,56 @@ language sql security invoker set search_path=pg_catalog as $fn$
 $fn$;
 revoke all on function public.commercial_list_manual_assignments_v1(uuid) from public,anon,authenticated,service_role;
 grant execute on function public.commercial_list_manual_assignments_v1(uuid) to service_role;
+-- Eligibility is an audited operator decision, independent of admission to
+-- the ten-organization activation pilot. Never grants a paid plan.
+create table saas_governance.manual_pilot_enrollment_events (
+ id uuid primary key default gen_random_uuid(),
+ organization_id uuid not null references public.organizations(id) on delete restrict,
+ actor_user_id uuid not null,
+ reason text not null check(char_length(btrim(reason)) between 10 and 512),
+ occurred_at timestamptz not null default clock_timestamp()
+);
+alter table saas_governance.manual_pilot_enrollment_events enable row level security;
+revoke all on saas_governance.manual_pilot_enrollment_events from public,anon,authenticated,service_role;
+create trigger pilot_enrollment_immutable before update or delete on saas_governance.manual_pilot_enrollment_events
+for each row execute function saas_governance.block_immutable();
+create trigger pilot_enrollment_no_truncate before truncate on saas_governance.manual_pilot_enrollment_events
+for each statement execute function saas_governance.block_immutable();
+
+create function saas_governance.enable_manual_pilot_requests(p_actor uuid,p_org uuid,p_reason text)
+returns boolean language plpgsql security definer set search_path=pg_catalog as $fn$
+begin
+ perform saas_governance.require_pilot_approver(p_actor);
+ if p_org is null or p_reason is null or char_length(btrim(p_reason)) not between 10 and 512
+   then raise exception 'Explicit enrollment reason required'; end if;
+ perform pg_advisory_xact_lock(hashtextextended('saas_change:'||p_org::text,0));
+ if not exists(select 1 from public.organizations o join public.signup_registration_intents i on i.organization_id=o.id
+   join public.signup_usage_counters u on u.organization_id=o.id
+   join public.organization_members m on m.organization_id=o.id and m.active and m.role='owner'
+   join public.profiles pr on pr.id=m.user_id and pr.active
+   join auth.users au on au.id=m.user_id and au.email_confirmed_at is not null and not coalesce(au.is_anonymous,false)
+   where o.id=p_org and o.status='active')
+   or coalesce(public.resolve_signup_plan_internal_v1(p_org)->>'state','unavailable') not in ('free','pro_trial','manual_active')
+   then raise exception 'Verified eligible customer required'; end if;
+ -- Do not silently override an explicit disabled row; a separately reviewed
+ -- re-enrollment path is needed for previously suspended organizations.
+ if exists(select 1 from saas_governance.change_request_access where organization_id=p_org and not enabled)
+   then raise exception 'Pilot access explicitly disabled'; end if;
+ insert into saas_governance.change_request_access(organization_id,enabled,approval_ref)
+   values(p_org,true,p_reason) on conflict(organization_id) do nothing;
+ if found then
+   insert into saas_governance.manual_pilot_enrollment_events(organization_id,actor_user_id,reason)
+     values(p_org,p_actor,p_reason);
+ end if;
+ return true;
+end;
+$fn$;
+revoke all on function saas_governance.enable_manual_pilot_requests(uuid,uuid,text) from public,anon,authenticated,service_role;
+grant execute on function saas_governance.enable_manual_pilot_requests(uuid,uuid,text) to service_role;
+create function public.commercial_enable_manual_pilot_requests_v1(p_actor uuid,p_org uuid,p_reason text)
+returns boolean language sql security invoker set search_path=pg_catalog as $fn$
+ select saas_governance.enable_manual_pilot_requests(p_actor,p_org,p_reason);
+$fn$;
+revoke all on function public.commercial_enable_manual_pilot_requests_v1(uuid,uuid,text) from public,anon,authenticated,service_role;
+grant execute on function public.commercial_enable_manual_pilot_requests_v1(uuid,uuid,text) to service_role;
 commit;
