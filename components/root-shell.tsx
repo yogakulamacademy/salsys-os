@@ -24,6 +24,7 @@ const InvestigationContextBar = dynamic(() =>
 function isShelllessPath(pathname: string) {
   return (
     pathname === '/' ||
+    pathname === '/platform-admin' ||
     pathname === '/login' ||
     pathname === '/signup' ||
     pathname.startsWith('/signup/') ||
