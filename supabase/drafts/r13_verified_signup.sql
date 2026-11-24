@@ -79,6 +79,11 @@ begin
   update public.signup_registration_intents
     set user_id = p_user_id, organization_id = v_org
     where id = v_intent.id;
+  -- Trusted routing hint only; membership remains the authorization boundary.
+  update auth.users
+    set raw_app_meta_data = coalesce(raw_app_meta_data, '{}'::jsonb)
+      || jsonb_build_object('self_signup_organization_id', v_org::text)
+    where id = p_user_id;
   return v_org;
 end;
 $$;
