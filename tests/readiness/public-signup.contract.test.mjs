@@ -137,3 +137,27 @@ test('self-service automation stays blocked before provider send or claim', () =
   assert.ok(guard.includes("rpc('signup_automation_allowed_v1'"));
   assert.ok(guard.includes('return !error && data === true'));
 });
+
+test('provider runtime operations require approved integration eligibility', () => {
+  assert.ok(sql.includes("pro_integration_codes text[] not null default '{}'"));
+  assert.ok(sql.includes('free_integration_codes <@ pro_integration_codes'));
+  assert.ok(sql.includes('trial_integration_codes = v_policy.pro_integration_codes'));
+  assert.ok(sql.includes('grant execute on function public.signup_integration_allowed_v1(uuid,text) to service_role'));
+  const guard = read('lib/commercial/integration-access.ts');
+  assert.ok(guard.includes("rpc('signup_integration_allowed_v1'"));
+  assert.ok(guard.includes('if (error || data !== true) throw'));
+  const checks = [
+    ['lib/integrations/instagram-connection.ts', 'await requireCommercialIntegration(resolvedOrganizationId, "instagram")', '.from("integration_connections")'],
+    ['lib/integrations/whatsapp-connection.ts', "await requireCommercialIntegration(resolvedOrganizationId, 'whatsapp')", 'await loadConfiguredRuntime('],
+    ['lib/ga4.ts', "await requireCommercialIntegration(resolvedRuntime.organizationId, 'ga4')", 'await getGoogleAccessTokenForOrganizationConnection('],
+    ['lib/gsc.ts', "await requireCommercialIntegration(resolvedRuntime.organizationId, 'gsc')", 'await getGoogleAccessTokenForOrganizationConnection('],
+    ['lib/google-ads.ts', "await requireCommercialIntegration(resolvedRuntime.organizationId, 'google_ads')", 'await getGoogleAccessTokenForOrganizationConnection('],
+    ['lib/meta-ads.ts', "await requireCommercialIntegration(organizationId, 'meta_ads')", 'await getMetaAccessTokenForSyncContext('],
+  ];
+  for (const [path, first, second] of checks) {
+    const source = read(path);
+    const entry = source.indexOf(first);
+    assert.ok(entry >= 0, path);
+    ordered(source.slice(entry), first, second);
+  }
+});
