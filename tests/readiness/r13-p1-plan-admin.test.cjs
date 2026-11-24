@@ -90,3 +90,17 @@ test('exact subscription quote terms and acceptance remain non-binding and immut
   assert.ok(action.includes("form.get('confirm')!=='review_only'"));
   assert.ok(page.includes('does not initiate a payment'));
 });
+
+test('payment evidence is isolated, exact and private, with no activation or checkout bridge',()=>{
+  const sql=readFileSync('supabase/drafts/r13_saas_payment_evidence.sql','utf8');
+  assert.ok(sql.includes('v_quote.first_period_total_minor'));
+  assert.ok(sql.includes('v_a.amount_minor<>v_i.amount_minor'));
+  assert.ok(sql.includes('v_a.currency<>v_i.currency'));
+  assert.ok(sql.includes('v_a.provider_order_ref<>v_o.provider_order_ref'));
+  assert.ok(sql.includes('unique(merchant_id,provider_payment_ref)'));
+  assert.ok(sql.includes('v_a.provider_observed_at>v_i.expires_at'));
+  assert.ok(sql.includes("environment='live'"));
+  assert.ok(sql.includes("'adverse_payment_review'"));
+  assert.ok(sql.includes("'settled_pending_activation_review'"));
+  assert.doesNotMatch(sql,/create function public\.|grant execute on function|update public\.saas_organization_subscriptions|insert into public\.saas_organization_subscriptions|update public\.organization_workspaces/i);
+});
