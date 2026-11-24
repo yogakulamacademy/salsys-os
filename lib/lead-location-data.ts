@@ -2,6 +2,7 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { enrichmentTenantActive, enrichmentLeadAllowed } from "@/lib/enrichment-tenant-access";
 import { openedByScanner } from "@/lib/dm-links";
 import { normalizeCountry } from "@/lib/home-command-center";
 import { isAdStarter } from "@/lib/lead-stages";
@@ -32,8 +33,9 @@ async function askClaude(lines: string[]): Promise<LocationClue | null> {
 }
 
 export async function locateLead(admin: SupabaseClient, leadId: string, now: Date): Promise<LeadLocation | null> {
-  const { data: lead } = await admin.from("leads").select("id, country, geo_country, geo_city, metadata").eq("id", leadId).maybeSingle();
-  if (!lead) return null;
+  const { data: lead, error } = await admin.from("leads").select("id, organization_id, country, geo_country, geo_city, metadata").eq("id", leadId).maybeSingle();
+  if (error) throw Error("Location scan lead unavailable.");
+  if (!lead || lead.id !== leadId || !await enrichmentTenantActive(admin, lead.organization_id)) return null;
   const meta = (lead.metadata ?? {}) as Record<string, unknown>;
 
   const [{ data: sessions }, { data: links }, { data: phones }, { data: msgs }] = await Promise.all([
@@ -80,6 +82,7 @@ export async function locateLead(admin: SupabaseClient, leadId: string, now: Dat
   const scannedAt = typeof meta.location_scanned_at === "string" ? meta.location_scanned_at : null;
   const newText = lastTyped && (!scannedAt || Date.parse(lastTyped) > Date.parse(scannedAt));
   if (typed.length && newText && (!current || current.confidence < LOCATION_CONFIDENCE.conversation)) {
+    if (!await enrichmentLeadAllowed(admin, lead.organization_id, leadId)) return null;
     const ai = await askClaude(typed.slice(-15)).catch(() => null);
     if (ai) clues.push(ai);
   } else if (meta.location && typeof meta.location === "object") {
@@ -89,9 +92,10 @@ export async function locateLead(admin: SupabaseClient, leadId: string, now: Dat
   }
 
   const best = bestLocation(clues, normalizeCountry);
+  if (!await enrichmentLeadAllowed(admin, lead.organization_id, leadId)) return null;
   await admin.from("leads").update({
     metadata: { ...meta, location: best, location_scanned_at: now.toISOString() },
-  }).eq("id", leadId);
+  }).eq("id", leadId).eq("organization_id", lead.organization_id);
   return best;
 }
 
