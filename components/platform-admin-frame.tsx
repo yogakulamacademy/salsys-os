@@ -2,7 +2,7 @@ import 'server-only';
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 
-type PlatformSection = 'overview' | 'plans' | 'pilot' | 'customers' | 'business';
+type PlatformSection = 'overview' | 'plans' | 'pilot' | 'customers' | 'business' | 'success';
 
 // Presentation only. Callers must authorize each page and its data before
 // rendering. Server actions retain their own independent authorization.
@@ -12,6 +12,7 @@ export function PlatformAdminFrame({ section, children }: { section: PlatformSec
     { id: 'overview', label: 'Overview', href: '/platform-admin' },
     { id: 'business', label: 'Business operations', href: '/platform-admin/business' },
     { id: 'customers', label: 'Customer organizations', href: '/settings/organizations' },
+    { id: 'success', label: 'Customer success', href: '/platform-admin/customer-success' },
     { id: 'plans', label: 'Plans and governance', href: '/settings/commercial-plans' },
     ...(process.env.SALSYS_MANUAL_PILOT_ENABLED === 'true'
       ? [{ id: 'pilot', label: 'Manual subscriptions', href: '/settings/commercial-plans/pilot' }]
