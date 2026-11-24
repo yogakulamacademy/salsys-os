@@ -161,3 +161,26 @@ test('provider runtime operations require approved integration eligibility', () 
     ordered(source.slice(entry), first, second);
   }
 });
+
+test('provider connection setup rechecks plan eligibility at OAuth start, exchange and persistence', () => {
+  const guard = read('lib/commercial/integration-access.ts');
+  assert.ok(guard.includes("['ga4', 'gsc', 'google_ads']"));
+  assert.ok(guard.includes("provider === 'meta' ? ['meta_ads']"));
+  for (const provider of ['google','meta','instagram']) {
+    const start = read('app/api/integrations/'+provider+'/connect/route.ts');
+    const callback = read('app/api/integrations/'+provider+'/callback/route.ts');
+    ordered(start, 'await requireIntegrationAdminTenant(supabase, user.id)', 'await requireCommercialConnection(organizationId,');
+    ordered(start, 'await requireCommercialConnection(organizationId,', 'const state = createOAuthState()');
+    const guardCall = "await requireCommercialConnection(stateRow.organization_id, '"+provider+"')";
+    assert.equal(callback.split(guardCall).length-1,2);
+    const beforeExchange = callback.indexOf(guardCall);
+    const exchange = callback.indexOf('await exchange',beforeExchange);
+    const beforeSave = callback.lastIndexOf(guardCall);
+    assert.ok(beforeExchange < exchange && exchange < beforeSave && beforeSave < callback.indexOf('const payload = {',beforeSave));
+  }
+  const start = read('app/api/integrations/whatsapp/embedded-signup/start/route.ts');
+  const complete = read('app/api/integrations/whatsapp/embedded-signup/complete/route.ts');
+  ordered(start, 'await requireCommercialConnection(organizationId,', 'const intent = createOAuthState()');
+  ordered(complete, 'await requireCommercialConnection(state.organization_id,', 'await completeWhatsAppEmbeddedSignup(');
+  assert.equal(read('lib/integrations/whatsapp-connect.ts').split("await requireCommercialConnection(organizationId, 'whatsapp')").length-1,3);
+});
