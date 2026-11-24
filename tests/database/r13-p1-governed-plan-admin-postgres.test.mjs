@@ -209,7 +209,7 @@ test('R13 P1 durable plan governance uses actual P0 DDL, immutable evidence and 
     const merchant=randomUUID(),otherMerchant=randomUUID();
     await db.query("insert into saas_governance.saas_payment_merchants(id,provider_code,merchant_ref,environment,enabled,approval_ref) values($1,'fixture','synthetic-merchant','test',true,'synthetic approval only'),($2,'fixture','other-merchant','test',true,'synthetic approval only')",[merchant,otherMerchant]);
     for(const role of ['anon','authenticated','service_role']){
-      for(const fn of ['prepare_payment_intent(uuid,text,uuid)','record_verified_settlement(uuid)']){
+      for(const fn of ['prepare_payment_intent(uuid,text,uuid)','bind_payment_order(uuid,uuid,text,bigint,text)','record_verified_settlement(uuid)']){
         assert.equal(await scalar("select has_function_privilege($1,$2,'EXECUTE') as value",[role,'saas_governance.'+fn]),false);
       }
       for(const table of ['saas_payment_merchants','saas_payment_intents','saas_payment_orders','saas_payment_attestations','saas_payment_settlements']){
@@ -228,7 +228,13 @@ test('R13 P1 durable plan governance uses actual P0 DDL, immutable evidence and 
     assert.equal(await prepare(),paymentIntent);
     await assert.rejects(prepare(quoted.terms_digest,otherMerchant),/different consent/);
     assert.equal(await scalar("select amount_minor::int as value from saas_governance.saas_payment_intents where id=$1",[paymentIntent]),12500);
-    await db.query("insert into saas_governance.saas_payment_orders(intent_id,merchant_id,provider_order_ref) values($1,$2,'synthetic-order')",[paymentIntent,merchant]);
+    const bind=(m=merchant,order='synthetic-order',amount=12500,currency='INR')=>scalar("select saas_governance.bind_payment_order($1,$2,$3,$4,$5) as value",[paymentIntent,m,order,amount,currency]);
+    await assert.rejects(bind(otherMerchant),/Provider order mismatch/);
+    await assert.rejects(bind(merchant,'synthetic-order',1),/Provider order mismatch/);
+    await assert.rejects(bind(merchant,'synthetic-order',12500,'USD'),/Provider order mismatch/);
+    assert.equal(await bind(),true);
+    assert.equal(await bind(),true);
+    await assert.rejects(bind(merchant,'replacement-order'),/Payment order already bound/);
     const attest=async ({m=merchant,order='synthetic-order',payment='synthetic-payment',digest=quoted.terms_digest,amount=12500,status='settled',late=false}={})=>scalar(
       "insert into saas_governance.saas_payment_attestations(intent_id,merchant_id,provider_order_ref,provider_payment_ref,provider_event_ref,terms_digest,currency,amount_minor,provider_status,provider_observed_at,evidence_sha256,verification_ref) values($1,$2,$3,$4,$5,$6,'INR',$7,$8,case when $9 then (select expires_at+interval '1 second' from saas_governance.saas_payment_intents where id=$1) else clock_timestamp() end,$10,'synthetic provider fixture') returning id as value",
       [paymentIntent,m,order,payment,randomUUID(),digest,amount,status,late,'a'.repeat(64)]);
