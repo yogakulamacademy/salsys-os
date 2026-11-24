@@ -1,4 +1,5 @@
 import "server-only";
+import { commercialAdvancedAllowed } from '@/lib/commercial/advanced-access';
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { resolveHashedAdActivationIdentifiers } from "@/lib/ad-activation/identifier-resolution";
@@ -21,6 +22,10 @@ export type AdActivationProviderDryRun =
 export async function prepareAdActivationProviderDryRun(
   delivery: ClaimedAdActivationDelivery,
 ): Promise<AdActivationProviderDryRun> {
+  // Never make privacy/removal workflows conditional on a paid subscription.
+  if (delivery.action === 'add' && !await commercialAdvancedAllowed(delivery.organization_id, 'ad_audience_add')) {
+    return { status: 'skipped', reason: 'commercial_audience_add_unavailable' };
+  }
   const validation = await validateAdActivationDeliveryBeforeSend(delivery);
   if (!validation.valid) {
     return { status: "skipped", reason: validation.reason || "pre_send_validation_failed" };
