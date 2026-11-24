@@ -39,13 +39,13 @@ test('R13 P1 durable plan governance uses actual P0 DDL, immutable evidence and 
     await db.query(readFileSync('supabase/migrations/20261108120000_r13_commercial_state_foundation_v1.sql','utf8'));
     await db.query(readFileSync('supabase/drafts/r13_governed_plan_admin.sql','utf8'));
     const scalar=async(sql,args=[]) => (await db.query(sql,args)).rows[0].value;
-    for(const table of ['operators','plan_requests','price_proposals','review_events']){
+    for(const table of ['operators','plan_requests','price_proposals','review_events','publication_authorizations','published_plan_versions']){
       assert.equal(await scalar("select relrowsecurity as value from pg_class where oid=$1::regclass",['saas_governance.'+table]),true);
       for(const role of ['anon','authenticated','service_role']){
         for(const right of ['INSERT','UPDATE','DELETE','TRUNCATE']){
           assert.equal(await scalar("select has_table_privilege($1,$2,$3) as value",[role,'saas_governance.'+table,right]),false);
         }
-        if(role!=='service_role'||table==='operators') assert.equal(await scalar("select has_table_privilege($1,$2,'SELECT') as value",[role,'saas_governance.'+table]),false);
+        if(role!=='service_role'||['operators','publication_authorizations'].includes(table)) assert.equal(await scalar("select has_table_privilege($1,$2,'SELECT') as value",[role,'saas_governance.'+table]),false);
       }
       assert.equal(await scalar('select count(*)::int as value from saas_governance.'+table),0);
     }
@@ -53,12 +53,12 @@ test('R13 P1 durable plan governance uses actual P0 DDL, immutable evidence and 
       assert.equal(await scalar("select has_schema_privilege($1,'saas_governance','USAGE') as value",[role]),false);
       assert.equal(await scalar("select has_function_privilege($1,'saas_governance.create_plan_request(uuid,text,integer,jsonb,text)','EXECUTE') as value",[role]),false);
     }
-    const platform=randomUUID(),tenant=randomUUID(),author=randomUUID(),reviewer=randomUUID(),reviewer2=randomUUID(),outsider=randomUUID();
+    const platform=randomUUID(),tenant=randomUUID(),author=randomUUID(),reviewer=randomUUID(),reviewer2=randomUUID(),publisher=randomUUID(),outsider=randomUUID();
     await db.query("insert into public.organizations values($1,'Platform','salsysos','active'),($2,'Tenant','tenant','active')",[platform,tenant]);
-    for(const user of [author,reviewer,reviewer2,outsider]){
+    for(const user of [author,reviewer,reviewer2,publisher,outsider]){
       await db.query("insert into public.profiles values($1,true)",[user]);
       await db.query("insert into public.organization_members values($1,$2,'owner',true)",[user===outsider?tenant:platform,user]);
-      await db.query("insert into saas_governance.operators values($1,$2,true,true,true)",[user,platform]);
+      await db.query("insert into saas_governance.operators(user_id,platform_organization_id,may_author,may_review,may_publish,active) values($1,$2,true,true,$3,true)",[user,platform,user===publisher||user===author||user===reviewer]);
     }
     const snapshot={display_name:'Synthetic Free',amount_minor:0,setup_min_minor:0,setup_max_minor:0,setup_optional:true,tax_treatment:'exclusive',named_users:1,lead_records:2,workspace_codes:['admin','sales'],integration_codes:[]};
     const create=(actor=author,code='free',version=0,terms=snapshot)=>scalar("select public.commercial_create_plan_request_v1($1,$2,$3,$4::jsonb,'Synthetic local proposal only') as value",[actor,code,version,JSON.stringify(terms)]);
@@ -98,12 +98,43 @@ test('R13 P1 durable plan governance uses actual P0 DDL, immutable evidence and 
     assert.equal(await transition(reviewer,id,2,row.snapshot_sha256,'review'),false);
     await assert.rejects(db.query("update saas_governance.price_proposals set amount_minor=1 where request_id=$1",[id]),/permission denied/);
     await assert.rejects(db.query("delete from saas_governance.review_events where request_id=$1",[id]),/permission denied/);
+    const publish=(actor,id,digest,rev=3)=>scalar("select public.commercial_publish_initial_plan_v1($1,$2,$3,$4) as value",[actor,id,rev,digest]);
+    const pubId=await create(author,'basic',0,{...snapshot,display_name:'Synthetic Basic',amount_minor:12300});
+    const pubHash=await scalar("select snapshot_sha256 as value from saas_governance.plan_requests where id=$1",[pubId]);
+    assert.equal(await transition(author,pubId,1,pubHash,'submit'),true);
+    assert.equal(await transition(reviewer,pubId,2,pubHash,'review'),true);
+    await assert.rejects(publish(publisher,pubId,pubHash),/publication authorization required/);
+    await assert.rejects(publish(author,pubId,pubHash),/Independent reviewed proposal/);
+    await assert.rejects(publish(reviewer,pubId,pubHash),/Independent reviewed proposal/);
+    await assert.rejects(publish(reviewer2,pubId,pubHash),/Publication permission required/);
+    await assert.rejects(db.query("insert into saas_governance.publication_authorizations(request_id,snapshot_sha256,authorized_publisher,commercial_approval_ref,release_approval_ref,expires_at) values($1,$2,$3,'synthetic commercial approval','synthetic release approval',clock_timestamp()+interval '1 hour')",[pubId,pubHash,publisher]),/permission denied/);
+    await db.query('reset role');
+    await db.query("insert into saas_governance.publication_authorizations(request_id,snapshot_sha256,authorized_publisher,commercial_approval_ref,release_approval_ref,expires_at) values($1,$2,$3,'synthetic commercial approval','synthetic release approval',clock_timestamp()+interval '1 hour')",[pubId,pubHash,publisher]);
+    await db.query('set role service_role');
+    await assert.rejects(publish(publisher,pubId,'0'.repeat(64)),/Independent reviewed proposal/);
+    const planId=await publish(publisher,pubId,pubHash);
+    assert.equal(await publish(publisher,pubId,pubHash),planId);
+    assert.equal(await scalar("select count(*)::int as value from saas_governance.published_plan_versions where request_id=$1",[pubId]),1);
+    assert.equal(await scalar("select amount_minor::int as value from saas_governance.published_plan_versions where request_id=$1",[pubId]),12300);
+    assert.equal(await scalar("select status as value from public.saas_plans where id=$1",[planId]),'active');
+    await assert.rejects(db.query("update saas_governance.published_plan_versions set amount_minor=1 where request_id=$1",[pubId]),/permission denied/);
+    const nextId=await create(author,'basic',1,{...snapshot,display_name:'Synthetic Basic v2',amount_minor:45600});
+    const nextHash=await scalar("select snapshot_sha256 as value from saas_governance.plan_requests where id=$1",[nextId]);
+    assert.equal(await transition(author,nextId,1,nextHash,'submit'),true);
+    assert.equal(await transition(reviewer,nextId,2,nextHash,'review'),true);
+    await db.query('reset role');
+    await db.query("insert into saas_governance.publication_authorizations(request_id,snapshot_sha256,authorized_publisher,commercial_approval_ref,release_approval_ref,expires_at) values($1,$2,$3,'synthetic commercial approval','synthetic release approval',clock_timestamp()+interval '1 hour')",[nextId,nextHash,publisher]);
+    await assert.rejects(db.query("delete from saas_governance.published_plan_versions where request_id=$1",[pubId]),/immutable/);
+    await db.query('set role service_role');
+    await assert.rejects(publish(publisher,nextId,nextHash),/Existing plan version changes/);
+    assert.equal(await scalar("select version as value from public.saas_plans where id=$1",[planId]),1);
     const stale=await create();
     const staleHash=await scalar("select snapshot_sha256 as value from saas_governance.plan_requests where id=$1",[stale]);
     await db.query('reset role');
     await assert.rejects(db.query("update saas_governance.price_proposals set amount_minor=1 where request_id=$1",[id]),/immutable/);
     await assert.rejects(db.query("delete from saas_governance.review_events where request_id=$1",[id]),/immutable/);
-    assert.equal(await scalar("select count(*)::int as value from public.saas_plans"),0);
+    assert.equal(await scalar("select count(*)::int as value from public.saas_plans"),1);
+    assert.equal(await scalar("select count(*)::int as value from public.saas_plan_entitlements"),0);
     assert.equal(await scalar("select count(*)::int as value from public.saas_organization_subscriptions"),0);
     await db.query("insert into public.saas_plans(code,display_name,version) values('free','Synthetic version conflict',1)");
     await db.query('set role service_role');
