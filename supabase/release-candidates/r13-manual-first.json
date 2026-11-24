@@ -1,5 +1,5 @@
 {
-  "status": "candidate only; versions provisional pending production ledger and DBA review",
+  "status": "promoted in release candidate; production not applied",
   "baseline": "eec8a45f8f98f256ef630cac4742698ede1f5a16",
   "entries": [
     {
@@ -27,5 +27,6 @@
       "version": "20261124130005",
       "blob": "773242af49878b5f333393dd8296ba6d1009c475"
     }
-  ]
+  ],
+  "validated_source_head": "eddd919e277fca1a38982ee14da0a708af007670"
 }
