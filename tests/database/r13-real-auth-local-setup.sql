@@ -55,8 +55,8 @@ begin
    v_terms:=jsonb_build_object('display_name','Synthetic '||v_code,'amount_minor',case when v_code='free' then 0 else 100 end,
     'setup_min_minor',0,'setup_max_minor',0,'setup_optional',true,'tax_treatment','exclusive',
     'named_users',case when v_code='free' then 1 else 3 end,'lead_records',case when v_code='free' then 1 else 4 end,
-    'workspace_codes',case when v_code='free' then jsonb_build_array('admin') else jsonb_build_array('admin','sales') end,
-    'integration_codes','[]'::jsonb);
+    'workspace_codes',jsonb_build_array('admin','sales'),
+    'integration_codes',jsonb_build_array('instagram'));
    execute 'set local role service_role';
    perform set_config('request.jwt.claim.role','service_role',true);
    v_request:=public.commercial_create_plan_request_v1(v_author,v_code,0,v_terms,'Synthetic local proposal');
