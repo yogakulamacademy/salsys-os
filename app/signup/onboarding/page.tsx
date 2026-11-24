@@ -1,10 +1,13 @@
+import OnboardingPage from '@/app/onboarding/page';
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { getCurrentWorkspaceContext } from '@/lib/workspace';
 
 export const dynamic = 'force-dynamic';
 
-export default async function SignupOnboardingPage() {
+export default async function SignupOnboardingPage({ searchParams }: {
+  searchParams: Promise<{ step?: string; error?: string }>;
+}) {
   const supabase = await createClient();
   const { data: { user }, error } = await supabase.auth.getUser();
   if (error || !user || !user.email_confirmed_at || user.is_anonymous) {
@@ -24,5 +27,5 @@ export default async function SignupOnboardingPage() {
   if (!data || data.status === 'completed' || data.status === 'dismissed') {
     redirect('/dashboard');
   }
-  redirect('/onboarding');
+  return OnboardingPage({ searchParams });
 }
