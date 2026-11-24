@@ -1,3 +1,4 @@
+import { requireCommercialConnection } from '@/lib/commercial/integration-access';
 import { revalidatePath } from 'next/cache';
 import { NextRequest, NextResponse } from 'next/server';
 
@@ -168,6 +169,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
+    await requireCommercialConnection(state.organization_id, 'whatsapp');
     const result = await completeWhatsAppEmbeddedSignup({
       organizationId: state.organization_id,
       actorUserId: user.id,
