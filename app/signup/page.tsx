@@ -25,6 +25,7 @@ export default async function SignupPage({ searchParams }: {
         <p className="mt-3 text-sm leading-6 text-copy-muted">Create an account, verify your email and set up your business workspace.</p>
         {params.error && <p role="alert" className="mt-4 text-sm text-red-700">{params.error}</p>}
         {params.notice && <p role="status" className="mt-4 text-sm text-emerald-700">{params.notice}</p>}
+        {enabled && <p className="mt-3 text-sm text-copy-muted">Free forever, with 14 days of Pro trial access. No automatic charges. After your trial, continue on Free.</p>}
         {enabled && resend ? (
           <form action={resendSignupVerificationAction} className="mt-6 space-y-4">
             <h2 className="text-lg font-semibold">Resend verification email</h2>
