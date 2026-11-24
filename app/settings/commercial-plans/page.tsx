@@ -17,6 +17,7 @@ export default async function CommercialPlansPage({searchParams}:{searchParams:P
     <header><h1 className="text-2xl font-bold">Commercial plan proposals</h1>
     <p className="mt-2 text-sm">Internal plan administration. Initial publication requires separate approval and authorization. No customer subscription change or charge is possible here.</p></header>
     {result==='error'?<p role="alert" className="rounded border border-line p-3 text-sm">Operation not completed. Check permissions, approval, and catalog version, then retry.</p>:['created','review_saved','published'].includes(result??'')?<p role="status" className="rounded border border-line p-3 text-sm">{result==='published'?'Initial catalog plan published. Customer subscriptions remain unchanged.':result==='created'?'Draft proposal saved.':'Review decision saved.'}</p>:null}
+    {process.env.SALSYS_MANUAL_PILOT_ENABLED==='true'&&<Link href="/settings/commercial-plans/pilot" className="text-sm underline">Manual subscription approvals</Link>}
     {process.env.SALSYS_CONTRACT_QUOTES_ENABLED==='true'&&<Link href="/settings/commercial-plans/quotes" className="text-sm underline">Subscription quote queue (authorized operators)</Link>}
     <section className="grid gap-3 sm:grid-cols-4" aria-label="Current catalog versions">
       {PLAN_CODES.map(code=><div key={code} className="rounded-xl border border-line p-4"><h2 className="font-semibold capitalize">{code}</h2><p className="text-sm">Catalog version: {state.versions[code]??'Not created'}</p></div>)}
