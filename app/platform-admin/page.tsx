@@ -1,5 +1,6 @@
 import 'server-only';
 import Link from 'next/link';
+import { PlatformAdminFrame } from '@/components/platform-admin-frame';
 import { notFound } from 'next/navigation';
 import { PLAN_CODES, readPlanReviewState } from '@/lib/commercial/plan-admin';
 import { loadManualLaunchReadiness, type ManualLaunchReadiness } from '@/lib/commercial/manual-pilot';
@@ -25,22 +26,7 @@ export default async function PlatformAdminPage() {
   const publishedCount = PLAN_CODES.filter(code => (state.versions[code] ?? 0) > 0).length;
 
   return (
-    <div className="min-h-screen bg-surface text-copy">
-      <header className="flex flex-wrap items-center justify-between gap-4 border-b border-line px-6 py-4">
-        <div><p className="text-sm font-semibold">SalsysOS</p><p className="text-xs text-copy-muted">Platform administration</p></div>
-        <Link href="/dashboard" className="rounded-lg border border-line px-4 py-2 text-sm font-semibold">Open business workspace</Link>
-      </header>
-      <div className="mx-auto grid max-w-7xl gap-6 px-4 py-6 md:grid-cols-[220px_minmax(0,1fr)]">
-        <nav aria-label="Platform administration" className="space-y-2 rounded-xl border border-line p-3">
-          <Link href="/platform-admin" aria-current="page" className="block rounded-lg border border-line px-3 py-2 text-sm font-semibold">Overview</Link>
-          <Link href="/settings/commercial-plans" className="block rounded-lg px-3 py-2 text-sm">Plans and governance</Link>
-          {pilotEnabled && <Link href="/settings/commercial-plans/pilot" className="block rounded-lg px-3 py-2 text-sm">Manual subscriptions</Link>}
-          <div className="border-t border-line pt-3">
-            <p className="px-3 text-xs font-semibold text-copy-muted">Internal business</p>
-            <Link href="/dashboard" className="block rounded-lg px-3 py-2 text-sm">CRM command center</Link>
-            <Link href="/marketing" className="block rounded-lg px-3 py-2 text-sm">Marketing workspace</Link>
-          </div>
-        </nav>
+    <PlatformAdminFrame section="overview">
         <main className="min-w-0 space-y-6">
           <header>
             <h1 className="text-2xl font-bold">Platform overview</h1>
@@ -73,7 +59,6 @@ export default async function PlatformAdminPage() {
             <p className="mt-2 text-sm text-copy-muted">Customer lifecycle, subscription revenue, acquisition and platform usage reporting require separate verified read models. No estimated or fabricated metrics are shown.</p>
           </section>
         </main>
-      </div>
-    </div>
+    </PlatformAdminFrame>
   );
 }
