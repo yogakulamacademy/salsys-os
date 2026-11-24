@@ -673,7 +673,7 @@ begin
    then v_blockers:=array_append(v_blockers,'inactive_workspace_scope'); end if;
  return jsonb_build_object('database_configuration_ready',cardinality(v_blockers)=0,
    'missing_plan_codes',to_jsonb(v_missing),'blockers',to_jsonb(v_blockers),
-   'trial_days',14,'pilot_capacity',10,
+   'trial_days',30,'pilot_capacity',10,
    'pilot_used',(select count(*) from saas_governance.manual_pilot_organizations));
 end;
 $fn$;
@@ -720,7 +720,7 @@ begin
  insert into public.signup_trial_policy(plan_id,plan_version,trial_days,free_plan_id,free_plan_version,
  pro_integration_codes,free_integration_codes,pro_named_users,pro_lead_records,free_named_users,free_lead_records,
  free_workspace_codes,allowed_workspace_codes,approval_ref,approved_at,enabled)
- values(v_pro.plan_id,v_pro.version,14,v_free.plan_id,v_free.version,v_pro_integrations,v_free_integrations,
+ values(v_pro.plan_id,v_pro.version,30,v_free.plan_id,v_free.version,v_pro_integrations,v_free_integrations,
  (v_pro.snapshot->>'named_users')::integer,(v_pro.snapshot->>'lead_records')::integer,
  (v_free.snapshot->>'named_users')::integer,(v_free.snapshot->>'lead_records')::integer,
  v_free_scope,v_pro_scope,p_approval_ref,clock_timestamp(),false);
