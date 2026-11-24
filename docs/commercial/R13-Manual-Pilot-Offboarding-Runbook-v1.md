@@ -98,7 +98,7 @@ Full browser acceptance: 0/14 complete at this evidence cut; the narrower local 
 
 | Decision or approval | Current disposition | Required signer/evidence |
 | --- | --- | --- |
-| Permanent Free, verified 14-day Pro trial, ten distinct manual pilot organizations (not registration cap), gateway deferred | Prior product scope decision | Preserve; any change needs explicit owner approval |
+| Permanent Free, verified 30-day Pro trial, ten distinct manual pilot organizations (not registration cap), gateway deferred | Revised owner product decision 2026-11-24 | Preserve; any change needs explicit owner approval |
 | Exact plan snapshots, pricing, quotas, workspace scopes, connection eligibility, GST, optional setup charge and manual term limit | Proposals in R13-Manual-Pilot-Launch-Configuration-v1; no publication | Commercial owner; record exact approved version/digest for every plan |
 | Customer-facing terms, refunds, cancellation, support contacts/hours, privacy and retention/legal hold | Not approved; no promises made | Designated commercial/legal/privacy owners; approved policy version |
 | Operator-assisted offboarding for limited pilot versus full P4 before pilot | Proposed in this runbook, not waived | Commercial owner + privacy/DBA approval, O01–O07 evidence |
