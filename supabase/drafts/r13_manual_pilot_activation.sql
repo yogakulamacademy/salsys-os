@@ -728,4 +728,10 @@ begin
 end;
 $fn$;
 revoke all on function saas_governance.prepare_initial_trial_policy(text,text,text) from public,anon,authenticated,service_role;
+-- P0 standalone grants are intentionally narrowed once governance is installed.
+-- All catalog and subscription mutations must go through reviewed definer RPCs.
+-- Keep diagnostic SELECT grants; database release operator retains maintenance.
+revoke insert,update,delete,truncate,references,trigger on public.saas_plans,
+ public.saas_plan_entitlements,public.saas_organization_subscriptions
+ from service_role;
 commit;
