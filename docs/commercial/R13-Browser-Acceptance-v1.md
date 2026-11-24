@@ -17,7 +17,7 @@ Apply reviewed manual-first candidate schema in the documented dependency order,
 | B03 | Submit valid synthetic customer registration | Neutral verification notice; no workspace before verification |
 | B04 | Open the controlled verification email in original browser | Exact isolated /signup/verify callback; verified identity; no production redirect |
 | B05 | Replay/expire code, resend, and retry sign-in | No duplicate workspace or extended trial; neutral errors; resend quota enforced |
-| B06 | Finish protected signup onboarding and sign in | Tenant-bound owner session; correct isolated organization; 14-day Pro trial and one counted user |
+| B06 | Finish protected signup onboarding and sign in | Tenant-bound owner session; correct isolated organization; 30-day Pro trial and one counted user |
 | B07 | Open /settings/subscription | Actual plan, usage, history; no payment checkout |
 | B08 | Visit admin commercial routes as customer, including direct URL | Access denied; no operator mutations |
 | B09 | Sign in as isolated platform pilot approver and enable plan requests | Eligibility enabled, no access or slot change |
@@ -31,4 +31,4 @@ For each case record exact commit SHA, isolated environment identifier, expected
 
 ## Remaining decisions
 
-Staging hosting/project and test credentials require explicit separate approval. Commercial plan prices, quotas and feature allocation remain proposals. Gateway is deferred; ten manual organizations does not cap Free registrations. No launch or production migration authorized.
+Staging hosting/project and test credentials require explicit separate approval. Owner confirmed the price/user/lead structure and website lead forms plus Instagram for every tier; exact governed publication snapshots still require configuration. Add Free website-form ingestion and Instagram checks before and after expiry/downgrade. Gateway is deferred; ten manual organizations does not cap Free registrations. No launch or production migration authorized.
