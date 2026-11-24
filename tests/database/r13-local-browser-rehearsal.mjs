@@ -71,6 +71,11 @@ async function captured(email){
   throw Error('Controlled email with exact callback not captured');
 }
 async function main(){
+  const containers=execFileSync('docker',['ps','--format','{{.Names}}'],{encoding:'utf8'}).trim().split('\n').filter(n=>/^supabase_db_[a-zA-Z0-9_-]+$/.test(n));
+  check(containers.length===1,'Expected one local database');
+  const sql=q=>execFileSync('docker',['exec',containers[0],'psql','-X','-v','ON_ERROR_STOP=1','-U','postgres','-d','postgres','-Atc',q],{encoding:'utf8',stdio:['ignore','pipe','pipe']}).trim();
+  const platform=sql("select id from public.organizations where slug='salsysos' and status='active'");
+  check(/^[0-9a-f-]{36}$/.test(platform),'Local platform fixture missing');
   // Local self-signed certificate only. Never change TLS verification globally.
   const key=join(temporary,'key.pem'),cert=join(temporary,'cert.pem');
   execFileSync('openssl',['req','-x509','-newkey','rsa:2048','-nodes','-days','1','-subj','/CN=localhost',
@@ -82,7 +87,7 @@ async function main(){
       NEXT_PUBLIC_USE_MOCK_DATA:'false',NEXT_PUBLIC_SUPABASE_URL:api,NEXT_PUBLIC_SUPABASE_ANON_KEY:anon,
       SUPABASE_SERVICE_ROLE_KEY:service,SALSYSOS_APP_URL:origin,
       SALSYS_PUBLIC_SIGNUP_ENABLED:'true',SALSYS_COMMERCIAL_ACCESS_ENABLED:'true',
-      SALSYS_TRIAL_RECONCILIATION_ENABLED:'true',SALSYS_MANUAL_RECONCILIATION_ENABLED:'true',SALSYS_MANUAL_PILOT_ENABLED:'true',SALSYS_MANUAL_ACTIVATION_ENABLED:'true',SALSYS_PLAN_CHANGE_REQUESTS_ENABLED:'true',CRON_SECRET:cronSecret,SALSYS_SIGNUP_TURNSTILE_SITE_KEY:'local-negative-only',
+      SALSYS_TRIAL_RECONCILIATION_ENABLED:'true',SALSYS_MANUAL_RECONCILIATION_ENABLED:'true',SALSYS_PLAN_ADMIN_ENABLED:'true',SALSYS_COMMERCIAL_PLATFORM_ORG_ID:platform,SALSYS_MANUAL_PILOT_ENABLED:'true',SALSYS_MANUAL_ACTIVATION_ENABLED:'true',SALSYS_PLAN_CHANGE_REQUESTS_ENABLED:'true',CRON_SECRET:cronSecret,SALSYS_SIGNUP_TURNSTILE_SITE_KEY:'local-negative-only',
       SALSYS_SIGNUP_TURNSTILE_SECRET:'local-negative-only'},stdio:'ignore'});
   browser=await chromium.launch({headless:true});
   const context=await browser.newContext({ignoreHTTPSErrors:true});
@@ -110,9 +115,6 @@ async function main(){
   await page.locator('input[name=password]').fill(randomBytes(24).toString('hex'));
   await page.getByRole('button',{name:'Create account',exact:true}).click();
   await page.getByRole('alert').filter({hasText:'Security verification failed'}).waitFor();
-  const containers=execFileSync('docker',['ps','--format','{{.Names}}'],{encoding:'utf8'}).trim().split('\n').filter(n=>/^supabase_db_[a-zA-Z0-9_-]+$/.test(n));
-  check(containers.length===1,'Expected one local database');
-  const sql=q=>execFileSync('docker',['exec',containers[0],'psql','-X','-v','ON_ERROR_STOP=1','-U','postgres','-d','postgres','-Atc',q],{encoding:'utf8',stdio:['ignore','pipe','pipe']}).trim();
   check(sql('select count(*) from public.signup_registration_intents')==='0','Missing CAPTCHA created an intent');
   console.log('B02 partial: actual browser server action rejects missing CAPTCHA without registration intent');
   phase='trusted PKCE signup fixture';
@@ -176,6 +178,50 @@ async function main(){
   check(await page.getByRole('heading',{name:'Manual subscription approvals'}).count()===0,'Customer operator UI exposed');
   check(sql('select count(*) from saas_governance.manual_pilot_organizations')==='0','Customer route changed pilot capacity');
   console.log('B08 partial: actual customer direct operator page denied without pilot mutation; customer RPC denial covered separately');
+  phase='independent customer sign in';
+  const loginContext=await browser.newContext({ignoreHTTPSErrors:true});
+  await loginContext.route('**/*',route=>[origin,api,'http://localhost:54321','http://127.0.0.1:54321'].includes(new URL(route.request().url()).origin)?route.continue():route.abort());
+  const loginPage=await loginContext.newPage();
+  loginPage.setDefaultTimeout(90000);
+  const login=async(p,e,pw,next)=>{
+    await p.goto(origin+'/login?next='+encodeURIComponent(next),{waitUntil:'domcontentloaded'});
+    await p.locator('input[name=email]').fill(e);
+    await p.locator('input[name=password]').fill(pw);
+    await p.getByRole('button',{name:'Sign in',exact:true}).click();
+    await p.waitForURL(u=>u.pathname===next);
+  };
+  await login(loginPage,email,password,'/settings/subscription');
+  await loginPage.getByRole('heading',{name:'Pro trial',exact:true}).waitFor();
+  check(sql("select count(*) from public.signup_registration_intents where id='"+intent+"' and organization_id is not null")==='1','Sign-in duplicated workspace');
+  console.log('B06: separate actual browser sign-in reaches subscription after completed onboarding');
+  phase='interactive platform approver';
+  const operatorId=sql('select user_id from saas_governance.operators where active and may_approve_pilot');
+  check(/^[0-9a-f-]{36}$/.test(operatorId),'Local approver fixture missing');
+  const opEmail='r13-operator-'+randomUUID()+'@example.com',opPassword=randomBytes(24).toString('hex');
+  // Assign fresh credentials only to the synthetic pre-authorized local operator.
+  const changed=await json(api+'/auth/v1/admin/users/'+operatorId,{method:'PUT',
+    headers:{apikey:service,authorization:'Bearer '+service,'content-type':'application/json'},
+    body:JSON.stringify({email:opEmail,password:opPassword,email_confirm:true})});
+  check((changed.user||changed).id===operatorId,'Local operator credentials not configured');
+  const operatorContext=await browser.newContext({ignoreHTTPSErrors:true});
+  await operatorContext.route('**/*',route=>[origin,api,'http://localhost:54321','http://127.0.0.1:54321'].includes(new URL(route.request().url()).origin)?route.continue():route.abort());
+  const operatorPage=await operatorContext.newPage();
+  operatorPage.setDefaultTimeout(90000);
+  await login(operatorPage,opEmail,opPassword,'/settings/commercial-plans/pilot');
+  await operatorPage.getByRole('heading',{name:'Manual subscription approvals'}).waitFor();
+  const customerCard=operatorPage.locator('article').filter({has:operatorPage.getByRole('heading',{name:'Synthetic Browser Workspace',exact:true})});
+  await customerCard.locator('input[name=reason]').fill('Synthetic local browser enrollment');
+  await customerCard.getByRole('button',{name:'Enable plan requests'}).click();
+  await operatorPage.waitForURL(u=>u.pathname==='/settings/commercial-plans/pilot'&&u.searchParams.get('result')==='enrolled');
+  await operatorPage.getByRole('status').filter({hasText:'Plan requests enabled'}).waitFor();
+  check(sql('select count(*) from saas_governance.manual_pilot_organizations')==='0','Interactive enrollment consumed pilot capacity');
+  await loginPage.reload({waitUntil:'domcontentloaded'});
+  await loginPage.getByRole('heading',{name:'Pro trial',exact:true}).waitFor();
+  await loginPage.getByRole('link',{name:'Request plan change or renewal'}).waitFor();
+  console.log('B09: actual local platform approver sign-in and enrollment server action, customer trial and pilot capacity unchanged');
+  await operatorContext.close();
+  await loginContext.close();
+
 
   // A replay/missing-code test uses an independent browser with no cookies.
   const fresh=await browser.newContext({ignoreHTTPSErrors:true});
@@ -253,7 +299,7 @@ async function main(){
   check(sql("select count(*) from public.organization_members where organization_id in ('"+trialOrg+"','"+manualOrg+"')")===before,'Expiry changed membership count');
   check(sql("select count(*) from saas_governance.manual_subscription_contracts where organization_id='"+manualOrg+"'")==='1','Expiry removed immutable contract');
   console.log('B12 local HTTP: missing/invalid bearer denied, effective Free before reconciliation, both trial and manual converted, repeat no-op and member/contract retention PASS. Hosted scheduling not tested.');
-  console.log('R13 actual local browser/HTTPS/PKCE smoke PASS. Valid CAPTCHA signup, subsequent sign-in and interactive operator browser remain unverified.');
+  console.log('R13 actual local browser/HTTPS/PKCE smoke PASS. Valid CAPTCHA signup and further operator assignment browser cases remain unverified.');
 }
 try{await main()}catch(e){console.error('R13 local browser failed at '+phase);process.exitCode=1}
 finally{if(browser)await browser.close();if(child)child.kill('SIGTERM');rmSync(temporary,{recursive:true,force:true})}
