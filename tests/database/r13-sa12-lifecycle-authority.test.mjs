@@ -70,6 +70,53 @@ test('SA-12 private lifecycle authorization requires explicit permission and mat
       assert.deepEqual(row,{usage:false,execute:false,insert:false});
     }
     assert.equal((await db.query('select status from public.organizations where id=$1',[target])).rows[0].status,'active');
+    await db.query(readFileSync('supabase/drafts/r13_sa12_lifecycle_transitions.sql','utf8'));
+    await db.query('update saas_lifecycle.operators set active=true');
+    const reason='Synthetic lifecycle test only';
+    const change=async(client,action,revision,request,why=reason,confirmation=action+':'+target)=>
+      (await client.query('select saas_lifecycle.transition($1,$2,$3,$4,$5,$6,$7,$8) as result',
+        [platform,target,action,action==='suspend'?'active':'suspended',revision,request,why,confirmation])).rows[0].result;
+    const state=async()=> (await db.query('select status from public.organizations where id=$1',[target])).rows[0].status;
+    const count=async()=> (await db.query('select count(*)::int as n from saas_lifecycle.events')).rows[0].n;
+    for(const role of ['anon','authenticated','service_role']){
+      const row=(await db.query("select has_function_privilege($1,'saas_lifecycle.transition(uuid,uuid,text,text,bigint,uuid,text,text)','EXECUTE') as execute,has_table_privilege($1,'saas_lifecycle.events','INSERT') as insert",[role])).rows[0];
+      assert.deepEqual(row,{execute:false,insert:false});
+    }
+    await assert.rejects(change(db,'suspend',0,randomUUID(),reason,'wrong'),e=>e.code==='22023');
+    await assert.rejects(change(db,'suspend',1,randomUUID()),e=>e.code==='40001');
+    assert.equal(await count(),0);
+    const request=randomUUID();
+    const first=await change(db,'suspend',0,request);
+    assert.equal(first.new_status,'suspended');assert.equal(first.revision,1);
+    assert.equal(await state(),'suspended');assert.equal(await count(),1);
+    assert.equal((await change(db,'suspend',0,request)).replayed,true);
+    await assert.rejects(change(db,'suspend',0,request,'Different synthetic reason'),e=>e.code==='23505');
+    await assert.rejects(change(db,'suspend',0,randomUUID()),e=>e.code==='40001');
+    assert.equal(await count(),1);
+    const restore=await change(db,'restore',1,randomUUID());
+    assert.equal(restore.revision,2);assert.equal(await state(),'active');
+    for(const statement of ["update saas_lifecycle.events set reason='Changed reason'","delete from saas_lifecycle.events","truncate saas_lifecycle.events"]){
+      await assert.rejects(db.query(statement),e=>e.code==='55000');
+    }
+    // Inject an audit failure: the state change must roll back as one statement.
+    await db.query(`create function saas_lifecycle.test_reject_insert() returns trigger language plpgsql as $begin raise exception 'synthetic audit failure';end;$;
+      create trigger test_reject_insert before insert on saas_lifecycle.events for each row execute function saas_lifecycle.test_reject_insert();`);
+    await assert.rejects(change(db,'suspend',2,randomUUID()),/synthetic audit failure/);
+    assert.equal(await state(),'active');assert.equal(await count(),2);
+    await db.query('drop trigger test_reject_insert on saas_lifecycle.events');
+    // Two independent connections compete at one expected revision.
+    const peer=new pg.Client({connectionString:url.href});
+    await peer.connect();
+    try{
+      await peer.query("select set_config('test.claims',$1,false)",[JSON.stringify({role:'authenticated',sub:actor,session_id:session})]);
+      const outcomes=await Promise.allSettled([change(db,'suspend',2,randomUUID()),change(peer,'suspend',2,randomUUID())]);
+      assert.equal(outcomes.filter(x=>x.status==='fulfilled').length,1);
+      assert.equal(outcomes.filter(x=>x.status==='rejected'&&x.reason.code==='40001').length,1);
+      assert.equal(await state(),'suspended');assert.equal(await count(),3);
+      await change(db,'restore',3,randomUUID());
+      assert.equal(await state(),'active');assert.equal(await count(),4);
+    }finally{await peer.end();}
+
   }finally{
     if(db)await db.end();
     if(created)await admin.query('drop database "'+dbName+'"');
