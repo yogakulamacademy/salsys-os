@@ -84,7 +84,7 @@ test('R13 public signup SQL fails closed and atomically provisions one scoped tr
     assert.equal(await scalar("select public.signup_trial_available_v1() as value"),false);
     assert.equal(await reserve(randomUUID(),'closed@example.invalid'),false);
     for (const role of ['anon','authenticated']) {
-      for (const fn of ['signup_trial_available_v1()','reserve_signup_intent_v1(uuid,text,text,text)','accept_signup_intent_v1(uuid,uuid)','reserve_signup_resend_v1(text)','provision_verified_signup_v1(uuid)','convert_expired_signup_trial_v1(uuid)']) {
+      for (const fn of ['signup_trial_available_v1()','reserve_signup_intent_v1(uuid,text,text,text)','accept_signup_intent_v1(uuid,uuid)','reserve_signup_resend_v1(text)','provision_verified_signup_v1(uuid)','convert_expired_signup_trial_v1(uuid)','reconcile_expired_signup_trials_v1(integer)']) {
         assert.equal(await scalar("select has_function_privilege($1,$2,'EXECUTE') as value",[role,'public.'+fn]),false);
       }
     }
@@ -125,7 +125,9 @@ test('R13 public signup SQL fails closed and atomically provisions one scoped tr
     // Simulate clock passage only in the disposable fixture.
     await db.query("update public.signup_registration_intents set trial_ends_at=now()-interval '1 second' where organization_id=$1",[org]);
     await db.query("update public.saas_organization_subscriptions set trial_ends_at=(select trial_ends_at from public.signup_registration_intents where organization_id=$1) where organization_id=$1",[org]);
-    assert.equal(await convert(),true);
+    assert.deepEqual(await scalar('select public.reconcile_expired_signup_trials_v1(100) as value'),{checked:1,converted:1,failed:0});
+    assert.deepEqual(await scalar('select public.reconcile_expired_signup_trials_v1(100) as value'),{checked:0,converted:0,failed:0});
+    await assert.rejects(scalar('select public.reconcile_expired_signup_trials_v1(101) as value'),/Invalid reconciliation batch size/);
     assert.equal(await convert(),false);
     assert.equal(await scalar("select count(*)::int as value from public.saas_organization_subscriptions where organization_id=$1 and plan_id=$2 and status='active'",[org,free]),1);
     assert.equal(await scalar("select enabled as value from public.organization_workspaces where organization_id=$1 and workspace_code='sales'",[org]),false);
