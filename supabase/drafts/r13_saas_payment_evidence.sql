@@ -202,5 +202,49 @@ end;
 $fn$;
 revoke all on function saas_governance.prepare_payment_intent(uuid,text,uuid),
   saas_governance.record_verified_settlement(uuid) from public,anon,authenticated,service_role;
+-- Private read-only activation preflight. Settlement is accounting
+-- evidence even if the request was subsequently withdrawn or became stale.
+-- Do not consume money or change entitlements from this projection.
+-- A future activation transaction must repeat these predicates under locks,
+-- validate billing consent and runtime reconciliation, and atomically
+-- record the new contract. Test merchants can never satisfy live preflight.
+create function saas_governance.payment_activation_preflight(p_intent uuid)
+returns text language plpgsql security definer set search_path=pg_catalog as $fn$
+declare v_i saas_governance.saas_payment_intents%rowtype;
+  v_s saas_governance.saas_payment_settlements%rowtype;
+begin
+  select * into v_i from saas_governance.saas_payment_intents where id=p_intent;
+  if not found then return 'unavailable'; end if;
+  select * into v_s from saas_governance.saas_payment_settlements where intent_id=p_intent;
+  if not found then return 'awaiting_verified_settlement'; end if;
+  if exists(select 1 from saas_governance.saas_payment_attestations x
+    where x.merchant_id=v_s.merchant_id and x.provider_payment_ref=v_s.provider_payment_ref
+      and x.provider_status in ('refunded','disputed'))
+    then return 'adverse_payment_review'; end if;
+  if not exists(select 1 from saas_governance.saas_payment_merchants
+    where id=v_i.merchant_id and enabled and environment='live')
+    then return 'merchant_review'; end if;
+  if not exists(
+    select 1 from saas_governance.subscription_contract_quotes q
+    join saas_governance.subscription_contract_acceptances a on a.quote_id=q.id
+      and a.terms_digest=q.terms_digest and a.accepted_by=v_i.consented_by
+    join saas_governance.subscription_change_requests r on r.id=q.request_id and r.status='requested'
+    join saas_governance.change_request_access x on x.organization_id=r.organization_id and x.enabled
+    join public.saas_organization_subscriptions s on s.id=r.subscription_id and s.organization_id=r.organization_id
+      and s.updated_at=r.from_subscription_updated_at and s.plan_id=r.from_plan_id
+    join public.organizations o on o.id=r.organization_id and o.status='active'
+    join public.organization_members m on m.organization_id=o.id and m.user_id=v_i.consented_by
+      and m.active and m.role='owner'
+    join public.profiles pr on pr.id=m.user_id and pr.active
+    join auth.users u on u.id=m.user_id and u.email_confirmed_at is not null and not coalesce(u.is_anonymous,false)
+    join public.saas_plans p on p.id=q.plan_id and p.version=q.plan_version and p.status='active'
+    where q.id=v_i.quote_id and q.organization_id=v_i.organization_id and q.terms_digest=v_i.terms_digest
+      and s.status in ('active','trialing') and (s.status<>'trialing' or s.trial_ends_at>clock_timestamp())
+  ) then return 'contract_review'; end if;
+  return 'settled_pending_activation_review';
+end;
+$fn$;
+revoke all on function saas_governance.payment_activation_preflight(uuid)
+from public,anon,authenticated,service_role;
 -- No public bridge, no service writes, no checkout or activation.
 commit;
