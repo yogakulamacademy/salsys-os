@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 
 import { DashboardVisuals } from "@/components/dashboard-visuals";
+import { SignupPlanBanner } from "@/components/commercial/signup-plan-banner";
 
 import { LeadsTable } from "@/components/leads-table";
 
@@ -164,6 +165,8 @@ export default async function DashboardPage({
     const organizationId = await getCurrentOrganizationId(supabase, user.id);
 
     return (
+      <>
+      <SignupPlanBanner />
       <EmployeeDashboard
         userId={user.id}
         organizationId={organizationId}
@@ -171,10 +174,11 @@ export default async function DashboardPage({
         notice={query.notice ?? null}
         error={query.error ?? null}
       />
+      </>
     );
   }
 
-  return <AdminDashboardPage />;
+  return <><SignupPlanBanner /><AdminDashboardPage /></>;
 }
 
 async function EmployeeDashboard({
