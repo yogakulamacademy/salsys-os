@@ -56,11 +56,11 @@ begin
   select id into v_id from saas_governance.manual_subscription_contracts where request_id=p_request;
   if found then return v_id; end if;
   select * into v_req from saas_governance.subscription_change_requests where id=p_request for update;
-  if not found or v_req.status<>'requested' or v_req.requested_by=p_actor
+  if not found or v_req.status<>'requested' or (v_req.request_origin='customer' and v_req.requested_by=p_actor) or (v_req.request_origin='admin' and v_req.requested_by<>p_actor)
     or not exists(select 1 from public.organizations where id=v_org and status='active')
     or not exists(select 1 from public.organization_members m join public.profiles pr on pr.id=m.user_id and pr.active
       join auth.users u on u.id=m.user_id and u.email_confirmed_at is not null and not coalesce(u.is_anonymous,false)
-      where m.organization_id=v_org and m.user_id=v_req.requested_by and m.active and m.role='owner')
+      where m.organization_id=v_org and (v_req.request_origin='admin' or m.user_id=v_req.requested_by) and m.active and m.role='owner')
     then raise exception 'Current independent plan request required'; end if;
   perform 1 from saas_governance.change_request_access where organization_id=v_org and enabled for share;
   if not found then raise exception 'Plan changes unavailable'; end if;
