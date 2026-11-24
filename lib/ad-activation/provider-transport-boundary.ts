@@ -1,4 +1,5 @@
 import "server-only";
+import { commercialAdvancedAllowed } from "@/lib/commercial/advanced-access";
 
 import type { AdActivationProviderDryRun } from "@/lib/ad-activation/provider-dry-run";
 import type { AdActivationProviderResult } from "@/lib/ad-activation/types";
@@ -42,6 +43,12 @@ export async function executeAdActivationTransport(input: {
 
   // This branch is intentionally unreachable in Phase 7C. A later authorized
   // phase must change the compile-time policy and add reviewed live adapters.
+  const isAdd = prepared.provider === "meta"
+    ? prepared.operations.some(operation => operation.action === "add" || operation.method === "POST")
+    : prepared.operation.action === "add" || prepared.operation.rpc === "IngestAudienceMembers";
+  if (isAdd && !await commercialAdvancedAllowed(input.context.organizationId, 'ad_audience_add')) {
+    return { status: "skipped", reason: "commercial_audience_add_unavailable" };
+  }
   const adapter = input.adapters?.find((candidate) => candidate.provider === prepared.provider);
   if (!adapter) {
     return { status: "failed", errorCode: "provider_adapter_missing", errorMessage: "No provider transport adapter is registered." };

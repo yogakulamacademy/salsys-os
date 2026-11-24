@@ -1,3 +1,4 @@
+import { requireCommercialConnection } from '@/lib/commercial/integration-access';
 import {
   revalidatePath,
 } from 'next/cache';
@@ -644,6 +645,7 @@ export async function GET(
 
 
   try {
+    await requireCommercialConnection(stateRow.organization_id, 'meta');
     const redirectUri =
       metaRedirectUri(
         request,
@@ -840,6 +842,7 @@ export async function GET(
       new Date().toISOString();
 
 
+    await requireCommercialConnection(stateRow.organization_id, 'meta');
     const payload = {
       organization_id:
         stateRow.organization_id,

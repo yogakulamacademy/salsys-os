@@ -1,3 +1,4 @@
+import { requireCommercialIntegration } from '@/lib/commercial/integration-access';
 import { getVercelOidcToken } from '@vercel/oidc';
 
 import { googleKeyClient } from '@/lib/google-key-credentials';
@@ -956,6 +957,7 @@ export async function syncGa4ToSupabase(
     runtime ??
     await resolveGa4Runtime();
 
+  await requireCommercialIntegration(resolvedRuntime.organizationId, 'ga4');
   const config = {
     propertyId:
       resolvedRuntime.propertyId,

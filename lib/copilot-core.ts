@@ -1,4 +1,5 @@
 import 'server-only';
+import { commercialAdvancedAllowed } from '@/lib/commercial/advanced-access';
 
 import { createAdminClient } from '@/lib/supabase/admin';
 import { inspectKnowledgeMatches, knowledgeFingerprint, type KnowledgeEvidence } from '@/lib/knowledge-evidence';
@@ -378,6 +379,9 @@ export async function draftCopilotReply({
   }
 
   const organizationId = String(lead.organization_id);
+  if (!await commercialAdvancedAllowed(organizationId, 'ai_drafting')) {
+    return { ok: false, error: 'AI drafting is not available for your current subscription.' };
+  }
   const channel = stringValue(lead.current_contact_channel) as SupportedChannel;
   // Re-engagement nudges to website leads are drafted as an email body; the Inbox
   // composer opens them in the team member's mail app (nothing is sent from here).

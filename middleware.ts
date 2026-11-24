@@ -3,6 +3,8 @@ import { NextResponse, type NextRequest } from "next/server";
 
 const PUBLIC_EXACT_PATHS = new Set([
   "/",
+  "/signup",
+  "/signup/verify",
   "/auth/callback",
   "/auth/recovery-confirm",
   "/forgot-password",
@@ -45,6 +47,7 @@ const PUBLIC_EXACT_PATHS = new Set([
   "/api/ai/autopilot",
   "/api/instagram/history-sync",
   "/api/course-batches/close-started",
+  "/api/commercial/trial-expiry",
   "/api/leads/interests/scan",
   "/api/leads/stages/scan",
   "/api/leads/location/scan",
@@ -75,6 +78,7 @@ const ADMIN_ONLY_EXACT_PATHS = new Set([
 
 const ONBOARDING_SETUP_PATHS = [
   "/onboarding",
+  "/signup/onboarding",
   "/tracking",
   "/settings/integrations",
   "/settings/team",
@@ -509,6 +513,23 @@ export async function middleware(request: NextRequest) {
     return redirectWithAuthCookies(request, response, "/onboarding/security");
   }
 
+  // Route self-service owners into the signup wizard after trusted tenant
+  // binding. This is a navigation preference, not an access grant.
+  const selfSignupWorkspace =
+    user.app_metadata?.self_signup_organization_id === organizationId &&
+    (role === "owner" || role === "admin");
+  if (
+    selfSignupWorkspace &&
+    (request.method === "GET" || request.method === "HEAD") &&
+    /^\/onboarding(?:\/(?:website|channels|team|finish))?\/?$/.test(pathname)
+  ) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/signup" + pathname;
+    const redirected = NextResponse.redirect(url);
+    response.cookies.getAll().forEach((cookie) => redirected.cookies.set(cookie));
+    return privateNoStore(redirected);
+  }
+
   if (
     !pathname.startsWith("/api/") &&
     !isOnboardingSetupPage(pathname) &&
@@ -540,7 +561,7 @@ export async function middleware(request: NextRequest) {
         onboarding.status !== "completed" &&
         onboarding.status !== "dismissed"
       ) {
-        return redirectWithAuthCookies(request, response, "/onboarding");
+        return redirectWithAuthCookies(request, response, selfSignupWorkspace ? "/signup/onboarding" : "/onboarding");
       }
     } catch (error) {
       console.warn("Middleware required onboarding lookup unavailable", {

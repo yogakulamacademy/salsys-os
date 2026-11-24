@@ -1,0 +1,51 @@
+const { test }=require('node:test');
+const assert=require('node:assert/strict');
+const {readFileSync}=require('node:fs');
+const {load}=require('./helpers.cjs');
+test('subscription adapter derives session, preserves over-limit usage and strips private fields',async()=>{
+  const old=process.env.SALSYS_COMMERCIAL_ACCESS_ENABLED;
+  try {
+    process.env.SALSYS_COMMERCIAL_ACCESS_ENABLED='true';
+    let user={id:'test-owner',email_confirmed_at:'2026-11-24T00:00:00Z',is_anonymous:false};
+    let error=null,calls=0;
+    const history={event_type:'subscription_created',previous_status:null,new_status:'trialing',occurred_at:'2026-11-10T00:00:00Z',plan_code:'pro',provider_customer_ref:'private'};
+    let response={state:'free_pending_reconciliation',plan_code:'free',trial_ends_at:'2026-11-24T00:00:00Z',remaining_seconds:0,named_users:2,named_user_limit:1,lead_records:3,lead_record_limit:1,history:[history],other_tenant:'private'};
+    const mod=load('lib/commercial/subscription-dashboard.ts',{'server-only':{},'@/lib/config':{useMockData:false},'@/lib/supabase/server':{createClient:async()=>({auth:{getUser:async()=>({data:{user},error:null})},rpc:async(...args)=>{calls++;assert.deepEqual(args,['get_current_subscription_dashboard_v1']);return {data:response,error}}})}});
+    const state=await mod.loadSubscriptionDashboard();
+    assert.equal(state.lead_records,3);assert.equal(state.lead_record_limit,1);
+    assert.equal(state.state,'free_pending_reconciliation');
+    assert.equal('other_tenant' in state,false);
+    assert.equal('provider_customer_ref' in state.history[0],false);
+    response={...response,state:'manual_active',plan_code:'growth',access_ends_at:'2026-12-20T00:00:00Z',named_user_limit:5,lead_record_limit:8};
+    const manual=await mod.loadSubscriptionDashboard();
+    assert.equal(manual.state,'manual_active');
+    assert.equal(manual.plan_code,'growth');
+    assert.equal(manual.access_ends_at,'2026-12-20T00:00:00Z');
+    response={...response,access_ends_at:null};
+    assert.deepEqual(await mod.loadSubscriptionDashboard(),{state:'unavailable'});
+    response={...response,access_ends_at:'2026-12-20T00:00:00Z',lead_record_limit:0};
+    assert.deepEqual(await mod.loadSubscriptionDashboard(),{state:'unavailable'});
+    response={state:'managed_separately'};
+    assert.deepEqual(await mod.loadSubscriptionDashboard(),{state:'managed_separately'});
+    error={message:'private error'};
+    assert.deepEqual(await mod.loadSubscriptionDashboard(),{state:'unavailable'});
+    error=null;user=null;
+    assert.deepEqual(await mod.loadSubscriptionDashboard(),{state:'unavailable'});
+    process.env.SALSYS_COMMERCIAL_ACCESS_ENABLED='false';
+    assert.deepEqual(await mod.loadSubscriptionDashboard(),{state:'unavailable'});
+    assert.equal(calls,6);
+  }finally{if(old===undefined)delete process.env.SALSYS_COMMERCIAL_ACCESS_ENABLED;else process.env.SALSYS_COMMERCIAL_ACCESS_ENABLED=old;}
+});
+test('subscription page is read-only with tenant-scoped history and no payment initiation',()=>{
+  const sql=readFileSync('supabase/drafts/r13_verified_signup.sql','utf8').split('create function public.get_current_subscription_dashboard_v1()')[1];
+  assert.ok(sql.includes("m.role in ('owner','admin')"));
+  assert.ok(sql.includes("e.organization_id=v_org"));
+  assert.ok(sql.includes('public.resolve_signup_plan_internal_v1(v_org)'));
+  assert.ok(sql.includes('grant execute on function public.get_current_subscription_dashboard_v1() to authenticated'));
+  assert.doesNotMatch(sql,/insert into|update public\.|delete from/i);
+  const page=readFileSync('app/settings/subscription/page.tsx','utf8');
+  assert.ok(page.includes('await requireAdminWorkspaceAccess()'));
+  assert.ok(page.includes('loadSubscriptionDashboard()'));
+  assert.ok(page.includes('Self-service paid upgrades are not yet available'));
+  assert.ok(!page.includes('createAdminClient'));
+});

@@ -4,11 +4,19 @@ on:
   pull_request:
     branches:
       - main
+      - feat/r13-manual-pilot-integrated
+      - test/r13-local-auth-rehearsal
     paths:
       - 'supabase/**'
       - 'scripts/build-migration-recovery-manifest.mjs'
+      - 'scripts/stage-r13-versioned-rehearsal.mjs'
+      - 'tests/database/r13-dormant-schema-local.sql'
       - 'tests/database/r2-behavior-rpc-negative-auth-local.sql'
       - 'tests/database/r2-behavior-rpc-positive-tenant-local.sql'
+      - 'tests/database/r13-commercial-state-full-local.sql'
+      - 'tests/database/r13-manual-full-local.sql'
+      - 'tests/database/r13-real-auth-local*'
+      - 'tests/database/r13-local-browser-rehearsal.mjs'
       - '.github/workflows/migration-replay.yml'
   workflow_dispatch:
 
@@ -22,9 +30,12 @@ concurrency:
 jobs:
   clean-replay:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 60
     env:
       SUPABASE_TELEMETRY_DISABLED: '1'
+      SALSYS_R13_DISPOSABLE_AUTH_TEST: ${{ (github.head_ref == 'test/r13-local-auth-rehearsal' || github.head_ref == 'test/r13-local-browser-rehearsal' || github.head_ref == 'release/r13-manual-first-consolidated') && '1' || '0' }}
+      SALSYS_R13_BROWSER_TEST: ${{ (github.head_ref == 'test/r13-local-browser-rehearsal' || github.head_ref == 'release/r13-manual-first-consolidated') && '1' || '0' }}
+      SALSYS_R13_VERSIONED_REHEARSAL: ${{ (github.head_ref == 'test/r13-versioned-release-rehearsal' || github.head_ref == 'release/r13-manual-first-consolidated') && '1' || '0' }}
     steps:
       - name: Checkout
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
@@ -106,6 +117,9 @@ jobs:
              supabase/migrations/20261014060700_legacy_crm_settings_helpers_prerequisite.sql
           cp supabase/recovery/20261014065500_legacy_global_crm_mutators_prerequisite.sql \
              supabase/migrations/20261014065500_legacy_global_crm_mutators_prerequisite.sql
+          # Existing production ledger entry, absent from source replay. Restore only in CI.
+          cp supabase/recovery/20261015022538_global_login_single_tenant_binding.sql \
+             supabase/migrations/20261015022538_global_login_single_tenant_binding.sql
           cp supabase/recovery/20261014091300_course_batch_admin_events_prerequisite.sql \
              supabase/migrations/20261014091300_course_batch_admin_events_prerequisite.sql
 
@@ -260,11 +274,26 @@ jobs:
           cp supabase/recovery/20261101095410_dashboard_snapshot_authorization_prerequisite.sql \
              supabase/migrations/20261101095410_dashboard_snapshot_authorization_prerequisite.sql
 
+      - name: Isolate verified promoted R13 migrations for foundation replay
+        run: node scripts/stage-r13-versioned-rehearsal.mjs --isolate-promoted
+
       - name: Start local Supabase database
         shell: bash
         run: |
           set -o pipefail
-          supabase db start 2>&1 | tee migration-replay.log
+          if [ "$SALSYS_R13_DISPOSABLE_AUTH_TEST" = "1" ]; then
+            test "$GITHUB_ACTIONS" = true && test "$RUNNER_ENVIRONMENT" = github-hosted
+            # Modify only the ephemeral checkout; confirmation mail stays inside the local stack.
+            if [ "$SALSYS_R13_BROWSER_TEST" = "1" ]; then
+              printf '\n[auth]\nsite_url = "https://localhost:3000"\nadditional_redirect_urls = ["https://localhost:3000/signup/verify"]\n[auth.email]\nenable_confirmations = true\n' >> supabase/config.toml
+            else
+              printf '\n[auth]\nsite_url = "http://127.0.0.1:3000"\n[auth.email]\nenable_confirmations = true\n' >> supabase/config.toml
+            fi
+            # CLI status can include keys; never send its output to logs/artifacts.
+            supabase start > /tmp/r13-local-start.log 2>&1 || { echo "Local Auth stack failed to start"; exit 1; }
+          else
+            supabase db start 2>&1 | tee migration-replay.log
+          fi
 
       - name: Replay migrations from a clean database
         shell: bash
@@ -309,6 +338,79 @@ jobs:
             -U postgres -d postgres \
             < tests/database/home-v1-rpc-auth-and-metrics-local.sql
 
+      - name: Verify R13-P0 commercial state, permissions and audit in disposable Postgres
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Only the disposable Supabase Postgres from this workflow.
+          db_containers="$(docker ps --format '{{.Names}}' | grep '^supabase_db_' || true)"
+          test "$(printf '%s\n' "$db_containers" | grep -c .)" -eq 1
+          docker exec -i "$db_containers" psql -X -v ON_ERROR_STOP=1 -U postgres -d postgres < tests/database/r13-commercial-state-full-local.sql
+
+      - name: Apply manual-first R13 candidates to full disposable schema
+        shell: bash
+        run: |
+          set -euo pipefail
+          # CI-local database only; no remote connection or migration ledger write.
+          db_containers="$(docker ps --format '{{.Names}}' | grep '^supabase_db_' || true)"
+          test "$(printf '%s\n' "$db_containers" | grep -c .)" -eq 1
+          if [ "$SALSYS_R13_VERSIONED_REHEARSAL" = "1" ]; then
+            if [ "${SALSYS_R13_PROMOTED:-0}" = "1" ]; then
+              node scripts/stage-r13-versioned-rehearsal.mjs --restore-promoted
+            else
+              node scripts/stage-r13-versioned-rehearsal.mjs
+            fi
+            # Second clean reset tests the actual versioned migration runner.
+            # First reset above preserves independent P0-only assertions.
+            supabase db reset --local 2>&1 | tee -a migration-replay.log
+            db_containers="$(docker ps --format '{{.Names}}' | grep '^supabase_db_' || true)"
+            test "$(printf '%s\n' "$db_containers" | grep -c .)" -eq 1
+            count="$(docker exec "$db_containers" psql -X -v ON_ERROR_STOP=1 -U postgres -d postgres -Atc "select count(*) from supabase_migrations.schema_migrations where version in ('20261124130001','20261124130002','20261124130003','20261124130004','20261124130005')")"
+            test "$count" = 5
+            echo "All five R13 versions recorded by local migration runner"
+          else
+            for candidate in r13_governed_plan_admin r13_verified_signup r13_subscription_change_requests r13_manual_pilot_approvals r13_manual_pilot_activation; do
+              docker exec -i "$db_containers" psql -X -v ON_ERROR_STOP=1 -U postgres -d postgres < "supabase/drafts/$candidate.sql"
+            done
+          fi
+          docker exec -i "$db_containers" psql -X -v ON_ERROR_STOP=1 -U postgres -d postgres < tests/database/r13-manual-full-local.sql
+          if [ "$SALSYS_R13_VERSIONED_REHEARSAL" = "1" ]; then
+            # Simulate application rollback with commercial schema retained and
+            # unconfigured. Exercise unchanged legacy RPCs and actual lead/member
+            # writes again AFTER the commercial triggers are installed.
+            for fixture in r2-behavior-rpc-negative-auth-local r2-behavior-rpc-positive-tenant-local home-v1-rpc-auth-and-metrics-local; do
+              docker exec -i "$db_containers" psql -X -v ON_ERROR_STOP=1 -U postgres -d postgres < "tests/database/$fixture.sql"
+            done
+            docker exec -i "$db_containers" psql -X -v ON_ERROR_STOP=1 -U postgres -d postgres < tests/database/r13-dormant-schema-local.sql
+          fi
+
+      - name: Prepare disposable Auth fixture and run API smoke when selected
+        if: env.SALSYS_R13_DISPOSABLE_AUTH_TEST == '1'
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_ACTIONS" = true && test "$RUNNER_ENVIRONMENT" = github-hosted
+          db_containers="$(docker ps --format '{{.Names}}' | grep '^supabase_db_' || true)"
+          test "$(printf '%s\n' "$db_containers" | grep -c .)" -eq 1
+          docker exec -i "$db_containers" psql -X -v ON_ERROR_STOP=1 -U postgres -d postgres < tests/database/r13-real-auth-local-setup.sql
+          if [ "$SALSYS_R13_BROWSER_TEST" != "1" ]; then node tests/database/r13-real-auth-local.mjs; fi
+
+      - name: Setup Node for local browser acceptance
+        if: env.SALSYS_R13_BROWSER_TEST == '1'
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 22
+
+      - name: Install app dependencies and browser for disposable test
+        if: env.SALSYS_R13_BROWSER_TEST == '1'
+        run: |
+          npm ci
+          npx playwright install --only-shell chromium
+
+      - name: Verify actual local HTTPS browser and PKCE callback
+        if: env.SALSYS_R13_BROWSER_TEST == '1'
+        run: node tests/database/r13-local-browser-rehearsal.mjs
+
       - name: Show local migration state
         if: always()
         shell: bash
@@ -326,3 +428,10 @@ jobs:
             migration-replay.log
           if-no-files-found: ignore
           retention-days: 3
+
+      - name: Destroy disposable Auth test stack
+        if: always() && env.SALSYS_R13_DISPOSABLE_AUTH_TEST == '1'
+        shell: bash
+        run: |
+          supabase stop --no-backup > /tmp/r13-local-stop.log 2>&1 || { echo "Local stack cleanup failed"; exit 1; }
+          rm -f /tmp/r13-local-start.log /tmp/r13-local-stop.log

@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 
 import { secretMatches } from '@/lib/security/machine-bearer-auth';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { commercialInboundAllowed } from '@/lib/commercial/inbound-access';
 import { recordWhatsappMessageSeenActivity } from '@/lib/integrations/message-read-activity';
 import { projectDeskcommInboundShadow } from '@/lib/integrations/deskcomm-inbound-shadow';
 
@@ -151,6 +152,7 @@ export async function POST(request: NextRequest) {
     let processed = 0;
     let alreadyProcessed = 0;
     let ignored = 0;
+    let commerciallyIgnored = 0;
 
     for (const event of events) {
       const eventKey = stringValue(event.event_key);
@@ -182,6 +184,14 @@ export async function POST(request: NextRequest) {
         throw new Error(
           `No active organization mapping found for WhatsApp phone_number_id ${phoneNumberId}.`,
         );
+      }
+
+      // Existing delivery/read status reconciliation remains independent of
+      // subscription eligibility. Reject new inbound content before storage.
+      if (!(stringValue(event.event_type) ?? '').startsWith('status:') &&
+          !await commercialInboundAllowed(supabase, organizationId, 'whatsapp')) {
+        commerciallyIgnored += 1;
+        continue;
       }
 
       event.organization_id = organizationId;
@@ -417,6 +427,7 @@ export async function POST(request: NextRequest) {
         processed,
         already_processed: alreadyProcessed,
         ignored,
+        commercially_ignored: commerciallyIgnored,
       },
       { status: 200 },
     );

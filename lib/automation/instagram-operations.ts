@@ -1,5 +1,7 @@
 import 'server-only';
 
+import { commercialAutomationAllowed } from '@/lib/commercial/automation-access';
+
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getInstagramRuntimeForOrganization } from '@/lib/integrations/instagram-connection';
 
@@ -230,6 +232,9 @@ async function sendInstagramAutomationRun(
   runId: string,
 ) {
   const admin = createAdminClient();
+  if (!await commercialAutomationAllowed(organizationId, 'instagram')) {
+    return { ok: true as const, runId, sent: false as const, reason: 'commercial_automation_unavailable' };
+  }
   const now = new Date().toISOString();
   const { data: claimData, error: claimError } = await admin.rpc(
     'claim_instagram_automation_run_v1',
@@ -270,6 +275,9 @@ async function sendInstagramAutomationRun(
       throw new Error('Instagram automation run is missing recipient or message data.');
     }
 
+    if (!await commercialAutomationAllowed(organizationId, 'instagram')) {
+      throw new Error('Commercial automation unavailable.');
+    }
     const response = await fetch(
       `https://graph.instagram.com/${apiVersion()}/${encodeURIComponent(runtime.accountId)}/messages`,
       {

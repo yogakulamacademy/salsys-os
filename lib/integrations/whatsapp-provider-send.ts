@@ -1,4 +1,6 @@
 import 'server-only';
+import { commercialAutomationAllowed } from '@/lib/commercial/automation-access';
+import { requireCommercialIntegration } from '@/lib/commercial/integration-access';
 
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getWhatsAppRuntimeForOrganization } from '@/lib/integrations/whatsapp-connection';
@@ -358,6 +360,14 @@ export async function executePreparedWhatsAppProviderSend(params: {
     throw new Error('organizationId and auditId are required.');
   }
 
+  // The prepared-send executor also serves automation approval/retry routes.
+  // Keep it unavailable to self-signup tenants until that boundary is approved.
+  if (!await commercialAutomationAllowed(organizationId, 'whatsapp')) {
+    return { ok: false, auditId, status: 'blocked', providerCallAttempted: false,
+      providerMessageId: null, canonicalMessageId: null, customerMessageSent: false,
+      error: 'Commercial automation unavailable.' };
+  }
+  await requireCommercialIntegration(organizationId, 'whatsapp');
   const admin = createAdminClient();
   const { data: claimData, error: claimError } = await admin.rpc(
     'claim_whatsapp_provider_send_v2',
@@ -439,6 +449,10 @@ export async function executePreparedWhatsAppProviderSend(params: {
 
     // After dispatch begins, a thrown network/response-body error cannot
     // prove the provider rejected the message. Never classify it retry-safe.
+    if (!await commercialAutomationAllowed(organizationId, 'whatsapp')) {
+      throw new Error('Commercial automation unavailable.');
+    }
+    await requireCommercialIntegration(organizationId, 'whatsapp');
     providerCallStarted = true;
     const response = await fetch(
       `https://graph.facebook.com/${apiVersion()}/${encodeURIComponent(runtime.phoneNumberId)}/messages`,

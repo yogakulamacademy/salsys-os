@@ -1,4 +1,5 @@
 "use server";
+import { requireCommercialIntegration } from "@/lib/commercial/integration-access";
 
 import { revalidatePath } from "next/cache";
 
@@ -607,6 +608,11 @@ export async function sendWhatsAppMessageAction(
 
   const phoneNumberId = whatsappRuntime.phoneNumberId;
 
+  try {
+    await requireCommercialIntegration(organizationId, 'whatsapp');
+  } catch {
+    redirect(conversationUrl(leadId, { error: 'WhatsApp is not available for your current subscription.' }));
+  }
   const version = whatsappApiVersion();
 
   const response = await fetch(
@@ -1422,6 +1428,11 @@ export async function sendWhatsAppTemplateAction(
 
   const phoneNumberId = whatsappRuntime.phoneNumberId;
 
+  try {
+    await requireCommercialIntegration(organizationId, 'whatsapp');
+  } catch {
+    redirect(conversationUrl(leadId, { error: 'WhatsApp is not available for your current subscription.' }));
+  }
   const version = whatsappApiVersion();
 
   const response = await fetch(

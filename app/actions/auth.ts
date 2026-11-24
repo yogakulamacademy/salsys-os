@@ -4,6 +4,7 @@ import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 
 import { useMockData } from '@/lib/config';
+import { provisionVerifiedSignup } from '@/lib/signup/provision';
 import { createClient } from '@/lib/supabase/server';
 import { ACTIVE_WORKSPACE_COOKIE } from '@/lib/workspace';
 
@@ -321,7 +322,21 @@ export async function signInAction(formData: FormData) {
     redirect(loginAuthUrl('error', 'Invalid email or password', next));
   }
 
-  const tenant = await bindCurrentUserOrganization(supabase);
+  let tenant = await bindCurrentUserOrganization(supabase);
+  let recoveredSignup = false;
+
+  // A missing membership can be an interrupted verified registration.
+  // Never retry provisioning on ambiguous membership or infrastructure errors.
+  if (!tenant.ok && tenant.reason === 'no_membership' &&
+      process.env.SALSYS_PUBLIC_SIGNUP_ENABLED === 'true' &&
+      signInData.user.email_confirmed_at && !signInData.user.is_anonymous &&
+      signInData.user.app_metadata?.require_password_change !== true) {
+    const recovered = await provisionVerifiedSignup().catch(() => ({ ok: false as const }));
+    if (recovered.ok) {
+      tenant = await bindCurrentUserOrganization(supabase);
+      recoveredSignup = tenant.ok && tenant.organizationId === recovered.organizationId;
+    }
+  }
 
   if (!tenant.ok) {
     const cookieStore = await cookies();
@@ -336,7 +351,8 @@ export async function signInAction(formData: FormData) {
   }
 
   if (await shouldEnterRequiredOnboarding(supabase, tenant.organizationId)) {
-    redirect('/onboarding');
+    redirect(recoveredSignup || signInData.user.app_metadata?.self_signup_organization_id === tenant.organizationId
+      ? '/signup/onboarding' : '/onboarding');
   }
 
   redirect(next);

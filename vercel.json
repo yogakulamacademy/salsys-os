@@ -16,6 +16,10 @@
   },
   "crons": [
     {
+      "path": "/api/commercial/trial-expiry",
+      "schedule": "*/5 * * * *"
+    },
+    {
       "path": "/api/admissions/auto-tasks",
       "schedule": "*/15 * * * *"
     },
