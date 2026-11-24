@@ -1,5 +1,7 @@
 'use server';
 
+import { randomUUID } from 'node:crypto';
+import { createAdminClient } from '@/lib/supabase/admin';
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { useMockData } from '@/lib/config';
@@ -20,13 +22,20 @@ export async function signupAction(formData: FormData) {
     redirect('/signup?error=Check+your+details.+Use+at+least+12+password+characters.');
   }
 
+  const intentId = randomUUID();
+  const admin = createAdminClient();
+  const { error: intentError } = await admin.from('signup_registration_intents').insert({
+    id: intentId, email, full_name: fullName, business_name: businessName,
+  });
+  if (intentError) redirect('/signup?error=Registration+is+temporarily+unavailable.');
+
   const supabase = await createClient();
   const { data, error } = await supabase.auth.signUp({
     email,
     password,
     options: {
       emailRedirectTo: 'https://salsysos.com/signup/verify',
-      data: { full_name: fullName, signup_business_name: businessName },
+      data: { signup_intent_id: intentId },
     },
   });
 
