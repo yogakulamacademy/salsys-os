@@ -35,14 +35,16 @@ test('R13 commercial schema is separate from CRM customer payments and real tena
 });
 
 test('R13 security and append-only audit contract stays explicit', () => {
-  assert.match(migration,/revoke all on table[\s\S]+?from public, anon, authenticated;/);
-  assert.match(migration,/grant select,insert on table public\.saas_subscription_events to service_role;/);
-  assert.match(migration,/revoke all on public\.saas_commercial_readiness_v1 from public, anon, authenticated;/);
+  assert.match(migration,/revoke all on table[\s\S]+?from public, anon, authenticated, service_role;/);
+  assert.match(migration,/grant select on table public\.saas_subscription_events to service_role;/);
+  assert.match(migration,/revoke all on public\.saas_commercial_readiness_v1 from public, anon, authenticated, service_role;/);
   assert.match(migration,/saas_subscription_event_immutable_v1/);
   assert.match(migration,/before update or delete on public\.saas_subscription_events/);
   assert.match(migration,/before truncate on public\.saas_subscription_events/);
   assert.match(migration,/saas_subscription_audit_insert_v1/);
   assert.match(migration,/saas_subscription_audit_update_v1/);
+  assert.match(fixture,/service-role audit forgery permitted/);
+  assert.match(fixture,/SET LOCAL ROLE service_role/);
 });
 
 test('R13 disposable real Postgres replay is wired and always rolled back', () => {
