@@ -274,6 +274,9 @@ jobs:
           cp supabase/recovery/20261101095410_dashboard_snapshot_authorization_prerequisite.sql \
              supabase/migrations/20261101095410_dashboard_snapshot_authorization_prerequisite.sql
 
+      - name: Isolate verified promoted R13 migrations for foundation replay
+        run: node scripts/stage-r13-versioned-rehearsal.mjs --isolate-promoted
+
       - name: Start local Supabase database
         shell: bash
         run: |
@@ -352,7 +355,11 @@ jobs:
           db_containers="$(docker ps --format '{{.Names}}' | grep '^supabase_db_' || true)"
           test "$(printf '%s\n' "$db_containers" | grep -c .)" -eq 1
           if [ "$SALSYS_R13_VERSIONED_REHEARSAL" = "1" ]; then
-            node scripts/stage-r13-versioned-rehearsal.mjs
+            if [ "${SALSYS_R13_PROMOTED:-0}" = "1" ]; then
+              node scripts/stage-r13-versioned-rehearsal.mjs --restore-promoted
+            else
+              node scripts/stage-r13-versioned-rehearsal.mjs
+            fi
             # Second clean reset tests the actual versioned migration runner.
             # First reset above preserves independent P0-only assertions.
             supabase db reset --local 2>&1 | tee -a migration-replay.log
@@ -360,7 +367,7 @@ jobs:
             test "$(printf '%s\n' "$db_containers" | grep -c .)" -eq 1
             count="$(docker exec "$db_containers" psql -X -v ON_ERROR_STOP=1 -U postgres -d postgres -Atc "select count(*) from supabase_migrations.schema_migrations where version in ('20261124130001','20261124130002','20261124130003','20261124130004','20261124130005')")"
             test "$count" = 5
-            echo "All five provisional versions recorded by local migration runner"
+            echo "All five R13 versions recorded by local migration runner"
           else
             for candidate in r13_governed_plan_admin r13_verified_signup r13_subscription_change_requests r13_manual_pilot_approvals r13_manual_pilot_activation; do
               docker exec -i "$db_containers" psql -X -v ON_ERROR_STOP=1 -U postgres -d postgres < "supabase/drafts/$candidate.sql"
