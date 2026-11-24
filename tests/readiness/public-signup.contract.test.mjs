@@ -81,3 +81,14 @@ test('14-day Pro trial has an approved permanent Free fallback and no automatic 
   assert.ok(!sql.includes('delete from public.organizations'));
   assert.ok(page.includes('Free forever, with 14 days of Pro trial access'));
 });
+
+test('trial expiry cron is secret-protected and separately release-gated', () => {
+  const cron = read('app/api/commercial/trial-expiry/route.ts');
+  ordered(cron, 'bearerMatchesAnySecret(request.headers', 'SALSYS_TRIAL_RECONCILIATION_ENABLED');
+  ordered(cron, 'SALSYS_TRIAL_RECONCILIATION_ENABLED', "rpc('reconcile_expired_signup_trials_v1'");
+  assert.ok(sql.includes('for update of i skip locked'));
+  assert.ok(sql.includes('p_limit > 100'));
+  assert.ok(sql.includes('trial_conversion_retry_at'));
+  assert.ok(JSON.parse(read('vercel.json')).crons.some(c => c.path === '/api/commercial/trial-expiry' && c.schedule === '*/5 * * * *'));
+  assert.ok(middleware.includes('"/api/commercial/trial-expiry"'));
+});
