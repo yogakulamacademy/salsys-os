@@ -108,7 +108,7 @@ test('R13 public signup SQL fails closed and atomically provisions one scoped tr
     assert.equal(await scalar("select public.signup_trial_available_v1() as value"),false);
     assert.equal(await reserve(randomUUID(),'closed@example.invalid'),false);
     for (const role of ['anon','authenticated']) {
-      for (const fn of ['signup_trial_available_v1()','reserve_signup_intent_v1(uuid,text,text,text)','accept_signup_intent_v1(uuid,uuid)','reserve_signup_resend_v1(text)','provision_verified_signup_v1(uuid)','convert_expired_signup_trial_v1(uuid)','reconcile_expired_signup_trials_v1(integer)','signup_automation_allowed_v1(uuid,text)','signup_integration_allowed_v1(uuid,text)']) {
+      for (const fn of ['signup_trial_available_v1()','reserve_signup_intent_v1(uuid,text,text,text)','accept_signup_intent_v1(uuid,uuid)','reserve_signup_resend_v1(text)','provision_verified_signup_v1(uuid)','convert_expired_signup_trial_v1(uuid)','reconcile_expired_signup_trials_v1(integer)','signup_automation_allowed_v1(uuid,text)','signup_integration_allowed_v1(uuid,text)','signup_advanced_operation_allowed_v1(uuid,text)']) {
         assert.equal(await scalar("select has_function_privilege($1,$2,'EXECUTE') as value",[role,'public.'+fn]),false);
       }
     }
@@ -185,6 +185,8 @@ test('R13 public signup SQL fails closed and atomically provisions one scoped tr
     await db.query("select set_config('request.jwt.claim.role','authenticated',false)");
     assert.equal(await integration(org,'instagram'),false);
     await db.query("select set_config('request.jwt.claim.role','service_role',false)");
+    const advanced = (tenant,operation) => scalar("select public.signup_advanced_operation_allowed_v1($1,$2) as value",[tenant,operation]);
+    for (const op of ['ai_drafting','ai_autopilot','ad_audience_add','unknown']) assert.equal(await advanced(org,op),false);
     const automation = (tenant,channel) => scalar("select public.signup_automation_allowed_v1($1,$2) as value",[tenant,channel]);
     assert.equal(await automation(org,'whatsapp'),false);
     assert.equal(await automation(org,'instagram'),false);
@@ -261,6 +263,12 @@ test('R13 public signup SQL fails closed and atomically provisions one scoped tr
     assert.equal(await automation(legacy,'instagram'),true);
     assert.equal(await integration(legacy,'instagram'),true);
     assert.equal(await integration(legacy,'gsc'),true);
+    for (const op of ['ai_drafting','ai_autopilot','ad_audience_add']) assert.equal(await advanced(legacy,op),true);
+    assert.equal(await advanced(legacy,'unknown'),false);
+    assert.equal(await advanced(randomUUID(),'ai_drafting'),false);
+    await db.query("select set_config('request.jwt.claim.role','authenticated',false)");
+    assert.equal(await advanced(legacy,'ai_drafting'),false);
+    await db.query("select set_config('request.jwt.claim.role','service_role',false)");
     assert.equal(await integration(randomUUID(),'ga4'),false);
     assert.equal(await automation(randomUUID(),'instagram'),false);
     await db.query("delete from public.organization_capabilities where organization_id=$1",[legacy]);
