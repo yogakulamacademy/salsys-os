@@ -85,7 +85,9 @@ test('14-day Pro trial has an approved permanent Free fallback and no automatic 
 test('trial expiry cron is secret-protected and separately release-gated', () => {
   const cron = read('app/api/commercial/trial-expiry/route.ts');
   ordered(cron, 'bearerMatchesAnySecret(request.headers', 'SALSYS_TRIAL_RECONCILIATION_ENABLED');
-  ordered(cron, 'SALSYS_TRIAL_RECONCILIATION_ENABLED', "rpc('reconcile_expired_signup_trials_v1'");
+  ordered(cron, 'SALSYS_TRIAL_RECONCILIATION_ENABLED', "reconcile('reconcile_expired_signup_trials_v1'");
+  assert.ok(cron.includes("reconcile('reconcile_expired_manual_contracts_v1',10)"));
+  assert.ok(cron.includes('SALSYS_MANUAL_RECONCILIATION_ENABLED'));
   assert.ok(sql.includes('for update of i skip locked'));
   assert.ok(sql.includes('p_limit > 100'));
   assert.ok(sql.includes('trial_conversion_retry_at'));
