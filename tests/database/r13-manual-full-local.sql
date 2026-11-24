@@ -101,6 +101,9 @@ begin
  execute 'set local role service_role';
  v_org:=public.provision_verified_signup_v1(v_customer);
  if v_org is null or public.provision_verified_signup_v1(v_customer) is distinct from v_org then raise exception 'Provisioning retry failed'; end if;
+ execute 'reset role';
+ if (select trial_ends_at-trial_started_at from public.saas_organization_subscriptions where organization_id=v_org) is distinct from interval '720 hours' then raise exception '30-day trial duration mismatch'; end if;
+ execute 'set local role service_role';
  if not public.commercial_enable_manual_pilot_requests_v1(v_publisher,v_org,'Synthetic local enrollment') then raise exception 'Enrollment failed'; end if;
  execute 'reset role';
  execute 'set local role authenticated';
@@ -110,7 +113,6 @@ begin
  if public.bind_current_tenant_session_for_current_user() is distinct from v_org then raise exception 'Automatic tenant binding mismatch'; end if;
  v_state:=public.get_current_subscription_dashboard_v1();
  if v_state->>'state' is distinct from 'pro_trial' or (v_state->>'named_users')::integer is distinct from 1 then raise exception 'Real session trial projection mismatch: %',v_state; end if;
- if (select trial_ends_at-trial_started_at from public.saas_organization_subscriptions where organization_id=v_org) is distinct from interval '720 hours' then raise exception '30-day trial duration mismatch'; end if;
  v_options:=public.get_current_plan_change_options_v1();
  v_revision:=(v_options->>'subscription_revision')::timestamptz;
  v_customer_request:=public.request_current_plan_change_v1(gen_random_uuid(),v_basic,1,v_basic_digest,v_revision);
