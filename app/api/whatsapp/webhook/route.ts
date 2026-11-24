@@ -188,7 +188,7 @@ export async function POST(request: NextRequest) {
 
       // Existing delivery/read status reconciliation remains independent of
       // subscription eligibility. Reject new inbound content before storage.
-      if (!stringValue(event.event_type).startsWith('status:') &&
+      if (!(stringValue(event.event_type) ?? '').startsWith('status:') &&
           !await commercialInboundAllowed(supabase, organizationId, 'whatsapp')) {
         commerciallyIgnored += 1;
         continue;
