@@ -69,6 +69,7 @@ export function RootShell({ children, platformAdminEnabled = false }: { children
   const pathname = usePathname();
 
   const platformCommercialPath = platformAdminEnabled && (
+    pathname === '/settings/organizations' ||
     pathname === '/settings/commercial-plans' ||
     pathname === '/settings/commercial-plans/pilot'
   );
