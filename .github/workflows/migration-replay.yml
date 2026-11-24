@@ -4,6 +4,7 @@ on:
   pull_request:
     branches:
       - main
+      - feat/r13-manual-pilot-integrated
     paths:
       - 'supabase/**'
       - 'scripts/build-migration-recovery-manifest.mjs'
@@ -11,6 +12,7 @@ on:
       - 'tests/database/r2-behavior-rpc-positive-tenant-local.sql'
       - 'tests/database/r13-commercial-state-full-local.sql'
       - 'tests/database/r13-manual-full-local.sql'
+      - 'tests/database/r13-real-auth-local*'
       - '.github/workflows/migration-replay.yml'
   workflow_dispatch:
 
@@ -24,9 +26,10 @@ concurrency:
 jobs:
   clean-replay:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 45
     env:
       SUPABASE_TELEMETRY_DISABLED: '1'
+      SALSYS_R13_DISPOSABLE_AUTH_TEST: ${{ github.head_ref == 'test/r13-local-auth-rehearsal' && '1' || '0' }}
     steps:
       - name: Checkout
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
@@ -266,7 +269,15 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          supabase db start 2>&1 | tee migration-replay.log
+          if [ "$SALSYS_R13_DISPOSABLE_AUTH_TEST" = "1" ]; then
+            test "$GITHUB_ACTIONS" = true && test "$RUNNER_ENVIRONMENT" = github-hosted
+            # Modify only the ephemeral checkout; confirmation mail stays inside the local stack.
+            printf '\n[auth]\nsite_url = "http://127.0.0.1:3000"\n[auth.email]\nenable_confirmations = true\n' >> supabase/config.toml
+            # CLI status can include keys; never send its output to logs/artifacts.
+            supabase start > /tmp/r13-local-start.log 2>&1 || { echo "Local Auth stack failed to start"; exit 1; }
+          else
+            supabase db start 2>&1 | tee migration-replay.log
+          fi
 
       - name: Replay migrations from a clean database
         shell: bash
@@ -332,6 +343,17 @@ jobs:
           done
           docker exec -i "$db_containers" psql -X -v ON_ERROR_STOP=1 -U postgres -d postgres < tests/database/r13-manual-full-local.sql
 
+      - name: Real Auth email and JWT acceptance on disposable runner
+        if: env.SALSYS_R13_DISPOSABLE_AUTH_TEST == '1'
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_ACTIONS" = true && test "$RUNNER_ENVIRONMENT" = github-hosted
+          db_containers="$(docker ps --format '{{.Names}}' | grep '^supabase_db_' || true)"
+          test "$(printf '%s\n' "$db_containers" | grep -c .)" -eq 1
+          docker exec -i "$db_containers" psql -X -v ON_ERROR_STOP=1 -U postgres -d postgres < tests/database/r13-real-auth-local-setup.sql
+          node tests/database/r13-real-auth-local.mjs
+
       - name: Show local migration state
         if: always()
         shell: bash
@@ -349,3 +371,10 @@ jobs:
             migration-replay.log
           if-no-files-found: ignore
           retention-days: 3
+
+      - name: Destroy disposable Auth test stack
+        if: always() && env.SALSYS_R13_DISPOSABLE_AUTH_TEST == '1'
+        shell: bash
+        run: |
+          supabase stop --no-backup > /tmp/r13-local-stop.log 2>&1 || { echo "Local stack cleanup failed"; exit 1; }
+          rm -f /tmp/r13-local-start.log /tmp/r13-local-stop.log
