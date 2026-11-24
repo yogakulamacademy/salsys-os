@@ -30,6 +30,9 @@ begin
   end if;
   -- Serialize quota checks and insertion across application instances.
   perform pg_catalog.pg_advisory_xact_lock(138130826);
+  -- Purge abandoned expired intent PII; consumed intents preserve replay safety.
+  delete from public.signup_registration_intents
+    where user_id is null and expires_at < now();
   if (select count(*) from public.signup_registration_intents
       where created_at > now() - interval '1 hour') >= 100
      or (select count(*) from public.signup_registration_intents
