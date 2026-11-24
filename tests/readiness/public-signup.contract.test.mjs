@@ -52,3 +52,18 @@ test('onboarding stays protected and login retries only missing membership', () 
   assert.ok(login.includes("tenant.reason === 'no_membership'"));
   assert.ok(login.includes('provisionVerifiedSignup'));
 });
+
+test('signup remains disabled without explicitly approved matching trial policy', () => {
+  const availability = read('lib/signup/availability.ts');
+  assert.ok(availability.includes("SALSYS_PUBLIC_SIGNUP_ENABLED !== 'true'"));
+  assert.ok(availability.includes('signup_trial_available_v1'));
+  assert.ok(page.includes('await isPublicSignupAvailable()'));
+  assert.ok(read('app/login/page.tsx').includes('await isPublicSignupAvailable()'));
+  assert.ok(sql.includes('revoke all on public.signup_trial_policy from public, anon, authenticated, service_role'));
+  assert.ok(!sql.includes('insert into public.signup_trial_policy'));
+  assert.ok(sql.includes('p.version = t.plan_version'));
+  ordered(sql, 'Approved trial policy unavailable', 'v_org := public.provision_customer_organization_v1');
+  ordered(sql, 'v_org := public.provision_customer_organization_v1', 'insert into public.saas_organization_subscriptions');
+  assert.ok(sql.includes('where organization_id = v_org'));
+  assert.ok(sql.includes('workspace_code = any(v_policy.allowed_workspace_codes)'));
+});
