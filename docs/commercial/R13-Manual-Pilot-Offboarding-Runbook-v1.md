@@ -70,3 +70,40 @@ Record exact SHA, isolated environment, expected/actual result, pass/fail, redac
 Before first real pilot customer: approve business entity and support contacts, actual prices/GST/invoicing and refund/cancellation terms, data processing and privacy policy, export scope, retention/deletion/legal hold procedures, backup/recovery objectives and owner/DBA/privacy authority. Confirm whether this limited operator-assisted scope is accepted for the manual pilot or full P4 implementation is required first. No real accounts, commercial activation, hosted data export, production writes, paid infrastructure or scope waiver authorized by this document.
 
 References: R13 audit/design V1, R13-Browser-Acceptance-v1.md, R13-Manual-Pilot-Launch-Configuration-v1.md, PR #829, PR #830, roadmap #518 and revenue-first #651.
+
+## 9. Consolidated release acceptance evidence and decisions — 2026-11-24
+
+This is a partial evidence record, not a signed release. The integrated application/schema candidate is PR #829 at `eec8a45f8f98f256ef630cac4742698ede1f5a16`. Its four workflows completed successfully: [CI](https://github.com/yogakulamacademy/salsys-os/actions/runs/45389571607), [Migration Replay](https://github.com/yogakulamacademy/salsys-os/actions/runs/45389571253), [CodeQL](https://github.com/yogakulamacademy/salsys-os/actions/runs/45389571203), [Self-host image](https://github.com/yogakulamacademy/salsys-os/actions/runs/45389571407). Stacked test-only PR #830 at `7ae9abd058add65d983d83f74e50e1f2915069d9` passed [disposable real Auth/API lifecycle replay](https://github.com/yogakulamacademy/salsys-os/actions/runs/45392162448) including cleanup. Test actors and offers were synthetic, while customer Auth sessions were issued by the real disposable Supabase Auth server. Operator actions used governed service-role RPC with a synthetic operator, not an interactive administrator login. PR #832 at `dc2d8848a639dc92246bf1b6d6b32a23f6f5ce50` [browser workflow](https://github.com/yogakulamacademy/salsys-os/actions/runs/45392577246) was in progress at this checkpoint. No result inferred. All PRs remain drafts.
+
+| Case from R13-Browser-Acceptance-v1 | Verified evidence on exact green heads | Still required to mark full case passed |
+| --- | --- | --- |
+| B01 | Source/behavior origin and flag checks in #829 | Actual browser flag-off and invalid origin |
+| B02 | Source/behavior CAPTCHA validation checks in #829 | Browser submission rejection and no intent/workspace; #832 planned |
+| B03 | Real local Auth reservation, signup and email capture in #830; no provisioning before verification | Successful browser registration with real valid CAPTCHA and neutral notice |
+| B04 | Actual local email verification through Auth API in #830 | Original browser PKCE HTTPS callback; #832 planned |
+| B05 | Idempotent real API provisioning and sign-in retry, synthetic resend controls | Actual browser replay/expiry/resend and quota evidence |
+| B06 | Two real customer Auth-issued JWTs, tenant-bound trial dashboard and one counted named user in #830 | Finish full browser onboarding and subsequent sign-in |
+| B07 | Real customer RPC plan, history and usage results in #830 | Actual subscription UI and no checkout |
+| B08 | Real customer JWT denied operator RPC in #830 | Direct admin URL and server-action denial in browser |
+| B09 | Governed service-role enrollment, retry, unchanged access and zero slots in #830 | Verified interactive operator login and server action |
+| B10 | Real customer Basic request and operator Growth override, superseded original and activation history in #830 | Customer and interactive operator browser paths |
+| B11 | Real customer dashboard after manual renewal and permanent Free assignment; one slot and pinned quotas in #830 | Browser actions, retained CRM records and approved commercial terms; database synthetic coverage does not replace browser evidence |
+| B12 | Disposable database expiry and reconciliation tests in #829 | Actual protected expiry HTTP route, both trial/manual fixtures, pre/post effective/canonical Free and repeat invocation; deployed scheduler and monitoring remain separate |
+| B13 | Two distinct real customer sessions, cross-tenant binding and withdrawal denied, other subscription unchanged in #830 | Actual browser and representative CRM data isolation |
+| B14 | Source/SQL flag boundaries in #829 | Browser pause with existing enforcement, reconciliation and legacy tenant regression |
+
+Full browser acceptance: 0/14 complete at this evidence cut; the narrower local API lifecycle has passed. Do not report partial evidence as full acceptance. O01–O07 remain planned, including approval of the human case process. No external SMTP, live customer, live CAPTCHA, production grant or hosted database migration is evidenced.
+
+### Consolidated approval record (fill before release)
+
+| Decision or approval | Current disposition | Required signer/evidence |
+| --- | --- | --- |
+| Permanent Free, verified 14-day Pro trial, ten distinct manual pilot organizations (not registration cap), gateway deferred | Prior product scope decision | Preserve; any change needs explicit owner approval |
+| Exact plan snapshots, pricing, quotas, workspace scopes, connection eligibility, GST, optional setup charge and manual term limit | Proposals in R13-Manual-Pilot-Launch-Configuration-v1; no publication | Commercial owner; record exact approved version/digest for every plan |
+| Customer-facing terms, refunds, cancellation, support contacts/hours, privacy and retention/legal hold | Not approved; no promises made | Designated commercial/legal/privacy owners; approved policy version |
+| Operator-assisted offboarding for limited pilot versus full P4 before pilot | Proposed in this runbook, not waived | Commercial owner + privacy/DBA approval, O01–O07 evidence |
+| Catalog author/reviewer/publisher and dedicated pilot approver; exact platform organization | Not granted/configured | Independent authority review, verified identities and least-privilege grant record |
+| Security/DBA review and reviewed versioned migration sequence | Outstanding | Independent named reviewers; review exact integrated SHA, grants, rollback, no overlap from #826/#827/#828 |
+| Production recovery baseline and deployment approval | NO-GO | Approved target, backup/rollback evidence, smoke and explicit release authorization |
+
+Record each signer, approval timestamp, scope, exact artifact revision/digest and unresolved exception. Never record service keys, personal data, payment references or verification URLs in the PR. No new paid staging or reuse of the held R2 environment. The exact consolidated head needs fresh CI and acceptance evidence before release. The owner has not waived independent review or full acceptance merely by requesting engineering continuation.
