@@ -35,7 +35,7 @@ export default async function PlanChangesPage({searchParams}:{searchParams:Promi
     </section>:<p>New plan change requests are not available for this workspace.</p>}
     <section className="space-y-3"><h2 className="text-lg font-semibold">Request history</h2>
       {!state.requests.length?<p>No requests recorded.</p>:state.requests.map(r=><article key={r.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line p-4">
-        <div><p className="font-semibold capitalize">{r.target_code} · version {r.target_version}</p><p className="text-sm">{money(r.amount_minor)}/month · {r.status} · {new Date(r.requested_at).toISOString().slice(0,10)} UTC</p></div>
+        <div><p className="font-semibold capitalize">{r.target_code} · version {r.target_version} · {r.request_origin==='admin'?'Admin assignment':'Your request'}</p><p className="text-sm">{money(r.amount_minor)}/month · {r.status} · {new Date(r.requested_at).toISOString().slice(0,10)} UTC</p></div>
         {r.status==='requested'&&<form action={withdrawChangeAction}><input type="hidden" name="id" value={r.id}/><button className="rounded border border-line px-3 py-2" type="submit">Withdraw request</button></form>}
       </article>)}
     </section>
