@@ -1,3 +1,4 @@
+import { requireCommercialIntegration } from '@/lib/commercial/integration-access';
 import { getVercelOidcToken } from '@vercel/oidc';
 
 import { googleKeyAccessToken } from '@/lib/google-key-credentials';
@@ -1248,6 +1249,8 @@ Promise<GscSyncCounts> {
     runtime ??
 
     await resolveGscRuntime();
+
+  await requireCommercialIntegration(resolvedRuntime.organizationId, 'gsc');
 
 
 
