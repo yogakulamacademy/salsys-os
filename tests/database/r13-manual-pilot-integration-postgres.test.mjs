@@ -116,7 +116,7 @@ test('R13 integrated manual pilot applies exact approved contract and expiry wit
     }
     const plan = randomUUID(), free = randomUUID();
     await db.query("insert into public.saas_plans(id,status,version,code,display_name) values($1,'active',1,'pro','Synthetic Pro'),($2,'active',1,'free','Synthetic Free')",[plan,free]);
-    await db.query("insert into public.signup_trial_policy(plan_id,plan_version,trial_days,allowed_workspace_codes,free_plan_id,free_plan_version,free_workspace_codes,pro_integration_codes,free_integration_codes,pro_named_users,pro_lead_records,free_named_users,free_lead_records,approval_ref,approved_at,enabled) values($1,1,14,array['admin','sales'],$2,1,array['admin'],array['instagram','ga4','google_ads'],array[]::text[],2,3,1,1,'synthetic test only',now(),true)",[plan,free]);
+    await db.query("insert into public.signup_trial_policy(plan_id,plan_version,trial_days,allowed_workspace_codes,free_plan_id,free_plan_version,free_workspace_codes,pro_integration_codes,free_integration_codes,pro_named_users,pro_lead_records,free_named_users,free_lead_records,approval_ref,approved_at,enabled) values($1,1,30,array['admin','sales'],$2,1,array['admin'],array['instagram','ga4','google_ads'],array[]::text[],2,3,1,1,'synthetic test only',now(),true)",[plan,free]);
     assert.equal(await scalar("select public.signup_trial_available_v1() as value"),true);
 
     const email='person@example.invalid', intent=randomUUID(), user=randomUUID();
@@ -138,7 +138,7 @@ test('R13 integrated manual pilot applies exact approved contract and expiry wit
     assert.deepEqual((await db.query("select workspace_code,enabled from public.organization_workspaces where organization_id=$1 order by workspace_code",[org])).rows,[
       {workspace_code:'admin',enabled:true},{workspace_code:'finance',enabled:false},{workspace_code:'sales',enabled:true}
     ]);
-    assert.equal(await scalar("select count(*)::int as value from public.saas_organization_subscriptions where organization_id=$1 and plan_id=$2 and status='trialing' and trial_ends_at-trial_started_at=interval '14 days'",[org,plan]),1);
+    assert.equal(await scalar("select count(*)::int as value from public.saas_organization_subscriptions where organization_id=$1 and plan_id=$2 and status='trialing' and trial_ends_at-trial_started_at=interval '720 hours'",[org,plan]),1);
     assert.equal(await scalar("select raw_app_meta_data->>'self_signup_organization_id' as value from auth.users where id=$1",[user]),org);
     assert.equal(await scalar("select public.reserve_signup_resend_v1($1) as value",[email]),false);
 
@@ -227,7 +227,7 @@ test('R13 integrated manual pilot applies exact approved contract and expiry wit
     const trial = await currentPlan(user);
     assert.equal(trial.state,'pro_trial');
     assert.equal(trial.plan_code,'pro');
-    assert.ok(trial.remaining_seconds > 0 && trial.remaining_seconds <= 1209600);
+    assert.ok(trial.remaining_seconds > 0 && trial.remaining_seconds <= 2592000);
     assert.deepEqual(trial.workspace_codes,['admin','sales']);
     await assert.rejects(currentPlan(randomUUID()),/Workspace access denied/);
     assert.equal(await scalar("select has_function_privilege('anon','public.get_current_signup_plan_v1()','EXECUTE') as value"),false);
@@ -305,7 +305,7 @@ test('R13 integrated manual pilot applies exact approved contract and expiry wit
     assert.deepEqual(beforeReadiness.missing_plan_codes,['free','growth','pro']);
     assert.ok(beforeReadiness.blockers.includes('free_policy_mismatch'));
     assert.ok(beforeReadiness.blockers.includes('pro_policy_mismatch'));
-    assert.equal(beforeReadiness.trial_days,14);
+    assert.equal(beforeReadiness.trial_days,30);
     assert.equal(beforeReadiness.pilot_capacity,10);
     await assert.rejects(scalar("select public.commercial_manual_launch_readiness_v1($1) as value",[user]),/operator not authorized/);
     const enrollment=()=>scalar("select public.commercial_enable_manual_pilot_requests_v1($1,$2,'Synthetic customer enrollment') as value",[operator,org]);
