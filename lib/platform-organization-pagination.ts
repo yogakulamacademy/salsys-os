@@ -14,7 +14,29 @@ export function organizationPageRange(page: number) {
   return { from, to: from + ORGANIZATION_PAGE_SIZE - 1 };
 }
 
-export function organizationPageHref(page: number) {
+export const ORGANIZATION_STATUSES = ['active','suspended','archived'] as const;
+export type OrganizationStatus = typeof ORGANIZATION_STATUSES[number];
+export type OrganizationFilters = { search: string; status: OrganizationStatus | ''; invalidSearch: boolean };
+
+export function parseOrganizationFilters(search: unknown, status: unknown): OrganizationFilters {
+  const raw = typeof search === 'string' ? search.trim() : '';
+  // Restrict the OR grammar to literal letters, numbers, spaces and hyphens.
+  // No PostgREST syntax, wildcards, escaping, or unbounded search strings.
+  const invalidSearch = (search !== undefined && typeof search !== 'string') ||
+    raw.length > 80 || (raw !== '' && !/^[\p{L}\p{M}\p{N} -]+$/u.test(raw));
+  const validStatus = ORGANIZATION_STATUSES.find(candidate => candidate === status) ?? '';
+  return { search: invalidSearch ? '' : raw, status: validStatus, invalidSearch };
+}
+
+export function organizationSearchExpression(search: string): string {
+  if (!search || search.length > 80 || !/^[\p{L}\p{M}\p{N} -]+$/u.test(search)) throw Error('Invalid organization search.');
+  return 'name.ilike.*' + search + '*,slug.ilike.*' + search + '*';
+}
+
+export function organizationPageHref(page: number, filters?: Pick<OrganizationFilters,'search'|'status'>) {
   organizationPageRange(page);
-  return '/settings/organizations?page=' + page;
+  const params = new URLSearchParams({ page: String(page) });
+  if (filters?.search) params.set('q', filters.search);
+  if (filters?.status) params.set('status', filters.status);
+  return '/settings/organizations?' + params.toString();
 }
