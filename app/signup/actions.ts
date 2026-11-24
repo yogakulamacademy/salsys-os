@@ -1,5 +1,6 @@
 'use server';
 
+import { isSignupEmailAdmitted } from '@/lib/signup/admission';
 import { getSignupOrigin } from '@/lib/signup/origin';
 import { randomUUID } from 'node:crypto';
 import { verifySignupCaptcha } from '@/lib/signup/captcha';
@@ -30,6 +31,10 @@ export async function signupAction(formData: FormData) {
     redirect('/signup?error=Security+verification+failed.+Please+try+again.');
   }
 
+  // Do not reveal pilot eligibility or create an intent for an unlisted email.
+  if (!isSignupEmailAdmitted(email)) {
+    redirect('/signup?notice=Check+your+email+for+verification+instructions.+If+you+already+have+an+account,+sign+in.');
+  }
   const intentId = randomUUID();
   const admin = createAdminClient();
   const { data: reserved, error: intentError } = await admin.rpc('reserve_signup_intent_v1', {
@@ -84,6 +89,9 @@ export async function resendSignupVerificationAction(formData: FormData) {
   if (email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ||
       !await verifySignupCaptcha(captchaToken)) {
     redirect('/signup?mode=resend&error=Check+your+email+and+security+verification.');
+  }
+  if (!isSignupEmailAdmitted(email)) {
+    redirect('/signup?mode=resend&notice=If+an+eligible+registration+exists,+a+verification+email+may+be+sent.+If+already+verified,+sign+in.');
   }
   const admin = createAdminClient();
   const { data: reserved, error } = await admin.rpc('reserve_signup_resend_v1', {
