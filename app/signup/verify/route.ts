@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { provisionVerifiedSignup } from '@/lib/signup/provision';
+import { ACTIVE_WORKSPACE_COOKIE } from '@/lib/workspace';
 import { useMockData } from '@/lib/config';
 
 export const dynamic = 'force-dynamic';
@@ -27,8 +29,21 @@ export async function GET(request: NextRequest) {
     await supabase.auth.signOut({ scope: 'local' });
     return go('/signup?error=Email+verification+could+not+be+confirmed.');
   }
-  // Provisioning is not implemented yet. Do not grant workspace access or
-  // treat client-editable metadata as proof of registration authorization.
-  await supabase.auth.signOut({ scope: 'local' });
-  return go('/signup?notice=Email+verified.+Workspace+setup+is+not+available+yet.');
+  const provisioned = await provisionVerifiedSignup().catch(() => ({ ok: false as const }));
+  if (!provisioned.ok) {
+    await supabase.auth.signOut({ scope: 'local' });
+    return go('/signup?error=Workspace+setup+could+not+be+completed.+Contact+support.');
+  }
+  const { error: bindingError } = await supabase.rpc('bind_current_tenant_session', {
+    p_organization_id: provisioned.organizationId,
+  });
+  if (bindingError) {
+    await supabase.auth.signOut({ scope: 'local' });
+    return go('/login?error=Workspace+setup+requires+another+sign-in.');
+  }
+  const response = go('/signup/onboarding');
+  response.cookies.set(ACTIVE_WORKSPACE_COOKIE, provisioned.organizationId, {
+    httpOnly: true, sameSite: 'lax', secure: true, path: '/', maxAge: 60 * 60 * 24 * 30,
+  });
+  return response;
 }
