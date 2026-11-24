@@ -1,7 +1,7 @@
 import {randomUUID} from 'node:crypto';
 import {notFound} from 'next/navigation';
 import Link from 'next/link';
-import {loadManualPilot,loadManualAssignments,type ManualQueue,type AssignmentState} from '@/lib/commercial/manual-pilot';
+import {loadManualPilot,loadManualAssignments,loadManualLaunchReadiness,type ManualLaunchReadiness,type ManualQueue,type AssignmentState} from '@/lib/commercial/manual-pilot';
 import {approvePilotAction,activatePilotAction,assignPlanAction,enablePilotAction} from './actions';
 export const dynamic='force-dynamic';
 export const metadata={title:'Manual subscription approvals',robots:{index:false,follow:false,nocache:true}};
@@ -12,6 +12,8 @@ export default async function ManualPilotPage({searchParams}:{searchParams:Promi
   const activationEnabled=process.env.SALSYS_MANUAL_ACTIVATION_ENABLED==='true';
   let assignments:AssignmentState|null=null;
   if(activationEnabled){try{assignments=await loadManualAssignments();}catch{/* Keep approval queue usable, but never guess available plans. */}}
+  let readiness:ManualLaunchReadiness|null=null;
+  try{readiness=await loadManualLaunchReadiness();}catch{/* Never infer release readiness from missing evidence. */}
   return <main className="space-y-4">
     <Link href="/settings/commercial-plans" className="text-sm underline">Commercial plans</Link>
     <h1 className="text-2xl font-semibold">Manual subscription approvals</h1>
@@ -19,6 +21,16 @@ export default async function ManualPilotPage({searchParams}:{searchParams:Promi
       <p className="font-semibold">{state.used_slots} / {state.max_slots} organizations admitted to manual pilot</p>
       <progress className="w-full" max={10} value={state.used_slots} aria-label="Manual pilot capacity"/>
       <p className="text-sm">Free registration is separate. No gateway or recurring charge is required. {activationEnabled?'Approval activates the exact approved plan.':'Approvals are recorded here; activation is disabled.'}</p>
+    </section>
+    <section className="rounded-xl border border-line p-4 space-y-2">
+      <h2 className="font-semibold">Commercial configuration readiness</h2>
+      {!readiness?<p role="alert" className="text-sm">Configuration check unavailable.</p>:<>
+        <p className="text-sm font-semibold">{readiness.database_configuration_ready?'Published plan and trial configuration checks passed':'Configuration incomplete'}</p>
+        {readiness.missing_plan_codes.length>0&&<p className="text-sm">Unpublished plans: {readiness.missing_plan_codes.join(', ')}</p>}
+        {readiness.blockers.length>0&&<ul className="list-disc pl-5 text-sm">{readiness.blockers.map(b=><li key={b}>{b.replaceAll('_',' ')}</li>)}</ul>}
+        <p className="text-sm">14-day Pro trial · Free fallback · 10-organization manual pilot</p>
+      </>}
+      <p className="text-xs">Database configuration only. This does not verify deployment, real authentication, provider access, or release approval and never enables signup.</p>
     </section>
     {result==='error'?<p role="alert">Approval not recorded. Check eligibility, capacity and terms.</p>:result==='approved'?<p role="status">Manual approval recorded. Access has not changed.</p>:result==='activated'?<p role="status">Subscription activated. No automatic charge.</p>:result==='enrolled'?<p role="status">Plan requests enabled. Current access and pilot capacity are unchanged.</p>:null}
     {activationEnabled&&<section className="space-y-3">
