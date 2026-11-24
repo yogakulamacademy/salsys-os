@@ -48,6 +48,7 @@ test('R13 P1 durable plan governance uses actual P0 DDL, immutable evidence and 
     await db.query(readFileSync('supabase/drafts/r13_governed_plan_admin.sql','utf8'));
     await db.query(readFileSync('supabase/drafts/r13_subscription_change_requests.sql','utf8'));
     await db.query(readFileSync('supabase/drafts/r13_subscription_contract_quotes.sql','utf8'));
+    await db.query(readFileSync('supabase/drafts/r13_saas_payment_evidence.sql','utf8'));
     const scalar=async(sql,args=[]) => (await db.query(sql,args)).rows[0].value;
     for(const table of ['operators','plan_requests','price_proposals','review_events','publication_authorizations','published_plan_versions']){
       assert.equal(await scalar("select relrowsecurity as value from pg_class where oid=$1::regclass",['saas_governance.'+table]),true);
@@ -203,6 +204,51 @@ test('R13 P1 durable plan governance uses actual P0 DDL, immutable evidence and 
     assert.equal(await accept(quoted.terms_digest),true);
     assert.equal(await accept(quoted.terms_digest),true);
     assert.equal((await quotes())[0].state,'accepted_not_activated');
+    // No payment intent or settlement API is exposed in this candidate.
+    await db.query('reset role');
+    const merchant=randomUUID(),otherMerchant=randomUUID();
+    await db.query("insert into saas_governance.saas_payment_merchants(id,provider_code,merchant_ref,environment,enabled,approval_ref) values($1,'fixture','synthetic-merchant','test',true,'synthetic approval only'),($2,'fixture','other-merchant','test',true,'synthetic approval only')",[merchant,otherMerchant]);
+    for(const role of ['anon','authenticated','service_role']){
+      for(const fn of ['prepare_payment_intent(uuid,text,uuid)','record_verified_settlement(uuid)']){
+        assert.equal(await scalar("select has_function_privilege($1,$2,'EXECUTE') as value",[role,'saas_governance.'+fn]),false);
+      }
+      for(const table of ['saas_payment_merchants','saas_payment_intents','saas_payment_orders','saas_payment_attestations','saas_payment_settlements']){
+        for(const right of ['SELECT','INSERT','UPDATE','DELETE','TRUNCATE']){
+          assert.equal(await scalar("select has_table_privilege($1,$2,$3) as value",[role,'saas_governance.'+table,right]),false);
+        }
+        assert.equal(await scalar("select relrowsecurity as value from pg_class where oid=$1::regclass",['saas_governance.'+table]),true);
+      }
+    }
+    const prepare=(digest=quoted.terms_digest,m=merchant)=>scalar("select saas_governance.prepare_payment_intent($1,$2,$3) as value",[quoteId,digest,m]);
+    await assert.rejects(prepare('0'.repeat(64)),/Payable quote unavailable/);
+    await db.query("select set_config('request.jwt.claim.sub',$1,false)",[author]);
+    await assert.rejects(prepare(),/Payable quote unavailable/);
+    await db.query("select set_config('request.jwt.claim.sub',$1,false)",[customer]);
+    const paymentIntent=await prepare();
+    assert.equal(await prepare(),paymentIntent);
+    await assert.rejects(prepare(quoted.terms_digest,otherMerchant),/different consent/);
+    assert.equal(await scalar("select amount_minor::int as value from saas_governance.saas_payment_intents where id=$1",[paymentIntent]),12500);
+    await db.query("insert into saas_governance.saas_payment_orders(intent_id,merchant_id,provider_order_ref) values($1,$2,'synthetic-order')",[paymentIntent,merchant]);
+    const attest=async ({m=merchant,order='synthetic-order',payment='synthetic-payment',digest=quoted.terms_digest,amount=12500,status='settled',late=false}={})=>scalar(
+      "insert into saas_governance.saas_payment_attestations(intent_id,merchant_id,provider_order_ref,provider_payment_ref,provider_event_ref,terms_digest,currency,amount_minor,provider_status,provider_observed_at,evidence_sha256,verification_ref) values($1,$2,$3,$4,$5,$6,'INR',$7,$8,case when $9 then (select expires_at+interval '1 second' from saas_governance.saas_payment_intents where id=$1) else clock_timestamp() end,$10,'synthetic provider fixture') returning id as value",
+      [paymentIntent,m,order,payment,randomUUID(),digest,amount,status,late,'a'.repeat(64)]);
+    const settle=(id)=>scalar("select saas_governance.record_verified_settlement($1) as value",[id]);
+    await assert.rejects(settle(randomUUID()),/Verified evidence unavailable/);
+    for(const wrong of [{amount:12499},{amount:12501},{m:otherMerchant},{order:'other-order'},{digest:'b'.repeat(64)},{status:'failed'},{late:true}]){
+      await assert.rejects(settle(await attest(wrong)),/Settlement evidence mismatch/);
+    }
+    assert.equal(await scalar("select count(*)::int as value from saas_governance.saas_payment_settlements"),0);
+    const valid=await attest();
+    assert.equal(await settle(valid),paymentIntent);
+    assert.equal(await settle(valid),paymentIntent);
+    assert.equal(await settle(await attest()),paymentIntent);
+    await assert.rejects(settle(await attest({payment:'duplicate-charge'})),/Different payment already recorded/);
+    await attest({status:'refunded'});
+    await assert.rejects(settle(valid),/adverse-event reconciliation/);
+    assert.equal(await scalar("select count(*)::int as value from saas_governance.saas_payment_settlements"),1);
+    await assert.rejects(db.query("delete from saas_governance.saas_payment_attestations where id=$1",[valid]),/immutable/);
+    await assert.rejects(db.query("update saas_governance.saas_payment_intents set amount_minor=1 where id=$1",[paymentIntent]),/immutable/);
+    await db.query('set role authenticated');
     await db.query("select set_config('request.jwt.claim.sub',$1,false)",[author]);
     assert.deepEqual((await options()).requests,[]);
     assert.equal(await scalar("select public.withdraw_current_plan_change_v1($1) as value",[change]),false);
@@ -216,6 +262,7 @@ test('R13 P1 durable plan governance uses actual P0 DDL, immutable evidence and 
     assert.equal((await quotes())[0].state,'withdrawn');
     assert.equal(await accept(quoted.terms_digest),false);
     await db.query('reset role');
+    await assert.rejects(prepare(),/Plan changes unavailable|Subscription changed/);
     assert.equal(await scalar("select plan_id as value from public.saas_organization_subscriptions where organization_id=$1",[tenant]),free);
     assert.equal(await scalar("select count(*)::int as value from public.saas_subscription_events"),before);
     assert.equal(await scalar("select count(*)::int as value from saas_governance.subscription_change_events where request_id=$1",[change]),2);
