@@ -601,4 +601,56 @@ create trigger signup_member_usage_guard_v1
   after insert or update or delete on public.organization_members
   for each row execute function public.signup_usage_row_guard_v1();
 
+-- Commercial eligibility is an additional restriction, never a grant.
+-- Legacy tenants keep the existing R11 capability behavior.
+create function public.signup_capability_allowed_internal_v1(p_org uuid,p_code text)
+returns boolean language plpgsql security definer set search_path = ''
+as $cap$
+declare
+  v_state text;
+  v_plan uuid;
+  v_intent public.signup_registration_intents%rowtype;
+begin
+  v_state := public.resolve_signup_plan_internal_v1(p_org)->>'state';
+  if v_state = 'not_self_signup' then return true; end if;
+  if v_state is null or v_state not in ('pro_trial','free','free_pending_reconciliation') then return false; end if;
+  select * into v_intent from public.signup_registration_intents where organization_id=p_org;
+  v_plan := case when v_state='pro_trial' then v_intent.trial_plan_id else v_intent.fallback_plan_id end;
+  return exists(select 1 from public.saas_plan_entitlements e
+    where e.plan_id=v_plan and e.capability_code=p_code and e.allowed);
+end;
+$cap$;
+revoke all on function public.signup_capability_allowed_internal_v1(uuid,text)
+  from public, anon, authenticated, service_role;
+
+-- Preserve the existing R11 tenant/session and enabled-capability checks.
+-- Volatile is intentional: trial expiry uses the actual database clock.
+create or replace function public.organization_has_capability(p_organization_id uuid,p_capability_code text)
+returns boolean language sql volatile security definer set search_path = ''
+as $r11$
+  select coalesce(
+    p_organization_id is not null
+    and nullif(lower(btrim(coalesce(p_capability_code,''))), '') is not null
+    and (
+      auth.role() = 'service_role'
+      or (
+        auth.role() = 'authenticated'
+        and public.session_is_bound_to_organization(p_organization_id)
+        and public.is_organization_member(p_organization_id)
+      )
+    )
+    and exists (
+      select 1 from public.organizations o
+      join public.organization_capabilities oc
+        on oc.organization_id=o.id and oc.capability_code=lower(btrim(p_capability_code)) and oc.enabled
+      join public.capability_catalog cc on cc.code=oc.capability_code and cc.status='active'
+      where o.id=p_organization_id and o.status='active'
+    )
+    and public.signup_capability_allowed_internal_v1(p_organization_id,lower(btrim(p_capability_code))),
+    false
+  );
+$r11$;
+revoke all on function public.organization_has_capability(uuid,text) from public,anon,authenticated,service_role;
+grant execute on function public.organization_has_capability(uuid,text) to authenticated,service_role;
+
 commit;
