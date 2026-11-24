@@ -4,6 +4,7 @@ on:
   pull_request:
     branches:
       - main
+      - feat/r13-p0-commercial-state-current-main
     paths:
       - 'supabase/**'
       - 'scripts/build-migration-recovery-manifest.mjs'
