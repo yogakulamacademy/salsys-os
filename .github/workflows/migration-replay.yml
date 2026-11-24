@@ -4,9 +4,11 @@ on:
   pull_request:
     branches:
       - main
+      - feat/r13-manual-pilot-integrated
     paths:
       - 'supabase/**'
       - 'scripts/build-migration-recovery-manifest.mjs'
+      - 'scripts/stage-r13-versioned-rehearsal.mjs'
       - 'tests/database/r2-behavior-rpc-negative-auth-local.sql'
       - 'tests/database/r2-behavior-rpc-positive-tenant-local.sql'
       - 'tests/database/r13-commercial-state-full-local.sql'
@@ -24,9 +26,10 @@ concurrency:
 jobs:
   clean-replay:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 45
     env:
       SUPABASE_TELEMETRY_DISABLED: '1'
+      SALSYS_R13_VERSIONED_REHEARSAL: ${{ github.head_ref == 'test/r13-versioned-release-rehearsal' && '1' || '0' }}
     steps:
       - name: Checkout
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
@@ -327,9 +330,21 @@ jobs:
           # CI-local database only; no remote connection or migration ledger write.
           db_containers="$(docker ps --format '{{.Names}}' | grep '^supabase_db_' || true)"
           test "$(printf '%s\n' "$db_containers" | grep -c .)" -eq 1
-          for candidate in r13_governed_plan_admin r13_verified_signup r13_subscription_change_requests r13_manual_pilot_approvals r13_manual_pilot_activation; do
-            docker exec -i "$db_containers" psql -X -v ON_ERROR_STOP=1 -U postgres -d postgres < "supabase/drafts/$candidate.sql"
-          done
+          if [ "$SALSYS_R13_VERSIONED_REHEARSAL" = "1" ]; then
+            node scripts/stage-r13-versioned-rehearsal.mjs
+            # Second clean reset tests the actual versioned migration runner.
+            # First reset above preserves independent P0-only assertions.
+            supabase db reset --local 2>&1 | tee -a migration-replay.log
+            db_containers="$(docker ps --format '{{.Names}}' | grep '^supabase_db_' || true)"
+            test "$(printf '%s\n' "$db_containers" | grep -c .)" -eq 1
+            count="$(docker exec "$db_containers" psql -X -v ON_ERROR_STOP=1 -U postgres -d postgres -Atc "select count(*) from supabase_migrations.schema_migrations where version in ('20261124130001','20261124130002','20261124130003','20261124130004','20261124130005')")"
+            test "$count" = 5
+            echo "All five provisional versions recorded by local migration runner"
+          else
+            for candidate in r13_governed_plan_admin r13_verified_signup r13_subscription_change_requests r13_manual_pilot_approvals r13_manual_pilot_activation; do
+              docker exec -i "$db_containers" psql -X -v ON_ERROR_STOP=1 -U postgres -d postgres < "supabase/drafts/$candidate.sql"
+            done
+          fi
           docker exec -i "$db_containers" psql -X -v ON_ERROR_STOP=1 -U postgres -d postgres < tests/database/r13-manual-full-local.sql
 
       - name: Show local migration state
