@@ -2,7 +2,7 @@ import Link from 'next/link';
 import Script from 'next/script';
 import { BrandIdentity, BrandMark } from '@/components/brand';
 import { SALSYSOS_VERSION_LABEL } from '@/lib/product-version';
-import { useMockData } from '@/lib/config';
+import { isPublicSignupAvailable } from '@/lib/signup/availability';
 import { signupAction, resendSignupVerificationAction } from './actions';
 
 export const dynamic = 'force-dynamic';
@@ -12,8 +12,7 @@ export default async function SignupPage({ searchParams }: {
 }) {
   const params = await searchParams;
   const siteKey = process.env.SALSYS_SIGNUP_TURNSTILE_SITE_KEY?.trim();
-  const enabled = !useMockData && process.env.SALSYS_PUBLIC_SIGNUP_ENABLED === 'true' &&
-    Boolean(siteKey && process.env.SALSYS_SIGNUP_TURNSTILE_SECRET?.trim());
+  const enabled = await isPublicSignupAvailable();
   const resend = params.mode === 'resend';
   return (
     <main className="grid min-h-screen place-items-center bg-mist px-4 py-10">
