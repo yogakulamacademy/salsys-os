@@ -204,3 +204,17 @@ test('advanced operations need separate approval and preserve privacy removals',
   ordered(transport, "isAdd && !await commercialAdvancedAllowed", 'return adapter.send(');
   ordered(transport, 'AD_ACTIVATION_TRANSPORT_ENABLED === false', 'return adapter.send(');
 });
+
+test('isolated deployment uses configured origin for all signup verification and CAPTCHA boundaries',()=>{
+  const origin=read('lib/signup/origin.ts');
+  const captcha=read('lib/signup/captcha.ts');
+  assert.ok(origin.includes('process.env.SALSYSOS_APP_URL'));
+  assert.ok(origin.includes("url.protocol!=='https:'"));
+  assert.ok(origin.includes('url.username||url.password'));
+  assert.ok(origin.includes('url.search||url.hash'));
+  assert.ok(action.includes("new URL('/signup/verify',origin).href"));
+  assert.ok(callback.includes('new URL(path, origin)'));
+  assert.ok(captcha.includes('result.hostname === new URL(origin).hostname'));
+  assert.ok(read('lib/signup/availability.ts').includes('!getSignupOrigin()'));
+  assert.doesNotMatch(action+callback+captcha,/https:\/\/salsysos\.com\/signup\/verify|result\.hostname === 'salsysos\.com'/);
+});
