@@ -19,6 +19,42 @@ Status: PROPOSAL ONLY. This document does not create plans, seed a trial policy,
 
 The prices and quotas are prior working proposals, not a final decision. Confirm tax treatment and whether to offer any optional setup service before recording exact snapshots. No mandatory setup charge for Free. Do not offer any unverified capability, AI, automated messaging or provider activation. Workspace and integration codes must be individually approved and mapped to actual enforced boundaries; no inference from tier names. Free must include admin and be a subset of each paid tier's workspace scope; Free integration codes must be a subset of Pro's. Verify all Free/Pro pinned limits and scopes match the published offer exactly.
 
+## Draft feature allocation for commercial approval
+
+The five workspace codes below are from the actual workspace catalog migration
+`20261013104212_workspace_rbac_foundation.sql`. The runtime commercial scope
+is an intersection with existing tenant/user permissions, not a replacement
+for roles. Do not infer finer-grained feature restrictions from a workspace grant.
+
+| Workspace or permission | Free | Basic | Growth | Pro |
+| --- | --- | --- | --- | --- |
+| Admin (required account management) | Yes | Yes | Yes | Yes |
+| Sales (leads, pipeline, follow-ups) | Yes | Yes | Yes | Yes |
+| Reports workspace | No | Yes | Yes | Yes |
+| Marketing workspace | No | No | Yes | Yes |
+| Finance workspace | No | No | No | Yes |
+| WhatsApp connection eligibility | No | Proposed | Proposed | Proposed |
+| Instagram and Meta Ads connection eligibility | No | No | Proposed | Proposed |
+| Google Analytics, Search Console and Google Ads connection eligibility | No | No | No | Proposed |
+| Automated messaging, AI processing and audience activation | No | No | No | No |
+| Education/residential capability activation | Not promised | Not promised | Not promised | Not promised |
+
+This is an intentionally conservative, unapproved mapping. In particular,
+WhatsApp/Instagram eligibility does not authorize a connection without the
+provider's own permissions, and Google OAuth currently requires all three
+Google integration codes. Keep integrations disabled in the initial published
+snapshots if the relevant production authorization and reconciliation paths
+have not passed acceptance. The Pro trial uses the exact approved Pro scope
+and Free fallback, not an independently invented feature allocation.
+No feature matrix or draft price is automatically inserted into the catalog.
+
+The private `saas_governance.prepare_initial_trial_policy` routine accepts
+exact published Free/Pro snapshot digests and a commercial approval reference.
+It derives quotas, scopes and plan versions; it refuses existing signup state
+and always creates a disabled policy. It is restricted to the database release
+operator and has no public, authenticated, or service-role grant. The release
+operator must separately review and authorize enabling it.
+
 ## Deployment gates
 1. Exact integrated PR #829 head: all CI, migration replay including full local P0 checks, CodeQL and image checks green. No independent overlapping merge of #826/#827/#828.
 2. Isolated real Supabase Auth rehearsal: migrate reviewed candidates in dependency order P0, P1 governed plans, P2 verified signup, P1 change requests, manual approvals, manual activation. Quote/payment candidates may remain unapplied (gateway deferred). Do not apply draft SQL as-is to production. Generate reviewed migration files and verify actual migration ledger/order.
