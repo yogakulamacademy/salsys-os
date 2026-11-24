@@ -13,6 +13,8 @@ import { PageHeader } from '@/components/ui';
 import { PlatformAdminFrame } from '@/components/platform-admin-frame';
 import { requirePlatformAdminAccess } from '@/lib/platform-admin-access';
 import { createAdminClient } from '@/lib/supabase/admin';
+import Link from 'next/link';
+import { ORGANIZATION_PAGE_SIZE, MAX_ORGANIZATION_PAGE, parseOrganizationPage, organizationPageRange, organizationPageHref } from '@/lib/platform-organization-pagination';
 
 type OrganizationRow = {
   id: string;
@@ -43,32 +45,39 @@ function formatDate(value: string | null) {
 export default async function OrganizationsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ notice?: string; error?: string }>;
+  searchParams: Promise<{ notice?: string; error?: string; page?: string | string[] }>;
 }) {
   const query = await searchParams;
   await requirePlatformAdminAccess();
 
   const admin = createAdminClient();
-  const [organizationsResult, onboardingResult] = await Promise.all([
-    admin
-      .from('organizations')
-      .select('id,name,slug,status,created_at')
-      .order('created_at', { ascending: false }),
-    admin
-      .from('organization_onboarding')
-      .select('organization_id,status,current_step,enforce_on_sign_in,completed_at'),
-  ]);
+  const page = parseOrganizationPage(query.page);
+  const { from, to } = organizationPageRange(page);
+  const organizationsResult = await admin
+    .from('organizations')
+    .select('id,name,slug,status,created_at', { count: 'exact' })
+    .order('created_at', { ascending: false })
+    .order('id', { ascending: false })
+    .range(from, to);
 
-  if (organizationsResult.error) {
-    throw new Error(`Unable to load organizations: ${organizationsResult.error.message}`);
-  }
-  if (onboardingResult.error) {
-    throw new Error(`Unable to load onboarding state: ${onboardingResult.error.message}`);
+  if (organizationsResult.error || organizationsResult.count === null || !Array.isArray(organizationsResult.data)) {
+    throw new Error('Organization registry unavailable.');
   }
 
-  const organizations = (organizationsResult.data ?? []) as OrganizationRow[];
+  const organizations = organizationsResult.data as OrganizationRow[];
+  const total = organizationsResult.count;
+  const lastPage = Math.max(1, Math.ceil(total / ORGANIZATION_PAGE_SIZE));
+  const organizationIds = organizations.map(organization => organization.id);
+  const onboardingResult = organizationIds.length
+    ? await admin.from('organization_onboarding')
+        .select('organization_id,status,current_step,enforce_on_sign_in,completed_at')
+        .in('organization_id', organizationIds)
+    : { data: [], error: null };
+  if (onboardingResult.error || !Array.isArray(onboardingResult.data)) {
+    throw new Error('Onboarding records unavailable.');
+  }
   const onboardingByOrganization = new Map(
-    ((onboardingResult.data ?? []) as OnboardingRow[]).map((row) => [row.organization_id, row]),
+    (onboardingResult.data as OnboardingRow[]).map(row => [row.organization_id, row]),
   );
 
   return (
@@ -196,11 +205,12 @@ export default async function OrganizationsPage({
             <h2 className="section-title mt-1">Organizations</h2>
           </div>
           <div className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-600">
-            {organizations.length} loaded
+            {organizations.length} loaded / {total} total
           </div>
         </div>
 
-        <p className="mt-2 text-xs text-copy-muted">Includes the platform workspace, demo and legacy organizations. Loaded rows are not a paid-customer count.</p>
+        <p className="mt-2 text-xs text-copy-muted">Includes the platform workspace, demo and legacy organizations. Registry counts are not paid-customer counts. Concurrent changes can shift page contents.</p>
+        {organizations.length === 0 && <p role="status" className="mt-5 rounded-lg border border-line p-4 text-sm text-copy-muted">{total === 0 ? 'No organizations recorded.' : 'No organizations on this page.'}</p>}
         <div className="mt-5 overflow-x-auto">
           <table className="w-full min-w-[820px] border-separate border-spacing-0 text-left text-sm">
             <thead>
@@ -250,6 +260,14 @@ export default async function OrganizationsPage({
             </tbody>
           </table>
         </div>
+        <nav aria-label="Organization registry pagination" className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-line pt-4">
+          <p className="text-xs text-copy-muted">Page {page} · {organizations.length ? `${from + 1}–${from + organizations.length} of ${total}` : `${total} total`}</p>
+          <div className="flex flex-wrap gap-2">
+            {page > 1 && <Link href={organizationPageHref(1)} className="rounded-lg border border-line px-3 py-2 text-xs font-semibold">First</Link>}
+            {page > 1 && <Link href={organizationPageHref(page - 1)} className="rounded-lg border border-line px-3 py-2 text-xs font-semibold">Previous</Link>}
+            {page < lastPage && page < MAX_ORGANIZATION_PAGE && <Link href={organizationPageHref(page + 1)} className="rounded-lg border border-line px-3 py-2 text-xs font-semibold">Next</Link>}
+          </div>
+        </nav>
       </section>
     </div>
     </PlatformAdminFrame>
