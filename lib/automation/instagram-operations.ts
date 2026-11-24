@@ -140,11 +140,23 @@ export async function suppressInstagramUser(
   if (error) throw new Error(`Unable to suppress Instagram recipient: ${error.message}`);
 }
 
+// Independent of commercial feature flags: do not create new reply work for
+// inactive tenants. Existing authenticated inbound STOP handling remains separate.
+async function instagramQueueTenantActive(organizationId: string): Promise<boolean> {
+  if (typeof organizationId !== 'string' || !organizationId.trim()) return false;
+  const { data, error } = await createAdminClient().from('organizations')
+    .select('id,status').eq('id', organizationId).maybeSingle();
+  if (error) throw new Error('Instagram queue tenant authorization unavailable.');
+  return data?.id === organizationId && data.status === 'active';
+}
+
 export async function queueInstagramDmAutomation(input: QueueDmInput) {
   if (isInstagramStopRequest(input.body)) {
     await suppressInstagramUser(input.organizationId, input.instagramUserId);
     return { ok: true as const, suppressed: true as const, queued: false as const };
   }
+
+  if (!await instagramQueueTenantActive(input.organizationId)) return { ok: true as const, queued: false as const };
 
   const triggerType =
     input.triggerType ??
@@ -163,6 +175,7 @@ export async function queueInstagramDmAutomation(input: QueueDmInput) {
     rule.requires_human_approval || (await policyRequiresApproval(input.organizationId));
   const status = requiresApproval ? 'pending_approval' : 'queued';
   const idempotencyKey = `instagram:${rule.id}:${input.sourceEventId}`;
+  if (!await instagramQueueTenantActive(input.organizationId)) return { ok: true as const, queued: false as const };
   const admin = createAdminClient();
 
   const { data, error } = await admin
@@ -193,6 +206,7 @@ export async function queueInstagramDmAutomation(input: QueueDmInput) {
 }
 
 export async function queueInstagramCommentAutomation(input: QueueCommentInput) {
+  if (!await instagramQueueTenantActive(input.organizationId)) return { ok: true as const, queued: false as const };
   const rule = await firstMatchingRule(input.organizationId, 'comment_keyword', input.body);
   if (!rule) return { ok: true as const, queued: false as const };
 
@@ -200,6 +214,7 @@ export async function queueInstagramCommentAutomation(input: QueueCommentInput) 
     rule.requires_human_approval || (await policyRequiresApproval(input.organizationId));
   const status = requiresApproval ? 'pending_approval' : 'queued';
   const idempotencyKey = `instagram:${rule.id}:${input.sourceEventId}`;
+  if (!await instagramQueueTenantActive(input.organizationId)) return { ok: true as const, queued: false as const };
   const admin = createAdminClient();
 
   const { data, error } = await admin
