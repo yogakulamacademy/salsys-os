@@ -92,3 +92,16 @@ test('trial expiry cron is secret-protected and separately release-gated', () =>
   assert.ok(JSON.parse(read('vercel.json')).crons.some(c => c.path === '/api/commercial/trial-expiry' && c.schedule === '*/5 * * * *'));
   assert.ok(middleware.includes('"/api/commercial/trial-expiry"'));
 });
+
+test('current plan projection is session-bound, expiry-aware and does not elevate workspace access', () => {
+  assert.ok(sql.includes('v_context := public.get_current_workspace_context_v1()'));
+  assert.ok(sql.includes('where organization_id = v_org'));
+  assert.ok(sql.includes('if now() < v_intent.trial_ends_at'));
+  assert.ok(sql.includes("'free_pending_reconciliation'"));
+  assert.ok(sql.includes('grant execute on function public.get_current_signup_plan_v1() to authenticated'));
+  const access = read('lib/workspace-access.ts');
+  assert.ok(access.includes('filter(code => !plan || signupPlanAllowsWorkspace(plan, code))'));
+  assert.ok(access.includes("plan?.state === 'unavailable'"));
+  assert.ok(read('components/root-shell.tsx').includes("pathname.startsWith('/signup/')"));
+  assert.ok(read('app/dashboard/page.tsx').includes('<SignupPlanBanner />'));
+});
