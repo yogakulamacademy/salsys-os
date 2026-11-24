@@ -55,6 +55,19 @@ begin
   perform pg_advisory_xact_lock(hashtextextended('saas_lifecycle_request:'||p_request::text,0));
   select status into v_status from public.organizations where id=p_target for update;
   if not found then raise exception 'Lifecycle operation not authorized' using errcode='42501'; end if;
+  -- Serialize against concurrent updates/deletions of the authorization rows.
+  -- Private rehearsal only; external writers and lock ordering need full review.
+  perform 1
+    from saas_lifecycle.operators l
+    join public.organizations o on o.id=l.platform_organization_id
+    join public.profiles p on p.id=l.user_id
+    join public.organization_members m on m.organization_id=o.id and m.user_id=l.user_id
+    join auth.users u on u.id=l.user_id
+    join auth.sessions s on s.user_id=u.id and s.id=(auth.jwt()->>'session_id')::uuid
+    join public.tenant_session_bindings b on b.session_id=s.id and b.user_id=u.id and b.organization_id=o.id
+    where l.user_id=v_actor and l.platform_organization_id=p_platform
+    for share of l,o,p,m,u,s,b;
+  if not found then raise exception 'Lifecycle operation not authorized' using errcode='42501'; end if;
   -- Recheck identity, session, permission and protected target after lock waits.
   v_actor:=saas_lifecycle.require_operator(p_platform,p_target,p_action);
   select * into v_event from saas_lifecycle.events where request_id=p_request;
