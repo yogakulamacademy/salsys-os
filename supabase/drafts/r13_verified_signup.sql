@@ -8,7 +8,7 @@ create table public.signup_trial_policy (
   singleton boolean primary key default true check (singleton),
   plan_id uuid not null references public.saas_plans(id) on delete restrict,
   plan_version integer not null check (plan_version > 0),
-  trial_days integer not null default 14 check (trial_days = 14),
+  trial_days integer not null default 30 check (trial_days = 30),
   free_plan_id uuid not null references public.saas_plans(id) on delete restrict,
   free_plan_version integer not null check (free_plan_version > 0),
   -- No integrations are implicitly enabled by Pro eligibility.
@@ -290,7 +290,7 @@ begin
     where organization_id = v_org
       and not (workspace_code = any(v_policy.allowed_workspace_codes));
 
-  v_trial_end := now() + interval '336 hours';
+  v_trial_end := now() + interval '720 hours';
   -- Commercial assignment and its P0 audit are atomic with organization creation.
   insert into public.saas_organization_subscriptions(
     organization_id, plan_id, status, source, trial_started_at, trial_ends_at, metadata
