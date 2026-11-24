@@ -20,12 +20,11 @@ create table saas_governance.subscription_change_requests (
   target_plan_id uuid not null,
   target_version integer not null,
   target_digest text not null check(target_digest ~ '^[0-9a-f]{64}$'),
-  status text not null default 'requested' check(status in ('requested','withdrawn')),
+  status text not null default 'requested' check(status in ('requested','withdrawn','activated')),
   requested_at timestamptz not null default clock_timestamp(),
   withdrawn_at timestamptz,
   withdrawn_by uuid,
-  check(from_plan_id<>target_plan_id),
-  check((status='requested' and withdrawn_at is null and withdrawn_by is null)
+  check((status in ('requested','activated') and withdrawn_at is null and withdrawn_by is null)
     or (status='withdrawn' and withdrawn_at is not null and withdrawn_by is not null)),
   foreign key(subscription_id,organization_id) references public.saas_organization_subscriptions(id,organization_id) on delete restrict,
   foreign key(target_plan_id,target_version) references saas_governance.published_plan_versions(plan_id,version) on delete restrict,
@@ -35,7 +34,7 @@ create unique index subscription_one_pending_change_v1
   on saas_governance.subscription_change_requests(organization_id) where status='requested';
 create table saas_governance.subscription_change_events (
   request_id uuid not null references saas_governance.subscription_change_requests(id) on delete restrict,
-  action text not null check(action in ('requested','withdrawn')),
+  action text not null check(action in ('requested','withdrawn','activated')),
   actor_user_id uuid not null,
   occurred_at timestamptz not null default clock_timestamp(),
   primary key(request_id,action)
@@ -103,7 +102,7 @@ begin
     'named_users',p.snapshot->'named_users','lead_records',p.snapshot->'lead_records') order by p.amount_minor,p.plan_code),'[]'::jsonb)
   into v_offers from saas_governance.published_plan_versions p
   join public.saas_plans c on c.id=p.plan_id and c.code=p.plan_code and c.version=p.version and c.status='active'
-  where p.effective_from<=clock_timestamp() and p.plan_id<>v_sub.plan_id;
+  where p.effective_from<=clock_timestamp() and (p.plan_id<>v_sub.plan_id or v_sub.status='trialing' or (v_sub.metadata->>'origin'='manual_pilot_contract' and v_sub.current_period_ends_at>clock_timestamp()));
   return jsonb_build_object('state','available','subscription_revision',v_sub.updated_at,'offers',v_offers,'requests',v_requests);
 end;
 $fn$;
@@ -136,7 +135,7 @@ begin
   if not found or v_sub.updated_at is distinct from p_expected_subscription_updated_at
     or v_sub.status not in ('active','trialing')
     or (v_sub.status='trialing' and (v_sub.trial_ends_at is null or v_sub.trial_ends_at<=clock_timestamp()))
-    or v_sub.plan_id=p_target_plan then raise exception 'Subscription changed; refresh options' using errcode='40001'; end if;
+    or (v_sub.plan_id=p_target_plan and v_sub.status<>'trialing' and not coalesce(v_sub.metadata->>'origin'='manual_pilot_contract' and v_sub.current_period_ends_at>clock_timestamp(),false)) then raise exception 'Subscription changed; refresh options' using errcode='40001'; end if;
   select p.* into v_offer from saas_governance.published_plan_versions p
     join public.saas_plans c on c.id=p.plan_id and c.code=p.plan_code and c.version=p.version and c.status='active'
     where p.plan_id=p_target_plan and p.version=p_target_version and p.snapshot_sha256=p_target_digest
