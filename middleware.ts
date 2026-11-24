@@ -512,6 +512,23 @@ export async function middleware(request: NextRequest) {
     return redirectWithAuthCookies(request, response, "/onboarding/security");
   }
 
+  // Route self-service owners into the signup wizard after trusted tenant
+  // binding. This is a navigation preference, not an access grant.
+  const selfSignupWorkspace =
+    user.app_metadata?.self_signup_organization_id === organizationId &&
+    (role === "owner" || role === "admin");
+  if (
+    selfSignupWorkspace &&
+    (request.method === "GET" || request.method === "HEAD") &&
+    /^\/onboarding(?:\/(?:website|channels|team|finish))?\/?$/.test(pathname)
+  ) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/signup" + pathname;
+    const redirected = NextResponse.redirect(url);
+    response.cookies.getAll().forEach((cookie) => redirected.cookies.set(cookie));
+    return privateNoStore(redirected);
+  }
+
   if (
     !pathname.startsWith("/api/") &&
     !isOnboardingSetupPage(pathname) &&
@@ -543,7 +560,7 @@ export async function middleware(request: NextRequest) {
         onboarding.status !== "completed" &&
         onboarding.status !== "dismissed"
       ) {
-        return redirectWithAuthCookies(request, response, "/onboarding");
+        return redirectWithAuthCookies(request, response, selfSignupWorkspace ? "/signup/onboarding" : "/onboarding");
       }
     } catch (error) {
       console.warn("Middleware required onboarding lookup unavailable", {
