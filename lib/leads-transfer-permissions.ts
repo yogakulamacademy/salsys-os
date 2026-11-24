@@ -2,6 +2,7 @@ import "server-only";
 
 import { createClient } from "@/lib/supabase/server";
 import { canManageLeadsTransferForWorkspace } from "@/lib/leads-transfer-policy";
+import { getCurrentSignupPlan, signupPlanAllowsWorkspace } from "@/lib/commercial/signup-plan";
 
 type ServerSupabaseClient = Awaited<ReturnType<typeof createClient>>;
 
@@ -70,6 +71,16 @@ export async function getLeadsTransferPermissions(
     salesMembershipRole,
   });
   if (!canExport) return DENIED;
+
+  // Commercial scope is additive to the existing session, role and PII
+  // decisions. This only controls operational CSV import/export, never a
+  // data-subject access request or statutory privacy export.
+  if (process.env.SALSYS_COMMERCIAL_ACCESS_ENABLED === 'true') {
+    const plan = await getCurrentSignupPlan(supabase);
+    if (!signupPlanAllowsWorkspace(plan, 'sales')) return DENIED;
+  } else if (process.env.SALSYS_PUBLIC_SIGNUP_ENABLED === 'true') {
+    return DENIED;
+  }
 
   const { data: contactGrant, error: contactError } = await supabase.rpc("can_view_lead_pii");
   const canExportContacts = !contactError && contactGrant === true;
