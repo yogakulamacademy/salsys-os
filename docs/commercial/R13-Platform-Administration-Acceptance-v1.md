@@ -33,3 +33,11 @@ Run full CI, CodeQL, readiness suite, real signed-session negative tests, and re
 - Effective entitlement and contract history reporting, customer success/support, platform health, governance and onboarding acceptance remain separate work.
 - Existing registry pagination and dependency on commercial operator read availability need review before commercial scale.
 - No production deployment or public signup authorization is implied by these tests.
+
+## SA-06 financial metric acceptance
+
+The SaaS payment evidence draft is not an installed production ledger. Before enabling financial KPIs, separately approve a billing model, currency and tax treatment, period and cancellation policy, merchant verification, refunds/disputes, invoice balances and reconciliation. Report MRR only from qualifying active recurring contracts normalized to monthly amounts, excluding complimentary accounts, taxes and one-time setup fees; ARR is annualized MRR, not booked cash. Report collections from reconciled settlement evidence net of relevant refunds/disputes, with explicit currency, period and accounting definition. Outstanding balances require issued invoices and applied payments. Never use CRM customer/student payments, plan list price, offline approval references or trial counts as settlement evidence. Do not install the draft or activate billing as part of this PR.
+
+## SA-07 customer success monitoring
+
+The protected customer-success page exposes only exact organization/onboarding counts, including not started, in progress, completed, dismissed, missing records and enforcement-configured incomplete records. Missing records are a legacy/not-enrolled possibility, not a failure. These counts include demos; do not call them paying customers or infer product adoption, support satisfaction or churn. Add isolated tests of zero rows, inconsistent concurrent reads, revoked operators and authorized access. No new customer data, tracking or support writes are enabled.
