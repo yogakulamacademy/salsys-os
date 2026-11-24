@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { canOpenPlatformWorkspace } from "@/lib/platform-workspace-navigation";
 import {
   BookOpen,
   CalendarDays,
@@ -103,6 +104,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
   const query = await searchParams;
   const mock = isMockMode();
   const periodFallback = resolveDashboardPeriod(query);
+  const platformWorkspaceAvailable = await canOpenPlatformWorkspace();
 
   const [snapshot, periodAnalytics, metricTruth, extras, story] = await Promise.all([
     getDashboardSnapshot(),
@@ -365,6 +367,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          {platformWorkspaceAvailable && <Link href="/platform-admin" className="inline-flex h-11 items-center gap-2 rounded-xl border border-line bg-surface px-3.5 text-sm font-semibold text-brand-700"><Users size={16} aria-hidden="true" /> Platform administration</Link>}
           <PeriodPresets selected={periodAnalytics.period.preset} />
           <details className="group relative">
             <summary className="inline-flex h-11 cursor-pointer list-none items-center gap-2 rounded-xl border border-line bg-surface px-3.5 text-[13px] font-semibold text-copy-strong hover:border-line-strong" title="UTC reporting days">

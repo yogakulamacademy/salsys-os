@@ -2,6 +2,7 @@ import { PlatformAdminFrame } from '@/components/platform-admin-frame';
 import {randomUUID} from 'node:crypto';
 import {notFound} from 'next/navigation';
 import Link from 'next/link';
+import { CreditCard, ShieldCheck, Inbox } from 'lucide-react';
 import {loadManualPilot,loadManualAssignments,loadManualLaunchReadiness,type ManualLaunchReadiness,type ManualQueue,type AssignmentState} from '@/lib/commercial/manual-pilot';
 import {approvePilotAction,activatePilotAction,assignPlanAction,enablePilotAction} from './actions';
 export const dynamic='force-dynamic';
@@ -17,14 +18,14 @@ export default async function ManualPilotPage({searchParams}:{searchParams:Promi
   try{readiness=await loadManualLaunchReadiness();}catch{/* Never infer release readiness from missing evidence. */}
   return <PlatformAdminFrame section="pilot"><main className="space-y-4">
     <Link href="/settings/commercial-plans" className="text-sm underline">Commercial plans</Link>
-    <h1 className="text-2xl font-semibold">Manual subscription approvals</h1>
-    <section className="rounded-xl border border-line p-4">
-      <p className="font-semibold">{state.used_slots} / {state.max_slots} organizations admitted to manual pilot</p>
-      <progress className="w-full" max={10} value={state.used_slots} aria-label="Manual pilot capacity"/>
+    <header><p className="text-xs font-bold uppercase tracking-wider text-brand-700">Commercial operations</p><h1 className="mt-1 text-[28px] font-bold tracking-tight">Manual subscription approvals</h1></header>
+    <section className="rounded-xl border border-line bg-surface p-5 shadow-sm">
+      <CreditCard size={20} className="mb-3 text-brand-700" aria-hidden="true"/><p className="font-semibold">{state.used_slots} / {state.max_slots} organizations admitted to manual pilot</p>
+      <progress className="my-3 h-3 w-full accent-brand-700" max={state.max_slots} value={state.used_slots} aria-label="Manual pilot capacity"/>
       <p className="text-sm">Free registration is separate. No gateway or recurring charge is required. {activationEnabled?'Approval activates the exact approved plan.':'Approvals are recorded here; activation is disabled.'}</p>
     </section>
-    <section className="rounded-xl border border-line p-4 space-y-2">
-      <h2 className="font-semibold">Commercial configuration readiness</h2>
+    <section className="space-y-2 rounded-xl border border-line bg-surface p-5 shadow-sm">
+      <h2 className="flex items-center gap-2 font-semibold"><ShieldCheck size={18} className="text-brand-700" aria-hidden="true"/> Commercial configuration readiness</h2>
       {!readiness?<p role="alert" className="text-sm">Configuration check unavailable.</p>:<>
         <p className="text-sm font-semibold">{readiness.database_configuration_ready?'Published plan and trial configuration checks passed':'Configuration incomplete'}</p>
         {readiness.missing_plan_codes.length>0&&<p className="text-sm">Unpublished plans: {readiness.missing_plan_codes.join(', ')}</p>}
@@ -37,7 +38,7 @@ export default async function ManualPilotPage({searchParams}:{searchParams:Promi
     {activationEnabled&&<section className="space-y-3">
       <h2 className="text-lg font-semibold">Manage organization access</h2>
       <p className="text-sm">Choose the final published plan. A customer request is a preference; your assignment controls actual access. No gateway charge is initiated. A different selection preserves the original request in history.</p>
-      {!assignments?<p role="alert">Organization assignment list unavailable.</p>:assignments.organizations.length===0?<p>No eligible organizations.</p>:assignments.organizations.map(o=><article key={o.id} className="space-y-3 rounded-xl border border-line p-4">
+      {!assignments?<p role="alert">Organization assignment list unavailable.</p>:assignments.organizations.length===0?<p>No eligible organizations.</p>:assignments.organizations.map(o=><article key={o.id} className="space-y-3 rounded-xl border border-line bg-surface p-4 shadow-sm">
         <h3 className="font-semibold">{o.organization_name}</h3>
         <p className="text-sm">Current plan: <strong className="capitalize">{o.current_code}</strong> · Customer requested: <strong className="capitalize">{o.requested_code??'None'}</strong></p>
         {!o.pilot_enabled?<form action={enablePilotAction} className="space-y-2">
@@ -58,7 +59,7 @@ export default async function ManualPilotPage({searchParams}:{searchParams:Promi
       </article>)}
     </section>}
     <h2 className="text-lg font-semibold">Pending customer requests</h2>
-    {state.requests.length===0?<p>No eligible plan requests.</p>:state.requests.map(r=><article key={r.id} className="space-y-3 rounded-xl border border-line p-4">
+    {state.requests.length===0?<div className="rounded-xl border border-line bg-surface p-8 text-center"><Inbox size={24} className="mx-auto text-copy-muted" aria-hidden="true"/><p className="mt-3 font-semibold">No eligible plan requests.</p><p className="mt-1 text-sm text-copy-muted">Eligible customer requests will appear here for review.</p></div>:state.requests.map(r=><article key={r.id} className="space-y-3 rounded-xl border border-line bg-surface p-4 shadow-sm">
       <h2 className="font-semibold">{r.organization_name} · {r.plan_code} v{r.version}</h2>
       <p className="text-sm">Published monthly price: {money(r.amount_minor)}. Requested {new Date(r.requested_at).toISOString().slice(0,10)} UTC.</p>
       {r.approved_at?<div className="space-y-2"><p className="text-sm">Approval recorded ({r.approval_mode?.replaceAll('_',' ')}). Pending activation.</p>{activationEnabled&&<form action={activatePilotAction} className="space-y-2"><input type="hidden" name="request" value={r.id}/><input type="hidden" name="digest" value={r.digest}/><label className="grid gap-1 text-sm">Type ACTIVATE PILOT to confirm<input name="confirmation" required autoComplete="off" className="rounded border border-line p-2"/></label><button type="submit" className="rounded border border-line p-2 font-semibold">Activate approved subscription</button></form>}</div>:<form action={approvePilotAction} className="grid gap-3 sm:grid-cols-2">

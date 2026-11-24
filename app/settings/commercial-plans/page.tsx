@@ -1,6 +1,7 @@
 import { PlatformAdminFrame } from '@/components/platform-admin-frame';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
+import { ChevronDown, Layers3, Plus } from 'lucide-react';
 import { readPlanReviewState, PLAN_CODES, type PlanReviewState } from '@/lib/commercial/plan-admin';
 import { createPlanAction, transitionPlanAction, publishInitialPlanAction } from './actions';
 
@@ -14,18 +15,19 @@ export default async function CommercialPlansPage({searchParams}:{searchParams:P
   let state:PlanReviewState;
   try { state=await readPlanReviewState(); } catch { notFound(); }
   const result=(await searchParams).result;
-  return <PlatformAdminFrame section="plans"><main className="mx-auto max-w-6xl space-y-6 p-6">
-    <header><h1 className="text-2xl font-bold">Commercial plan proposals</h1>
+  return <PlatformAdminFrame section="plans"><main className="min-w-0 space-y-6">
+    <header><p className="text-xs font-bold uppercase tracking-wider text-brand-700">Commercial management</p><h1 className="mt-1 text-[28px] font-bold tracking-tight">Commercial plan proposals</h1>
     <p className="mt-2 text-sm">Internal plan administration. Initial publication requires separate approval and authorization. No customer subscription change or charge is possible here.</p></header>
     {result==='error'?<p role="alert" className="rounded border border-line p-3 text-sm">Operation not completed. Check permissions, approval, and catalog version, then retry.</p>:['created','review_saved','published'].includes(result??'')?<p role="status" className="rounded border border-line p-3 text-sm">{result==='published'?'Initial catalog plan published. Customer subscriptions remain unchanged.':result==='created'?'Draft proposal saved.':'Review decision saved.'}</p>:null}
     {process.env.SALSYS_PLATFORM_ADMIN_ENABLED==='true'&&<Link href="/platform-admin" className="block text-sm underline">Platform administration overview</Link>}
     {process.env.SALSYS_MANUAL_PILOT_ENABLED==='true'&&<Link href="/settings/commercial-plans/pilot" className="text-sm underline">Manual subscription approvals</Link>}
     {process.env.SALSYS_CONTRACT_QUOTES_ENABLED==='true'&&<Link href="/settings/commercial-plans/quotes" className="text-sm underline">Subscription quote queue (authorized operators)</Link>}
     <section className="grid gap-3 sm:grid-cols-4" aria-label="Current catalog versions">
-      {PLAN_CODES.map(code=><div key={code} className="rounded-xl border border-line p-4"><h2 className="font-semibold capitalize">{code}</h2><p className="text-sm">Catalog version: {state.versions[code]??'Not created'}</p></div>)}
+      {PLAN_CODES.map(code=><div key={code} className="rounded-xl border border-line bg-surface p-5 shadow-sm"><Layers3 size={19} className="text-brand-700" aria-hidden="true"/><h2 className="mt-3 text-xl font-semibold capitalize">{code}</h2><p className="mt-1 text-sm text-copy-muted">Catalog version: {state.versions[code]??'Not created'}</p><p className="mt-3 text-xs font-semibold">{(state.versions[code]??0)>0?'Published catalog':'Not published'}</p></div>)}
     </section>
-    {state.may_author&&<section className="rounded-xl border border-line p-5">
-      <h2 className="mb-4 text-lg font-semibold">New immutable proposal</h2>
+    {state.may_author&&<details open={result==='error'} className="group rounded-xl border border-line bg-surface p-5 shadow-sm">
+      <summary className="flex cursor-pointer list-none flex-wrap items-center justify-between gap-3"><span><span className="block text-lg font-semibold">New immutable proposal</span><span className="block text-xs text-copy-muted">Draft plan changes for the existing approval process</span></span><span className="inline-flex items-center gap-2 text-sm font-semibold text-brand-700"><Plus size={16} aria-hidden="true"/> Create proposal <ChevronDown size={15} className="group-open:rotate-180" aria-hidden="true"/></span></summary>
+      <p className="mb-4 mt-5 text-xs text-copy-muted">Initial publication requires separate approval. Existing customer subscriptions are not changed by this proposal.</p>
       <form action={createPlanAction} className="grid gap-4 sm:grid-cols-2">
         <label className="grid gap-1 text-sm">Plan<select name="code" required className={inputClass}>{PLAN_CODES.map(code=><option key={code} value={code}>{code}</option>)}</select></label>
         <Field name="expected_version" label="Expected catalog version (0 for new)" type="number" min={0} max={2147483647} defaultValue={0}/>
@@ -42,10 +44,10 @@ export default async function CommercialPlansPage({searchParams}:{searchParams:P
         <label className="grid gap-1 text-sm sm:col-span-2">Rationale<textarea name="rationale" required minLength={10} maxLength={2048} className={inputClass}/></label>
         <button className="rounded-lg border border-line px-4 py-2 text-sm font-semibold" type="submit">Save draft proposal</button>
       </form>
-    </section>}
+    </details>}
     <section className="space-y-3"><h2 className="text-lg font-semibold">Recent proposals (up to 100)</h2>
       {!state.requests.length&&<p>No proposals recorded.</p>}
-      {state.requests.map(r=><article key={r.id} className="space-y-3 rounded-xl border border-line p-4">
+      {state.requests.map(r=><article key={r.id} className="space-y-3 rounded-xl border border-line bg-surface p-4 shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-2"><h3 className="font-semibold">{r.snapshot.display_name} · {r.plan_code}</h3><span className="text-sm">{state.published_request_ids.includes(r.id)?'published':r.status.replaceAll('_',' ')} · revision {r.revision}</span></div>
         <p className="text-sm">Base version {r.expected_plan_version} · proposed INR {(r.snapshot.amount_minor/100).toFixed(2)}/month</p>
         <p className="text-sm">{r.rationale}</p>

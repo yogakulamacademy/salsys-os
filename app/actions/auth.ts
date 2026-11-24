@@ -7,6 +7,7 @@ import { useMockData } from '@/lib/config';
 import { provisionVerifiedSignup } from '@/lib/signup/provision';
 import { createClient } from '@/lib/supabase/server';
 import { ACTIVE_WORKSPACE_COOKIE } from '@/lib/workspace';
+import { canOpenPlatformWorkspace } from '@/lib/platform-workspace-navigation';
 
 const ORGANIZATION_COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 30;
 const AUTH_RETRY_DELAY_MS = 450;
@@ -355,6 +356,9 @@ export async function signInAction(formData: FormData) {
       ? '/signup/onboarding' : '/onboarding');
   }
 
+  if (next === '/dashboard' && await canOpenPlatformWorkspace({ organizationId: tenant.organizationId, userId: signInData.user.id })) {
+    redirect('/platform-admin');
+  }
   redirect(next);
 }
 

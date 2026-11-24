@@ -1,5 +1,6 @@
 import {
   Building2,
+  ChevronDown,
   CheckCircle2,
   KeyRound,
   ShieldCheck,
@@ -91,8 +92,12 @@ export default async function OrganizationsPage({
         </div>
       ) : null}
 
-      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-        <div className="flex items-start gap-3">
+      <details open={Boolean(query.error)} className="group rounded-2xl border border-line bg-surface p-5 shadow-sm">
+        <summary className="flex cursor-pointer list-none flex-wrap items-center justify-between gap-3">
+          <span className="flex items-center gap-3"><span className="grid h-10 w-10 place-items-center rounded-xl bg-brand-50 text-brand-700"><UserPlus size={18} aria-hidden="true" /></span><span><span className="block font-semibold">Create organization</span><span className="block text-xs text-copy-muted">Provision a workspace and owner account</span></span></span>
+          <span className="flex items-center gap-2 text-sm font-semibold text-brand-700">New organization <ChevronDown size={16} className="group-open:rotate-180" aria-hidden="true" /></span>
+        </summary>
+        <div className="mt-5 flex items-start gap-3 border-t border-line pt-5">
           <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-emerald-50 text-emerald-700">
             <UserPlus size={18} />
           </span>
@@ -182,19 +187,20 @@ export default async function OrganizationsPage({
             </button>
           </div>
         </form>
-      </section>
+      </details>
 
-      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+      <section className="rounded-2xl border border-line bg-surface p-5 shadow-sm">
         <div className="flex items-center justify-between gap-3">
           <div>
             <div className="eyebrow">Tenant registry</div>
             <h2 className="section-title mt-1">Organizations</h2>
           </div>
           <div className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-600">
-            {organizations.length} total
+            {organizations.length} loaded
           </div>
         </div>
 
+        <p className="mt-2 text-xs text-copy-muted">Includes the platform workspace, demo and legacy organizations. Loaded rows are not a paid-customer count.</p>
         <div className="mt-5 overflow-x-auto">
           <table className="w-full min-w-[820px] border-separate border-spacing-0 text-left text-sm">
             <thead>
