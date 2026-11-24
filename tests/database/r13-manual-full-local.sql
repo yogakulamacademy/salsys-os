@@ -81,7 +81,10 @@ begin
  end loop;
  if not saas_governance.prepare_initial_trial_policy(v_free_digest,v_pro_digest,'Synthetic local approval') then raise exception 'policy preparation failed'; end if;
  if public.signup_trial_available_v1() then raise exception 'Prepared policy enabled prematurely'; end if;
- update public.signup_trial_policy set enabled=true;
+ -- The release enables a previously committed policy in a later transaction.
+ -- This rollback-only fixture has one transaction clock; model that ordering.
+ update public.signup_trial_policy set enabled=true,approved_at=now();
+ if not public.signup_trial_available_v1() then raise exception 'Enabled local policy not available'; end if;
  execute 'set local role service_role';
  if not public.reserve_signup_intent_v1(v_intent,v_email,'Synthetic customer','Synthetic customer organization') then raise exception 'reservation failed'; end if;
  execute 'reset role';
