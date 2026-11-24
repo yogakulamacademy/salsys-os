@@ -303,6 +303,9 @@ test('R13 P1 durable plan governance uses actual P0 DDL, immutable evidence and 
     for(let i=2;i<=11;i++){
       const org=randomUUID(),sub=randomUUID(),req=randomUUID(),who=randomUUID();
       await db.query("insert into public.organizations(id,name,slug,status) values($1,$2,$3,'active')",[org,'Synthetic pilot '+i,'synthetic-pilot-'+i]);
+      await db.query("insert into auth.users values($1,now(),false)",[who]);
+      await db.query("insert into public.profiles values($1,true)",[who]);
+      await db.query("insert into public.organization_members values($1,$2,'owner',true)",[org,who]);
       await db.query("insert into saas_governance.change_request_access values($1,true,'synthetic pilot enrollment')",[org]);
       await db.query("insert into public.saas_organization_subscriptions(id,organization_id,plan_id,status) values($1,$2,$3,'active')",[sub,org,free]);
       await db.query("insert into saas_governance.subscription_change_requests(id,organization_id,subscription_id,requested_by,idempotency_key,from_plan_id,from_subscription_updated_at,target_plan_id,target_version,target_digest) select $1,$2,id,$3,$4,plan_id,updated_at,$5,1,$6 from public.saas_organization_subscriptions where id=$7",[req,org,who,randomUUID(),planId,pubHash,sub]);
