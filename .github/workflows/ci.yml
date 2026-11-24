@@ -8,6 +8,7 @@ on:
   push:
     branches:
       - main
+      - feat/r13-p1-governed-plan-admin
 
 permissions:
   contents: read
