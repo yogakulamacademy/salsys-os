@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { readPlanReviewState } from '@/lib/commercial/plan-admin';
 import { redirect } from 'next/navigation';
 import type { ReactNode } from 'react';
 import {
@@ -145,6 +146,8 @@ export default async function SettingsOverviewPage() {
   const manager = role === 'manager';
   if (!admin && !manager) redirect('/dashboard?restricted=1');
   const platformAdmin = admin && workspace.activeWorkspace?.organizationSlug === 'salsysos';
+  const platformOverview = platformAdmin && process.env.SALSYS_PLATFORM_ADMIN_ENABLED === 'true'
+    && Boolean(await readPlanReviewState().catch(() => null));
 
   const { configured } = getSupabasePublicConfig();
   const live = configured && !useMockData;
@@ -317,6 +320,7 @@ export default async function SettingsOverviewPage() {
       </section>
       <div className="wso-footer">
         {admin ? <Link href="/system-health"><Activity size={15}/> System Health <ArrowRight size={13}/></Link> : null}
+        {platformOverview ? <Link href="/platform-admin"><ShieldCheck size={15}/> Platform Administration <ArrowRight size={13}/></Link> : null}
         {platformAdmin ? <Link href="/settings/organizations"><Building2 size={15}/> Customer Organizations <ArrowRight size={13}/></Link> : null}
         {manager ? <span><ShieldCheck size={15}/> Manager scope: CRM rules only. Administrative settings remain Owner/Admin restricted.</span> : null}
       </div>
