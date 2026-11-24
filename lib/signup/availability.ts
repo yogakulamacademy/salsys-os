@@ -1,10 +1,11 @@
 import 'server-only';
+import { isSignupAdmissionConfigured } from '@/lib/signup/admission';
 import { getSignupOrigin } from '@/lib/signup/origin';
 import { useMockData } from '@/lib/config';
 import { createAdminClient } from '@/lib/supabase/admin';
 
 export async function isPublicSignupAvailable(): Promise<boolean> {
-  if (!getSignupOrigin() || useMockData || process.env.SALSYS_PUBLIC_SIGNUP_ENABLED !== 'true' ||
+  if (!getSignupOrigin() || !isSignupAdmissionConfigured() || useMockData || process.env.SALSYS_PUBLIC_SIGNUP_ENABLED !== 'true' ||
       process.env.SALSYS_COMMERCIAL_ACCESS_ENABLED !== 'true' ||
       process.env.SALSYS_TRIAL_RECONCILIATION_ENABLED !== 'true' ||
       !process.env.SALSYS_SIGNUP_TURNSTILE_SITE_KEY?.trim() ||
