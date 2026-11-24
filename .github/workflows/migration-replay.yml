@@ -11,6 +11,12 @@ on:
       - 'tests/database/r2-behavior-rpc-negative-auth-local.sql'
       - 'tests/database/r2-behavior-rpc-positive-tenant-local.sql'
       - '.github/workflows/migration-replay.yml'
+  push:
+    branches:
+      - feat/r13-p1-governed-plan-admin
+    paths:
+      - 'supabase/**'
+      - '.github/workflows/migration-replay.yml'
   workflow_dispatch:
 
 permissions:
