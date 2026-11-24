@@ -38,3 +38,56 @@ end;
 $fn$;
 revoke all on function saas_governance.platform_effective_quota_preview(uuid)
   from public,anon,authenticated,service_role;
+
+-- A separate read capability. Plan publication and lifecycle mutation rights
+-- must never implicitly authorize cross-tenant quota reads.
+create table saas_governance.platform_quota_readers (
+  user_id uuid primary key references public.profiles(id) on delete restrict,
+  platform_organization_id uuid not null references public.organizations(id) on delete restrict,
+  active boolean not null default false
+);
+alter table saas_governance.platform_quota_readers enable row level security;
+revoke all on table saas_governance.platform_quota_readers from public,anon,authenticated,service_role;
+
+-- Private rehearsal; do not expose to a browser or service-role RPC.
+create function saas_governance.require_platform_quota_reader(p_platform uuid)
+returns void language plpgsql security invoker set search_path=pg_catalog as $fn$
+declare v_actor uuid; v_session uuid; v_claims jsonb;
+begin
+  v_claims:=auth.jwt();
+  v_actor:=auth.uid();
+  begin
+    v_session:=nullif(v_claims->>'session_id','')::uuid;
+  exception when invalid_text_representation then
+    raise exception 'Quota read not authorized' using errcode='42501';
+  end;
+  if v_claims->>'role' is distinct from 'authenticated'
+    or v_actor is null or v_session is null or p_platform is null
+    or not exists(
+      select 1 from saas_governance.platform_quota_readers r
+      join public.organizations o on o.id=r.platform_organization_id and o.slug='salsysos' and o.status='active'
+      join public.profiles p on p.id=r.user_id and p.active
+      join public.organization_members m on m.organization_id=o.id and m.user_id=r.user_id and m.active and m.role in ('owner','admin')
+      join auth.users u on u.id=r.user_id and u.email_confirmed_at is not null and u.is_anonymous is false
+      join auth.sessions s on s.id=v_session and s.user_id=u.id and (s.not_after is null or s.not_after>clock_timestamp())
+      join public.tenant_session_bindings b on b.session_id=s.id and b.user_id=u.id and b.organization_id=o.id
+      where r.user_id=v_actor and r.platform_organization_id=p_platform and r.active
+    )
+  then raise exception 'Quota read not authorized' using errcode='42501'; end if;
+end;
+$fn$;
+revoke all on function saas_governance.require_platform_quota_reader(uuid) from public,anon,authenticated,service_role;
+
+create function saas_governance.read_platform_effective_quota_preview(p_platform uuid,p_target uuid)
+returns jsonb language plpgsql security invoker set search_path=pg_catalog as $fn$
+declare v_result jsonb;
+begin
+  perform saas_governance.require_platform_quota_reader(p_platform);
+  if p_target is null or p_target=p_platform then return jsonb_build_object('state','unavailable'); end if;
+  v_result:=saas_governance.platform_effective_quota_preview(p_target);
+  perform saas_governance.require_platform_quota_reader(p_platform);
+  return v_result;
+end;
+$fn$;
+revoke all on function saas_governance.read_platform_effective_quota_preview(uuid,uuid)
+  from public,anon,authenticated,service_role;
