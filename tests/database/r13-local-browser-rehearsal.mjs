@@ -184,9 +184,20 @@ async function main(){
   console.log('B07: real subscription UI shows trial, usage, history, no checkout');
   phase='customer operator route denial';
   const operatorUrl=origin+'/settings/commercial-plans/pilot';
-  const deniedRoute=await page.goto(operatorUrl,{waitUntil:'domcontentloaded'});
-  check(deniedRoute?.status()===404||new URL(page.url()).pathname!=='/settings/commercial-plans/pilot','Customer operator route did not deny');
-  check(await page.getByRole('heading',{name:'Manual subscription approvals'}).count()===0,'Customer operator UI exposed');
+  await page.goto(operatorUrl,{waitUntil:'domcontentloaded'});
+  // Next.js can stream a rendered not-found boundary with HTTP 200.
+  // Require actual access-denied UI or a known protected redirect instead
+  // of treating an arbitrary status/redirect as evidence of authorization.
+  phase='B08 actual access-denied boundary';
+  const denied=page.getByRole('heading',{name:'This page isn’t available',exact:true});
+  const privileged=page.getByRole('heading',{name:'Manual subscription approvals',exact:true});
+  await Promise.race([
+    denied.waitFor({state:'visible'}),
+    privileged.waitFor({state:'visible'}),
+    page.waitForURL(u=>u.origin===origin&&['/dashboard','/home','/login','/workspace'].includes(u.pathname))
+  ]);
+  check(!await privileged.isVisible(),'Customer operator UI exposed');
+  check(await denied.isVisible()||['/dashboard','/home','/login','/workspace'].includes(new URL(page.url()).pathname),'Customer operator access denial not witnessed');
   check(sql('select count(*) from saas_governance.manual_pilot_organizations')==='0','Customer route changed pilot capacity');
   console.log('B08 partial: actual customer direct operator page denied without pilot mutation; customer RPC denial covered separately');
   phase='independent customer sign in';
