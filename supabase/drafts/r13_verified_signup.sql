@@ -1,6 +1,47 @@
 -- Draft only: promote to a CLI-generated migration after isolated database tests.
 begin;
 
+-- Depends on R13-P0 and approved P1 governance. No default plan or trial is seeded.
+-- Only a separately approved migration/release may configure this singleton.
+-- No service API can create, approve, or change this policy directly.
+create table public.signup_trial_policy (
+  singleton boolean primary key default true check (singleton),
+  plan_id uuid not null references public.saas_plans(id) on delete restrict,
+  plan_version integer not null check (plan_version > 0),
+  trial_days integer not null check (trial_days between 1 and 365),
+  allowed_workspace_codes text[] not null
+    check (cardinality(allowed_workspace_codes) > 0
+      and array_position(allowed_workspace_codes, null) is null
+      and 'admin' = any(allowed_workspace_codes)),
+  approval_ref text not null check (char_length(trim(approval_ref)) between 3 and 250),
+  approved_at timestamptz not null,
+  enabled boolean not null default false
+);
+alter table public.signup_trial_policy enable row level security;
+revoke all on public.signup_trial_policy from public, anon, authenticated, service_role;
+
+-- Returns only availability, never pricing, policy details or customer records.
+create function public.signup_trial_available_v1()
+returns boolean language sql stable security definer set search_path = ''
+as $policy$
+  select exists (
+    select 1 from public.signup_trial_policy t
+    join public.saas_plans p on p.id = t.plan_id
+    where t.singleton and t.enabled and p.status = 'active'
+      and p.version = t.plan_version and t.approved_at <= now()
+      and not exists (
+        select 1 from unnest(t.allowed_workspace_codes) as w(code)
+        where not exists (
+          select 1 from public.workspace_catalog c
+          where c.code = w.code and c.status = 'active'
+        )
+      )
+  );
+$policy$;
+revoke all on function public.signup_trial_available_v1()
+  from public, anon, authenticated, service_role;
+grant execute on function public.signup_trial_available_v1() to service_role;
+
 create table public.signup_registration_intents (
   id uuid primary key,
   email text not null check (char_length(email) between 3 and 254),
@@ -28,6 +69,7 @@ begin
   if auth.role() is distinct from 'service_role' then
     raise exception 'Registration not authorized';
   end if;
+  if not public.signup_trial_available_v1() then return false; end if;
   -- Serialize quota checks and insertion across application instances.
   perform pg_catalog.pg_advisory_xact_lock(138130826);
   -- Purge abandoned expired intent PII; consumed intents preserve replay safety.
@@ -127,6 +169,7 @@ declare
   v_intent public.signup_registration_intents%rowtype;
   v_org uuid;
   v_slug text;
+  v_policy public.signup_trial_policy%rowtype;
 begin
   if auth.role() is distinct from 'service_role' or p_user_id is null then
     raise exception 'Registration not authorized';
@@ -169,6 +212,17 @@ begin
     raise exception 'Registration not authorized';
   end if;
 
+  -- Pin approved policy and plan version in this same transaction. P1 must
+  -- advance the version for every commercially material plan change.
+  select t.* into v_policy from public.signup_trial_policy t
+    join public.saas_plans p on p.id = t.plan_id
+    where t.singleton and t.enabled and p.status = 'active'
+      and p.version = t.plan_version and t.approved_at <= now()
+    for share of t, p;
+  if not found or not public.signup_trial_available_v1() then
+    raise exception 'Approved trial policy unavailable';
+  end if;
+
   v_slug := 'customer-' || replace(p_user_id::text, '-', '');
   v_org := public.provision_customer_organization_v1(
     p_user_id, v_intent.business_name, v_slug, v_intent.full_name
@@ -176,6 +230,22 @@ begin
   if v_org is null then
     raise exception 'Workspace creation failed';
   end if;
+  -- Existing provisioning grants all active workspaces; narrow the new
+  -- tenant before the transaction commits. Never touch other organizations.
+  update public.organization_workspaces
+    set enabled = false
+    where organization_id = v_org
+      and not (workspace_code = any(v_policy.allowed_workspace_codes));
+
+  -- Commercial assignment and its P0 audit are atomic with organization creation.
+  insert into public.saas_organization_subscriptions(
+    organization_id, plan_id, status, source, trial_started_at, trial_ends_at, metadata
+  ) values (
+    v_org, v_policy.plan_id, 'trialing', 'manual', now(),
+    now() + make_interval(days => v_policy.trial_days),
+    jsonb_build_object('origin','verified_self_signup','plan_version',v_policy.plan_version,
+      'approval_ref',v_policy.approval_ref)
+  );
   update public.signup_registration_intents
     set user_id = p_user_id, organization_id = v_org
     where id = v_intent.id;
