@@ -685,4 +685,47 @@ returns jsonb language sql security invoker set search_path=pg_catalog as $fn$
 $fn$;
 revoke all on function public.commercial_manual_launch_readiness_v1(uuid) from public,anon,authenticated,service_role;
 grant execute on function public.commercial_manual_launch_readiness_v1(uuid) to service_role;
+-- Initial configuration only, restricted to the database release operator.
+-- Derive all terms from exact published offers. The policy stays disabled;
+-- separate release authorization is required to enable it. Never repin users.
+create function saas_governance.prepare_initial_trial_policy(
+ p_free_digest text,p_pro_digest text,p_approval_ref text
+) returns boolean language plpgsql security invoker set search_path=pg_catalog as $fn$
+declare v_free saas_governance.published_plan_versions%rowtype;
+ v_pro saas_governance.published_plan_versions%rowtype;
+ v_free_scope text[]; v_pro_scope text[]; v_free_integrations text[]; v_pro_integrations text[];
+begin
+ if p_free_digest is null or p_free_digest !~ '^[0-9a-f]{64}$' or p_pro_digest is null or p_pro_digest !~ '^[0-9a-f]{64}$'
+   or p_approval_ref is null or char_length(btrim(p_approval_ref)) not between 10 and 250
+   then raise exception 'Exact approved published terms required'; end if;
+ perform pg_advisory_xact_lock(138130826);
+ if exists(select 1 from public.signup_trial_policy) or exists(select 1 from public.signup_registration_intents)
+   then raise exception 'Initial policy preparation requires empty signup state'; end if;
+ select p.* into v_free from saas_governance.published_plan_versions p
+ join public.saas_plans c on c.id=p.plan_id and c.code=p.plan_code and c.version=p.version and c.status='active'
+ where p.plan_code='free' and p.snapshot_sha256=p_free_digest and p.effective_from<=clock_timestamp() for share of c;
+ if not found or v_free.amount_minor<>0 or not v_free.setup_optional then raise exception 'Approved Free offer unavailable'; end if;
+ select p.* into v_pro from saas_governance.published_plan_versions p
+ join public.saas_plans c on c.id=p.plan_id and c.code=p.plan_code and c.version=p.version and c.status='active'
+ where p.plan_code='pro' and p.snapshot_sha256=p_pro_digest and p.effective_from<=clock_timestamp() for share of c;
+ if not found then raise exception 'Approved Pro offer unavailable'; end if;
+ select array(select jsonb_array_elements_text(v_free.snapshot->'workspace_codes')),
+ array(select jsonb_array_elements_text(v_pro.snapshot->'workspace_codes')),
+ array(select jsonb_array_elements_text(v_free.snapshot->'integration_codes')),
+ array(select jsonb_array_elements_text(v_pro.snapshot->'integration_codes'))
+ into v_free_scope,v_pro_scope,v_free_integrations,v_pro_integrations;
+ if not (v_free_scope <@ v_pro_scope and v_free_integrations <@ v_pro_integrations)
+ or exists(select 1 from unnest(v_pro_scope) w(code) where not exists(select 1 from public.workspace_catalog c where c.code=w.code and c.status='active'))
+ then raise exception 'Incompatible Free/Pro scope'; end if;
+ insert into public.signup_trial_policy(plan_id,plan_version,trial_days,free_plan_id,free_plan_version,
+ pro_integration_codes,free_integration_codes,pro_named_users,pro_lead_records,free_named_users,free_lead_records,
+ free_workspace_codes,allowed_workspace_codes,approval_ref,approved_at,enabled)
+ values(v_pro.plan_id,v_pro.version,14,v_free.plan_id,v_free.version,v_pro_integrations,v_free_integrations,
+ (v_pro.snapshot->>'named_users')::integer,(v_pro.snapshot->>'lead_records')::integer,
+ (v_free.snapshot->>'named_users')::integer,(v_free.snapshot->>'lead_records')::integer,
+ v_free_scope,v_pro_scope,p_approval_ref,clock_timestamp(),false);
+ return true;
+end;
+$fn$;
+revoke all on function saas_governance.prepare_initial_trial_policy(text,text,text) from public,anon,authenticated,service_role;
 commit;
