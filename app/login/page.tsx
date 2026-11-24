@@ -107,6 +107,12 @@ export default async function LoginPage({
           </button>
         </form>
 
+        {!useMockData && process.env.SALSYS_PUBLIC_SIGNUP_ENABLED === 'true' && (
+          <p className="mt-5 text-center text-sm text-copy-muted">
+            New to SalsysOS? <Link href="/signup" className="font-semibold text-brand-700 hover:underline">Create an account</Link>
+          </p>
+        )}
+
         <div className="mt-5 flex items-start gap-2 rounded-ui border border-line bg-surface-soft px-3.5 py-3 text-[12px] leading-5 text-copy-muted">
           <ShieldCheck size={16} className="mt-0.5 shrink-0 text-brand-700" />
 
