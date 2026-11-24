@@ -49,6 +49,7 @@ function harness(options = {}) {
     automation: 0,
     profile: 0,
     readActivity: 0,
+    commercial: 0,
   };
   const seen = new Set();
 
@@ -157,7 +158,15 @@ function harness(options = {}) {
         json(data, options = {}) { return { status: options.status ?? 200, data }; },
       },
     },
-    '@/lib/commercial/inbound-access': { commercialInboundAllowed: async () => true },
+    '@/lib/commercial/inbound-access': {
+      commercialInboundAllowed: async (_admin, organizationId, channel) => {
+        calls.commercial += 1;
+        assert.equal(organizationId, ORG);
+        assert.equal(channel, 'instagram');
+        if (options.commercialOutage) throw Error('Commercial authorization unavailable.');
+        return !options.commercialDenied;
+      },
+    },
     '@/lib/supabase/admin': {
       createAdminClient: () => {
         calls.createAdminClient += 1;
@@ -479,4 +488,28 @@ test('echo projection rejection fails the webhook for provider replay, without p
   } finally {
     console.error = originalConsoleError;
   }
+});
+
+test('signed inbound message denied by subscription does not store customer content or queue automation', async () => {
+  const incoming = echoEvent({ sender: { id: CUSTOMER }, recipient: { id: ACCOUNT }, message: { mid: MID, text: 'Synthetic incoming message' } });
+  const { reply, calls } = await run(payload([incoming]), {}, { commercialDenied: true });
+  assert.equal(reply.status, 200);
+  assert.equal(reply.data.commercially_ignored, 1);
+  assert.equal(calls.commercial, 1);
+  assert.equal(calls.rpc.length, 0);
+  assert.equal(calls.profile, 0);
+  assert.equal(calls.automation, 0);
+});
+test('commercial lookup outage returns retryable webhook failure without a write', async () => {
+  const incoming = echoEvent({ sender: { id: CUSTOMER }, recipient: { id: ACCOUNT }, message: { mid: MID, text: 'Synthetic incoming message' } });
+  const { reply, calls } = await run(payload([incoming]), {}, { commercialOutage: true });
+  assert.equal(reply.status, 500);
+  assert.equal(calls.commercial, 1);
+  assert.equal(calls.rpc.length, 0);
+});
+test('existing signed outbound echo reconciliation is not blocked by inbound commercial denial', async () => {
+  const { reply, calls } = await run(payload(), {}, { commercialDenied: true });
+  assert.equal(reply.status, 200);
+  assert.equal(reply.data.echoes_processed, 1);
+  assert.equal(calls.commercial, 0);
 });
