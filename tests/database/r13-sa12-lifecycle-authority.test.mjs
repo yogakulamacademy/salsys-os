@@ -99,7 +99,7 @@ test('SA-12 private lifecycle authorization requires explicit permission and mat
       await assert.rejects(db.query(statement),e=>e.code==='55000');
     }
     // Inject an audit failure: the state change must roll back as one statement.
-    await db.query(`create function saas_lifecycle.test_reject_insert() returns trigger language plpgsql as $begin raise exception 'synthetic audit failure';end;$;
+    await db.query(`create function saas_lifecycle.test_reject_insert() returns trigger language plpgsql as $audit$begin raise exception 'synthetic audit failure';end;$audit$;
       create trigger test_reject_insert before insert on saas_lifecycle.events for each row execute function saas_lifecycle.test_reject_insert();`);
     await assert.rejects(change(db,'suspend',2,randomUUID()),/synthetic audit failure/);
     assert.equal(await state(),'active');assert.equal(await count(),2);
@@ -115,6 +115,19 @@ test('SA-12 private lifecycle authorization requires explicit permission and mat
       assert.equal(await state(),'suspended');assert.equal(await count(),3);
       await change(db,'restore',3,randomUUID());
       assert.equal(await state(),'active');assert.equal(await count(),4);
+      // A concurrent permission revocation must not be bypassed by a stale snapshot.
+      await peer.query('begin');
+      try{
+        await peer.query('update saas_lifecycle.operators set active=false');
+        await db.query("set lock_timeout='200ms'");
+        await assert.rejects(change(db,'suspend',4,randomUUID()),e=>e.code==='55P03');
+        assert.equal(await state(),'active');assert.equal(await count(),4);
+        await peer.query('commit');
+        await assert.rejects(change(db,'suspend',4,randomUUID()),e=>e.code==='42501');
+      }finally{
+        await peer.query('rollback');
+        await db.query("set lock_timeout=0");
+      }
     }finally{await peer.end();}
 
   }finally{
