@@ -66,3 +66,25 @@ operator must separately review and authorize enabling it.
 
 ## Known constraints
 The current candidate implements user/lead quotas and workspace/integration access. Advanced capability enablement and automated sends are separately restricted; do not promise them based on plan names. Manual paid access is bounded to one month per approval in the candidate; confirm this operational policy. Published version edits, provider payment, invoices and recurring billing remain out of scope. Real Auth rehearsal and production rollback are not yet evidenced. The current development readiness panel checks database configuration only, not live deployment or payment verification.
+
+## Super Admin setup and operational rehearsal
+
+Do not grant broad service keys to an administrator or browser. The platform
+operator must have a verified Auth identity, active profile, active owner/admin
+membership in the exact platform organization with slug salsysos, and a
+dedicated active governance grant. Configure the exact organization UUID in
+SALSYS_COMMERCIAL_PLATFORM_ORG_ID only after independent identity review.
+Keep catalog authorship, review and publication on separate actors; publication
+requires exact release and commercial authorization. Manual subscription
+approval additionally requires may_approve_pilot. No customer membership
+confers these privileges. Record the chosen operator identity and role
+approval out of band; never seed operator credentials or fabricate identities.
+
+The integrated activation candidate narrows standalone P0 direct service-role
+writes. All plan and subscription changes must use governed routines.
+The disposable full-schema replay now rehearses real database provisioning,
+published plan setup, disabled initial policy preparation, unconfirmed-user
+denial, tenant session binding, customer preference and operator override,
+using synthetic identities and rollback-only SQL. This is not an Auth-issued
+token or browser/email delivery rehearsal. Actual login, verification callback,
+cookie/session behavior and deployed scheduler still require isolated testing.
