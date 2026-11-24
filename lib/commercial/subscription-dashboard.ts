@@ -8,7 +8,7 @@ type HistoryEntry = {
 };
 export type SubscriptionDashboard =
   | { state:'unavailable'|'managed_separately' }
-  | { state:'pro_trial'|'free_pending_reconciliation'|'free'; plan_code:'pro'|'free';
+  | { state:'pro_trial'|'free_pending_reconciliation'|'free'|'manual_active'; plan_code:'pro'|'free'|'basic'|'growth'; access_ends_at?:string|null;
       trial_ends_at:string; remaining_seconds:number; named_users:number; named_user_limit:number;
       lead_records:number; lead_record_limit:number; history:HistoryEntry[] };
 
@@ -39,14 +39,14 @@ export async function loadSubscriptionDashboard():Promise<SubscriptionDashboard>
     const {data,error}=await session.rpc('get_current_subscription_dashboard_v1');
     if(error||!data||typeof data!=='object'||Array.isArray(data))return {state:'unavailable'};
     if(data.state==='managed_separately')return {state:'managed_separately'};
-    if(!['pro_trial','free_pending_reconciliation','free'].includes(data.state)
-      ||data.plan_code!==(data.state==='pro_trial'?'pro':'free')
+    if(!['pro_trial','free_pending_reconciliation','free','manual_active'].includes(data.state)
+      ||(data.state==='manual_active'?(!['free','basic','growth','pro'].includes(data.plan_code)||(data.plan_code==='free'?data.access_ends_at!==null:!validDate(data.access_ends_at))):data.plan_code!==(data.state==='pro_trial'?'pro':'free'))
       ||!validDate(data.trial_ends_at)||!validInteger(data.remaining_seconds)
       ||!validInteger(data.named_users)||!validInteger(data.named_user_limit,1)
       ||!validInteger(data.lead_records)||!validInteger(data.lead_record_limit,1)
       ||!Array.isArray(data.history)||data.history.length>50||!data.history.every(validHistory))return {state:'unavailable'};
     // Explicit projection: never spread raw RPC responses into customer views.
-    return {state:data.state,plan_code:data.plan_code,trial_ends_at:data.trial_ends_at,
+    return {state:data.state,plan_code:data.plan_code,...(data.state==='manual_active'?{access_ends_at:data.access_ends_at}:{}),trial_ends_at:data.trial_ends_at,
       remaining_seconds:data.remaining_seconds,named_users:data.named_users,named_user_limit:data.named_user_limit,
       lead_records:data.lead_records,lead_record_limit:data.lead_record_limit,
       history:data.history.map((row:HistoryEntry)=>({event_type:row.event_type,previous_status:row.previous_status,
