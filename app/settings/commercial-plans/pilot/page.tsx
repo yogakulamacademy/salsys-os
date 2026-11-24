@@ -2,7 +2,7 @@ import {randomUUID} from 'node:crypto';
 import {notFound} from 'next/navigation';
 import Link from 'next/link';
 import {loadManualPilot,loadManualAssignments,type ManualQueue,type AssignmentState} from '@/lib/commercial/manual-pilot';
-import {approvePilotAction,activatePilotAction,assignPlanAction} from './actions';
+import {approvePilotAction,activatePilotAction,assignPlanAction,enablePilotAction} from './actions';
 export const dynamic='force-dynamic';
 export const metadata={title:'Manual subscription approvals',robots:{index:false,follow:false,nocache:true}};
 const money=(n:number)=>new Intl.NumberFormat('en-IN',{style:'currency',currency:'INR'}).format(n/100);
@@ -20,14 +20,19 @@ export default async function ManualPilotPage({searchParams}:{searchParams:Promi
       <progress className="w-full" max={10} value={state.used_slots} aria-label="Manual pilot capacity"/>
       <p className="text-sm">Free registration is separate. No gateway or recurring charge is required. {activationEnabled?'Approval activates the exact approved plan.':'Approvals are recorded here; activation is disabled.'}</p>
     </section>
-    {result==='error'?<p role="alert">Approval not recorded. Check eligibility, capacity and terms.</p>:result==='approved'?<p role="status">Manual approval recorded. Access has not changed.</p>:result==='activated'?<p role="status">Subscription activated. No automatic charge.</p>:null}
+    {result==='error'?<p role="alert">Approval not recorded. Check eligibility, capacity and terms.</p>:result==='approved'?<p role="status">Manual approval recorded. Access has not changed.</p>:result==='activated'?<p role="status">Subscription activated. No automatic charge.</p>:result==='enrolled'?<p role="status">Plan requests enabled. Current access and pilot capacity are unchanged.</p>:null}
     {activationEnabled&&<section className="space-y-3">
       <h2 className="text-lg font-semibold">Manage organization access</h2>
       <p className="text-sm">Choose the final published plan. A customer request is a preference; your assignment controls actual access. No gateway charge is initiated. A different selection preserves the original request in history.</p>
       {!assignments?<p role="alert">Organization assignment list unavailable.</p>:assignments.organizations.length===0?<p>No eligible organizations.</p>:assignments.organizations.map(o=><article key={o.id} className="space-y-3 rounded-xl border border-line p-4">
         <h3 className="font-semibold">{o.organization_name}</h3>
         <p className="text-sm">Current plan: <strong className="capitalize">{o.current_code}</strong> · Customer requested: <strong className="capitalize">{o.requested_code??'None'}</strong></p>
-        <form action={assignPlanAction} className="grid gap-3 sm:grid-cols-2">
+        {!o.pilot_enabled?<form action={enablePilotAction} className="space-y-2">
+          <p className="text-sm">This verified organization is not enabled for plan requests. Enrollment does not change access or reserve a pilot slot.</p>
+          <input type="hidden" name="org" value={o.id}/>
+          <label className="grid gap-1 text-sm">Enrollment reason<input name="reason" required minLength={10} maxLength={512} className="rounded border border-line p-2"/></label>
+          <button type="submit" className="rounded border border-line p-2 font-semibold">Enable plan requests</button>
+        </form>:<form action={assignPlanAction} className="grid gap-3 sm:grid-cols-2">
           <input type="hidden" name="org" value={o.id}/><input type="hidden" name="revision" value={o.revision}/><input type="hidden" name="key" value={randomUUID()}/>
           <label className="grid gap-1 text-sm">Final plan to activate<select name="offer" required defaultValue="" className="rounded border border-line p-2"><option value="" disabled>Select published plan</option>{assignments.offers.map(p=><option key={p.id} value={[p.id,p.version,p.digest].join('|')}>{p.code.toUpperCase()} · {money(p.amount_minor)}/month · v{p.version}</option>)}</select></label>
           <label className="grid gap-1 text-sm">Approval type<select name="mode" required defaultValue="" className="rounded border border-line p-2"><option value="" disabled>Select approval type</option><option value="free">Free forever</option><option value="offline_confirmation">Offline payment confirmed</option><option value="complimentary">Complimentary access</option></select></label>
@@ -36,7 +41,7 @@ export default async function ManualPilotPage({searchParams}:{searchParams:Promi
           <label className="grid gap-1 text-sm">Reason for plan assignment<textarea name="reason" required minLength={10} maxLength={2048} className="rounded border border-line p-2"/></label>
           <label className="grid gap-1 text-sm">Type ASSIGN PLAN to confirm<input name="confirmation" required autoComplete="off" className="rounded border border-line p-2"/></label>
           <button type="submit" className="rounded border border-line p-2 font-semibold">Assign and activate selected plan</button>
-        </form>
+        </form>}
       </article>)}
     </section>}
     <h2 className="text-lg font-semibold">Pending customer requests</h2>
