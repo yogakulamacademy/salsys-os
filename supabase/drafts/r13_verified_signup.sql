@@ -723,4 +723,67 @@ revoke all on function public.signup_advanced_operation_allowed_v1(uuid,text)
   from public, anon, authenticated, service_role;
 grant execute on function public.signup_advanced_operation_allowed_v1(uuid,text) to service_role;
 
+-- Customer-facing, read-only projection. No client-selected tenant, raw
+-- provider references, operator IDs, commercial metadata or other tenants.
+create function public.get_current_subscription_dashboard_v1()
+returns jsonb language plpgsql security definer set search_path = ''
+as $billing$
+declare
+  v_org uuid;
+  v_context jsonb;
+  v_plan jsonb;
+  v_state text;
+  v_usage public.signup_usage_counters%rowtype;
+  v_history jsonb;
+begin
+  if auth.role() is distinct from 'authenticated' or auth.uid() is null
+    or not exists(select 1 from auth.users u where u.id=auth.uid()
+      and u.email_confirmed_at is not null and not coalesce(u.is_anonymous,false))
+    or not exists(select 1 from public.profiles p where p.id=auth.uid() and p.active)
+  then raise exception 'Authenticated active account required' using errcode='42501'; end if;
+  v_context := public.get_current_workspace_context_v1();
+  v_org := nullif(v_context->>'organization_id','')::uuid;
+  if v_org is null or not exists (
+    select 1 from public.organization_members m
+    join public.organizations o on o.id=m.organization_id and o.status='active'
+    where m.organization_id=v_org and m.user_id=auth.uid() and m.active
+      and m.role in ('owner','admin') and m.role::text=v_context->>'role'
+  ) then raise exception 'Subscription access denied' using errcode='42501'; end if;
+  v_plan := public.resolve_signup_plan_internal_v1(v_org);
+  v_state := v_plan->>'state';
+  if v_state='not_self_signup' then
+    return jsonb_build_object('state','managed_separately');
+  end if;
+  if v_state is null or v_state not in ('pro_trial','free_pending_reconciliation','free') then
+    return jsonb_build_object('state','unavailable');
+  end if;
+  select * into v_usage from public.signup_usage_counters where organization_id=v_org;
+  if not found then return jsonb_build_object('state','unavailable'); end if;
+  -- P0 generates these events transactionally. Do not invent history from
+  -- the current state; pending reconciliation is an effective state only.
+  select coalesce(jsonb_agg(to_jsonb(e) order by e.occurred_at desc,e.event_type),'[]'::jsonb)
+    into v_history from (
+      select e.event_type,e.previous_status,e.new_status,e.occurred_at,p.code as plan_code
+      from public.saas_subscription_events e
+      join public.saas_organization_subscriptions s on s.id=e.subscription_id and s.organization_id=e.organization_id
+      left join public.saas_plans p on p.id::text=e.metadata->>'plan_id'
+      where e.organization_id=v_org
+        and e.event_type in ('subscription_created','subscription_status_changed','subscription_plan_changed','subscription_terms_changed')
+      order by e.occurred_at desc,e.id desc limit 50
+    ) e;
+  return jsonb_build_object(
+    'state',v_state,'plan_code',v_plan->>'plan_code',
+    'trial_ends_at',v_plan->'trial_ends_at','remaining_seconds',v_plan->'remaining_seconds',
+    'named_users',v_usage.named_users,
+    'named_user_limit',case when v_state='pro_trial' then v_usage.pro_named_users else v_usage.free_named_users end,
+    'lead_records',v_usage.lead_records,
+    'lead_record_limit',case when v_state='pro_trial' then v_usage.pro_lead_records else v_usage.free_lead_records end,
+    'history',v_history
+  );
+end;
+$billing$;
+revoke all on function public.get_current_subscription_dashboard_v1()
+  from public,anon,authenticated,service_role;
+grant execute on function public.get_current_subscription_dashboard_v1() to authenticated;
+
 commit;
