@@ -19,11 +19,11 @@ export async function GET(request: NextRequest) {
   }
   const code = request.nextUrl.searchParams.get('code')?.trim();
   if (!code || code.length > 2048) {
-    return go('/signup?error=Invalid+or+expired+verification+link.');
+    return go('/signup?mode=resend&error=Invalid+or+expired+verification+link.+If+already+verified,+sign+in.');
   }
   const supabase = await createClient();
   const { error } = await supabase.auth.exchangeCodeForSession(code);
-  if (error) return go('/signup?error=Invalid+or+expired+verification+link.');
+  if (error) return go('/signup?mode=resend&error=Invalid+or+expired+verification+link.+If+already+verified,+sign+in.');
   const { data: { user }, error: userError } = await supabase.auth.getUser();
   if (userError || !user || !user.email_confirmed_at || user.is_anonymous) {
     await supabase.auth.signOut({ scope: 'local' });
@@ -32,7 +32,7 @@ export async function GET(request: NextRequest) {
   const provisioned = await provisionVerifiedSignup().catch(() => ({ ok: false as const }));
   if (!provisioned.ok) {
     await supabase.auth.signOut({ scope: 'local' });
-    return go('/signup?error=Workspace+setup+could+not+be+completed.+Contact+support.');
+    return go('/signup?error=Workspace+setup+could+not+be+completed.+Sign+in+to+retry+or+contact+support.');
   }
   const { error: bindingError } = await supabase.rpc('bind_current_tenant_session', {
     p_organization_id: provisioned.organizationId,
