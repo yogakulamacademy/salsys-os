@@ -14,7 +14,36 @@ create table public.signup_registration_intents (
 );
 alter table public.signup_registration_intents enable row level security;
 revoke all on public.signup_registration_intents from public, anon, authenticated, service_role;
-grant insert on public.signup_registration_intents to service_role;
+-- All intent creation goes through the serialized quota boundary.
+create index signup_intents_email_created_idx on public.signup_registration_intents(email, created_at);
+create index signup_intents_created_idx on public.signup_registration_intents(created_at);
+
+create function public.reserve_signup_intent_v1(
+  p_id uuid, p_email text, p_full_name text, p_business_name text
+) returns boolean
+language plpgsql security definer set search_path = ''
+as $
+begin
+  if auth.role() is distinct from 'service_role' then
+    raise exception 'Registration not authorized';
+  end if;
+  -- Serialize quota checks and insertion across application instances.
+  perform pg_catalog.pg_advisory_xact_lock(138130826);
+  if (select count(*) from public.signup_registration_intents
+      where created_at > now() - interval '1 hour') >= 100
+     or (select count(*) from public.signup_registration_intents
+      where email = lower(trim(p_email))
+        and created_at > now() - interval '1 hour') >= 3 then
+    return false;
+  end if;
+  insert into public.signup_registration_intents(id,email,full_name,business_name)
+  values(p_id,lower(trim(p_email)),trim(p_full_name),trim(p_business_name));
+  return true;
+end;
+$;
+revoke all on function public.reserve_signup_intent_v1(uuid,text,text,text)
+  from public, anon, authenticated, service_role;
+grant execute on function public.reserve_signup_intent_v1(uuid,text,text,text) to service_role;
 
 create function public.provision_verified_signup_v1(p_user_id uuid)
 returns uuid
