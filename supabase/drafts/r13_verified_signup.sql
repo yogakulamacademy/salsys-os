@@ -22,7 +22,7 @@ create function public.reserve_signup_intent_v1(
   p_id uuid, p_email text, p_full_name text, p_business_name text
 ) returns boolean
 language plpgsql security definer set search_path = ''
-as $
+as $quota$
 begin
   if auth.role() is distinct from 'service_role' then
     raise exception 'Registration not authorized';
@@ -40,7 +40,7 @@ begin
   values(p_id,lower(trim(p_email)),trim(p_full_name),trim(p_business_name));
   return true;
 end;
-$;
+$quota$;
 revoke all on function public.reserve_signup_intent_v1(uuid,text,text,text)
   from public, anon, authenticated, service_role;
 grant execute on function public.reserve_signup_intent_v1(uuid,text,text,text) to service_role;
