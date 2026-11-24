@@ -1,4 +1,5 @@
 import 'server-only';
+import { isSignupEmailAdmitted } from '@/lib/signup/admission';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createClient } from '@/lib/supabase/server';
 
@@ -11,7 +12,7 @@ export async function provisionVerifiedSignup() {
   }
   const supabase = await createClient();
   const { data: { user }, error } = await supabase.auth.getUser();
-  if (error || !user || user.is_anonymous || !user.email_confirmed_at) {
+  if (error || !user || user.is_anonymous || !user.email_confirmed_at || !isSignupEmailAdmitted(user.email)) {
     return { ok: false as const };
   }
   const admin = createAdminClient();
