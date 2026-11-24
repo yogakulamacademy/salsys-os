@@ -1,4 +1,6 @@
 import 'server-only';
+import { requireCommercialConnection } from '@/lib/commercial/integration-access';
+
 
 import { createAdminClient } from '@/lib/supabase/admin';
 import {
@@ -232,6 +234,7 @@ export async function connectWhatsAppForOrganization(
   input: ConnectWhatsAppInput,
 ): Promise<ConnectWhatsAppResult> {
   const organizationId = input.organizationId.trim();
+  await requireCommercialConnection(organizationId, 'whatsapp');
   const actorUserId = input.actorUserId.trim();
   const wabaId = requiredNumericId(
     input.wabaId,
@@ -590,6 +593,7 @@ export async function reconnectWhatsAppForOrganization(
   input: ReconnectWhatsAppInput,
 ): Promise<ConnectWhatsAppResult> {
   const organizationId = input.organizationId.trim();
+  await requireCommercialConnection(organizationId, 'whatsapp');
   const actorUserId = input.actorUserId.trim();
   const connectionId = input.connectionId.trim();
 
@@ -794,6 +798,7 @@ export async function reauthorizeWhatsAppForOrganization(
   input: ReauthorizeWhatsAppInput,
 ): Promise<ConnectWhatsAppResult> {
   const organizationId = input.organizationId.trim();
+  await requireCommercialConnection(organizationId, 'whatsapp');
   const actorUserId = input.actorUserId.trim();
   const connectionId = input.connectionId.trim();
   const accessToken = input.accessToken.trim();
