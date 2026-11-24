@@ -77,6 +77,7 @@ const ADMIN_ONLY_EXACT_PATHS = new Set([
 
 const ONBOARDING_SETUP_PATHS = [
   "/onboarding",
+  "/signup/onboarding",
   "/tracking",
   "/settings/integrations",
   "/settings/team",
