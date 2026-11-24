@@ -126,6 +126,46 @@ begin
 end;
 $fn$;
 
+-- Private server-side order binding. A future provider adapter must verify
+-- order creation against the merchant and expected amount before calling.
+-- No provider order can be rebound or reused across different intents.
+create function saas_governance.bind_payment_order(
+  p_intent uuid,p_merchant uuid,p_order_ref text,p_amount_minor bigint,p_currency text
+) returns boolean language plpgsql security definer set search_path=pg_catalog as $fn$
+declare v_i saas_governance.saas_payment_intents%rowtype;
+  v_o saas_governance.saas_payment_orders%rowtype;
+begin
+  select * into v_i from saas_governance.saas_payment_intents where id=p_intent for update;
+  if not found or v_i.merchant_id is distinct from p_merchant
+    or v_i.amount_minor is distinct from p_amount_minor or v_i.currency is distinct from p_currency
+    or p_order_ref is null or char_length(btrim(p_order_ref)) not between 1 and 256
+    then raise exception 'Provider order mismatch'; end if;
+  select * into v_o from saas_governance.saas_payment_orders where intent_id=p_intent;
+  if found then
+    if v_o.provider_order_ref<>p_order_ref then raise exception 'Payment order already bound'; end if;
+    return true;
+  end if;
+  if v_i.expires_at<=clock_timestamp() or not exists(
+    select 1 from saas_governance.saas_payment_merchants where id=p_merchant and enabled
+  ) then raise exception 'Payment intent unavailable'; end if;
+  if not exists(select 1 from saas_governance.subscription_contract_quotes q
+    join saas_governance.subscription_change_requests r on r.id=q.request_id and r.status='requested'
+    join saas_governance.change_request_access a on a.organization_id=r.organization_id and a.enabled
+    join public.saas_organization_subscriptions s on s.id=r.subscription_id and s.organization_id=r.organization_id
+      and s.updated_at=r.from_subscription_updated_at and s.plan_id=r.from_plan_id
+    join public.organizations o on o.id=r.organization_id and o.status='active'
+    join public.saas_plans p on p.id=q.plan_id and p.version=q.plan_version and p.status='active'
+    where q.id=v_i.quote_id and q.organization_id=v_i.organization_id
+      and s.status in ('active','trialing') and (s.status<>'trialing' or s.trial_ends_at>clock_timestamp())
+  ) then raise exception 'Payment intent no longer eligible'; end if;
+  insert into saas_governance.saas_payment_orders(intent_id,merchant_id,provider_order_ref)
+    values(p_intent,p_merchant,p_order_ref);
+  return true;
+end;
+$fn$;
+revoke all on function saas_governance.bind_payment_order(uuid,uuid,text,bigint,text)
+  from public,anon,authenticated,service_role;
+
 -- Consume only pre-existing trusted attestations, never a caller's claimed
 -- amount or status. A mismatch or adverse event requires reconciliation.
 -- No execute grants yet; activation code must recheck all current state.
