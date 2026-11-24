@@ -14,17 +14,19 @@ create table saas_governance.subscription_change_requests (
   organization_id uuid not null,
   subscription_id uuid not null,
   requested_by uuid not null,
+  request_origin text not null default 'customer' check(request_origin in ('customer','admin')),
+  supersedes_request_id uuid references saas_governance.subscription_change_requests(id) on delete restrict,
   idempotency_key uuid not null,
   from_plan_id uuid not null references public.saas_plans(id) on delete restrict,
   from_subscription_updated_at timestamptz not null,
   target_plan_id uuid not null,
   target_version integer not null,
   target_digest text not null check(target_digest ~ '^[0-9a-f]{64}$'),
-  status text not null default 'requested' check(status in ('requested','withdrawn','activated')),
+  status text not null default 'requested' check(status in ('requested','withdrawn','activated','superseded')),
   requested_at timestamptz not null default clock_timestamp(),
   withdrawn_at timestamptz,
   withdrawn_by uuid,
-  check((status in ('requested','activated') and withdrawn_at is null and withdrawn_by is null)
+  check((status in ('requested','activated','superseded') and withdrawn_at is null and withdrawn_by is null)
     or (status='withdrawn' and withdrawn_at is not null and withdrawn_by is not null)),
   foreign key(subscription_id,organization_id) references public.saas_organization_subscriptions(id,organization_id) on delete restrict,
   foreign key(target_plan_id,target_version) references saas_governance.published_plan_versions(plan_id,version) on delete restrict,
@@ -80,7 +82,7 @@ declare v_org uuid; v_sub public.saas_organization_subscriptions%rowtype; v_offe
 begin
   v_org:=saas_governance.current_change_owner();
   select coalesce(jsonb_agg(jsonb_build_object(
-    'id',r.id,'status',r.status,'target_code',p.plan_code,'target_version',r.target_version,
+    'id',r.id,'status',r.status,'request_origin',r.request_origin,'target_code',p.plan_code,'target_version',r.target_version,
     'amount_minor',p.amount_minor,'currency',p.currency,'requested_at',r.requested_at,
     'withdrawn_at',r.withdrawn_at) order by r.requested_at desc,r.id),'[]'::jsonb)
     into v_requests from (
