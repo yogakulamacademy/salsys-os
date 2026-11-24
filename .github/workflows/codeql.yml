@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - feat/r13-p1-governed-plan-admin
   pull_request:
     branches:
       - main
