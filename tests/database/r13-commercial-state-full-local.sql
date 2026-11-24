@@ -83,6 +83,19 @@ BEGIN
      OR NOT has_table_privilege('service_role','public.saas_commercial_readiness_v1','SELECT') THEN
     RAISE EXCEPTION 'R13-P0: service-role operator diagnostic privileges missing';
   END IF;
+  -- Supabase default privileges must not silently grant extra service-role powers.
+  IF EXISTS (
+    SELECT 1 FROM (VALUES ('INSERT'),('UPDATE'),('DELETE'),('TRUNCATE'),('REFERENCES'),('TRIGGER')) AS p(name)
+    WHERE has_table_privilege('service_role','public.saas_subscription_events',p.name)
+  ) OR EXISTS (
+    SELECT 1 FROM (VALUES ('public.saas_plans'),('public.saas_plan_entitlements'),('public.saas_organization_subscriptions')) AS t(name)
+    CROSS JOIN (VALUES ('DELETE'),('TRUNCATE'),('REFERENCES'),('TRIGGER')) AS p(name)
+    WHERE has_table_privilege('service_role',t.name,p.name)
+  ) OR has_function_privilege('service_role','public.saas_subscription_audit_v1()','EXECUTE')
+    OR has_function_privilege('service_role','public.saas_subscription_event_immutable_v1()','EXECUTE')
+  THEN
+    RAISE EXCEPTION 'R13-P0: service role has excess privileges';
+  END IF;
 END
 $r13_precheck$;
 
@@ -240,5 +253,32 @@ BEGIN
   END IF;
 END
 $r13_fixture$;
+
+-- Exercise the actual service-role boundary, not just the database owner.
+SET LOCAL ROLE service_role;
+DO $r13_service$
+DECLARE
+  v_org uuid := '00000000-0000-4000-8000-00000000c132';
+  v_plan uuid;
+  v_sub uuid;
+  denied boolean := false;
+BEGIN
+  SELECT id INTO STRICT v_plan FROM public.saas_plans WHERE code='r13_fixture';
+  INSERT INTO public.saas_organization_subscriptions(organization_id,plan_id,status)
+    VALUES(v_org,v_plan,'active') RETURNING id INTO v_sub;
+  UPDATE public.saas_organization_subscriptions SET status='past_due' WHERE id=v_sub;
+  IF (SELECT count(*) FROM public.saas_subscription_events WHERE subscription_id=v_sub) <> 2 THEN
+    RAISE EXCEPTION 'R13-P0: service-role writes did not produce trigger audit';
+  END IF;
+  BEGIN
+    INSERT INTO public.saas_subscription_events(organization_id,subscription_id,event_type,source)
+      VALUES(v_org,v_sub,'forged_event','manual');
+  EXCEPTION WHEN insufficient_privilege THEN
+    denied:=true;
+  END;
+  IF NOT denied THEN RAISE EXCEPTION 'R13-P0: service-role audit forgery permitted'; END IF;
+END
+$r13_service$;
+RESET ROLE;
 ROLLBACK;
 \echo 'R13-P0: actual local foundation, authorization, drift, and immutable-audit checks PASSED; ROLLBACK complete'
