@@ -58,8 +58,8 @@ begin
    v_terms:=jsonb_build_object('display_name','Synthetic '||v_code,'amount_minor',case when v_code='free' then 0 else 100 end,
     'setup_min_minor',0,'setup_max_minor',0,'setup_optional',true,'tax_treatment','exclusive',
     'named_users',case when v_code='free' then 1 else 3 end,'lead_records',case when v_code='free' then 1 else 4 end,
-    'workspace_codes',case when v_code='free' then jsonb_build_array('admin') else jsonb_build_array('admin','sales') end,
-    'integration_codes','[]'::jsonb);
+    'workspace_codes',jsonb_build_array('admin','sales'),
+    'integration_codes',jsonb_build_array('instagram'));
    execute 'set local role service_role';
    perform set_config('request.jwt.claim.role','service_role',true);
    v_request:=public.commercial_create_plan_request_v1(v_author,v_code,0,v_terms,'Synthetic local proposal');
@@ -107,9 +107,10 @@ begin
  perform set_config('request.jwt.claim.role','authenticated',true);
  perform set_config('request.jwt.claim.sub',v_customer::text,true);
  perform set_config('request.jwt.claims',jsonb_build_object('role','authenticated','sub',v_customer,'aud','authenticated','session_id',v_session)::text,true);
- perform public.bind_current_tenant_session(v_org);
+ if public.bind_current_tenant_session_for_current_user() is distinct from v_org then raise exception 'Automatic tenant binding mismatch'; end if;
  v_state:=public.get_current_subscription_dashboard_v1();
  if v_state->>'state' is distinct from 'pro_trial' or (v_state->>'named_users')::integer is distinct from 1 then raise exception 'Real session trial projection mismatch: %',v_state; end if;
+ if (select trial_ends_at-trial_started_at from public.saas_organization_subscriptions where organization_id=v_org) is distinct from interval '720 hours' then raise exception '30-day trial duration mismatch'; end if;
  v_options:=public.get_current_plan_change_options_v1();
  v_revision:=(v_options->>'subscription_revision')::timestamptz;
  v_customer_request:=public.request_current_plan_change_v1(gen_random_uuid(),v_basic,1,v_basic_digest,v_revision);
