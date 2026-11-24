@@ -14,7 +14,7 @@ export type PlanSnapshot = {
 export type PlanRequest = {
   id:string; plan_code:PlanCode; expected_plan_version:number; snapshot:PlanSnapshot;
   snapshot_sha256:string; rationale:string; author_user_id:string;
-  reviewer_user_id:string|null; status:'draft'|'under_review'|'reviewed_for_design'|'rejected';
+  reviewer_user_id:string|null; status:'draft'|'under_review'|'reviewed_for_design'|'rejected'|'owner_approved';
   revision:number; created_at:string;
 };
 export type PlanReviewState = { actorId:string; may_author:boolean; may_review:boolean; may_publish:boolean;

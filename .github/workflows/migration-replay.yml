@@ -384,6 +384,18 @@ jobs:
             docker exec -i "$db_containers" psql -X -v ON_ERROR_STOP=1 -U postgres -d postgres < tests/database/r13-dormant-schema-local.sql
           fi
 
+      - name: Rehearse one-time owner catalog bootstrap
+        if: env.SALSYS_R13_PROMOTED == '1'
+        shell: bash
+        run: |
+          set -euo pipefail
+          db_containers="$(docker ps --format '{{.Names}}' | grep '^supabase_db_' || true)"
+          test "$(printf '%s\n' "$db_containers" | grep -c .)" -eq 1
+          if [ ! -f supabase/migrations/20261124130006_r13_initial_owner_catalog.sql ]; then exit 0; fi
+          test "$(docker exec "$db_containers" psql -X -v ON_ERROR_STOP=1 -U postgres -d postgres -Atc "select count(*) from supabase_migrations.schema_migrations where version='20261124130006'")" = 1
+          cmp supabase/drafts/r13_initial_owner_catalog.sql supabase/migrations/20261124130006_r13_initial_owner_catalog.sql
+          docker exec -i "$db_containers" psql -X -v ON_ERROR_STOP=1 -U postgres -d postgres < tests/database/r13-initial-owner-catalog-local.sql
+
       - name: Prepare disposable Auth fixture and run API smoke when selected
         if: env.SALSYS_R13_DISPOSABLE_AUTH_TEST == '1'
         shell: bash
