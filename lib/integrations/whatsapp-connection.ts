@@ -1,4 +1,5 @@
 import "server-only";
+import { requireCommercialIntegration } from '@/lib/commercial/integration-access';
 
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -254,6 +255,7 @@ export async function getWhatsAppRuntimeForOrganization(
       organizationId,
     );
 
+  await requireCommercialIntegration(resolvedOrganizationId, 'whatsapp');
   const configured =
     await loadConfiguredRuntime(
       resolvedOrganizationId,
