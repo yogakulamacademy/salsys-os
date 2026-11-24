@@ -3,12 +3,12 @@
 Status: PROPOSAL ONLY. This document does not create plans, seed a trial policy, grant operator privileges, publish prices, or authorize production deployment.
 
 ## Decisions already made
-- Permanent Free plan; 14-day Pro trial from verified workspace creation, followed by Free without automatic charges or deletion.
+- Permanent Free plan; 30-day Pro trial from verified workspace creation, followed by Free without automatic charges or deletion.
 - First ten distinct organizations in the manual approval pilot. Free registrations are not capped by pilot capacity.
 - Customer selection is a request. Super Admin can assign a different published plan, grant complimentary access, confirm offline payment, and manually renew access.
 - Gateway integration and recurring billing deferred until separately authorized.
 
-## Initial commercial proposal (not approved)
+## Owner-confirmed price and quota structure
 
 | Plan | INR/month/workspace | Active named users | Retained lead records |
 | --- | ---: | ---: | ---: |
@@ -17,9 +17,9 @@ Status: PROPOSAL ONLY. This document does not create plans, seed a trial policy,
 | Growth | 3499 | 5 | 10000 |
 | Pro | 6999 | 10 | 50000 |
 
-The prices and quotas are prior working proposals, not a final decision. Confirm tax treatment and whether to offer any optional setup service before recording exact snapshots. No mandatory setup charge for Free. Do not offer any unverified capability, AI, automated messaging or provider activation. Workspace and integration codes must be individually approved and mapped to actual enforced boundaries; no inference from tier names. Free must include admin and be a subset of each paid tier's workspace scope; Free integration codes must be a subset of Pro's. Verify all Free/Pro pinned limits and scopes match the published offer exactly.
+The owner confirmed these prices and quotas on 2026-11-24. Confirm tax treatment and whether to offer any optional setup service before recording exact snapshots. No mandatory setup charge for Free. Do not offer any unverified capability, AI, automated messaging or provider activation. Workspace and integration codes must be individually approved and mapped to actual enforced boundaries; no inference from tier names. Free must include admin and be a subset of each paid tier's workspace scope; Free integration codes must be a subset of Pro's. Verify all Free/Pro pinned limits and scopes match the published offer exactly.
 
-## Draft feature allocation for commercial approval
+## Revised feature allocation (owner decision and remaining proposals)
 
 The five workspace codes below are from the actual workspace catalog migration
 `20261013104212_workspace_rbac_foundation.sql`. The runtime commercial scope
@@ -34,17 +34,17 @@ for roles. Do not infer finer-grained feature restrictions from a workspace gran
 | Marketing workspace | No | No | Yes | Yes |
 | Finance workspace | No | No | No | Yes |
 | WhatsApp connection eligibility | No | Proposed | Proposed | Proposed |
-| Instagram and Meta Ads connection eligibility | No | No | Proposed | Proposed |
+| Website lead form capture (within lead quota) | Yes | Yes | Yes | Yes |
+| Instagram connection eligibility and ordinary permitted manual operations | Yes | Yes | Yes | Yes |
+| Meta Ads connection eligibility | No | No | Proposed | Proposed |
 | Google Analytics, Search Console and Google Ads connection eligibility | No | No | No | Proposed |
 | Automated messaging, AI processing and audience activation | No | No | No | No |
 | Education/residential capability activation | Not promised | Not promised | Not promised | Not promised |
 
-This is an intentionally conservative, unapproved mapping. In particular,
+Website lead capture and Instagram across all tiers are owner-approved. Other integration entitlements, taxes and setup terms remain subject to exact snapshot configuration. In particular,
 WhatsApp/Instagram eligibility does not authorize a connection without the
 provider's own permissions, and Google OAuth currently requires all three
-Google integration codes. Keep integrations disabled in the initial published
-snapshots if the relevant production authorization and reconciliation paths
-have not passed acceptance. The Pro trial uses the exact approved Pro scope
+Google integration codes. Keep public registration disabled if the owner-approved integration and capture paths have not passed acceptance. Do not silently omit Instagram from the approved plans. The Pro trial uses the exact approved Pro scope
 and Free fallback, not an independently invented feature allocation.
 No feature matrix or draft price is automatically inserted into the catalog.
 
@@ -56,7 +56,7 @@ operator and has no public, authenticated, or service-role grant. The release
 operator must separately review and authorize enabling it.
 
 ## Deployment gates
-1. Exact integrated PR #829 head: all CI, migration replay including full local P0 checks, CodeQL and image checks green. No independent overlapping merge of #826/#827/#828.
+1. Exact consolidated PR #834 head: all CI, migration replay including full local P0 checks, CodeQL and image checks green. No independent overlapping merge of #826/#827/#828.
 2. Isolated real Supabase Auth rehearsal: migrate reviewed candidates in dependency order P0, P1 governed plans, P2 verified signup, P1 change requests, manual approvals, manual activation. Quote/payment candidates may remain unapplied (gateway deferred). Do not apply draft SQL as-is to production. Generate reviewed migration files and verify actual migration ledger/order.
 3. Security review: RLS/ACLs, private schemas, trusted session-derived operator identity and exact platform organization UUID; verify no cross-tenant access. Dedicated publication roles and separate approval evidence. No production role grants before explicit approval.
 4. After exact commercial approval, create/review/publish four plan versions using governance; configure trial policy from published Free and Pro with matching versions, scopes and limits. Use read-only commercial configuration readiness panel; its green status is not deployment approval.
