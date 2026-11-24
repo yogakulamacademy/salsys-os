@@ -46,6 +46,7 @@ test('R13 public signup SQL fails closed and atomically provisions one scoped tr
         id uuid primary key default gen_random_uuid(), name text not null,
         slug text unique not null, status text not null
       );
+      create table public.leads(id uuid primary key default gen_random_uuid(), organization_id uuid not null references public.organizations(id));
       create table public.profiles(
         id uuid primary key references auth.users(id), full_name text,
         role text, active boolean, updated_at timestamptz default now()
@@ -107,7 +108,7 @@ test('R13 public signup SQL fails closed and atomically provisions one scoped tr
     }
     const plan = randomUUID(), free = randomUUID();
     await db.query("insert into public.saas_plans values($1,'active',1,'pro'),($2,'active',1,'free')",[plan,free]);
-    await db.query("insert into public.signup_trial_policy(plan_id,plan_version,trial_days,allowed_workspace_codes,free_plan_id,free_plan_version,free_workspace_codes,approval_ref,approved_at,enabled) values($1,1,14,array['admin','sales'],$2,1,array['admin'],'synthetic test only',now(),true)",[plan,free]);
+    await db.query("insert into public.signup_trial_policy(plan_id,plan_version,trial_days,allowed_workspace_codes,free_plan_id,free_plan_version,free_workspace_codes,pro_named_users,pro_lead_records,free_named_users,free_lead_records,approval_ref,approved_at,enabled) values($1,1,14,array['admin','sales'],$2,1,array['admin'],2,3,1,1,'synthetic test only',now(),true)",[plan,free]);
     assert.equal(await scalar("select public.signup_trial_available_v1() as value"),true);
 
     const email='person@example.invalid', intent=randomUUID(), user=randomUUID();
@@ -138,6 +139,29 @@ test('R13 public signup SQL fails closed and atomically provisions one scoped tr
       try { return await scalar("select public.get_current_signup_plan_v1() as value"); }
       finally { await db.query("select set_config('request.jwt.claim.role','service_role',false)"); }
     };
+    const usage = async () => (await db.query("select named_users::int,lead_records::int from public.signup_usage_counters where organization_id=$1",[org])).rows[0];
+    assert.deepEqual(await usage(),{named_users:1,lead_records:0});
+    const teamUser=randomUUID(), extraUser=randomUUID();
+    await addUser(teamUser,'team@example.invalid',randomUUID(),true);
+    await addUser(extraUser,'extra@example.invalid',randomUUID(),true);
+    await db.query("insert into public.organization_members values($1,$2,'employee',true)",[org,teamUser]);
+    await assert.rejects(db.query("insert into public.organization_members values($1,$2,'employee',true)",[org,extraUser]),/Commercial usage limit reached: named_users/);
+    await db.query("insert into public.organization_members values($1,$2,'employee',false)",[org,extraUser]);
+    await assert.rejects(db.query("update public.organization_members set active=true where organization_id=$1 and user_id=$2",[org,extraUser]),/Commercial usage limit reached: named_users/);
+    await db.query("insert into public.leads(organization_id) values($1),($1)",[org]);
+    // Two independent transactions compete for the final lead slot.
+    const peer = new pg.Client({connectionString:url.href});
+    await peer.connect();
+    try {
+      const outcomes = await Promise.allSettled([
+        db.query("insert into public.leads(organization_id) values($1)",[org]),
+        peer.query("insert into public.leads(organization_id) values($1)",[org])
+      ]);
+      assert.equal(outcomes.filter(x=>x.status==='fulfilled').length,1);
+      assert.match(String(outcomes.find(x=>x.status==='rejected').reason),/Commercial usage limit reached: lead_records/);
+    } finally { await peer.end(); }
+    assert.deepEqual(await usage(),{named_users:2,lead_records:3});
+    await assert.rejects(db.query("insert into public.leads(organization_id) values($1)",[org]),/Commercial usage limit reached: lead_records/);
     const trial = await currentPlan(user);
     assert.equal(trial.state,'pro_trial');
     assert.equal(trial.plan_code,'pro');
@@ -155,6 +179,14 @@ test('R13 public signup SQL fails closed and atomically provisions one scoped tr
     await db.query("update public.saas_organization_subscriptions set trial_ends_at=(select trial_ends_at from public.signup_registration_intents where organization_id=$1) where organization_id=$1",[org]);
     const expired = await currentPlan(user);
     assert.equal(expired.state,'free_pending_reconciliation');
+    assert.deepEqual(await usage(),{named_users:2,lead_records:3});
+    await assert.rejects(db.query("insert into public.leads(organization_id) values($1)",[org]),/Commercial usage limit reached: lead_records/);
+    await db.query("update public.organization_members set active=false where organization_id=$1 and user_id=$2",[org,teamUser]);
+    assert.deepEqual(await usage(),{named_users:1,lead_records:3});
+    await assert.rejects(db.query("update public.organization_members set active=true where organization_id=$1 and user_id=$2",[org,teamUser]),/Commercial usage limit reached: named_users/);
+    // Existing rows remain; updates and explicit deletions are still allowed.
+    await db.query("update public.leads set organization_id=organization_id where organization_id=$1",[org]);
+    assert.equal(await scalar("select count(*)::int as value from public.leads where organization_id=$1",[org]),3);
     assert.equal(expired.plan_code,'free');
     assert.equal(expired.remaining_seconds,0);
     assert.deepEqual(expired.workspace_codes,['admin']);
@@ -168,6 +200,17 @@ test('R13 public signup SQL fails closed and atomically provisions one scoped tr
     assert.equal(await scalar("select count(*)::int as value from public.organization_members where organization_id=$1 and user_id=$2",[org,user]),1);
     assert.equal(await provision(user),org);
     assert.equal((await currentPlan(user)).state,'free');
+    await db.query("delete from public.leads where organization_id=$1",[org]);
+    assert.deepEqual(await usage(),{named_users:1,lead_records:0});
+    await db.query("insert into public.leads(organization_id) values($1)",[org]);
+    await assert.rejects(db.query("insert into public.leads(organization_id) values($1)",[org]),/Commercial usage limit reached: lead_records/);
+    // Legacy tenants are unaffected by the signup-only guard.
+    const legacy=randomUUID();
+    await db.query("insert into public.organizations values($1,'Legacy','legacy','active')",[legacy]);
+    await db.query("insert into public.leads(organization_id) values($1),($1),($1),($1)",[legacy]);
+    assert.equal(await scalar("select count(*)::int as value from public.leads where organization_id=$1",[legacy]),4);
+    await db.query("delete from public.leads where organization_id=$1",[legacy]);
+    await db.query("delete from public.organizations where id=$1",[legacy]);
 
     const auto=randomUUID(), autoIntent=randomUUID();
     assert.equal(await reserve(autoIntent,'auto@example.invalid'),true);
