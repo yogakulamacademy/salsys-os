@@ -25,3 +25,20 @@ test('registry queries are guarded, ordered and bounded; onboarding follows visi
   assert.match(source,/action=\{provisionCustomerOrganizationAction\}/);
   assert.doesNotMatch(source,/\.insert\(|\.update\(|\.delete\(|\.upsert\(/);
 });
+
+test('registry search rejects raw PostgREST syntax and preserves validated filters across pages',()=>{
+  assert.deepEqual(p.parseOrganizationFilters(' Yoga Academy ','active'),{search:'Yoga Academy',status:'active',invalidSearch:false});
+  assert.equal(p.parseOrganizationFilters('Mysūru','unknown').status,'');
+  for(const value of ['a,b','a.b','a%','a*','a_','a(b)','a"b','a\\b','a\nb','x'.repeat(81),['a','b']]){
+    assert.equal(p.parseOrganizationFilters(value,'active').invalidSearch,true);
+  }
+  assert.equal(p.organizationSearchExpression('Yoga Academy'),'name.ilike.*Yoga Academy*,slug.ilike.*Yoga Academy*');
+  assert.throws(()=>p.organizationSearchExpression('a,b'));
+  assert.equal(p.organizationPageHref(2,{search:'Yoga Academy',status:'active'}),'/settings/organizations?page=2&q=Yoga+Academy&status=active');
+  const source=readFileSync('app/settings/organizations/page.tsx','utf8');
+  assert.match(source,/countQuery\.or\(searchExpression\)/);
+  assert.match(source,/registryQuery\.or\(searchExpression\)/);
+  assert.match(source,/countQuery\.eq\('status', filters.status\)/);
+  assert.match(source,/registryQuery\.eq\('status', filters.status\)/);
+  assert.match(source,/filters\.invalidSearch \? \{ count: 0, error: null \}/);
+});
