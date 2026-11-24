@@ -58,10 +58,14 @@ export async function signupAction(formData: FormData) {
 
   if (!error && data.user && !data.user.email_confirmed_at &&
       data.user.identities?.length) {
-    const { error: acceptError } = await admin.rpc('accept_signup_intent_v1', {
+    const { data: accepted, error: acceptError } = await admin.rpc('accept_signup_intent_v1', {
       p_id: intentId, p_user_id: data.user.id,
     });
-    if (acceptError) redirect('/signup?error=Registration+is+temporarily+unavailable.');
+    if (acceptError || accepted !== true) {
+      // Keep the public response neutral; never imply that an unbound identity
+      // is provisionable. A support investigation may be required.
+      console.warn('Signup identity acceptance incomplete');
+    }
   }
 
   // Use a generic response for duplicate accounts to limit enumeration.
