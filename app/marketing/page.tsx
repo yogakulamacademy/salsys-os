@@ -1,5 +1,8 @@
-import { MarketingCommandCenterOverview } from "./marketing-command-center-overview";
+import { SmartMarketingOverview } from "@/components/marketing/smart-marketing-overview";
+import { getMarketingStory } from "@/lib/marketing-story-data";
+
 import CanonicalMarketingWorkspace from "./canonical-workspace";
+import { MarketingCommandCenterOverview } from "./marketing-command-center-overview";
 
 type MarketingPageProps = {
   searchParams: Promise<{
@@ -23,7 +26,10 @@ export default async function MarketingPage({ searchParams }: MarketingPageProps
   const view = query.view || "overview";
 
   if (view === "overview") {
-    return <MarketingCommandCenterOverview />;
+    // Smart Overview (owner-approved prototype, 25 Nov 2026); the older command
+    // centre stays as the fallback when the story can't be read.
+    const story = await getMarketingStory();
+    return story ? <SmartMarketingOverview story={story} /> : <MarketingCommandCenterOverview />;
   }
 
   return <CanonicalMarketingWorkspace searchParams={Promise.resolve(query)} />;

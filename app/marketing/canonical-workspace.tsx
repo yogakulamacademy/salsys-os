@@ -1,14 +1,4 @@
-import Link from "next/link";
-import {
-  Activity,
-  BarChart3,
-  CircleDollarSign,
-  GitBranch,
-  Megaphone,
-  Route,
-  Search,
-  Target,
-} from "lucide-react";
+import { Activity } from "lucide-react";
 
 import { AnalyticsExplorer } from "@/components/analytics-explorer";
 import { AttributionIntelligenceExplorer } from "@/components/attribution-intelligence-explorer";
@@ -55,6 +45,14 @@ type MarketingPageProps = {
 };
 
 const PAGE_SIZE = 50;
+const VIEW_HEAD: Record<MarketingView, { group: string; title: string; description: string }> = {
+  overview: { group: "Marketing", title: "Overview", description: "What’s bringing enquiries and what’s broken." },
+  campaigns: { group: "Marketing · Ads", title: "Ads", description: "Meta and Google campaigns: spend, clicks, enquiries and what they led to." },
+  analytics: { group: "Marketing · Website", title: "Visits and sources", description: "How many people visit the website, where they come from and which pages they land on." },
+  behavior: { group: "Marketing · Website", title: "Clicks and forms", description: "What visitors do on the website: the steps they take, and where they stop." },
+  funnel: { group: "Marketing · Where enquiries come from", title: "Stage by stage", description: "How far enquiries from each source get, from first message to payment." },
+  attribution: { group: "Marketing · Where enquiries come from", title: "Credit by source", description: "Which source gets the credit for each enquiry, and how the answer changes by model." },
+};
 const validViews = new Set<MarketingView>([
   "overview",
   "campaigns",
@@ -71,26 +69,8 @@ export default async function MarketingPage({ searchParams }: MarketingPageProps
 
   return (
     <div className="space-y-4">
-      <PageHeader
-        eyebrow="Growth / Marketing"
-        title="Marketing"
-        description="One workspace for acquisition quality, campaign performance, analytics, funnel movement and attribution evidence."
-        actions={
-          <div className="flex flex-wrap gap-2">
-            <Link href="/paid-media-leads" className="btn-secondary">
-              <Megaphone size={15} /> Acquisition leads
-            </Link>
-            <Link href="/seo" className="btn-secondary">
-              <Search size={15} /> Search intelligence
-            </Link>
-            <Link href="/revenue" className="btn-primary">
-              <CircleDollarSign size={15} /> Revenue
-            </Link>
-          </div>
-        }
-      />
-
-      <MarketingTabs view={view} />
+      {/* Sub-pages are listed in the Marketing menu (owner-approved revamp, 25 Nov 2026). */}
+      <PageHeader eyebrow={VIEW_HEAD[view].group} title={VIEW_HEAD[view].title} description={VIEW_HEAD[view].description} />
 
       {view === "overview" ? <MarketingOverview /> : null}
       {view === "campaigns" ? <CampaignsView query={query} /> : null}
@@ -99,59 +79,6 @@ export default async function MarketingPage({ searchParams }: MarketingPageProps
       {view === "behavior" ? <BehaviorView query={query} /> : null}
       {view === "attribution" ? <AttributionView query={query} /> : null}
     </div>
-  );
-}
-
-function MarketingTabs({ view }: { view: MarketingView }) {
-  const tabs: Array<{
-    value: MarketingView;
-    label: string;
-    icon: React.ReactNode;
-  }> = [
-    { value: "overview", label: "Overview", icon: <Activity size={13} /> },
-    { value: "campaigns", label: "Campaigns", icon: <Target size={13} /> },
-    { value: "analytics", label: "Analytics", icon: <BarChart3 size={13} /> },
-    { value: "funnel", label: "Funnel", icon: <GitBranch size={13} /> },
-    { value: "behavior", label: "Behavior", icon: <Activity size={13} /> },
-    { value: "attribution", label: "Attribution", icon: <Route size={13} /> },
-  ];
-
-  return (
-    <nav
-      className="overflow-x-auto rounded-xl border border-slate-200 bg-white p-1 dark:border-slate-800 dark:bg-slate-950"
-      aria-label="Marketing workspace views"
-    >
-      <div className="flex min-w-max items-center gap-1">
-        {tabs.map((tab) => (
-          <Link
-            key={tab.value}
-            href={tab.value === "overview" ? "/marketing" : `/marketing?view=${tab.value}`}
-            aria-current={view === tab.value ? "page" : undefined}
-            className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-700 dark:focus-visible:outline-slate-200 ${
-              view === tab.value
-                ? "bg-slate-950 text-white dark:bg-white dark:text-slate-950"
-                : "text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-900"
-            }`}
-          >
-            {tab.icon}
-            {tab.label}
-          </Link>
-        ))}
-        <span className="mx-1 h-7 w-px bg-slate-200 dark:bg-slate-800" />
-        <Link
-          href="/paid-media-leads"
-          className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold text-slate-500 transition hover:bg-slate-100 dark:hover:bg-slate-900"
-        >
-          <Megaphone size={13} /> Acquisition
-        </Link>
-        <Link
-          href="/seo"
-          className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold text-slate-500 transition hover:bg-slate-100 dark:hover:bg-slate-900"
-        >
-          <Search size={13} /> Search
-        </Link>
-      </div>
-    </nav>
   );
 }
 

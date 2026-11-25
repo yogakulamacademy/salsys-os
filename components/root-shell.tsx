@@ -49,7 +49,6 @@ function isMarketingPath(pathname: string) {
     '/paid-media-leads',
     '/seo',
     '/analytics',
-    '/revenue',
     '/tracking',
   ].some((href) => pathname === href || pathname.startsWith(`${href}/`));
 }

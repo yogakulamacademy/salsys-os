@@ -29,8 +29,8 @@ test('every privileged workspace is named and located once', () => {
   assert.equal(where('/admissions'), 'CRM / Admissions');
   assert.equal(where('/customer-360/person-1'), 'CRM / Customer 360');
   assert.equal(where('/re-engaged'), 'CRM / Re-engaged');
-  assert.equal(where('/marketing'), 'Marketing / Marketing Workspace');
-  assert.equal(where('/seo/technical'), 'Marketing / Search Intelligence');
+  assert.equal(where('/marketing'), 'Marketing / Overview');
+  assert.equal(where('/seo/technical'), 'Marketing / Google search');
   assert.equal(where('/revenue'), 'Revenue / Revenue workspace');
   assert.equal(where('/revenue/valuation'), 'Revenue / Revenue valuation');
   assert.equal(where('/operations'), 'Operations / Overview');
