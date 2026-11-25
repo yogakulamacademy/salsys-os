@@ -1,7 +1,9 @@
 // Pure presentation contract for a future approved read-only platform quota endpoint.
 // Do not fetch private counters or infer effective usage from registry/catalog data.
 export type EffectiveQuotaView =
-  | { state:'unavailable'|'managed_separately'|'organization_inactive' }
+  | { state:'unavailable' }
+  | { state:'managed_separately' }
+  | { state:'organization_inactive' }
   | { state:'pro_trial'|'free'|'free_pending_reconciliation'|'manual_active'; planCode:'free'|'basic'|'growth'|'pro'; users:QuotaMetric; leads:QuotaMetric };
 export type QuotaMetric = { used:number; limit:number; remaining:number; overLimit:boolean; atLimit:boolean };
 const states=['pro_trial','free','free_pending_reconciliation','manual_active'] as const;
