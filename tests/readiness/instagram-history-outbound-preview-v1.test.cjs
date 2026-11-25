@@ -29,6 +29,14 @@ async function runPreview(options = {}) {
   ];
   const admin = {
     from(table) {
+      if (table==='organizations') {
+        const q={
+          select(columns){assert.equal(columns,'id,status');return q;},
+          eq(key,value){assert.equal(key,'id');assert.equal(value,ORG);return q;},
+          maybeSingle:async()=>({data:{id:ORG,status:options.inactive?'suspended':'active'},error:null}),
+        };
+        return q;
+      }
       calls.dbTables.push(table);
       if (table === 'instagram_history_sync_cursor_v1') {
         const q = {
@@ -167,4 +175,8 @@ test('failed CRM lookup and over-limit provider page do not invent zero missing 
   const oversized = Array.from({ length: 21 }, (_, i) =>
     providerMessage('mid-many-' + i, ACCOUNT, CUSTOMER));
   await assert.rejects(runPreview({ messages: oversized }), /exceeded its message limit/);
+});
+
+test('read-only preview also denies suspended organizations',async()=>{
+  await assert.rejects(runPreview({inactive:true}),/Instagram history organization unavailable/);
 });
