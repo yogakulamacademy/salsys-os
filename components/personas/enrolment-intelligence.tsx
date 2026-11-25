@@ -109,8 +109,8 @@ export function EnrolmentIntelligenceSection({ data }: { data: EnrolmentIntellig
         <Suggestion rank={2} impact={bestAd && worstAd ? "WHICH AD BRINGS SERIOUS PEOPLE" : "AD TRACKING IS LIVE"}
           title={bestAd && worstAd && bestAd !== worstAd ? `“${bestAd.title}” brings ${Math.round((bestAd.qualified / bestAd.people) / Math.max(0.01, worstAd.qualified / worstAd.people))}× as many Qualified people as “${worstAd.title}”` : `${data.layers.ad.toLocaleString("en-IN")} people linked to the ad they clicked`}
           evidence={bestAd && worstAd ? <Meter max={1} rows={[
-            { label: bestAd.title, value: bestAd.qualified / bestAd.people, text: pctText(bestAd.qualified / bestAd.people), tone: "bg-emerald-600" },
-            { label: worstAd.title, value: worstAd.qualified / worstAd.people, text: pctText(worstAd.qualified / worstAd.people), tone: "bg-red-600" },
+            { label: bestAd.title ?? "", value: bestAd.qualified / bestAd.people, text: pctText(bestAd.qualified / bestAd.people), tone: "bg-emerald-600" },
+            { label: worstAd.title ?? "", value: worstAd.qualified / worstAd.people, text: pctText(worstAd.qualified / worstAd.people), tone: "bg-red-600" },
           ]} /> : null}
           action={<a href="#ads" className="btn-secondary">See every ad</a>}
           basis={`${data.layers.ad.toLocaleString("en-IN")} people · from the ad that started each Instagram chat`}>
