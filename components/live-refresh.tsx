@@ -35,15 +35,11 @@ const LIVE_ROUTE_CONFIG: LiveRouteConfig[] = [
     prefixes: ['/follow-ups'],
     tables: ['tasks', 'leads', 'activities'],
   },
-  {
-    // Message INSERT/UPDATE handling on the selected thread is specialized.
-    // The generic listener only keeps conversation-level server data fresh.
-    prefixes: ['/conversations'],
-    tables: ['conversations', 'leads', 'activities'],
-  },
+  // /conversations has its own listener (ConversationsRealtime). Two
+  // listeners refreshed the Inbox twice per change (25 Nov 2026 load fix).
 ];
 
-const MIN_REFRESH_INTERVAL_MS = 3_000;
+const MIN_REFRESH_INTERVAL_MS = 10_000;
 const EVENT_DEBOUNCE_MS = 350;
 
 function routeTables(pathname: string) {

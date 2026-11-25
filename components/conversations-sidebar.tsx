@@ -594,6 +594,9 @@ function ConversationRow({
   return (
     <Link
       href={href}
+      // No background prefetch: 50 rows each ran the sign-in and workspace
+      // checks on every scroll (25 Nov 2026 load fix). Opening a chat is unchanged.
+      prefetch={false}
       aria-current={selected ? "page" : undefined}
       data-channel={lead.currentContactChannel}
       data-unread={lead.unread && !selected ? "true" : undefined}
