@@ -98,7 +98,7 @@ function subActive(where: Where, href: string) {
 
 function NavigationLinks({ where }: { where: Where }) {
   return (
-    <div className="space-y-1">
+    <nav className="space-y-1" aria-label="Marketing workspace views">
       {items.map((item) => {
         const active = item.match(where);
         const Icon = item.icon;
@@ -106,7 +106,7 @@ function NavigationLinks({ where }: { where: Where }) {
           <div key={item.key}>
             <Link
               href={item.href}
-              aria-current={active && !item.subs ? 'page' : undefined}
+              aria-current={active && (!item.subs || subActive(where, item.href)) ? 'page' : undefined}
               className={`group relative flex min-h-10 items-start gap-2.5 rounded-ui px-3 py-2.5 transition ${
                 active ? 'bg-brand-50' : 'hover:bg-surface-muted'
               }`}
@@ -138,7 +138,7 @@ function NavigationLinks({ where }: { where: Where }) {
           </div>
         );
       })}
-    </div>
+    </nav>
   );
 }
 
