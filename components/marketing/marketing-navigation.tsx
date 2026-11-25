@@ -39,11 +39,12 @@ const items: NavigationItem[] = [
     match: ({ path, view }) => path === '/marketing' && (!view || view === 'overview'),
   },
   {
-    key: 'sources', href: '/marketing?view=funnel', label: 'Where enquiries come from', icon: UsersRound,
+    key: 'sources', href: '/marketing?view=sources', label: 'Where enquiries come from', icon: UsersRound,
     description: 'How far enquiries from each source get',
-    match: ({ path, view }) => (path === '/marketing' && (view === 'funnel' || view === 'attribution'))
+    match: ({ path, view }) => (path === '/marketing' && (view === 'sources' || view === 'funnel' || view === 'attribution'))
       || under(path, '/funnel') || under(path, '/attribution') || under(path, '/paid-media-leads'),
     subs: [
+      { href: '/marketing?view=sources', label: 'By source' },
       { href: '/marketing?view=funnel', label: 'Stage by stage' },
       { href: '/marketing?view=attribution', label: 'Credit by source' },
       { href: '/paid-media-leads', label: 'Enquiries from ads' },

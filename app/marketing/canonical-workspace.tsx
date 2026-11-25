@@ -9,12 +9,15 @@ import { NativeBehaviorExplorer } from "@/components/marketing/native-behavior-e
 import { NativeBehaviorBreakdownPanel } from "@/components/marketing/native-behavior-breakdown";
 import { ExecutiveDecisionBrief } from "@/components/marketing/executive-decision-brief";
 import { MarketingOverview } from "@/components/marketing/marketing-overview";
+import { SmartAdsPage } from "@/components/marketing/smart-ads-page";
+import { SmartSourcesPage } from "@/components/marketing/smart-sources-page";
 import { Notice, PageHeader } from "@/components/ui";
 import { getAnalyticsWorkspace } from "@/lib/analytics-data";
 import { getAttributionWorkspace } from "@/lib/attribution-data";
 import { getCampaignsWorkspace } from "@/lib/campaigns-data";
 import { buildAttributionIntelligence } from "@/lib/commercial-intelligence";
 import { isMockMode } from "@/lib/data";
+import { getAdsStory, getSourcesStory } from "@/lib/marketing-pages-data";
 import { normalizeBehaviorRequest, normalizeBehaviorBreakdownEvent } from "@/lib/native-behavior-contract";
 import { getNativeBehaviorPageBreakdown } from "@/lib/native-behavior-breakdown-data";
 import { getNativeBehaviorWorkspace } from "@/lib/native-behavior-data";
@@ -24,7 +27,7 @@ import {
   type FunnelIntelligenceWorkspace as FunnelWorkspace,
 } from "@/lib/funnel-intelligence-data";
 
-type MarketingView = "overview" | "campaigns" | "analytics" | "funnel" | "behavior" | "attribution";
+type MarketingView = "overview" | "sources" | "campaigns" | "analytics" | "funnel" | "behavior" | "attribution";
 
 type MarketingPageProps = {
   searchParams: Promise<{
@@ -47,6 +50,7 @@ type MarketingPageProps = {
 const PAGE_SIZE = 50;
 const VIEW_HEAD: Record<MarketingView, { group: string; title: string; description: string }> = {
   overview: { group: "Marketing", title: "Overview", description: "What’s bringing enquiries and what’s broken." },
+  sources: { group: "Marketing", title: "Where enquiries come from", description: "Where every enquiry from each source is now." },
   campaigns: { group: "Marketing · Ads", title: "Ads", description: "Meta and Google campaigns: spend, clicks, enquiries and what they led to." },
   analytics: { group: "Marketing · Website", title: "Visits and sources", description: "How many people visit the website, where they come from and which pages they land on." },
   behavior: { group: "Marketing · Website", title: "Clicks and forms", description: "What visitors do on the website: the steps they take, and where they stop." },
@@ -55,6 +59,7 @@ const VIEW_HEAD: Record<MarketingView, { group: string; title: string; descripti
 };
 const validViews = new Set<MarketingView>([
   "overview",
+  "sources",
   "campaigns",
   "analytics",
   "funnel",
@@ -67,13 +72,35 @@ export default async function MarketingPage({ searchParams }: MarketingPageProps
   const requestedView = (query.view || "overview") as MarketingView;
   const view = validViews.has(requestedView) ? requestedView : "overview";
 
+  // Smart pages (owner-approved prototype "Marketing step 2", 25 Nov 2026) carry their own
+  // heading; if their story can't be read, the older views are shown instead.
+  const [sourcesStory, adsStory] = await Promise.all([
+    view === "sources" ? getSourcesStory() : Promise.resolve(null),
+    view === "campaigns" ? getAdsStory() : Promise.resolve(null),
+  ]);
+  const smart = Boolean(sourcesStory || adsStory);
+  const campaignFilters = Boolean(query.q || query.platform || query.outcome || query.page || query.sort);
+
   return (
     <div className="space-y-4">
       {/* Sub-pages are listed in the Marketing menu (owner-approved revamp, 25 Nov 2026). */}
-      <PageHeader eyebrow={VIEW_HEAD[view].group} title={VIEW_HEAD[view].title} description={VIEW_HEAD[view].description} />
+      {smart ? null : <PageHeader eyebrow={VIEW_HEAD[view].group} title={VIEW_HEAD[view].title} description={VIEW_HEAD[view].description} />}
 
       {view === "overview" ? <MarketingOverview /> : null}
-      {view === "campaigns" ? <CampaignsView query={query} /> : null}
+      {view === "sources" ? (sourcesStory ? <SmartSourcesPage story={sourcesStory} /> : <FunnelView />) : null}
+      {view === "campaigns" && adsStory ? (
+        <>
+          <SmartAdsPage story={adsStory} />
+          <details className="group rounded-panel border border-line bg-surface shadow-card" open={campaignFilters}>
+            <summary className="cursor-pointer list-none px-4 py-3.5 sm:px-5">
+              <span className="block text-[15px] font-bold text-copy-strong">Detailed campaign numbers</span>
+              <span className="block text-[12.5px] text-copy-muted">The full campaign explorer: filters, cost per enquiry and evidence for each campaign</span>
+            </summary>
+            <div className="border-t border-line px-3 py-4 sm:px-4"><CampaignsView query={query} /></div>
+          </details>
+        </>
+      ) : null}
+      {view === "campaigns" && !adsStory ? <CampaignsView query={query} /> : null}
       {view === "analytics" ? <AnalyticsView /> : null}
       {view === "funnel" ? <FunnelView /> : null}
       {view === "behavior" ? <BehaviorView query={query} /> : null}

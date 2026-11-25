@@ -39,7 +39,8 @@ test("Keyboard navigation marks the active Marketing view and preserves existing
   // "Visits and sources" under Website; Funnel is "Where enquiries come from".
   const nav = page.getByRole("navigation", { name: "Marketing workspace views" });
   const behavior = nav.getByRole("link", { name: "Clicks and forms", exact: true });
-  const funnel = nav.getByRole("link", { name: "Where enquiries come from", exact: true });
+  const sources = nav.getByRole("link", { name: "Where enquiries come from", exact: true });
+  const funnel = nav.getByRole("link", { name: "Stage by stage", exact: true });
   const analytics = nav.getByRole("link", { name: "Visits and sources", exact: true });
   const website = nav.getByRole("link", { name: "Website", exact: true });
 
@@ -53,6 +54,9 @@ test("Keyboard navigation marks the active Marketing view and preserves existing
   await expect(analytics).toHaveAttribute("aria-current", "page");
   await expect(page.getByRole("heading", { name: "Behavior explorer" })).toHaveCount(0);
 
+  // Stage by stage sits under "Where enquiries come from".
+  await sources.click();
+  await expect(page).toHaveURL(/view=sources/);
   await funnel.focus();
   await expect(funnel).toBeFocused();
   await page.keyboard.press("Enter");
@@ -260,6 +264,8 @@ test("Funnel builder enforces five distinct stages and never changes the origina
   await expect(page.getByRole("combobox", { name: "Funnel step 5" })).toHaveCount(0);
 
   await page.getByRole("navigation", { name: "Marketing workspace views" }).getByRole("link", { name: "Where enquiries come from", exact: true }).click();
+  await expect(page).toHaveURL(/view=sources/);
+  await page.getByRole("navigation", { name: "Marketing workspace views" }).getByRole("link", { name: "Stage by stage", exact: true }).click();
   await expect(page).toHaveURL(/view=funnel/);
   await expect(page.getByRole("heading", { name: "Funnel", exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Behavior explorer" })).toHaveCount(0);
@@ -312,7 +318,8 @@ test("Soft Marketing navigation after synthetic tenant switch never reuses prior
   // "Visits and sources" under Website; Funnel is "Where enquiries come from".
   const nav = page.getByRole("navigation", { name: "Marketing workspace views" });
   const behavior = nav.getByRole("link", { name: "Clicks and forms", exact: true });
-  const funnel = nav.getByRole("link", { name: "Where enquiries come from", exact: true });
+  const sources = nav.getByRole("link", { name: "Where enquiries come from", exact: true });
+  const funnel = nav.getByRole("link", { name: "Stage by stage", exact: true });
   const analytics = nav.getByRole("link", { name: "Visits and sources", exact: true });
   const website = nav.getByRole("link", { name: "Website", exact: true });
   const paths = page.getByRole("region", { name: "Popular navigation paths" });
@@ -333,6 +340,8 @@ test("Soft Marketing navigation after synthetic tenant switch never reuses prior
     const switchTenant = await request.get(fixtureBase +
       "/__behavior_scenario?state=ready&tenant=secondary");
     expect(switchTenant.ok()).toBe(true);
+    await sources.click();
+    await expect(page).toHaveURL(/view=sources/);
     await funnel.click();
     await expect(page).toHaveURL(/view=funnel/);
     await website.click();
