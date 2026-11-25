@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const { readFileSync } = require('node:fs');
 const { load } = require('./helpers.cjs');
 
-function setup({ v2Missing = false } = {}) {
+function setup({ v2Missing = false, legacyEngine = false } = {}) {
   const calls = [];
   const session = {
     rpc: async (name, args) => {
@@ -19,6 +19,7 @@ function setup({ v2Missing = false } = {}) {
           totalMatching: 0,
           counts: {},
           owners: [],
+          ...(legacyEngine || name !== 'get_current_conversations_page_v2' ? {} : { waitingWeek: { all: 3, whatsapp: 1, instagram: 2, website: 0 } }),
         },
         error: null,
       };
@@ -34,14 +35,15 @@ function setup({ v2Missing = false } = {}) {
 }
 
 test('Inbox defaults to latest conversation activity instead of lead creation', async () => {
-  // Default view is All again (25 Nov 2026): this week's waiting chats are counted
-  // first (for the Waiting badge), then the All page, newest activity first.
+  // Default view is All (25 Nov 2026), newest activity first, in ONE database
+  // call: the engine returns this week's waiting counts itself (waitingWeek).
   const {reader,calls} = setup();
   const result = await reader.getInboxPage({}, 'team');
   assert.equal(result.sort, 'activity_desc');
   assert.equal(result.filter, 'all');
+  assert.equal(calls.length, 1);
   assert.equal(calls[0].name, 'get_current_conversations_page_v2');
-  assert.equal(calls[0].args.p_filter, 'reply');
+  assert.equal(result.counts.waiting, 3);
   const page = calls.at(-1);
   assert.equal(page.args.p_filter, 'all');
   assert.equal(page.args.p_topic, 'all');
@@ -70,12 +72,26 @@ test('Unknown topics are ignored', async () => {
 });
 
 test('Explicit created-date sort is retained and unsupported sort defaults safely', async () => {
-  // On the All tab: the first call counts this week's waiting chats, the second is the page.
+  // One call per view.
   const {reader,calls} = setup();
   assert.equal((await reader.getInboxPage({sort:'created_desc', filter:'all'}, 'team')).sort, 'created_desc');
-  assert.equal(calls[1].args.p_sort, 'created_desc');
+  assert.equal(calls[0].args.p_sort, 'created_desc');
   assert.equal((await reader.getInboxPage({sort:'unexpected', filter:'all'}, 'team')).sort, 'activity_desc');
-  assert.equal(calls[3].args.p_sort, 'activity_desc');
+  assert.equal(calls[1].args.p_sort, 'activity_desc');
+  assert.equal(calls.length, 2);
+});
+
+test('Waiting and Older are filtered by the database in one call; old engines fall back', async () => {
+  const {reader,calls} = setup();
+  const waiting = await reader.getInboxPage({filter:'waiting'}, 'team');
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].args.p_filter, 'waiting');
+  assert.deepEqual(waiting.channelCounts, { all: 3, whatsapp: 1, instagram: 2, website: 0 });
+  await reader.getInboxPage({filter:'older'}, 'team');
+  assert.equal(calls[1].args.p_filter, 'older');
+  const legacy = setup({ legacyEngine: true });
+  await legacy.reader.getInboxPage({}, 'team');
+  assert.equal(legacy.calls.length, 2, 'without waitingWeek: one extra needs-a-reply read, not three');
 });
 
 test('Sidebar treats activity-first as default and preserves user sort choice', () => {

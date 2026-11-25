@@ -152,67 +152,39 @@ export async function getInboxPage(
     return data;
   }
 
-  // Waiting = needs a reply and wrote in the last 7 days. Needs-reply rows
-  // come newest first, so read them until they turn older than a week (all
-  // channels, so the channel chips can show this week's counts).
+  // One call per Inbox view (25 Nov 2026). The database works out "waiting
+  // this week" (needs a reply, wrote in the last 7 days) and "older" itself,
+  // and returns this week's counts per channel. The app used to read up to
+  // three extra 100-row pages on every view to count them, which overloaded
+  // the database when realtime refreshed the Inbox.
   const now = Date.now();
-  const waitingAll: ConversationLeadSummary[] = [];
-  let replyAllPayload: any = null;
-  const skipWaitingScan = query.light === "1" && filter !== "waiting" && filter !== "older";
-  for (let p = 1; p <= (skipWaitingScan ? 0 : 3); p += 1) {
-    const payload = await callPage({ page: p, pageSize: 100, filter: "reply", channel: "all", sort: "activity_desc" });
-    if (p === 1) replyAllPayload = payload;
-    const rows = payload.inbox as ConversationLeadSummary[];
-    const recent = rows.filter((r) => isRecentWait(r.waitingSince, now));
-    waitingAll.push(...recent);
-    if (recent.length < rows.length || rows.length < 100) break;
+  let data: any = await callPage({ page, pageSize: 50, filter, channel, sort });
+  let rows: ConversationLeadSummary[] = data.inbox as ConversationLeadSummary[];
+  let totalMatching = numberOrZero(data.totalMatching);
+  const pageSize = 50;
+  const week = data.waitingWeek && typeof data.waitingWeek === "object" ? data.waitingWeek : null;
+  let waitingAll: ConversationLeadSummary[] = [];
+  if (!week) {
+    // Engine without waitingWeek (older database): fall back to the first page of needs-a-reply.
+    const reply = filter === "reply" && channel === "all" ? data : await callPage({ page: 1, pageSize: 100, filter: "reply", channel: "all", sort: "activity_desc" });
+    waitingAll = (reply.inbox as ConversationLeadSummary[]).filter((r) => isRecentWait(r.waitingSince, now));
+    if (filter === "waiting") { rows = channel === "all" ? waitingAll : waitingAll.filter((r) => r.currentContactChannel === channel); totalMatching = rows.length; data = { ...reply, ...data }; }
   }
-  const waitingFor = (ch: string) => ch === "all" ? waitingAll : waitingAll.filter((r) => r.currentContactChannel === ch);
-
-  let data: any;
-  let rows: ConversationLeadSummary[];
-  let totalMatching: number;
-  let pageSize = 50;
-  if (filter === "waiting") {
-    data = replyAllPayload;
-    rows = waitingFor(channel);
-    totalMatching = rows.length;
-    pageSize = Math.max(50, rows.length);
-  } else if (filter === "older") {
-    // Older needs-reply rows sit after this week's in the same order.
-    const skip = waitingFor(channel).length;
-    const start = skip + (page - 1) * 50;
-    const rpcPage = Math.floor(start / 100) + 1;
-    const first = await callPage({ page: rpcPage, pageSize: 100, filter: "reply", channel, sort: "activity_desc" });
-    let pool = first.inbox as ConversationLeadSummary[];
-    const offset = start - (rpcPage - 1) * 100;
-    if (offset + 50 > pool.length && pool.length === 100) {
-      const next = await callPage({ page: rpcPage + 1, pageSize: 100, filter: "reply", channel, sort: "activity_desc" });
-      pool = pool.concat(next.inbox as ConversationLeadSummary[]);
-    }
-    data = first;
-    rows = pool.slice(offset, offset + 50).filter((r) => !isRecentWait(r.waitingSince, now));
-    totalMatching = Math.max(0, numberOrZero(first.totalMatching) - skip);
-  } else {
-    data = await callPage({ page, pageSize: 50, filter, channel, sort });
-    rows = data.inbox as ConversationLeadSummary[];
-    totalMatching = numberOrZero(data.totalMatching);
-  }
+  const waitingCount = week ? numberOrZero(week.all) : waitingAll.length;
 
   const counts = data.counts || {};
-  const waitingCount = waitingAll.length;
-  const channelCounts = filter === "waiting" && usedV2
+  const channelCounts = filter === "waiting" && usedV2 && week
     ? {
-        all: waitingAll.length,
-        whatsapp: waitingFor("whatsapp").length,
-        instagram: waitingFor("instagram").length,
-        website: waitingFor("website").length,
+        all: numberOrZero(week.all),
+        whatsapp: numberOrZero(week.whatsapp),
+        instagram: numberOrZero(week.instagram),
+        website: numberOrZero(week.website),
       }
     : null;
   return {
     rows,
-    page: filter === "waiting" ? 1 : numberOrZero(data.page) || page,
-    pageSize: filter === "waiting" ? pageSize : numberOrZero(data.pageSize) || 50,
+    page: numberOrZero(data.page) || page,
+    pageSize: numberOrZero(data.pageSize) || pageSize,
     totalMatching,
     owners: Array.isArray(data.owners) ? data.owners.filter((owner: unknown) => Boolean(owner && typeof owner === "object" && typeof (owner as {id?: unknown}).id === "string" && typeof (owner as {name?: unknown}).name === "string")) : [],
     counts: {

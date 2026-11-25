@@ -15,7 +15,15 @@ type RealtimeMessage = {
   created_at?: string;
 };
 
-const MIN_REFRESH_INTERVAL_MS = 5_000;
+// At most one Inbox refresh every 15 seconds, and none for old messages
+// brought in by the Instagram history catch-up (25 Nov 2026 load fix: each
+// refresh reloads the whole Inbox, and imports arrive in bursts).
+const MIN_REFRESH_INTERVAL_MS = 15_000;
+const LIVE_MESSAGE_MAX_AGE_MS = 10 * 60_000;
+const isLive = (createdAt?: string) => {
+  const at = createdAt ? Date.parse(createdAt) : NaN;
+  return !Number.isFinite(at) || Date.now() - at <= LIVE_MESSAGE_MAX_AGE_MS;
+};
 
 export function ConversationsRealtime() {
   const router = useRouter();
@@ -59,7 +67,7 @@ export function ConversationsRealtime() {
         (payload: unknown) => {
           const event = payload as { new?: RealtimeMessage };
           const message = event.new;
-          if (!message) return;
+          if (!message || !isLive(message.created_at)) return;
           if (message.direction === 'inbound') {
             window.dispatchEvent(
               new CustomEvent('crm:conversation-inbound', {

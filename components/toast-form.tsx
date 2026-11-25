@@ -16,12 +16,16 @@ type Props = Omit<FormHTMLAttributes<HTMLFormElement>, "action"> & {
   action: (formData: FormData) => Promise<ToastActionResult>;
   /** Clear the fields after a successful submit (default true). */
   resetOnSuccess?: boolean;
-  /** Re-read the page's data after success (default true). */
+  /**
+   * Also call router.refresh() after success (default false). Actions wrapped
+   * by asResult already revalidate, which refreshes the page in the same
+   * response; refreshing again doubled every page load (25 Nov 2026 load fix).
+   */
   refresh?: boolean;
   onDone?: (result: { ok: boolean; message: string }) => void;
 };
 
-export function ToastForm({ action, resetOnSuccess = true, refresh = true, onDone, children, ...rest }: Props) {
+export function ToastForm({ action, resetOnSuccess = true, refresh = false, onDone, children, ...rest }: Props) {
   const router = useRouter();
   const ref = useRef<HTMLFormElement>(null);
   return (
