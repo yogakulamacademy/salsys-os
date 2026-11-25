@@ -18,7 +18,9 @@ function metric(used:unknown,limit:unknown,over:unknown):QuotaMetric|null {
 export function parseEffectiveQuotaPreview(value:unknown):EffectiveQuotaView {
   if(!value||typeof value!=='object'||Array.isArray(value))return {state:'unavailable'};
   const r=value as Record<string,unknown>;
-  if(r.state==='managed_separately'||r.state==='organization_inactive'||r.state==='unavailable')return {state:r.state};
+  if(r.state==='managed_separately')return {state:'managed_separately'};
+  if(r.state==='organization_inactive')return {state:'organization_inactive'};
+  if(r.state==='unavailable')return {state:'unavailable'};
   if(!states.includes(r.state as typeof states[number])||!codes.includes(r.plan_code as typeof codes[number]))return {state:'unavailable'};
   const state=r.state as typeof states[number],planCode=r.plan_code as typeof codes[number];
   if((state==='pro_trial'&&planCode!=='pro')||((state==='free'||state==='free_pending_reconciliation')&&planCode!=='free'))return {state:'unavailable'};
