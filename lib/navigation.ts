@@ -180,6 +180,7 @@ export function buildNavigation(access: NavAccess): NavSection[] {
         "/customer-360",
         "/re-engaged",
         "/personas",
+        "/data-quality",
       ],
       items: [
         {
@@ -212,6 +213,15 @@ export function buildNavigation(access: NavAccess): NavSection[] {
           description: "Who joins each course, and how well each lead fits.",
           keywords: "personas ideal customer fit score course audience",
         },
+        // Admins only, inside the CRM (owner request, 25 Nov 2026).
+        ...(access.admin
+          ? [{
+              label: "Data quality",
+              href: "/data-quality",
+              description: "Missing courses, owners and same-person checks.",
+              keywords: "data quality duplicates merge identity missing fields clean up",
+            }]
+          : []),
       ],
     },
     {
@@ -328,7 +338,6 @@ export function buildNavigation(access: NavAccess): NavSection[] {
         "/settings/organizations",
         "/tracking",
         "/system-health",
-        "/data-quality",
       ],
       items: [
         {
@@ -362,12 +371,6 @@ export function buildNavigation(access: NavAccess): NavSection[] {
                 href: "/system-health",
                 description: "Sync status, failures and data freshness.",
                 keywords: "system health sync failures status freshness",
-              },
-              {
-                label: "Data Quality",
-                href: "/data-quality",
-                description: "Duplicates, missing details and identity merges.",
-                keywords: "data quality duplicates merge identity missing fields clean up",
               },
             ]
           : []),

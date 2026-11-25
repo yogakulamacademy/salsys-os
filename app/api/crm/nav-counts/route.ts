@@ -23,10 +23,10 @@ export async function GET() {
     if (!user) return NextResponse.json({ ok: false }, { status: 401, headers });
     const organizationId = await requireCurrentOrganizationId(supabase, user.id);
     const { data: isAdmin } = await supabase.rpc("can_manage_organization", { p_organization_id: organizationId });
-    if (isAdmin !== true) return NextResponse.json({ ok: true, counts: null }, { headers });
+    if (isAdmin !== true) return NextResponse.json({ ok: true, counts: null, isAdmin: false }, { headers });
 
     const hit = cache.get(organizationId);
-    if (hit && Date.now() - hit.at < TTL_MS) return NextResponse.json({ ok: true, counts: hit.counts }, { headers });
+    if (hit && Date.now() - hit.at < TTL_MS) return NextResponse.json({ ok: true, counts: hit.counts, isAdmin: true }, { headers });
 
     const admin = createAdminClient();
     const [story, overdue, paying] = await Promise.all([
@@ -43,7 +43,7 @@ export async function GET() {
       saysPaid: story?.saysPaid.length ?? 0,
     };
     cache.set(organizationId, { at: Date.now(), counts });
-    return NextResponse.json({ ok: true, counts }, { headers });
+    return NextResponse.json({ ok: true, counts, isAdmin: true }, { headers });
   } catch {
     return NextResponse.json({ ok: false }, { status: 500, headers });
   }

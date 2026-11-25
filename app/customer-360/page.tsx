@@ -45,6 +45,9 @@ export default async function Customer360Page({ searchParams }: { searchParams?:
   if (!user) return null;
 
   const organizationId = await requireCurrentOrganizationId(supabase, user.id);
+  // Data quality is for admins only (25 Nov 2026).
+  const { data: canManage } = await supabase.rpc("can_manage_organization", { p_organization_id: organizationId });
+  const isAdmin = canManage === true;
   const accessibleLeadIds = new Set(leads.map((lead) => lead.id));
   const warnings: string[] = [];
 
@@ -194,9 +197,11 @@ export default async function Customer360Page({ searchParams }: { searchParams?:
             <Link href="/leads" className="btn-secondary">
               <Search size={14} /> Find a person
             </Link>
-            <Link href="/data-quality" className="btn-secondary">
-              Data quality
-            </Link>
+            {isAdmin ? (
+              <Link href="/data-quality" className="btn-secondary">
+                Data quality
+              </Link>
+            ) : null}
           </div>
         }
       />

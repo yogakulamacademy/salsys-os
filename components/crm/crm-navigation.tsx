@@ -9,6 +9,7 @@ import {
   ListTodo,
   Rows3,
   RotateCcw,
+  ShieldCheck,
   Sparkles,
   UserRoundSearch,
   UsersRound,
@@ -22,6 +23,8 @@ type NavigationItem = {
   icon: React.ComponentType<{ size?: number; className?: string }>;
   /** Other routes that belong to this item. */
   also?: string[];
+  /** Only shown to admins. */
+  adminOnly?: boolean;
   /** Live badge: which count, what it means, and its colour. */
   badge?: { key: keyof Counts; label: string; tone: 'attention' | 'money' };
 };
@@ -33,8 +36,8 @@ type NavigationGroup = {
 
 // Owner review (20 Nov 2026): Sales Overview (= Home), Today (old command
 // center), separate Pipeline (= Admissions tab) and the two saved views
-// (duplicates of Leads quick views) were removed; Data Quality moved to
-// Settings. Old links still work.
+// (duplicates of Leads quick views) were removed. Data quality is a CRM tab
+// again, for admins only (owner request, 25 Nov 2026). Old links still work.
 const groups: NavigationGroup[] = [
   {
     label: "Today's work",
@@ -51,6 +54,7 @@ const groups: NavigationGroup[] = [
       { href: '/leads#says-paid', label: 'Say they paid', icon: BadgeCheck, badge: { key: 'saysPaid', label: 'to check', tone: 'money' } },
       { href: '/customer-360', label: 'Customer 360', icon: UsersRound },
       { href: '/personas', label: 'Personas', icon: Sparkles },
+      { href: '/data-quality', label: 'Data quality', icon: ShieldCheck, adminOnly: true },
     ],
   },
 ];
@@ -68,27 +72,30 @@ function isActive(pathname: string, item: NavigationItem) {
 }
 
 // One fetch per page load, shared by the desktop and mobile menus.
-let countsPromise: Promise<Counts | null> | null = null;
-function loadCounts(): Promise<Counts | null> {
+type NavInfo = { counts: Counts | null; isAdmin: boolean };
+let countsPromise: Promise<NavInfo> | null = null;
+function loadCounts(): Promise<NavInfo> {
   countsPromise ??= fetch('/api/crm/nav-counts', { cache: 'no-store' })
     .then((r) => (r.ok ? r.json() : null))
-    .then((body) => (body?.counts ?? null) as Counts | null)
-    .catch(() => null);
+    .then((body) => ({ counts: (body?.counts ?? null) as Counts | null, isAdmin: body?.isAdmin === true }))
+    .catch(() => ({ counts: null, isAdmin: false }));
   return countsPromise;
 }
 
-function useCounts() {
-  const [counts, setCounts] = useState<Counts | null>(null);
+function useNavInfo(): NavInfo {
+  const [info, setInfo] = useState<NavInfo>({ counts: null, isAdmin: false });
   useEffect(() => {
     let alive = true;
     countsPromise = null;
-    loadCounts().then((c) => { if (alive) setCounts(c); });
+    loadCounts().then((c) => { if (alive) setInfo(c); });
     return () => { alive = false; };
   }, []);
-  return counts;
+  return info;
 }
 
-function NavigationLinks({ mobile = false, counts }: { mobile?: boolean; counts: Counts | null }) {
+const visible = (items: NavigationItem[], isAdmin: boolean) => items.filter((item) => !item.adminOnly || isAdmin);
+
+function NavigationLinks({ mobile = false, counts, isAdmin }: { mobile?: boolean; counts: Counts | null; isAdmin: boolean }) {
   const pathname = usePathname();
 
   return (
@@ -99,7 +106,7 @@ function NavigationLinks({ mobile = false, counts }: { mobile?: boolean; counts:
             {group.label}
           </div>
           <div className="space-y-1">
-            {group.items.map((item) => {
+            {visible(group.items, isAdmin).map((item) => {
               const { href, label, icon: Icon, badge } = item;
               const active = isActive(pathname, item);
               const count = badge && counts ? counts[badge.key] : 0;
@@ -152,7 +159,7 @@ function NavigationLinks({ mobile = false, counts }: { mobile?: boolean; counts:
 
 export function CrmNavigation() {
   const pathname = usePathname();
-  const counts = useCounts();
+  const { counts, isAdmin } = useNavInfo();
   const current = groups
     .flatMap((group) => group.items)
     .find((item) => isActive(pathname, item));
@@ -176,7 +183,7 @@ export function CrmNavigation() {
               Manage leads, admissions, follow-ups and customer context in one workspace.
             </div>
           </div>
-          <NavigationLinks mobile counts={counts} />
+          <NavigationLinks mobile counts={counts} isAdmin={isAdmin} />
         </div>
       </details>
 
@@ -193,7 +200,7 @@ export function CrmNavigation() {
               Manage leads, admissions, follow-ups and customer context in one workspace.
             </p>
           </div>
-          <NavigationLinks counts={counts} />
+          <NavigationLinks counts={counts} isAdmin={isAdmin} />
         </div>
       </aside>
     </>
@@ -207,8 +214,8 @@ export function CrmNavigation() {
  */
 export function CrmTabs() {
   const pathname = usePathname();
-  const counts = useCounts();
-  const items = groups.flatMap((group) => group.items);
+  const { counts, isAdmin } = useNavInfo();
+  const items = visible(groups.flatMap((group) => group.items), isAdmin);
 
   return (
     <nav aria-label="CRM navigation" className="crm-tabs -mx-1 mb-5 overflow-x-auto border-b border-line [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
