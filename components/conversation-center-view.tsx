@@ -1,5 +1,7 @@
 "use client";
 
+import { ToastForm, type ToastActionResult } from "@/components/toast-form";
+
 import { Activity, FileText, MessageCircle, PhoneCall, RefreshCw, Sparkles } from "lucide-react";
 
 import {
@@ -61,7 +63,7 @@ type TimelineItem = {
   kind: ActivityKind;
 };
 
-type ServerAction = (formData: FormData) => void | Promise<void>;
+type ServerAction = (formData: FormData) => Promise<ToastActionResult>;
 
 const KIND_STYLE: Record<ActivityKind, string> = {
   message: "bg-brand-50 text-brand-700",
@@ -415,7 +417,7 @@ export function ConversationCenterView({
             </div>
 
             {logOpen && logAction ? (
-              <form action={logAction} className="ibx-v3-log-contact mb-4 grid gap-2 rounded-lg border border-line bg-surface p-3 sm:grid-cols-[120px_130px_minmax(0,1fr)]">
+              <ToastForm action={logAction} onDone={(r) => { if (r.ok) setLogOpen(false); }} className="ibx-v3-log-contact mb-4 grid gap-2 rounded-lg border border-line bg-surface p-3 sm:grid-cols-[120px_130px_minmax(0,1fr)]">
                 <input type="hidden" name="return_to" value="conversations" />
                 <label className="sr-only" htmlFor="ibx-log-channel">How</label>
                 <select id="ibx-log-channel" name="channel" defaultValue="phone" className="input h-9 text-[12px]">
@@ -440,7 +442,7 @@ export function ConversationCenterView({
                     <button type="submit" className="btn-primary h-8 px-3 text-[12px]">Save</button>
                   </div>
                 </div>
-              </form>
+              </ToastForm>
             ) : null}
 
             {activityLoading ? (

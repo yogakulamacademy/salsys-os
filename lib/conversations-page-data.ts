@@ -106,8 +106,8 @@ export async function getInboxPage(
     /^owner:[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(query.scope)
     ? query.scope.toLowerCase() as InboxScope
     : choice(query.scope, ["team", "mine", "unassigned"] as const, defaultScope);
-  // Waiting (this week) is the default view; the full list is one tap away.
-  const filter = choice(query.filter, ["all", "reply", "unread", "snoozed", "waiting", "older"] as const, "waiting");
+  // All, newest activity first, is the default view (owner request, 25 Nov 2026).
+  const filter = choice(query.filter, ["all", "reply", "unread", "snoozed", "waiting", "older"] as const, "all");
   const channel = choice(query.channel, ["all", "website", "instagram", "whatsapp"] as const, "all");
   const priority = choice(query.priority, ["all", "urgent", "high", "normal", "waiting"] as const, "all");
   const search = (query.q || "").trim().slice(0, 120);

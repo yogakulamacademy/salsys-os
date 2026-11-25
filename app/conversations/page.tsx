@@ -6,12 +6,7 @@ import {
   Save,
 } from "lucide-react";
 
-import { logLeadInteractionAction } from "@/app/actions/crm";
-import {
-  sendWhatsAppMessageAction,
-  sendWhatsAppTemplateAction,
-} from "@/app/conversations/actions";
-import { updateConversationLeadContextWithActivityAction } from "@/app/conversations/context-actions";
+import { sendWhatsAppMessageAction } from "@/app/conversations/actions";
 import { ConversationCenterView } from "@/components/conversation-center-view";
 import { ConversationCopilot } from "@/components/conversation-copilot";
 import { WhatsAppComposer } from "@/components/conversation-composer";
@@ -57,7 +52,8 @@ import { getCurrentWorkspaceContext } from "@/lib/workspace";
 import { getApprovedWhatsAppTemplates } from "@/lib/whatsapp-templates";
 import { noticeFor } from "@/lib/inbox-notices";
 import { InboxToastHost } from "@/components/inbox-toast";
-import { changeStageInline, logInteractionInline } from "@/app/conversations/inline-actions";
+import { changeStageInline, logInteractionInline, sendWhatsAppTemplateInline, updateLeadContextInline } from "@/app/conversations/inline-actions";
+import { ToastForm } from "@/components/toast-form";
 import "./inbox-v2.css";
 import "./inbox-reference.css";
 import "./inbox-v5.css";
@@ -246,14 +242,15 @@ export default async function ConversationsPage({
         })
       : null;
 
+  // Submits update in place with a toast, no page reload (owner request, 25 Nov 2026).
   const interactionAction = selectedId
-    ? logLeadInteractionAction.bind(null, selectedId)
+    ? logInteractionInline.bind(null, selectedId)
     : undefined;
   const whatsappAction = selectedId
     ? sendWhatsAppMessageAction.bind(null, selectedId)
     : undefined;
   const whatsappTemplateAction = selectedId
-    ? sendWhatsAppTemplateAction.bind(null, selectedId)
+    ? sendWhatsAppTemplateInline.bind(null, selectedId)
     : undefined;
   const stageInlineAction = selectedId ? changeStageInline.bind(null, selectedId) : undefined;
   const logInlineAction = selectedId ? logInteractionInline.bind(null, selectedId) : undefined;
@@ -268,7 +265,7 @@ export default async function ConversationsPage({
       })
     : null;
   const leadContextAction = selectedId
-    ? updateConversationLeadContextWithActivityAction.bind(null, selectedId)
+    ? updateLeadContextInline.bind(null, selectedId)
     : undefined;
 
   // Autopilot is on when the CRM-wide switch is on and this business has it switched on.
@@ -566,8 +563,9 @@ export default async function ConversationsPage({
               />
             </summary>
             <div className="ibx-v3-advanced-evidence"><ContextLine label="Lead creation" value={selected.leadCreationChannel.replaceAll("_"," ")}/></div>
-            <form
+            <ToastForm
               action={leadContextAction}
+              resetOnSuccess={false}
               className="space-y-3 border-t border-line p-3"
             >
               <label className="block">
@@ -604,7 +602,7 @@ export default async function ConversationsPage({
               >
                 <Save size={13} /> Save details
               </button>
-            </form>
+            </ToastForm>
           </details>
         </section>
       ) : null}

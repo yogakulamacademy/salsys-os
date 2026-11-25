@@ -84,8 +84,8 @@ export function ConversationsSidebar({
   const [scope, setScope] = useState<ScopeFilter>(
     pagination?.scope ?? (currentUserId && !canManageAssignments ? "mine" : "team"),
   );
-  // Live inbox opens on Waiting; demo data (no server paging) keeps All.
-  const defaultFilter: InboxFilter = pagination ? "waiting" : "all";
+  // The inbox opens on All, newest first (owner request, 25 Nov 2026).
+  const defaultFilter: InboxFilter = "all";
   const [filter, setFilter] = useState<InboxFilter>(pagination?.filter ?? defaultFilter);
   const [priorityFilter, setPriorityFilter] = useState<PriorityFilter>(pagination?.priority ?? "all");
   const [channelFilter, setChannelFilter] = useState<ChannelFilter>(pagination?.channel ?? "all");

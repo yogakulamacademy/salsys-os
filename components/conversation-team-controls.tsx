@@ -1,9 +1,7 @@
 import { Clock3, UserRoundCheck } from 'lucide-react';
 
-import {
-  assignConversationOwnerAction,
-  snoozeConversationAction,
-} from '@/app/conversations/team-actions';
+import { assignOwnerInline, snoozeInline } from '@/app/conversations/inline-actions';
+import { ToastForm } from '@/components/toast-form';
 import type { ConversationAssignmentCandidate } from '@/lib/conversations-data';
 
 export function ConversationTeamControls({
@@ -21,8 +19,8 @@ export function ConversationTeamControls({
   canManageAssignments: boolean;
   assignmentCandidates: ConversationAssignmentCandidate[];
 }) {
-  const assignAction = assignConversationOwnerAction.bind(null, leadId);
-  const snoozeAction = snoozeConversationAction.bind(null, leadId);
+  const assignAction = assignOwnerInline.bind(null, leadId);
+  const snoozeAction = snoozeInline.bind(null, leadId);
   const snoozed = Boolean(
     snoozedUntil && new Date(snoozedUntil).getTime() > Date.now(),
   );
@@ -54,7 +52,7 @@ export function ConversationTeamControls({
         </div>
 
         {canManageAssignments ? (
-          <form action={assignAction} className="mt-3 flex gap-2">
+          <ToastForm action={assignAction} resetOnSuccess={false} className="mt-3 flex gap-2">
             <label className="min-w-0 flex-1">
               <span className="sr-only">Assign conversation owner</span>
               <select
@@ -73,7 +71,7 @@ export function ConversationTeamControls({
             <button type="submit" className="btn-secondary shrink-0 px-3">
               Save
             </button>
-          </form>
+          </ToastForm>
         ) : (
           <div className="mt-2 text-[11px] leading-5 text-copy-muted">
             Assignment changes are available to Sales managers and administrators.
@@ -81,7 +79,7 @@ export function ConversationTeamControls({
         )}
       </div>
 
-      <form action={snoozeAction} className="mt-3 rounded-ui border border-line bg-surface p-3">
+      <ToastForm action={snoozeAction} resetOnSuccess={false} className="mt-3 rounded-ui border border-line bg-surface p-3">
         <div className="flex items-start gap-2">
           <Clock3 size={14} className="mt-0.5 shrink-0 text-brand-700" />
           <div className="min-w-0 flex-1">
@@ -115,7 +113,7 @@ export function ConversationTeamControls({
             {snoozed ? 'Update' : 'Snooze'}
           </button>
         </div>
-      </form>
+      </ToastForm>
     </section>
   );
 }

@@ -34,25 +34,27 @@ function setup({ v2Missing = false } = {}) {
 }
 
 test('Inbox defaults to latest conversation activity instead of lead creation', async () => {
-  // Default view is Waiting (20 Nov 2026): one read of needs-reply rows, newest activity first.
+  // Default view is All again (25 Nov 2026): this week's waiting chats are counted
+  // first (for the Waiting badge), then the All page, newest activity first.
   const {reader,calls} = setup();
   const result = await reader.getInboxPage({}, 'team');
   assert.equal(result.sort, 'activity_desc');
-  assert.equal(result.filter, 'waiting');
-  assert.equal(calls.length, 1);
+  assert.equal(result.filter, 'all');
   assert.equal(calls[0].name, 'get_current_conversations_page_v2');
-  assert.equal(calls[0].args.p_topic, 'all');
-  assert.equal(calls[0].args.p_sort, 'activity_desc');
   assert.equal(calls[0].args.p_filter, 'reply');
-  assert.equal(calls[0].args.p_page, 1);
-  assert.equal(calls[0].args.p_scope, 'team');
+  const page = calls.at(-1);
+  assert.equal(page.args.p_filter, 'all');
+  assert.equal(page.args.p_topic, 'all');
+  assert.equal(page.args.p_sort, 'activity_desc');
+  assert.equal(page.args.p_page, 1);
+  assert.equal(page.args.p_scope, 'team');
 });
 
 test('Inbox falls back to the v1 page reader only when v2 is not deployed', async () => {
   const {reader,calls} = setup({ v2Missing: true });
   const result = await reader.getInboxPage({ topic: 'fee' }, 'team');
-  assert.deepEqual(calls.map((c) => c.name), ['get_current_conversations_page_v2', 'get_current_conversations_page_v1']);
-  assert.equal('p_topic' in calls[1].args, false);
+  assert.deepEqual(calls.slice(0, 2).map((c) => c.name), ['get_current_conversations_page_v2', 'get_current_conversations_page_v1']);
+  assert.ok(calls.slice(1).every((c) => c.name === 'get_current_conversations_page_v1' && !('p_topic' in c.args)));
   assert.equal(result.topic, 'all');
   assert.equal(result.channelCounts, null);
   assert.equal(result.topicCounts, null);
@@ -61,9 +63,10 @@ test('Inbox falls back to the v1 page reader only when v2 is not deployed', asyn
 test('Unknown topics are ignored', async () => {
   const {reader,calls} = setup();
   await reader.getInboxPage({ topic: 'drop table' }, 'team');
-  assert.equal(calls[0].args.p_topic, 'all');
+  assert.ok(calls.every((c) => c.args.p_topic === 'all'));
+  const before = calls.length;
   await reader.getInboxPage({ topic: 'fee' }, 'team');
-  assert.equal(calls[1].args.p_topic, 'fee');
+  assert.ok(calls.slice(before).every((c) => c.args.p_topic === 'fee'));
 });
 
 test('Explicit created-date sort is retained and unsupported sort defaults safely', async () => {
