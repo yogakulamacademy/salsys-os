@@ -80,6 +80,43 @@ test('SA-12 private lifecycle authorization requires explicit permission and mat
     assert.equal(await bind(oldBroadcast,0,'whatsapp'),true);
     assert.equal(await allowed(oldWork),true);
     assert.equal(await allowed(oldBroadcast,'whatsapp'),true);
+    // Synthetic stand-ins for the real claim/prepare RPCs: verify delegation,
+    // denial and preserved return values, not provider policy implementation.
+    await db.query(`
+      create table public.automation_provider_send_audits(id uuid primary key,organization_id uuid,broadcast_campaign_id uuid,broadcast_recipient_id uuid);
+      create table public.test_worker_calls(kind text,organization_id uuid,work_id uuid);
+      create function public.claim_instagram_automation_run_v1(p_org uuid,p_run uuid,p_now timestamptz) returns jsonb language plpgsql as $stub$begin
+        insert into public.test_worker_calls values('instagram',p_org,p_run);
+        return jsonb_build_object('ok',true,'claimed',false,'reason','synthetic_policy_denied');
+      end;$stub$;
+      create function public.prepare_whatsapp_broadcast_provider_send_v1(p_org uuid,p_campaign uuid,p_recipient uuid,p_now timestamptz) returns jsonb language plpgsql as $stub$begin
+        insert into public.test_worker_calls values('prepare',p_org,p_campaign);
+        return jsonb_build_object('ok',true,'prepared',true,'provider_call_allowed',true);
+      end;$stub$;
+      create function public.claim_whatsapp_broadcast_provider_send_v1(p_org uuid,p_audit uuid,p_now timestamptz) returns jsonb language plpgsql as $stub$begin
+        insert into public.test_worker_calls values('claim',p_org,p_audit);
+        return jsonb_build_object('ok',true,'claimed',false,'reason','synthetic_policy_denied');
+      end;$stub$;
+    `);
+    await db.query(readFileSync('supabase/drafts/r13_sa12_lifecycle_claim_adapters.sql','utf8'));
+    const oldAudit=randomUUID(),freshAudit=randomUUID(),recipient=randomUUID();
+    await db.query("insert into public.automation_provider_send_audits values($1,$2,$3,$4),($5,$2,$6,$4)",[oldAudit,target,oldBroadcast,recipient,freshAudit,freshBroadcast]);
+    const igClaim=async(id,org=target)=>(await db.query("select saas_lifecycle.claim_instagram_work_preview($1,$2,now()) as value",[org,id])).rows[0].value;
+    const waPrepare=async(id,org=target)=>(await db.query("select saas_lifecycle.prepare_whatsapp_broadcast_preview($1,$2,$3,now()) as value",[org,id,recipient])).rows[0].value;
+    const waClaim=async(id,org=target)=>(await db.query("select saas_lifecycle.claim_whatsapp_broadcast_preview($1,$2,now()) as value",[org,id])).rows[0].value;
+    const calls=async()=>(await db.query("select count(*)::int as value from public.test_worker_calls")).rows[0].value;
+    assert.equal((await igClaim(oldWork)).reason,'synthetic_policy_denied');
+    assert.equal((await waPrepare(oldBroadcast)).prepared,true);
+    assert.equal((await waClaim(oldAudit)).reason,'synthetic_policy_denied');
+    assert.equal(await calls(),3);
+    assert.equal((await waClaim(oldAudit,other)).reason,'lifecycle_work_revision_blocked');
+    assert.equal((await igClaim(randomUUID())).reason,'lifecycle_work_revision_blocked');
+    assert.equal(await calls(),3);
+    for(const role of ['anon','authenticated','service_role']){
+      for(const sig of ['claim_instagram_work_preview(uuid,uuid,timestamptz)','prepare_whatsapp_broadcast_preview(uuid,uuid,uuid,timestamptz)','claim_whatsapp_broadcast_preview(uuid,uuid,timestamptz)']){
+        assert.equal((await db.query("select has_function_privilege($1,$2,'EXECUTE') as value",[role,'saas_lifecycle.'+sig])).rows[0].value,false);
+      }
+    }
     assert.equal(await allowed(oldWork,'whatsapp'),false);
     assert.equal(await allowed(oldWork,'instagram',randomUUID()),false);
     assert.equal(await bind(oldWork,0),false);
@@ -113,6 +150,10 @@ test('SA-12 private lifecycle authorization requires explicit permission and mat
     assert.equal(await allowed(oldWork),false);
     assert.equal(await allowed(oldBroadcast,'whatsapp'),false);
     assert.equal(await bind(freshWork,1),false);
+    assert.equal((await igClaim(oldWork)).reason,'lifecycle_work_revision_blocked');
+    assert.equal((await waPrepare(oldBroadcast)).provider_call_allowed,false);
+    assert.equal((await waClaim(oldAudit)).provider_call_allowed,false);
+    assert.equal(await calls(),3);
     assert.equal((await change(db,'suspend',0,request)).replayed,true);
     await assert.rejects(change(db,'suspend',0,request,'Different synthetic reason'),e=>e.code==='23505');
     await assert.rejects(change(db,'suspend',0,randomUUID()),e=>e.code==='40001');
@@ -128,6 +169,14 @@ test('SA-12 private lifecycle authorization requires explicit permission and mat
     assert.equal(await bind(freshBroadcast,2,'whatsapp'),true);
     assert.equal(await allowed(freshWork),true);
     assert.equal(await allowed(freshBroadcast,'whatsapp'),true);
+    assert.equal((await igClaim(oldWork)).reason,'lifecycle_work_revision_blocked');
+    assert.equal((await waPrepare(oldBroadcast)).provider_call_allowed,false);
+    assert.equal((await waClaim(oldAudit)).provider_call_allowed,false);
+    assert.equal(await calls(),3);
+    assert.equal((await igClaim(freshWork)).reason,'synthetic_policy_denied');
+    assert.equal((await waPrepare(freshBroadcast)).prepared,true);
+    assert.equal((await waClaim(freshAudit)).reason,'synthetic_policy_denied');
+    assert.equal(await calls(),6);
     for(const statement of ["update saas_lifecycle.work_revision_bindings set lifecycle_revision=2","delete from saas_lifecycle.work_revision_bindings","truncate saas_lifecycle.work_revision_bindings"]){
       await assert.rejects(db.query(statement),e=>e.code==='55000');
     }
