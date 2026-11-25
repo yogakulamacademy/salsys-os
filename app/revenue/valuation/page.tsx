@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ArrowLeft, ArrowRight, CircleDollarSign, Info, ListChecks } from "lucide-react";
 
+import { RevenueReadinessNotice } from "@/components/revenue-readiness-notice";
 import { getCourseBatches, getCourses, isMockMode } from "@/lib/data";
 import { isEducationCoreEnabledForCurrentSession } from "@/lib/education-access";
 import {
@@ -87,6 +88,7 @@ export default async function ValuationReadinessPage() {
 
   return (
     <div className="space-y-5 pb-8">
+      <RevenueReadinessNotice showAction={false} />
       <Link href="/revenue" className="inline-flex items-center gap-2 text-xs font-semibold text-copy-muted hover:text-brand-700">
         <ArrowLeft size={14} /> Back to Revenue
       </Link>

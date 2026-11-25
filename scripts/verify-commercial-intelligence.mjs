@@ -61,7 +61,7 @@ expectIncludes(revenuePage, '/marketing?view=attribution', 'Revenue must route a
 
 expectNotIncludes(funnelLayout, 'CommercialIntelligencePanel', 'Funnel layout must not append duplicate intelligence presentation');
 expectNotIncludes(revenueLayout, 'CommercialIntelligencePanel', 'Revenue layout must not append duplicate intelligence presentation');
-expectIncludes(revenueLayout, 'RevenueReadinessNotice', 'Revenue layout must surface forecast readiness before downstream evidence');
+expectIncludes(revenuePage, '<RevenueReadinessNotice />', 'Revenue must surface open-enquiry readiness next to the detailed numbers');
 
 for (const [needle, label] of [
   ['get_revenue_readiness_v1', 'Revenue readiness RPC client'],
@@ -75,13 +75,10 @@ for (const [needle, label] of [
 }
 
 for (const [needle, label] of [
-  ['Revenue forecast readiness', 'Revenue readiness heading'],
-  ['Commercial value coverage', 'commercial value coverage metric'],
-  ['Expected close coverage', 'expected close coverage metric'],
-  ['Pending payment requests', 'pending payment request metric'],
-  ['never count as collected revenue until payment evidence is marked paid', 'pending-payment revenue guard'],
-  ['/admissions?view=pipeline', 'pipeline readiness action'],
-  ['/admissions?view=payments', 'payment queue readiness action'],
+  ['Read these numbers as rough.', 'plain readiness line'],
+  ['have no course price yet', 'unvalued enquiries explained'],
+  ['expected joining month', 'undated enquiries explained'],
+  ['/revenue/valuation', 'missing-price action'],
 ]) {
   expectIncludes(revenueReadinessNotice, needle, label);
 }

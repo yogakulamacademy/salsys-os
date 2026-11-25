@@ -10,6 +10,7 @@ import {
   UsersRound,
 } from "lucide-react";
 
+import { RevenueReadinessNotice } from "@/components/revenue-readiness-notice";
 import { EmptyState, PageHeader } from "@/components/ui";
 import {
   getRevenueAttributionActions,
@@ -53,6 +54,7 @@ export default async function RevenueAttributionPage({
 
   return (
     <div className="space-y-5">
+      <RevenueReadinessNotice />
       <PageHeader
         eyebrow="Revenue · Exact attribution cohort"
         title="Revenue evidence focus"

@@ -1,6 +1,5 @@
 import type { ReactNode } from "react";
 
-import { RevenueReadinessNotice } from "@/components/revenue-readiness-notice";
 import { requirePrivilegedWorkspaceAccess } from "@/lib/route-access";
 
 export default async function RevenueLayout({
@@ -11,9 +10,6 @@ export default async function RevenueLayout({
   await requirePrivilegedWorkspaceAccess();
 
   return (
-    <div className="space-y-4">
-      <RevenueReadinessNotice />
-      {children}
-    </div>
+    <div className="space-y-4">{children}</div>
   );
 }
