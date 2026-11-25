@@ -56,20 +56,22 @@ const items: NavigationItem[] = [
     match: ({ path, view }) => (path === '/marketing' && view === 'campaigns') || under(path, '/campaigns'),
   },
   {
-    key: 'website', href: '/marketing?view=analytics', label: 'Website', icon: BarChart3,
+    key: 'website', href: '/marketing?view=website', label: 'Website', icon: BarChart3,
     description: 'Visits, pages and forms',
-    match: ({ path, view }) => (path === '/marketing' && (view === 'analytics' || view === 'behavior')) || under(path, '/analytics'),
+    match: ({ path, view }) => (path === '/marketing' && (view === 'website' || view === 'analytics' || view === 'behavior')) || under(path, '/analytics'),
     subs: [
+      { href: '/marketing?view=website', label: 'Overview' },
       { href: '/marketing?view=analytics', label: 'Visits and sources' },
       { href: '/marketing?view=behavior', label: 'Clicks and forms' },
     ],
   },
   {
-    key: 'search', href: '/seo', label: 'Google search', icon: Search,
+    key: 'search', href: '/marketing?view=search', label: 'Google search', icon: Search,
     description: 'Clicks, searches to target, page fixes',
-    match: ({ path }) => under(path, '/seo'),
+    match: ({ path, view }) => (path === '/marketing' && view === 'search') || under(path, '/seo'),
     subs: [
-      { href: '/seo', label: 'Overview' },
+      { href: '/marketing?view=search', label: 'Overview' },
+      { href: '/seo', label: 'SEO details' },
       { href: '/seo/intelligence', label: 'Insights' },
       { href: '/seo/search-performance', label: 'Searches and pages' },
       { href: '/seo/content-opportunities', label: 'Content ideas' },
@@ -78,11 +80,12 @@ const items: NavigationItem[] = [
     ],
   },
   {
-    key: 'tracking', href: '/tracking', label: 'Tracking check', icon: ShieldCheck,
+    key: 'tracking', href: '/marketing?view=tracking', label: 'Tracking check', icon: ShieldCheck,
     description: 'Is every source still sending data?',
-    match: ({ path }) => under(path, '/tracking') || under(path, '/marketing/tracking-sources') || under(path, '/marketing/integrations'),
+    match: ({ path, view }) => (path === '/marketing' && view === 'tracking') || under(path, '/tracking') || under(path, '/marketing/tracking-sources') || under(path, '/marketing/integrations'),
     subs: [
-      { href: '/tracking', label: 'Overview' },
+      { href: '/marketing?view=tracking', label: 'Overview' },
+      { href: '/tracking', label: 'Tracking details' },
       { href: '/tracking/conversion-health', label: 'Form and lead matching' },
       { href: '/tracking/data-coverage', label: 'Data coverage' },
       { href: '/marketing/tracking-sources', label: 'Tracking sources' },

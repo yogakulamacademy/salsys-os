@@ -10,7 +10,10 @@ import { NativeBehaviorBreakdownPanel } from "@/components/marketing/native-beha
 import { ExecutiveDecisionBrief } from "@/components/marketing/executive-decision-brief";
 import { MarketingOverview } from "@/components/marketing/marketing-overview";
 import { SmartAdsPage } from "@/components/marketing/smart-ads-page";
+import { SmartSearchPage } from "@/components/marketing/smart-search-page";
 import { SmartSourcesPage } from "@/components/marketing/smart-sources-page";
+import { SmartTrackingPage } from "@/components/marketing/smart-tracking-page";
+import { SmartWebsitePage } from "@/components/marketing/smart-website-page";
 import { Notice, PageHeader } from "@/components/ui";
 import { getAnalyticsWorkspace } from "@/lib/analytics-data";
 import { getAttributionWorkspace } from "@/lib/attribution-data";
@@ -18,6 +21,7 @@ import { getCampaignsWorkspace } from "@/lib/campaigns-data";
 import { buildAttributionIntelligence } from "@/lib/commercial-intelligence";
 import { isMockMode } from "@/lib/data";
 import { getAdsStory, getSourcesStory } from "@/lib/marketing-pages-data";
+import { getSearchStory, getTrackingStory, getWebStory } from "@/lib/marketing-web-data";
 import { normalizeBehaviorRequest, normalizeBehaviorBreakdownEvent } from "@/lib/native-behavior-contract";
 import { getNativeBehaviorPageBreakdown } from "@/lib/native-behavior-breakdown-data";
 import { getNativeBehaviorWorkspace } from "@/lib/native-behavior-data";
@@ -27,7 +31,7 @@ import {
   type FunnelIntelligenceWorkspace as FunnelWorkspace,
 } from "@/lib/funnel-intelligence-data";
 
-type MarketingView = "overview" | "sources" | "campaigns" | "analytics" | "funnel" | "behavior" | "attribution";
+type MarketingView = "overview" | "sources" | "campaigns" | "website" | "search" | "tracking" | "analytics" | "funnel" | "behavior" | "attribution";
 
 type MarketingPageProps = {
   searchParams: Promise<{
@@ -51,6 +55,9 @@ const PAGE_SIZE = 50;
 const VIEW_HEAD: Record<MarketingView, { group: string; title: string; description: string }> = {
   overview: { group: "Marketing", title: "Overview", description: "What’s bringing enquiries and what’s broken." },
   sources: { group: "Marketing", title: "Where enquiries come from", description: "Where every enquiry from each source is now." },
+  website: { group: "Marketing", title: "Website", description: "Visits, sources, pages and the enquiries they bring." },
+  search: { group: "Marketing", title: "Google search", description: "Clicks from Google, searches to target and pages to fix." },
+  tracking: { group: "Marketing", title: "Tracking check", description: "Whether every source is still sending data." },
   campaigns: { group: "Marketing · Ads", title: "Ads", description: "Meta and Google campaigns: spend, clicks, enquiries and what they led to." },
   analytics: { group: "Marketing · Website", title: "Visits and sources", description: "How many people visit the website, where they come from and which pages they land on." },
   behavior: { group: "Marketing · Website", title: "Clicks and forms", description: "What visitors do on the website: the steps they take, and where they stop." },
@@ -60,6 +67,9 @@ const VIEW_HEAD: Record<MarketingView, { group: string; title: string; descripti
 const validViews = new Set<MarketingView>([
   "overview",
   "sources",
+  "website",
+  "search",
+  "tracking",
   "campaigns",
   "analytics",
   "funnel",
@@ -74,11 +84,14 @@ export default async function MarketingPage({ searchParams }: MarketingPageProps
 
   // Smart pages (owner-approved prototype "Marketing step 2", 25 Nov 2026) carry their own
   // heading; if their story can't be read, the older views are shown instead.
-  const [sourcesStory, adsStory] = await Promise.all([
+  const [sourcesStory, adsStory, webStory, searchStory, trackingStory] = await Promise.all([
     view === "sources" ? getSourcesStory() : Promise.resolve(null),
     view === "campaigns" ? getAdsStory() : Promise.resolve(null),
+    view === "website" ? getWebStory() : Promise.resolve(null),
+    view === "search" ? getSearchStory() : Promise.resolve(null),
+    view === "tracking" ? getTrackingStory() : Promise.resolve(null),
   ]);
-  const smart = Boolean(sourcesStory || adsStory);
+  const smart = Boolean(sourcesStory || adsStory || webStory || searchStory || trackingStory);
   const campaignFilters = Boolean(query.q || query.platform || query.outcome || query.page || query.sort);
 
   return (
@@ -101,6 +114,9 @@ export default async function MarketingPage({ searchParams }: MarketingPageProps
         </>
       ) : null}
       {view === "campaigns" && !adsStory ? <CampaignsView query={query} /> : null}
+      {view === "website" ? (webStory ? <SmartWebsitePage story={webStory} /> : <AnalyticsView />) : null}
+      {view === "search" ? (searchStory ? <SmartSearchPage story={searchStory} /> : <Notice tone="warning">Google search data couldn’t be read right now. The detailed SEO pages are under Google search in the menu.</Notice>) : null}
+      {view === "tracking" ? (trackingStory ? <SmartTrackingPage story={trackingStory} /> : <Notice tone="warning">The tracking check couldn’t be read right now. Tracking details are under Tracking check in the menu.</Notice>) : null}
       {view === "analytics" ? <AnalyticsView /> : null}
       {view === "funnel" ? <FunnelView /> : null}
       {view === "behavior" ? <BehaviorView query={query} /> : null}

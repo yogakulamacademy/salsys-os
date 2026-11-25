@@ -66,7 +66,7 @@ test("Keyboard navigation marks the active Marketing view and preserves existing
 
   // Website's sub-pages show once Website is open.
   await website.click();
-  await expect(page).toHaveURL(/view=analytics/);
+  await expect(page).toHaveURL(/view=website/);
   await behavior.focus();
   await expect(behavior).toBeFocused();
   await page.keyboard.press("Enter");
@@ -345,7 +345,7 @@ test("Soft Marketing navigation after synthetic tenant switch never reuses prior
     await funnel.click();
     await expect(page).toHaveURL(/view=funnel/);
     await website.click();
-    await expect(page).toHaveURL(/view=analytics/);
+    await expect(page).toHaveURL(/view=website/);
     await behavior.click();
     await expect(page).toHaveURL(/view=behavior/);
 
