@@ -1,8 +1,9 @@
 'use client';
 
+import { setEmployeeActiveInline } from '@/app/settings/team/inline-actions';
+import { ToastForm } from '@/components/toast-form';
 import { useMemo, useState } from 'react';
 import { ArrowRight, Filter, Search, UserPlus, UsersRound } from 'lucide-react';
-import { setEmployeeActiveAction } from './actions';
 
 export type DirectoryMember = {
   id: string;
@@ -93,13 +94,13 @@ export function TeamDirectory({ members, organizationName }: {
               <td><span className={member.active ? 'tac-state tac-state-active' : 'tac-state tac-state-inactive'}>
                 <span aria-hidden="true"/> {member.active ? 'Active' : 'Inactive'}</span></td>
               <td className="tac-access-cell">{isEmployee
-                ? <form action={setEmployeeActiveAction}>
+                ? <ToastForm action={setEmployeeActiveInline}>
                     <input type="hidden" name="employee_id" value={member.id}/>
                     <input type="hidden" name="active" value={member.active ? 'false' : 'true'}/>
                     <button type="submit" className="tac-outline-action">
                       {member.active ? 'Deactivate' : 'Activate'}
                     </button>
-                  </form>
+                  </ToastForm>
                 : <span className="tac-admin-access">Full tenant access</span>}</td>
             </tr>;
           })}</tbody>

@@ -1,3 +1,5 @@
+import { assignTeamPerformanceLeadInline } from '@/app/team-performance/inline-actions';
+import { ToastForm } from '@/components/toast-form';
 import Link from 'next/link';
 
 import {
@@ -17,9 +19,6 @@ import {
   UsersRound,
 } from 'lucide-react';
 
-import {
-  assignTeamPerformanceLeadAction,
-} from '@/app/team-performance/actions';
 
 import {
   TeamAssignmentInsights,
@@ -1516,10 +1515,8 @@ export default async function TeamPerformancePage({
                 </div>
 
                 {suggestedEmployee ? (
-                  <form
-                    action={
-                      assignTeamPerformanceLeadAction
-                    }
+                  <ToastForm
+                    action={assignTeamPerformanceLeadInline}
                     className="mt-4"
                   >
                     <input
@@ -1556,7 +1553,7 @@ export default async function TeamPerformancePage({
 
                       Assign to {suggestedEmployee.employeeName}
                     </button>
-                  </form>
+                  </ToastForm>
                 ) : (
                   <div className="mt-4 rounded-xl bg-white px-3 py-2 text-xs font-semibold text-slate-500">
                     No active Employee account is available for assignment.
@@ -1667,10 +1664,8 @@ export default async function TeamPerformancePage({
                     </div>
 
                     {workloadBalance.length ? (
-                      <form
-                        action={
-                          assignTeamPerformanceLeadAction
-                        }
+                      <ToastForm
+                        action={assignTeamPerformanceLeadInline}
                         className="flex gap-2"
                       >
                         <input
@@ -1724,7 +1719,7 @@ export default async function TeamPerformancePage({
                         >
                           Assign
                         </button>
-                      </form>
+                      </ToastForm>
                     ) : (
                       <div className="text-xs font-semibold text-slate-400">
                         No employee available

@@ -1,6 +1,7 @@
+import { assignLeadOwnerInline } from '@/app/actions/lead-assignment-inline';
+import { ToastForm } from '@/components/toast-form';
 import { UserRoundCheck } from 'lucide-react';
 
-import { assignLeadOwnerAction } from '@/app/actions/lead-assignment';
 import { createClient } from '@/lib/supabase/server';
 import { requireCurrentOrganizationId } from '@/lib/workspace';
 
@@ -128,7 +129,7 @@ export async function LeadOwnerControl({ leadId }: { leadId: string }) {
           </div>
         </div>
 
-        <form action={assignLeadOwnerAction} className="flex flex-col gap-2 sm:flex-row sm:items-center">
+        <ToastForm action={assignLeadOwnerInline} className="flex flex-col gap-2 sm:flex-row sm:items-center">
           <input type="hidden" name="lead_id" value={leadId} />
           <input type="hidden" name="return_to" value={`/leads/${leadId}`} />
           <select
@@ -144,7 +145,7 @@ export async function LeadOwnerControl({ leadId }: { leadId: string }) {
             ))}
           </select>
           <button type="submit" className="btn-primary justify-center">Update owner</button>
-        </form>
+        </ToastForm>
       </div>
     </section>
   );

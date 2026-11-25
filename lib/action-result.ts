@@ -24,6 +24,8 @@ function redirectTarget(error: unknown): string | null {
 /** Plain words for a redirect's notice code; unknown codes fall back to the caller's message. */
 function messageFor(notice: string | null, fallback: string): string {
   if (!notice) return fallback;
+  // Some actions redirect with a full sentence ("Asha was created as an Employee.").
+  if (/\s/.test(notice) && notice.length <= 200) return notice;
   const inbox = noticeFor(notice);
   if (inbox && inbox !== 'Interaction logged.') return inbox;
   return fallback;

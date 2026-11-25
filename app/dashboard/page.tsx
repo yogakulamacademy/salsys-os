@@ -1,3 +1,5 @@
+import { completeDashboardFollowUpInline, snoozeDashboardFollowUpInline } from "@/app/dashboard/inline-actions";
+import { ToastForm } from "@/components/toast-form";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
@@ -31,10 +33,6 @@ import { isMockMode } from "@/lib/data";
 import { createClient } from "@/lib/supabase/server";
 import { requireCurrentOrganizationId } from "@/lib/workspace";
 
-import {
-  completeDashboardFollowUpAction,
-  snoozeDashboardFollowUpAction,
-} from "@/app/dashboard/actions";
 
 import { getDashboardSnapshot } from "@/lib/dashboard-data";
 
@@ -732,7 +730,7 @@ async function EmployeeDashboard({
                   </Link>
 
                   <div className="flex shrink-0 flex-wrap items-center gap-2 lg:justify-end">
-                    <form action={completeDashboardFollowUpAction}>
+                    <ToastForm action={completeDashboardFollowUpInline}>
                       <input type="hidden" name="task_id" value={task.id} />
                       <input
                         type="hidden"
@@ -745,9 +743,9 @@ async function EmployeeDashboard({
                       >
                         Complete
                       </button>
-                    </form>
+                    </ToastForm>
 
-                    <form action={snoozeDashboardFollowUpAction}>
+                    <ToastForm action={snoozeDashboardFollowUpInline}>
                       <input type="hidden" name="task_id" value={task.id} />
                       <input
                         type="hidden"
@@ -760,7 +758,7 @@ async function EmployeeDashboard({
                       >
                         Snooze
                       </button>
-                    </form>
+                    </ToastForm>
 
                     <Link
                       href={`/conversations?lead=${task.lead_id}`}
@@ -862,7 +860,7 @@ function EmployeeTodayLead({
         <div className="flex shrink-0 flex-wrap items-center gap-2">
           {item.taskId ? (
             <>
-              <form action={completeDashboardFollowUpAction}>
+              <ToastForm action={completeDashboardFollowUpInline}>
                 <input type="hidden" name="task_id" value={item.taskId} />
                 <input type="hidden" name="lead_id" value={lead.id} />
                 <button
@@ -871,9 +869,9 @@ function EmployeeTodayLead({
                 >
                   Complete
                 </button>
-              </form>
+              </ToastForm>
 
-              <form action={snoozeDashboardFollowUpAction}>
+              <ToastForm action={snoozeDashboardFollowUpInline}>
                 <input type="hidden" name="task_id" value={item.taskId} />
                 <input type="hidden" name="lead_id" value={lead.id} />
                 <button
@@ -882,7 +880,7 @@ function EmployeeTodayLead({
                 >
                   Snooze
                 </button>
-              </form>
+              </ToastForm>
             </>
           ) : null}
 

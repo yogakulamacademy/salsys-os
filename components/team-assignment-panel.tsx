@@ -1,7 +1,8 @@
+import { assignLeadOwnerInline } from '@/app/actions/lead-assignment-inline';
+import { ToastForm } from '@/components/toast-form';
 import Link from 'next/link';
 import { ArrowRightLeft, UserRoundCheck, UsersRound } from 'lucide-react';
 
-import { assignLeadOwnerAction } from '@/app/actions/lead-assignment';
 import { useMockData } from '@/lib/config';
 import { createClient } from '@/lib/supabase/server';
 import { getTeamAssignmentQueue } from '@/lib/team-performance-data';
@@ -166,9 +167,9 @@ export async function TeamAssignmentPanel({ returnTo }: { returnTo: '/leads' | '
         ) : queue.leads.length ? (
           <div className="space-y-2">
             {queue.leads.map((lead) => (
-              <form
+              <ToastForm
                 key={lead.id}
-                action={assignLeadOwnerAction}
+                action={assignLeadOwnerInline}
                 className="grid gap-3 rounded-xl border border-slate-100 bg-slate-50/70 p-3 md:grid-cols-[minmax(0,1fr)_220px_auto] md:items-center dark:border-slate-800 dark:bg-slate-900/50"
               >
                 <input type="hidden" name="lead_id" value={lead.id} />
@@ -192,7 +193,7 @@ export async function TeamAssignmentPanel({ returnTo }: { returnTo: '/leads' | '
                 <button type="submit" className="btn-primary justify-center">
                   <ArrowRightLeft size={14} /> Assign
                 </button>
-              </form>
+              </ToastForm>
             ))}
           </div>
         ) : (

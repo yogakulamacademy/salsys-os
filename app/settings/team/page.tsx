@@ -1,3 +1,5 @@
+import { createEmployeeInline } from '@/app/settings/team/inline-actions';
+import { ToastForm } from '@/components/toast-form';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import {
@@ -10,7 +12,6 @@ import { PageHeader } from '@/components/ui';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { requireCurrentOrganizationId } from '@/lib/workspace';
-import { createEmployeeAction } from './actions';
 import { TeamDirectory, type DirectoryMember } from './team-directory';
 import './team-access.css';
 
@@ -213,7 +214,7 @@ export default async function TeamAccessPage({
             <div><h2 id="tac-create-heading">Add Team Member</h2>
               <p>Create an Employee account for the Sales workspace.</p></div>
           </div>
-          <form action={createEmployeeAction}>
+          <ToastForm action={createEmployeeInline}>
             <label className="tac-create-field">
               <span className="tac-create-label">Full name</span>
               <input className="tac-create-input" required name="full_name" type="text"
@@ -237,7 +238,7 @@ export default async function TeamAccessPage({
             </div>
             <p className="tac-form-note">New members receive the fixed Employee role in {organizationName} and access to its Sales workspace. Owner/Admin creation and arbitrary role changes are not available here.</p>
             <button type="submit" className="tac-primary-action"><UserPlus size={16}/> Create employee</button>
-          </form>
+          </ToastForm>
         </section>
       </div>
 
