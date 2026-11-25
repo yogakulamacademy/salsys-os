@@ -1,9 +1,12 @@
 import Link from "next/link";
 
+import { EnrolmentIntelligenceSection } from "@/components/personas/enrolment-intelligence";
 import { PersonaButton } from "@/components/personas/persona-buttons";
 import { EmptyState, PageHeader } from "@/components/ui";
 import { labelTopic, MIN_STRONG, personaAdvice, type PersonaTraits } from "@/lib/course-persona";
 import { listCoursePersonas } from "@/lib/course-persona-data";
+import { getEnrolmentIntelligence } from "@/lib/enrolment-intelligence-data";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { requireCurrentOrganizationId } from "@/lib/workspace";
 
@@ -40,7 +43,10 @@ export default async function PersonasPage() {
   const organizationId = await requireCurrentOrganizationId(supabase, user.id);
   const { data: canManage } = await supabase.rpc("can_manage_organization", { p_organization_id: organizationId });
   const manager = canManage === true;
-  const personas = await listCoursePersonas(supabase, organizationId);
+  const [personas, intelligence] = await Promise.all([
+    listCoursePersonas(supabase, organizationId),
+    getEnrolmentIntelligence(createAdminClient(), organizationId),
+  ]);
 
   const approvedCount = personas.filter((p) => p.approved_traits).length;
   const strongTotal = personas.reduce((s, p) => s + ((p.draft_traits as PersonaTraits).outcome === "strong" ? p.draft_sample_size : 0), 0);
@@ -68,6 +74,10 @@ export default async function PersonasPage() {
           </div>
         ) : undefined}
       />
+
+      {intelligence ? <EnrolmentIntelligenceSection data={intelligence} /> : null}
+
+      <h2 className="pt-2 text-[18px] font-extrabold text-copy-strong">Course personas</h2>
 
       {!personas.length ? (
         <EmptyState
