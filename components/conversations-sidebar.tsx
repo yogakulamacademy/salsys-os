@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import type { InboxPage } from "@/lib/conversations-page-data";
 import { nextInboxQueueHref, resetInboxQueueHref } from "@/lib/inbox-query-navigation";
-import { CHANNEL_CHIPS, INBOX_TOPICS, INBOX_TOPIC_LABELS } from "@/lib/inbox-topics";
+import { CHANNEL_CHIPS, INBOX_TOPICS, INBOX_TOPIC_LABELS, PINNED_TOPIC } from "@/lib/inbox-topics";
 import { Clock3, Search, SlidersHorizontal, UsersRound, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { EmptyState } from "@/components/ui";
@@ -459,7 +459,7 @@ export function ConversationsSidebar({
           <p className="mb-1.5 text-[10.5px] font-semibold uppercase tracking-wide text-copy-subtle">What people are asking</p>
           <DragScrollRow role="group" aria-label="Filter by question topic" className="flex gap-1.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {INBOX_TOPICS.filter((key) => (pagination.topicCounts?.[key] ?? 0) > 0)
-              .sort((a, b) => (pagination.topicCounts?.[b] ?? 0) - (pagination.topicCounts?.[a] ?? 0))
+              .sort((a, b) => Number(b === PINNED_TOPIC) - Number(a === PINNED_TOPIC) || (pagination.topicCounts?.[b] ?? 0) - (pagination.topicCounts?.[a] ?? 0))
               .map((key) => {
                 const active = pagination.topic === key;
                 return (
