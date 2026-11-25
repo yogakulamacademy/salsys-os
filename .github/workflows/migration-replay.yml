@@ -397,7 +397,7 @@ jobs:
           # and transaction. No migration ledger write; no cloud connection.
           {
             printf 'begin;\n'
-            for candidate in r13_sa12_lifecycle_authority r13_sa12_lifecycle_transitions r13_sa12_lifecycle_work_revision r13_sa12_lifecycle_claim_adapters r13_sa12_lifecycle_queue_binding r13_sa12_organization_write_boundary r13_sa12_platform_effective_quota; do
+            for candidate in r13_sa12_lifecycle_authority r13_sa12_lifecycle_transitions r13_sa12_lifecycle_read_preview r13_sa12_lifecycle_work_revision r13_sa12_lifecycle_claim_adapters r13_sa12_lifecycle_queue_binding r13_sa12_organization_write_boundary r13_sa12_platform_effective_quota; do
               cat "supabase/drafts/$candidate.sql"
               printf '\n'
             done
