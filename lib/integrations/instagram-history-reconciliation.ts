@@ -65,6 +65,13 @@ function participantsOf(conversation: GraphConversation): GraphPerson[] {
   return Array.isArray(raw) ? raw : Array.isArray(raw?.data) ? raw.data : [];
 }
 
+async function requireActiveHistoryOrganization(admin:ReturnType<typeof createAdminClient>,organizationId:string):Promise<void> {
+  const {data,error}=await admin.from('organizations').select('id,status').eq('id',organizationId).maybeSingle();
+  if(error||data?.id!==organizationId||data.status!=='active'){
+    throw new Error('Instagram history organization unavailable.');
+  }
+}
+
 async function graphPage<T>(path: string, token: string, params: Record<string, string>): Promise<GraphPage<T>> {
   const url = new URL('https://graph.instagram.com/' + META_GRAPH_VERSION + '/' + path);
   for (const [key, value] of Object.entries(params)) url.searchParams.set(key, value);
@@ -171,6 +178,7 @@ export async function reconcileInstagramMessageHistory({
   }
 
   const admin = createAdminClient();
+  await requireActiveHistoryOrganization(admin,organizationId);
   const runtime = await getInstagramRuntimeForOrganization(organizationId, accountId);
   const { data: state, error: stateError } = await admin
     .from('instagram_history_sync_cursor_v1')
@@ -186,6 +194,7 @@ export async function reconcileInstagramMessageHistory({
   };
   if (apply && text(state?.next_cursor)) params.after = text(state?.next_cursor);
 
+  await requireActiveHistoryOrganization(admin,organizationId);
   const conversations = await graphPage<GraphConversation>(
     encodeURIComponent(accountId) + '/conversations', runtime.accessToken, params,
   );
@@ -210,6 +219,7 @@ export async function reconcileInstagramMessageHistory({
   const lastScanned = Date.parse(text(state?.last_scanned_at));
   if (apply && text(state?.next_cursor) && Number.isFinite(lastScanned)) {
     // Newest-first page: only conversations that changed since the last pass.
+    await requireActiveHistoryOrganization(admin,organizationId);
     const recent = await graphPage<GraphConversation>(
       encodeURIComponent(accountId) + '/conversations', runtime.accessToken,
       { fields: 'id,participants,updated_time', limit: String(RECENT_CONVERSATIONS_PER_PASS) },
@@ -249,6 +259,7 @@ export async function reconcileInstagramMessageHistory({
     }
     const instagramUserId = users[0] as string;
 
+    await requireActiveHistoryOrganization(admin,organizationId);
     const { data: matching, error: matchError } = await admin.from('conversations')
       .select('id,lead_id')
       .eq('organization_id', organizationId)
@@ -264,6 +275,7 @@ export async function reconcileInstagramMessageHistory({
     }
     summary.conversationsMatched += 1;
 
+    await requireActiveHistoryOrganization(admin,organizationId);
     const providerMessages = await graphPage<GraphMessage>(
       encodeURIComponent(graphConversationId) + '/messages', runtime.accessToken,
       { fields: 'id,created_time,from,to,message,attachments', limit: String(MAX_MESSAGES_PER_CONVERSATION) },
@@ -296,6 +308,7 @@ export async function reconcileInstagramMessageHistory({
       if (!apply && sender === accountId) previewOutboundIds.add(id);
       if (!apply) continue;
 
+      await requireActiveHistoryOrganization(admin,organizationId);
       const direction = sender === accountId ? 'outbound' : 'inbound';
       const { data: ingestion, error: ingestError } = await admin.rpc('ingest_raw_event', {
         p_organization_id: organizationId,
@@ -318,6 +331,8 @@ export async function reconcileInstagramMessageHistory({
       if (ingestError) throw new Error('Failed to persist Instagram history evidence.');
       const rawId = text(object(ingestion).event_id);
       if (!rawId) throw new Error('Instagram history receipt did not return a raw event ID.');
+      // Preserve the raw receipt if status changes after ingestion; do not project it here.
+      await requireActiveHistoryOrganization(admin,organizationId);
       const { data: projected, error: projectionError } = await admin.rpc(
         'ingest_instagram_history_message_v1', { p_raw_event_id: rawId },
       );
@@ -335,6 +350,7 @@ export async function reconcileInstagramMessageHistory({
       // webhook echoes have never been delivered. Compare real provider MIDs
       // against ONLY this previously identity-verified tenant CRM thread.
       // Return aggregate counts only: never pass provider IDs to the client.
+      await requireActiveHistoryOrganization(admin,organizationId);
       const { data: existing, error: lookupError } = await admin.from('messages')
         .select('external_message_id')
         .eq('organization_id', organizationId)
@@ -356,6 +372,7 @@ export async function reconcileInstagramMessageHistory({
   }
 
   if (apply) {
+    await requireActiveHistoryOrganization(admin,organizationId);
     const nextCursor = !backfillFinished
       ? (text(state?.next_cursor) || null)
       : summary.hasMore ? text(conversations.paging?.cursors?.after) : null;
@@ -375,5 +392,6 @@ export async function reconcileInstagramMessageHistory({
       }, { onConflict: 'organization_id,instagram_account_id' });
     if (progressError) throw new Error('Instagram scan succeeded but saving its cursor failed.');
   }
+  await requireActiveHistoryOrganization(admin,organizationId);
   return summary;
 }
