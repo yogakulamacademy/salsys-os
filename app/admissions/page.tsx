@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { getPipelineIntelligence } from "@/lib/pipeline-intelligence-data";
+import { SmartPipelineBriefing } from "@/components/admissions/smart-pipeline-briefing";
 import { ToastOnLoad } from "@/components/app-toast";
 import {
   ArrowRight,
@@ -162,10 +164,11 @@ export default async function AdmissionsDeskPage({
   const band = one(resolved.band) || "all";
   const ownerFilter = one(resolved.owner) || "all";
 
-  const [snapshot, pipelineSnapshot, story] = await Promise.all([
+  const [snapshot, pipelineSnapshot, story, smart] = await Promise.all([
     getAdmissionsSnapshot(),
     view === "pipeline" ? getPipelineSnapshot() : Promise.resolve(null),
     view === "overview" ? getHomeStory() : Promise.resolve(null),
+    view === "overview" ? getPipelineIntelligence() : Promise.resolve(null),
   ]);
   const batchIds = ((snapshot.batchCapacity ?? []) as Array<{ batch_id: string }>).map((row) => row.batch_id);
   const extras = view === "overview" || view === "capacity" || view === "payments" || view === "pipeline"
@@ -267,8 +270,12 @@ export default async function AdmissionsDeskPage({
         </div>
       </nav>
 
+      {/* Smart briefing (owner-approved "Pipeline v2", 25 Nov 2026) inside Overview; tabs above are unchanged. */}
+      {view === "overview" && smart ? <SmartPipelineBriefing data={smart} /> : null}
+
       {view === "overview" ? (
         <AdmissionsOverview
+          hideActionCards={Boolean(smart)}
           story={story}
           extras={extras}
           brief={brief}
@@ -331,7 +338,9 @@ function AdmissionsOverview({
   paymentCount,
   paymentOutstanding,
   inboxKnown,
+  hideActionCards = false,
 }: {
+  hideActionCards?: boolean;
   brief: string;
   priorityQueue: PriorityRow[];
   batchCapacity: AdmissionsBatchCapacityRow[];
@@ -360,7 +369,7 @@ function AdmissionsOverview({
 
   return (
     <div className="space-y-5">
-      <ActionCards items={[
+      {hideActionCards ? null : <ActionCards items={[
         {
           count: paymentCount,
           title: "Payment pending",
@@ -385,7 +394,7 @@ function AdmissionsOverview({
           detail: "Still at New",
           cta: "Review", href: "/leads?stage=new", tone: "neutral",
         },
-      ] satisfies ActionCardItem[]} />
+      ] satisfies ActionCardItem[]} />}
 
       <section className="grid gap-5 xl:grid-cols-[minmax(0,1.25fr)_minmax(340px,.75fr)]">
         <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-950">
