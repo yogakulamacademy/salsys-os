@@ -12,6 +12,9 @@ import { InterestProfileCard } from "@/components/interest-profile-card";
 import { suggestNextStep } from "@/lib/interest-profile";
 import { getReEngagedWorkspace } from "@/lib/reengaged-data";
 import { getReEngagedIntelligence } from "@/lib/reengaged-intelligence-data";
+import { getReengagedStory } from "@/lib/reengaged-story-data";
+import { reengagedHeadline, summarise } from "@/lib/reengaged-story";
+import { SmartReengagedBriefing } from "@/components/reengaged/smart-reengaged-briefing";
 
 type JourneyLeadRow = {
   lead_id: string;
@@ -96,7 +99,9 @@ export default async function ReEngagedPage({
 
   const selectedLeadId = one(resolved.lead);
 
-  const workspace = await getReEngagedWorkspace();
+  // Smart briefing (owner-approved mockup, 25 Nov 2026): managers and admins.
+  const [workspace, story] = await Promise.all([getReEngagedWorkspace(), getReengagedStory()]);
+  const storySummary = story ? summarise(story) : null;
 
   const { distribution } = workspace;
 
@@ -156,7 +161,9 @@ export default async function ReEngagedPage({
     <>
       <PageHeader
         title="Re-engaged"
-        description={
+        description={storySummary ? (
+          <span className="text-[15px] leading-7 text-copy"><strong className="font-semibold text-copy-strong">{reengagedHeadline(storySummary)}</strong></span>
+        ) : (
           <span className="text-[15px] leading-7 text-copy">
             {actNow.length ? (
               <>
@@ -169,8 +176,10 @@ export default async function ReEngagedPage({
               "Nobody stands out right now. People show here when their visits and messages show interest."
             )}
           </span>
-        }
+        )}
       />
+
+      {story && storySummary ? <div className="mt-4"><SmartReengagedBriefing data={story} s={storySummary} /></div> : null}
 
       {workspace.warning && (
         <div className="mt-4 rounded-xl border border-amber-100 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-700">
