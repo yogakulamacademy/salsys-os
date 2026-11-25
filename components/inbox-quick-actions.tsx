@@ -1,11 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import {
   ArrowUpRight, CalendarDays, IndianRupee, MessageCircle, MoreHorizontal, Phone, PhoneCall, X,
 } from "lucide-react";
 
+import { LogCallPanel } from "@/components/log-call-panel";
 import type { QuickReplies } from "@/lib/inbox-quick-replies";
 import { showInboxToast } from "@/lib/inbox-toast";
 
@@ -13,7 +14,7 @@ import { showInboxToast } from "@/lib/inbox-toast";
 type ServerAction = (formData: FormData) => Promise<{ ok: boolean; message: string }>;
 
 export function InboxQuickActions({
-  phone, canCall, profileHref, channel, replies, logAction, stageAction, mock,
+  phone, canCall, profileHref, channel, replies, logAction, callAction, leadId, leadName, stageAction, mock,
 }: {
   phone?: string | null;
   canCall: boolean;
@@ -21,6 +22,10 @@ export function InboxQuickActions({
   channel: string;
   replies: QuickReplies;
   logAction?: ServerAction;
+  /** Log a call in two taps (25 Nov 2026). */
+  callAction?: ServerAction;
+  leadId?: string;
+  leadName?: string;
   stageAction?: ServerAction;
   mock: boolean;
 }) {
@@ -39,6 +44,33 @@ export function InboxQuickActions({
     attempt();
   };
   const callNumber = phone?.replace(/[^\d+]/g, "") || "";
+  const [callPrompt, setCallPrompt] = useState<string | null>(null);
+  // After tapping Call, ask how it went when they come back to the CRM.
+  const CALL_KEY = "crm:last-call";
+  const rememberCall = () => {
+    try { if (leadId) sessionStorage.setItem(CALL_KEY, JSON.stringify({ leadId, at: Date.now() })); } catch { /* storage may be blocked */ }
+  };
+  useEffect(() => {
+    if (!leadId || !callAction) return;
+    const check = () => {
+      if (document.visibilityState !== "visible") return;
+      try {
+        const raw = sessionStorage.getItem(CALL_KEY);
+        if (!raw) return;
+        const last = JSON.parse(raw) as { leadId?: string; at?: number };
+        if (last.leadId !== leadId || !last.at) return;
+        const mins = Math.round((Date.now() - last.at) / 60_000);
+        if (Date.now() - last.at < 5_000 || mins > 120) return;
+        sessionStorage.removeItem(CALL_KEY);
+        setCallPrompt(mins < 1 ? "You tapped their number just now" : `You tapped their number ${mins} minute${mins === 1 ? "" : "s"} ago`);
+        setPanel("log");
+      } catch { /* ignore */ }
+    };
+    check();
+    document.addEventListener("visibilitychange", check);
+    window.addEventListener("focus", check);
+    return () => { document.removeEventListener("visibilitychange", check); window.removeEventListener("focus", check); };
+  }, [leadId, callAction]);
   const isInstagram = channel === "instagram";
 
   // Put a draft in the reply box. Composers listen for this event for their own channel.
@@ -69,7 +101,7 @@ export function InboxQuickActions({
             <MessageCircle size={18} /><span>Ask for WhatsApp</span>
           </button>
         ) : canCall && callNumber ? (
-          <a href={`tel:${callNumber}`} className="ibx-v2-quick-tile" aria-label="Call customer">
+          <a href={`tel:${callNumber}`} onClick={rememberCall} className="ibx-v2-quick-tile" aria-label="Call customer">
             <Phone size={18} /><span>Call</span>
           </a>
         ) : (
@@ -77,7 +109,7 @@ export function InboxQuickActions({
             <Phone size={18} /><span>Call</span>
           </span>
         )}
-        <button type="button" className="ibx-v2-quick-tile" disabled={!logAction || mock}
+        <button type="button" className="ibx-v2-quick-tile" disabled={!(callAction || logAction) || mock}
           aria-expanded={panel === "log"} onClick={() => setPanel(panel === "log" ? "none" : "log")}
           title="Record a call you made or received">
           <PhoneCall size={18} /><span>Log call</span>
@@ -92,7 +124,13 @@ export function InboxQuickActions({
         </Link>
       </div>
 
-      {panel === "log" && logAction ? (
+      {panel === "log" && callAction ? (
+        <LogCallPanel compact leadName={leadName ?? "them"} action={callAction} prompt={callPrompt}
+          onDone={() => { setPanel("none"); setCallPrompt(null); }}
+          onCancel={() => { setPanel("none"); setCallPrompt(null); }} />
+      ) : null}
+
+      {panel === "log" && !callAction && logAction ? (
         <form onSubmit={submitInline(logAction)} className="ibx-v3-quick-panel">
           <input type="hidden" name="channel" value="phone" />
           <input type="hidden" name="return_to" value="conversations" />
