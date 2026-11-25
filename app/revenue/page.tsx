@@ -4,6 +4,7 @@ import { ArrowRight, CalendarClock, GitBranch, Sparkles, Target, WalletCards } f
 import { ExecutiveDecisionBrief } from "@/components/marketing/executive-decision-brief";
 import { RevenueCashPanel } from "@/components/revenue-cash-panel";
 import { RevenueInsights } from "@/components/revenue-insights";
+import { SmartRevenueBriefing } from "@/components/revenue/smart-revenue-briefing";
 import { Notice, PageHeader } from "@/components/ui";
 import {
   getRevenueWorkspace,
@@ -11,6 +12,8 @@ import {
   type RevenueOpportunityRow,
 } from "@/lib/revenue-data";
 import { getCashSummary } from "@/lib/revenue-cash-data";
+import { buildRevenueStory, revenueHeadline } from "@/lib/revenue-story";
+import { getRevenueStory } from "@/lib/revenue-story-data";
 import { createClient } from "@/lib/supabase/server";
 import { requireCurrentOrganizationId } from "@/lib/workspace";
 
@@ -28,11 +31,16 @@ export default async function RevenuePage({ searchParams }: RevenuePageProps) {
   const investigationFrom = query.from?.trim() || "revenue";
   const strictAttributionFocus = Boolean(investigationSource && investigationFrom === "attribution");
   const currentMonth = new Date().toISOString().slice(0, 7);
-  const [workspace, fxRate, cash] = await Promise.all([
+  const [workspace, fxRate, cash, storyData] = await Promise.all([
     getRevenueWorkspace(currentMonth),
     getUsdInrRate(),
     loadCashSummary(),
+    getRevenueStory(),
   ]);
+  // Smart briefing (owner-approved mockup "Revenue", 25 Nov 2026). Dollars are
+  // shown in rupees at the live rate, or 92.70 if the rate service is down.
+  const usdInr = fxRate.rate ?? 92.7;
+  const story = storyData ? buildRevenueStory(storyData, usdInr) : null;
 
   const {
     totalsByCurrency,
@@ -124,27 +132,41 @@ export default async function RevenuePage({ searchParams }: RevenuePageProps) {
   return (
     <div className="space-y-4">
       <PageHeader
-        eyebrow="Intelligence · Revenue"
         title="Revenue"
-        description="Understand collected cash, open pipeline, outstanding balances and the opportunities most likely to need action now."
+        description={story && storyData ? (
+          <span className="text-[15px] leading-7 text-copy">
+            {revenueHeadline(story, storyData.since).map((part, i) => (part.strong ? <strong key={i} className="font-semibold text-copy-strong">{part.text}</strong> : <span key={i}>{part.text}</span>))}
+          </span>
+        ) : "Money collected, what is closest to landing, and the open enquiries behind it."}
         actions={
           <div className="flex flex-wrap gap-2">
-            <Link href="/marketing?view=campaigns" className="btn-secondary">
-              <Target size={15} /> Campaigns
+            <Link href="/admissions?view=payments" className="btn-secondary">
+              <WalletCards size={15} /> Check who paid
             </Link>
-            <Link href="/marketing?view=funnel" className="btn-secondary">
-              <GitBranch size={15} /> Funnel
-            </Link>
-            <Link href="/marketing?view=attribution" className="btn-secondary">
-              Attribution
-            </Link>
-            <Link href="/admissions?view=payments" className="btn-primary">
-              <WalletCards size={15} /> Work payment queue
-            </Link>
+            {story?.warm.recent ? (
+              <Link href="/leads?stage=high_intent" className="btn-primary">
+                Contact the warm {story.warm.recent.toLocaleString("en-IN")}
+              </Link>
+            ) : null}
           </div>
         }
       />
 
+      {story && storyData ? <SmartRevenueBriefing s={story} since={storyData.since} usdInr={usdInr} /> : null}
+
+      <details className="group rounded-panel border border-line bg-surface shadow-card" open={!story || Boolean(investigationSource)}>
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3.5 sm:px-5">
+          <span>
+            <span className="block text-[15px] font-bold text-copy-strong">Detailed numbers</span>
+            <span className="block text-[12.5px] text-copy-muted">Payments due, open enquiry value by stage, source and location, and the biggest open opportunities</span>
+          </span>
+          <span className="flex shrink-0 flex-wrap items-center gap-2 text-[12.5px]">
+            <Link href="/marketing?view=campaigns" className="btn-secondary"><Target size={15} /> Campaigns</Link>
+            <Link href="/marketing?view=funnel" className="btn-secondary"><GitBranch size={15} /> Funnel</Link>
+            <Link href="/marketing?view=attribution" className="btn-secondary">Attribution</Link>
+          </span>
+        </summary>
+        <div className="space-y-4 border-t border-line px-3 py-4 sm:px-4">
       <ExecutiveDecisionBrief
         eyebrow="Revenue decision brief"
         title={brief.title}
@@ -261,6 +283,8 @@ export default async function RevenuePage({ searchParams }: RevenuePageProps) {
       <div className="px-1 text-[10px] leading-4 text-copy-subtle">
         Weighted pipeline is a deterministic planning value based on configured stage weights, not a calibrated probability. Cross-currency totals are shown only through the explicit FX display layer above.
       </div>
+        </div>
+      </details>
     </div>
   );
 }
@@ -317,15 +341,11 @@ function buildRevenueDecisionBrief(
         tone: "neutral" as const,
       },
       {
-        label: "Outstanding balances",
+        label: "Open enquiry value",
         value: outstanding,
-        statusLabel: unvaluedLeads > 0 || active.length === 0 ? "Incomplete" : undefined,
-        detail: closingThisMonth.length
-          ? `${closingThisMonth.length} expected close ${closingThisMonth.length === 1 ? "record" : "records"} this month.`
-          : "No expected-close cohort is visible this month.",
-        tone: active.some((row) => row.outstanding > 0)
-          ? ("watch" as const)
-          : unvaluedLeads > 0 || active.length === 0 ? ("neutral" as const) : ("positive" as const),
+        statusLabel: "Not owed",
+        detail: "Course price of every open enquiry, minus anything already paid. Nobody owes this yet.",
+        tone: "neutral" as const,
       },
     ],
     actions: [
