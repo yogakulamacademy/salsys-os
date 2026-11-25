@@ -21,6 +21,9 @@ import { ActionCards, initialsOf, type ActionCardItem } from "@/components/crm/a
 import { EmptyState, PageHeader } from "@/components/ui";
 import { getFollowUpsWorkspace } from "@/lib/followups-data";
 import { getFollowupsStory } from "@/lib/followups-story-data";
+import { getTasksIntelligence } from "@/lib/tasks-intelligence-data";
+import { tasksHeadline } from "@/lib/tasks-intelligence";
+import { SmartTasksBriefing } from "@/components/followups/smart-tasks-briefing";
 import {
   buildFollowupsStory,
   KIND_LABEL,
@@ -81,8 +84,12 @@ async function loadStory(): Promise<FollowupsStory> {
 export default async function FollowUpsPage({ searchParams }: FollowUpsPageProps) {
   const query = await searchParams;
   const view = parseView(query.view);
-  const story = await loadStory();
   const mock = isMockMode();
+  // Smart briefing (owner-approved mockup, 25 Nov 2026): managers and admins, the All view.
+  const [story, intel] = await Promise.all([
+    loadStory(),
+    !mock && view === "all" ? getTasksIntelligence() : Promise.resolve(null),
+  ]);
   const settled = story.due.filter((t) => t.settled);
 
   const cardNote: Record<TaskKind, string> = {
@@ -122,7 +129,7 @@ export default async function FollowUpsPage({ searchParams }: FollowUpsPageProps
         description={
           <span className="text-[15px] leading-7 text-copy">
             {mock ? "Mock mode: changes are not saved. " : null}
-            <strong className="font-semibold text-copy-strong">{story.headline}</strong>
+            <strong className="font-semibold text-copy-strong">{intel ? tasksHeadline(intel) : story.headline}</strong>
             {story.lateOverWeek ? ` ${story.lateOverWeek.toLocaleString("en-IN")} are over a week late.` : ""}
           </span>
         }
@@ -135,6 +142,8 @@ export default async function FollowUpsPage({ searchParams }: FollowUpsPageProps
 
       {/* Results show as a toast that fades (20 Nov 2026), not a banner. */}
       <ToastOnLoad message={query.notice ? noticeText(query.notice) : null} error={query.error ?? null} />
+
+      {intel ? <SmartTasksBriefing data={intel} lostChecks={story.counts.lost} /> : null}
 
       <ActionCards items={cards} label="Kinds of work" />
 
@@ -155,7 +164,7 @@ export default async function FollowUpsPage({ searchParams }: FollowUpsPageProps
         </section>
       ) : null}
 
-      <section className="overflow-hidden rounded-2xl border border-line bg-surface shadow-card">
+      <section id="followups-list" className="overflow-hidden rounded-2xl border border-line bg-surface shadow-card">
         <div className="border-b border-line px-4 py-3">
           <nav aria-label="Filter tasks" className="flex flex-wrap items-center gap-1 rounded-xl bg-surface-soft p-1 sm:inline-flex">
             <Tab href="/follow-ups" active={view === "all"} label="All due" count={story.dueNow} />
