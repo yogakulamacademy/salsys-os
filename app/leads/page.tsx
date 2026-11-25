@@ -3,6 +3,7 @@ import { ToastOnLoad } from "@/components/app-toast";
 import { LeadsCleanTable } from "@/components/leads-clean-table";
 import { LeadsOverview, LeadsSaysPaid } from "@/components/leads/leads-overview";
 import { LeadsHeaderActions } from "@/components/leads/leads-header-actions";
+import { SmartLeadsBriefing } from "@/components/leads/smart-leads-briefing";
 import { RecentBookingActivity } from "@/components/recent-booking-activity";
 import { TeamAssignmentPanel } from "@/components/team-assignment-panel";
 import { Notice, PageHeader } from "@/components/ui";
@@ -15,6 +16,8 @@ import { getLeadsTableEvidence } from "@/lib/leads-table-evidence";
 import { getHomeStory } from "@/lib/home-story-data";
 import { getLeadStageCounts } from "@/lib/leads-stage-counts";
 import { leadsStory, QUALIFIED_UP } from "@/lib/leads-story";
+import { headline as smartHeadline, type Channel } from "@/lib/leads-intelligence";
+import { getLeadsIntelligence } from "@/lib/leads-intelligence-data";
 import { isMockMode } from "@/lib/data";
 import { createClient } from "@/lib/supabase/server";
 import { requireCurrentOrganizationId } from "@/lib/workspace";
@@ -37,6 +40,8 @@ type LeadsPageProps = {
     view?: string | string[];
     sort?: string | string[];
     page?: string | string[];
+    range?: string | string[];
+    ch?: string | string[];
   }>;
 };
 
@@ -46,11 +51,15 @@ export default async function LeadsPage({ searchParams }: LeadsPageProps) {
   const attributionScope = parseLeadsAttributionScope(params);
   const workspace = await getLeadsWorkspacePageWithAttributionScope(filters, attributionScope);
   const mock = isMockMode();
-  const [tableEvidence, story, stages] = await Promise.all([
+  const [tableEvidence, story, stages, intelligence] = await Promise.all([
     getLeadsTableEvidence(workspace.leads),
     mock ? Promise.resolve(null) : getHomeStory(),
     mock ? Promise.resolve(null) : getLeadStageCounts(),
+    mock ? Promise.resolve(null) : getLeadsIntelligence(),
   ]);
+  const range = one(params.range) === "90" ? 90 : 30;
+  const chRaw = one(params.ch);
+  const channel: Channel = chRaw === "instagram" || chRaw === "website" ? chRaw : "all";
   const storyParts = leadsStory({
     all: workspace.summary.all,
     unassigned: workspace.summary.unassigned,
@@ -104,7 +113,7 @@ export default async function LeadsPage({ searchParams }: LeadsPageProps) {
         title="Leads"
         description={
           <span className="text-[15px] leading-7 text-copy">
-            {storyParts.map((part, i) => (part.strong ? <strong key={i} className="font-semibold text-copy-strong">{part.text}</strong> : <span key={i}>{part.text}</span>))}
+            {(intelligence ? smartHeadline(intelligence) : storyParts).map((part, i) => (part.strong ? <strong key={i} className="font-semibold text-copy-strong">{part.text}</strong> : <span key={i}>{part.text}</span>))}
           </span>
         }
         actions={<LeadsHeaderActions canExport={canExport} canImport={canImport} canExportContacts={canExportContacts} mock={mock} exportHref={exportHref} />}
@@ -127,7 +136,10 @@ export default async function LeadsPage({ searchParams }: LeadsPageProps) {
         </Notice>
       ) : null}
 
-      <LeadsOverview summary={workspace.summary} story={story} stages={stages} activeStage={filters.stage} />
+      {/* Smart briefing (owner-approved "Leads v2", 25 Nov 2026); the plain overview stays as the fallback. */}
+      {intelligence
+        ? <SmartLeadsBriefing data={intelligence} channel={channel} range={range} searchQuery={one(params.q)} />
+        : <LeadsOverview summary={workspace.summary} story={story} stages={stages} activeStage={filters.stage} />}
 
       <LeadsAttributionScopeBar scope={attributionScope} />
 
