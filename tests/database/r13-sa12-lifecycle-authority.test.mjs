@@ -71,6 +71,27 @@ test('SA-12 private lifecycle authorization requires explicit permission and mat
     }
     assert.equal((await db.query('select status from public.organizations where id=$1',[target])).rows[0].status,'active');
     await db.query(readFileSync('supabase/drafts/r13_sa12_lifecycle_transitions.sql','utf8'));
+    await db.query(readFileSync('supabase/drafts/r13_sa12_lifecycle_work_revision.sql','utf8'));
+    const bind=async(id,revision,channel='instagram',org=target)=>(await db.query('select saas_lifecycle.bind_new_work($1,$2,$3,$4) as value',[org,channel,id,revision])).rows[0].value;
+    const allowed=async(id,channel='instagram',org=target)=>(await db.query('select saas_lifecycle.work_revision_allowed($1,$2,$3) as value',[org,channel,id])).rows[0].value;
+    const oldWork=randomUUID(),oldBroadcast=randomUUID(),freshWork=randomUUID(),freshBroadcast=randomUUID();
+    assert.equal(await allowed(oldWork),false);
+    assert.equal(await bind(oldWork,0),true);
+    assert.equal(await bind(oldBroadcast,0,'whatsapp'),true);
+    assert.equal(await allowed(oldWork),true);
+    assert.equal(await allowed(oldBroadcast,'whatsapp'),true);
+    assert.equal(await allowed(oldWork,'whatsapp'),false);
+    assert.equal(await allowed(oldWork,'instagram',randomUUID()),false);
+    assert.equal(await bind(oldWork,0),false);
+    assert.equal(await bind(randomUUID(),1),false);
+    assert.equal(await bind(randomUUID(),0,'instagram',platform),false);
+    assert.equal(await bind(randomUUID(),0,'instagram',other),false);
+    for(const role of ['anon','authenticated','service_role']){
+      for(const signature of ['active_work_revision(uuid)','bind_new_work(uuid,text,uuid,bigint)','work_revision_allowed(uuid,text,uuid)']){
+        assert.equal((await db.query("select has_function_privilege($1,$2,'EXECUTE') as value",[role,'saas_lifecycle.'+signature])).rows[0].value,false);
+      }
+      assert.equal((await db.query("select has_table_privilege($1,'saas_lifecycle.work_revision_bindings','INSERT,UPDATE,DELETE,SELECT,TRUNCATE') as value",[role])).rows[0].value,false);
+    }
     await db.query('update saas_lifecycle.operators set active=true');
     const reason='Synthetic lifecycle test only';
     const change=async(client,action,revision,request,why=reason,confirmation=action+':'+target)=>
@@ -89,12 +110,27 @@ test('SA-12 private lifecycle authorization requires explicit permission and mat
     const first=await change(db,'suspend',0,request);
     assert.equal(first.new_status,'suspended');assert.equal(first.revision,1);
     assert.equal(await state(),'suspended');assert.equal(await count(),1);
+    assert.equal(await allowed(oldWork),false);
+    assert.equal(await allowed(oldBroadcast,'whatsapp'),false);
+    assert.equal(await bind(freshWork,1),false);
     assert.equal((await change(db,'suspend',0,request)).replayed,true);
     await assert.rejects(change(db,'suspend',0,request,'Different synthetic reason'),e=>e.code==='23505');
     await assert.rejects(change(db,'suspend',0,randomUUID()),e=>e.code==='40001');
     assert.equal(await count(),1);
     const restore=await change(db,'restore',1,randomUUID());
     assert.equal(restore.revision,2);assert.equal(await state(),'active');
+    assert.equal(await allowed(oldWork),false);
+    assert.equal(await allowed(oldBroadcast,'whatsapp'),false);
+    assert.equal(await bind(oldWork,2),false);
+    assert.equal(await bind(oldBroadcast,2,'whatsapp'),false);
+    assert.equal(await bind(freshWork,0),false);
+    assert.equal(await bind(freshWork,2),true);
+    assert.equal(await bind(freshBroadcast,2,'whatsapp'),true);
+    assert.equal(await allowed(freshWork),true);
+    assert.equal(await allowed(freshBroadcast,'whatsapp'),true);
+    for(const statement of ["update saas_lifecycle.work_revision_bindings set lifecycle_revision=2","delete from saas_lifecycle.work_revision_bindings","truncate saas_lifecycle.work_revision_bindings"]){
+      await assert.rejects(db.query(statement),e=>e.code==='55000');
+    }
     for(const statement of ["update saas_lifecycle.events set reason='Changed reason'","delete from saas_lifecycle.events","truncate saas_lifecycle.events"]){
       await assert.rejects(db.query(statement),e=>e.code==='55000');
     }
@@ -115,6 +151,8 @@ test('SA-12 private lifecycle authorization requires explicit permission and mat
       assert.equal(await state(),'suspended');assert.equal(await count(),3);
       await change(db,'restore',3,randomUUID());
       assert.equal(await state(),'active');assert.equal(await count(),4);
+      assert.equal(await allowed(freshWork),false);
+      assert.equal(await allowed(freshBroadcast,'whatsapp'),false);
       // A concurrent permission revocation must not be bypassed by a stale snapshot.
       await peer.query('begin');
       try{
