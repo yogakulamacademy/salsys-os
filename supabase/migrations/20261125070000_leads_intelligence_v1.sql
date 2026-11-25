@@ -14,7 +14,10 @@ set search_path = public, pg_temp
 as $$
 with
 L as (
-  select l.id, l.created_at, l.current_stage::text as stage, l.interested_course_id, l.potential_value, l.potential_value_source
+  select l.id, l.created_at, l.current_stage::text as stage, l.interested_course_id,
+         (to_jsonb(l) ->> 'potential_value')::numeric as potential_value,
+         -- Read via jsonb: these columns exist in production but predate the tracked migrations.
+         to_jsonb(l) ->> 'potential_value_source' as potential_value_source
   from public.leads l
   where l.organization_id = p_organization_id and l.created_at >= now() - interval '120 days'
 ),
@@ -108,8 +111,8 @@ waiting as (
   where lm.direction = 'inbound' and lm.created_at >= now() - interval '7 days'
 ),
 pipeline as (
-  select count(*) as n, coalesce(sum(potential_value) filter (where potential_value_source like 'course_price:india%'), 0) as inr
-  from public.leads where organization_id = p_organization_id and current_stage::text in ('qualified','high_intent','payment_pending')
+  select count(*) as n, coalesce(sum((to_jsonb(l) ->> 'potential_value')::numeric) filter (where (to_jsonb(l) ->> 'potential_value_source') like 'course_price:india%'), 0) as inr
+  from public.leads l where l.organization_id = p_organization_id and l.current_stage::text in ('qualified','high_intent','payment_pending')
 )
 select jsonb_build_object(
   'generatedAt', now(),
