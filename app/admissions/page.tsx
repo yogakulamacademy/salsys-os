@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { getPipelineIntelligence } from "@/lib/pipeline-intelligence-data";
+import { getPaymentCheckData } from "@/lib/payment-check-data";
+import { PaymentCheckQueue } from "@/components/admissions/payment-check-queue";
 import { SmartPipelineBriefing } from "@/components/admissions/smart-pipeline-briefing";
 import { ToastOnLoad } from "@/components/app-toast";
 import {
@@ -170,6 +172,7 @@ export default async function AdmissionsDeskPage({
     view === "overview" ? getHomeStory() : Promise.resolve(null),
     view === "overview" ? getPipelineIntelligence() : Promise.resolve(null),
   ]);
+  const paymentCheck = view === "payments" ? await getPaymentCheckData() : null;
   const batchIds = ((snapshot.batchCapacity ?? []) as Array<{ batch_id: string }>).map((row) => row.batch_id);
   const extras = view === "overview" || view === "capacity" || view === "payments" || view === "pipeline"
     ? await getAdmissionsExtras(batchIds)
@@ -311,7 +314,8 @@ export default async function AdmissionsDeskPage({
 
       {view === "payments" ? (
         <>
-          <StalePaymentCallout extras={extras} />
+          {/* Check who paid (owner-approved mockup, 25 Nov 2026). */}
+          {paymentCheck ? <PaymentCheckQueue {...paymentCheck} /> : <StalePaymentCallout extras={extras} />}
           <PaymentsView rows={paymentPending} outstanding={paymentOutstanding} />
         </>
       ) : null}
