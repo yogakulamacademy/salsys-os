@@ -51,20 +51,26 @@ export default async function Customer360Page({ searchParams }: { searchParams?:
   // Keep the Customer index on lightweight canonical tables. Rich Person 360
   // views are reserved for one-customer detail reads so a large tenant cannot
   // time out the entire customer list.
-  const [linksResult, personsResult, identifiersResult] = await Promise.all([
-    supabase
-      .from("person_leads")
-      .select("person_id,lead_id,resolution_method,confidence")
-      .eq("organization_id", organizationId),
-    supabase
-      .from("persons")
-      .select("id,status,created_at")
-      .eq("organization_id", organizationId),
-    supabase
-      .from("person_identifiers")
-      .select("person_id,identifier_type,verified")
-      .eq("organization_id", organizationId)
-      .eq("verified", true),
+  // Read only the people behind the leads this user can see, in batches.
+  // One unfiltered read is capped at 1,000 rows by the API, which left the
+  // list with a handful of people once the business passed 1,000 (25 Nov 2026).
+  const batches = <T,>(xs: T[], n = 200) => Array.from({ length: Math.ceil(xs.length / n) }, (_, i) => xs.slice(i * n, i * n + n));
+  type Read<T> = { data: T[] | null; error: { message: string } | null };
+  const readAll = async <T,>(ids: string[], read: (chunk: string[]) => PromiseLike<Read<T>>): Promise<Read<T>> => {
+    const parts = await Promise.all(batches(ids).map((chunk) => read(chunk)));
+    const failed = parts.find((r) => r.error);
+    return failed ? { data: null, error: failed.error } : { data: parts.flatMap((r) => r.data ?? []), error: null };
+  };
+  const linksResult = await readAll<PersonLinkRow>([...accessibleLeadIds], (chunk) =>
+    supabase.from("person_leads").select("person_id,lead_id,resolution_method,confidence")
+      .eq("organization_id", organizationId).in("lead_id", chunk) as unknown as PromiseLike<Read<PersonLinkRow>>);
+  const linkedPersonIds = [...new Set((linksResult.data ?? []).map((row) => row.person_id).filter(Boolean))];
+  const [personsResult, identifiersResult] = await Promise.all([
+    readAll<PersonRow>(linkedPersonIds, (chunk) =>
+      supabase.from("persons").select("id,status,created_at").eq("organization_id", organizationId).in("id", chunk) as unknown as PromiseLike<Read<PersonRow>>),
+    readAll<IdentifierRow>(linkedPersonIds, (chunk) =>
+      supabase.from("person_identifiers").select("person_id,identifier_type,verified")
+        .eq("organization_id", organizationId).eq("verified", true).in("person_id", chunk) as unknown as PromiseLike<Read<IdentifierRow>>),
   ]);
 
   if (linksResult.error) warnings.push("Customer identity links are temporarily unavailable.");
