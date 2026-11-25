@@ -99,7 +99,7 @@ function WeeklyChart({ view, pick, onPick }: { view: MarketingView; pick: number
                 return v ? <rect key={c} x={x - bw / 2} y={y1} width={bw} height={Math.max(1, y0 - y1)} rx={3} fill={row.imported === c ? "#C9C1F2" : CH_COLOR[c]} /> : null;
               })}
               <text x={x} y={Y(totals[i]) - 8} textAnchor="middle" className="fill-copy-strong text-[13px] font-extrabold">{n(totals[i])}</text>
-              <text x={x} y={H - 8} textAnchor="middle" className="fill-copy-muted text-[12px]">{row.label}{row.imported ? "*" : ""}{row.partial && !small ? " (so far)" : ""}</text>
+              <text x={x} y={H - 8} textAnchor="middle" className="fill-copy-muted text-[12px]">{row.label}{row.imported && view.channels.includes(row.imported) ? "*" : ""}{row.partial && !small ? " (so far)" : ""}</text>
             </g>
           );
         })}
@@ -117,7 +117,7 @@ function WeekDrill({ view, i, filter }: { view: MarketingView; i: number; filter
   let text = `${n(total)} new enquiries`;
   if (view.channels.length > 1) text += ` (${view.channels.filter((c) => v(row, c)).map((c) => `${n(v(row, c))} ${CHANNEL_LABEL[c]}`).join(", ")})`;
   text += ".";
-  if (row.imported) text += ` This week also includes older ${CHANNEL_LABEL[row.imported]} conversations brought in when ${CHANNEL_LABEL[row.imported]} was connected, so it isn’t a fair comparison.`;
+  if (row.imported && view.channels.includes(row.imported)) text += ` This week also includes older ${CHANNEL_LABEL[row.imported]} conversations brought in when ${CHANNEL_LABEL[row.imported]} was connected, so it isn’t a fair comparison.`;
   else if (prev) {
     const before = view.channels.reduce((s, c) => s + v(prev, c), 0), d = total - before;
     text += ` ${d < 0 ? "Down" : "Up"} ${n(Math.abs(d))} on the week before`;
@@ -213,7 +213,7 @@ export function SmartMarketingOverview({ story }: { story: MarketingStory }) {
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <h2 className="text-[16px] font-extrabold text-copy-strong">New enquiries per week</h2>
-              <p className="text-[12.5px] text-copy-muted">Hover for numbers · click a week to see what changed{view.weeks.some((w) => w.imported) ? " · * includes older conversations brought in when a channel was connected" : ""}</p>
+              <p className="text-[12.5px] text-copy-muted">Hover for numbers · click a week to see what changed{view.weeks.some((w) => w.imported && view.channels.includes(w.imported)) ? " · * includes older conversations brought in when a channel was connected" : ""}</p>
             </div>
             <div className="flex flex-wrap gap-3.5">
               {view.channels.map((c) => <span key={c} className="inline-flex items-center gap-1.5 text-[12px] text-copy-muted"><span className="size-2.5 rounded-sm" style={{ background: CH_COLOR[c] }} />{CHANNEL_LABEL[c]}</span>)}
