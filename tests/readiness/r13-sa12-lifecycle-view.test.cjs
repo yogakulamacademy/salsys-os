@@ -24,9 +24,13 @@ test('confirmation rehearsal requires valid reason and exact action word',()=>{
   assert.equal(ready('restore','Synthetic test reason','RESTORE'),true);
   for(const [action,reason,word] of [['restore','short','RESTORE'],['suspend',' '.repeat(15),'SUSPEND'],['restore','a'.repeat(513),'RESTORE'],['suspend','Synthetic test reason','RESTORE'],['archive','Synthetic test reason','ARCHIVE']])assert.equal(ready(action,reason,word),false);
 });
-test('lifecycle panel has no write endpoint and remains disconnected from production profile',()=>{
+test('lifecycle panel has no write endpoint and renders only gated views',()=>{
   const panel=readFileSync('components/platform-lifecycle-panel.tsx','utf8');
   assert.doesNotMatch(panel,/fetch\(|\.rpc\(|createAdminClient|<form|onSubmit/);
   assert.match(panel,/<button type="button" disabled/);
-  assert.doesNotMatch(readFileSync('app/platform-admin/organization/page.tsx','utf8'),/PlatformLifecyclePanel|parseLifecyclePreview/);
+  const page=readFileSync('app/platform-admin/organization/page.tsx','utf8');
+  assert.match(page,/readViews&&/);
+  assert.match(page,/<PlatformLifecyclePanel key={organization.id/);
+  assert.match(page,/readViews.lifecycle.revision/);
+  assert.doesNotMatch(page,/parseLifecyclePreview/);
 });
