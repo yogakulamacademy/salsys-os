@@ -1,8 +1,10 @@
 "use client";
+import { updateCourseInline } from "@/app/course-management/inline-actions";
+import { ToastForm } from "@/components/toast-form";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { CalendarDays, Copy, GraduationCap, Pencil, Plus, X, } from "lucide-react";
-import { createCourseAction, createCourseBatchAction, updateCourseAction, } from "@/app/course-management/actions";
+import { createCourseAction, createCourseBatchAction } from "@/app/course-management/actions";
 type CourseOption = {
     course_id: string;
     code: string;
@@ -299,7 +301,7 @@ export function CourseManagementSelector({ courses, batches, selectedCourseId, s
 
 
 
-          <form action={updateCourseAction} className="mt-5">
+          <ToastForm action={updateCourseInline} resetOnSuccess={false} className="mt-5">
 
             <input type="hidden" name="course_id" value={selectedCourse.course_id}/>
 
@@ -441,7 +443,7 @@ export function CourseManagementSelector({ courses, batches, selectedCourseId, s
 
             </div>
 
-          </form>
+          </ToastForm>
 
         </div>)}
 

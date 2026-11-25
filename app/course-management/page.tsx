@@ -1,7 +1,8 @@
+import { setCourseBatchEnrollmentStateInline, setCourseBatchActiveStateInline, updateCourseBatchAdminInline } from "@/app/course-management/inline-actions";
+import { ToastForm } from "@/components/toast-form";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { AlertTriangle, ArrowRight, CalendarDays, CircleDollarSign, GraduationCap, LockKeyhole, MapPin, PauseCircle, PlayCircle, Save, ShieldCheck, UnlockKeyhole, Users, } from "lucide-react";
-import { setCourseBatchActiveStateAction, setCourseBatchEnrollmentStateAction, updateCourseBatchAdminAction, } from "@/app/course-management/actions";
 import { CourseManagementSelector } from "@/components/course-management-selector";
 import { EmptyState, Notice, PageHeader } from "@/components/ui";
 import { getCourseManagementWorkspace, type CourseManagementAuditRow, type CourseManagementBatchRow, type CourseManagementCourseRow, } from "@/lib/course-management-data";
@@ -423,7 +424,7 @@ function BatchAdminCard({ row, returnTo, }: {
 
         <div className="flex flex-wrap gap-2">
 
-          <form action={setCourseBatchEnrollmentStateAction}>
+          <ToastForm action={setCourseBatchEnrollmentStateInline}>
 
             <input type="hidden" name="batch_id" value={row.batch_id}/>
 
@@ -461,11 +462,11 @@ function BatchAdminCard({ row, returnTo, }: {
 
             </button>
 
-          </form>
+          </ToastForm>
 
 
 
-          <form action={setCourseBatchActiveStateAction}>
+          <ToastForm action={setCourseBatchActiveStateInline}>
 
             <input type="hidden" name="batch_id" value={row.batch_id}/>
 
@@ -497,7 +498,7 @@ function BatchAdminCard({ row, returnTo, }: {
 
             </button>
 
-          </form>
+          </ToastForm>
 
         </div>
 
@@ -571,7 +572,7 @@ function BatchAdminCard({ row, returnTo, }: {
 
 
 
-      <form action={updateCourseBatchAdminAction} className="mt-5 border-t border-black/5 pt-5">
+      <ToastForm action={updateCourseBatchAdminInline} resetOnSuccess={false} className="mt-5 border-t border-black/5 pt-5">
 
         <input type="hidden" name="batch_id" value={row.batch_id}/>
 
@@ -713,7 +714,7 @@ function BatchAdminCard({ row, returnTo, }: {
 
         </div>
 
-      </form>
+      </ToastForm>
 
 
 

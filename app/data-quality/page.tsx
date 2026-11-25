@@ -1,3 +1,5 @@
+import { dismissIdentityResolutionConflictInline, mergeIdentityResolutionConflictInline } from '@/app/data-quality/inline-actions';
+import { ToastForm } from '@/components/toast-form';
 import Link from 'next/link';
 import {
   AlertTriangle,
@@ -7,10 +9,6 @@ import {
   UsersRound,
 } from 'lucide-react';
 
-import {
-  dismissIdentityResolutionConflictAction,
-  mergeIdentityResolutionConflictAction,
-} from '@/app/actions/identity-resolution';
 import styles from '@/components/crm/crm-studio.module.css';
 import { getLeads } from '@/lib/data';
 import { createClient } from '@/lib/supabase/server';
@@ -338,22 +336,22 @@ export default async function DataQualityPage({ searchParams }: DataQualityPageP
                           ) : null}
                           {canReviewIdentityConflicts ? (
                             <>
-                              <form action={dismissIdentityResolutionConflictAction}>
+                              <ToastForm action={dismissIdentityResolutionConflictInline}>
                                 <input type="hidden" name="conflict_id" value={conflict.id} />
                                 <button type="submit" className={styles.button}>
                                   Dismiss as distinct
                                 </button>
-                              </form>
+                              </ToastForm>
 
                               {mergeEligible ? (
                                 mergeConfirmationOpen ? (
                                   <>
-                                    <form action={mergeIdentityResolutionConflictAction}>
+                                    <ToastForm action={mergeIdentityResolutionConflictInline}>
                                       <input type="hidden" name="conflict_id" value={conflict.id} />
                                       <button type="submit" className={styles.buttonPrimary}>
                                         Confirm same person & merge
                                       </button>
-                                    </form>
+                                    </ToastForm>
                                     <Link href="/data-quality" className={styles.button}>
                                       Cancel merge
                                     </Link>

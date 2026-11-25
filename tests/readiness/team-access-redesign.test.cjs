@@ -15,8 +15,12 @@ test('team redesign preserves tenant authorization and secure write flows', () =
   assert.match(page, /\['owner', 'admin'\]\.includes/);
   assert.match(page, /\.eq\('organization_id', organizationId\)/);
   assert.match(page, /<TeamDirectory members=\{directoryMembers\}/);
-  assert.match(page, /form action=\{createEmployeeAction\}/);
-  assert.match(directory, /form action=\{setEmployeeActiveAction\}/);
+  // Saves in place with a toast (25 Nov 2026); the wrappers call the same secure actions.
+  assert.match(page, /ToastForm action=\{createEmployeeInline\}/);
+  assert.match(directory, /ToastForm action=\{setEmployeeActiveInline\}/);
+  const inline = read('app/settings/team/inline-actions.ts');
+  assert.match(inline, /createEmployeeAction\(fd\)/);
+  assert.match(inline, /setEmployeeActiveAction\(fd\)/);
   assert.match(actions, /provision_tenant_employee/);
   assert.match(actions, /set_tenant_employee_active/);
 });
