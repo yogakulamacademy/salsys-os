@@ -18,8 +18,9 @@ export async function getLeadsIntelligence(): Promise<LeadsIntelligence | null> 
     if (!user) return null;
     const organizationId = await requireCurrentOrganizationId(supabase, user.id);
     const { data, error } = await createAdminClient().rpc('leads_intelligence_v1', { p_organization_id: organizationId });
-    if (error || !data || typeof data !== 'object') return null;
-    return data as LeadsIntelligence;
+    const d = data as Partial<LeadsIntelligence> | null;
+    if (error || !d || !Array.isArray(d.daily) || !Array.isArray(d.weeks) || !Array.isArray(d.courses) || !d.replyEffect || !d.waiting || !d.pipeline) return null;
+    return d as LeadsIntelligence;
   } catch {
     return null;
   }
