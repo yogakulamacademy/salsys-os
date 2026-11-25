@@ -10,6 +10,8 @@ import { getLeads } from "@/lib/data";
 import { suggestNextStep } from "@/lib/interest-profile";
 import { getInterestProfile } from "@/lib/interest-profile-data";
 import { getPersonViewData } from "@/lib/person-360-data";
+import { getRecordCheck } from "@/lib/person-checks-data";
+import { RecordVsConversation, SignalsCard } from "@/components/customer-360/record-check";
 import { buildPersonTimeline, personSummary, STAGE_LABEL, type TimelineKind } from "@/lib/person-story";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
@@ -212,6 +214,8 @@ export default async function Customer360DetailPage({
   const step = interestProfile ? suggestNextStep(interestProfile, course) : null;
   const waiting = Boolean(view?.lastInboundAt && (!view.lastOutboundAt || Date.parse(view.lastInboundAt) > Date.parse(view.lastOutboundAt)));
   const stageText = STAGE_LABEL[activeLead.stage] ?? pretty(activeLead.stage);
+  // The record vs the conversation, and signals (owner-approved mockup, 25 Nov 2026).
+  const recordCheck = await getRecordCheck(admin, organizationId, activeLead.id, stageText);
   const value = activeLead.value ? `worth about ${formatMoney(activeLead.value, activeLead.currency || "INR")}` : null;
   const facts: { label: string; value: string | null; source: string | null }[] = [
     { label: "Course", value: course, source: course ? "Their enquiry" : null },
@@ -271,6 +275,8 @@ export default async function Customer360DetailPage({
             </div>
           ) : null}
         </section>
+
+        {recordCheck && recordCheck.messages ? <SignalsCard s={recordCheck.signals} /> : null}
 
         <section className="rounded-2xl border border-line bg-surface p-5 shadow-xs">
           <h2 className="text-[12px] font-semibold uppercase tracking-[0.08em] text-copy-muted">Everything that happened</h2>
@@ -354,6 +360,8 @@ export default async function Customer360DetailPage({
             </div>
           </section>
         ) : null}
+
+        {recordCheck ? <RecordVsConversation check={recordCheck.check} leadId={activeLead.id} personId={personId} messages={recordCheck.messages} /> : null}
 
         <section className="rounded-2xl border border-line bg-surface p-4 shadow-xs">
           <h2 className="text-[12px] font-semibold uppercase tracking-[0.08em] text-copy-muted">What we know</h2>
