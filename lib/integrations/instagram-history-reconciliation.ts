@@ -9,10 +9,17 @@ const META_GRAPH_VERSION = 'v26.0';
 const MAX_CONVERSATIONS_PER_PASS = 3;
 const MAX_MESSAGES_PER_CONVERSATION = 20;
 const GRAPH_TIMEOUT_MS = 7_000;
+// Every pass first rechecks the newest conversations, so replies typed in the
+// Instagram app reach the CRM within one run. The older-history backfill then
+// continues from its cursor. Without this, the backfill cursor walks deep into
+// old history and new replies wait until a full cycle completes (days).
+const RECENT_CONVERSATIONS_PER_PASS = 10;
+const RECENT_OVERLAP_MS = 30 * 60_000;
+const PASS_TIME_BUDGET_MS = 40_000;
 
 type Json = Record<string, unknown>;
 type GraphPerson = { id?: string | null };
-type GraphConversation = { id?: string; participants?: { data?: GraphPerson[] } | GraphPerson[] };
+type GraphConversation = { id?: string; updated_time?: string; participants?: { data?: GraphPerson[] } | GraphPerson[] };
 type GraphMessage = {
   id?: string;
   created_time?: string;
@@ -40,6 +47,8 @@ export type InstagramHistorySyncSummary = {
   messagesImported: number;
   messagesAlreadyPresent: number;
   messagesSkipped: number;
+  /** Newest conversations rechecked before the backfill page (apply only). */
+  recentConversationsChecked: number;
   hasMore: boolean;
   dryRun: boolean;
   customerMessageSent: false;
@@ -165,7 +174,7 @@ export async function reconcileInstagramMessageHistory({
   const runtime = await getInstagramRuntimeForOrganization(organizationId, accountId);
   const { data: state, error: stateError } = await admin
     .from('instagram_history_sync_cursor_v1')
-    .select('next_cursor,completed_cycles,conversations_scanned,messages_imported,messages_already_present')
+    .select('next_cursor,completed_cycles,conversations_scanned,messages_imported,messages_already_present,last_scanned_at')
     .eq('organization_id', organizationId)
     .eq('instagram_account_id', accountId)
     .maybeSingle();
@@ -190,12 +199,42 @@ export async function reconcileInstagramMessageHistory({
     messagesImported: 0,
     messagesAlreadyPresent: 0,
     messagesSkipped: 0,
+    recentConversationsChecked: 0,
     hasMore: Boolean(conversations.paging?.next && conversations.paging?.cursors?.after),
     dryRun: !apply,
     customerMessageSent: false,
   };
 
-  for (const providerConversation of conversations.data ?? []) {
+  const startedAt = Date.now();
+  const queue: Array<{ conversation: GraphConversation; backfill: boolean }> = [];
+  const lastScanned = Date.parse(text(state?.last_scanned_at));
+  if (apply && text(state?.next_cursor) && Number.isFinite(lastScanned)) {
+    // Newest-first page: only conversations that changed since the last pass.
+    const recent = await graphPage<GraphConversation>(
+      encodeURIComponent(accountId) + '/conversations', runtime.accessToken,
+      { fields: 'id,participants,updated_time', limit: String(RECENT_CONVERSATIONS_PER_PASS) },
+    );
+    const since = lastScanned - RECENT_OVERLAP_MS;
+    for (const conversation of recent.data ?? []) {
+      const updated = Date.parse(text(conversation.updated_time));
+      if (Number.isFinite(updated) && updated >= since) {
+        queue.push({ conversation, backfill: false });
+      }
+    }
+    summary.recentConversationsChecked = queue.length;
+  }
+  const queued = new Set(queue.map(item => text(item.conversation.id)));
+  for (const conversation of conversations.data ?? []) {
+    if (!queued.has(text(conversation.id))) queue.push({ conversation, backfill: true });
+  }
+  let backfillFinished = true;
+
+  for (const { conversation: providerConversation, backfill } of queue) {
+    if (apply && Date.now() - startedAt > PASS_TIME_BUDGET_MS) {
+      // Out of time: keep the backfill cursor so skipped history is retried.
+      if (backfill) backfillFinished = false;
+      break;
+    }
     const graphConversationId = text(providerConversation.id);
     if (!/^[A-Za-z0-9_:-]{4,160}$/.test(graphConversationId)) {
       summary.messagesSkipped += 1;
@@ -317,14 +356,16 @@ export async function reconcileInstagramMessageHistory({
   }
 
   if (apply) {
-    const nextCursor = summary.hasMore ? text(conversations.paging?.cursors?.after) : null;
+    const nextCursor = !backfillFinished
+      ? (text(state?.next_cursor) || null)
+      : summary.hasMore ? text(conversations.paging?.cursors?.after) : null;
     const now = new Date().toISOString();
     const { error: progressError } = await admin.from('instagram_history_sync_cursor_v1')
       .upsert({
         organization_id: organizationId,
         instagram_account_id: accountId,
         next_cursor: nextCursor,
-        completed_cycles: Number(state?.completed_cycles || 0) + (nextCursor ? 0 : 1),
+        completed_cycles: Number(state?.completed_cycles || 0) + (nextCursor || !backfillFinished ? 0 : 1),
         conversations_scanned: Number(state?.conversations_scanned || 0) + summary.conversationsScanned,
         messages_imported: Number(state?.messages_imported || 0) + summary.messagesImported,
         messages_already_present: Number(state?.messages_already_present || 0) + summary.messagesAlreadyPresent,
