@@ -26,6 +26,8 @@ import {
   updateLeadStageInline,
 } from "@/app/leads/inline-actions";
 import { ToastForm } from "@/components/toast-form";
+import { LogCallPanel } from "@/components/log-call-panel";
+import { logCallAction } from "@/app/leads/log-call-action";
 
 import { ContractValueCard } from "@/components/contract-value-card";
 import { PaymentCard } from "@/components/payment-card";
@@ -876,10 +878,17 @@ export default async function LeadDetailPage({
             )}
           </div>
 
+          {!mock ? (
+            <div id="log-call">
+              {/* Log a call in two taps (owner-approved mockup, 25 Nov 2026). */}
+              <LogCallPanel leadName={lead.name} action={logCallAction.bind(null, id)} />
+            </div>
+          ) : null}
+
           <div className="card-pad">
             <div className="eyebrow">Admissions activity</div>
 
-            <div className="section-title mt-1">Log contact</div>
+            <div className="section-title mt-1">Log other contact</div>
 
             <p className="mt-2 text-xs leading-5 text-slate-400">
               Record calls, texts, email, WhatsApp or Instagram contact made by

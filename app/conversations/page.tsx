@@ -13,6 +13,7 @@ import { WhatsAppComposer } from "@/components/conversation-composer";
 import { ConversationIntelligencePanel } from "@/components/conversation-intelligence-panel";
 import { AILeadInsightPanel } from "@/components/ai-lead-insight-panel";
 import { InboxQuickActions } from "@/components/inbox-quick-actions";
+import { logCallAction } from "@/app/leads/log-call-action";
 import { buildQuickReplies } from "@/lib/inbox-quick-replies";
 import { getUpcomingBatchesForQuickReplies } from "@/lib/inbox-quick-reply-data";
 import { InboxHeaderActions } from "@/components/inbox-header-actions";
@@ -254,6 +255,7 @@ export default async function ConversationsPage({
     : undefined;
   const stageInlineAction = selectedId ? changeStageInline.bind(null, selectedId) : undefined;
   const logInlineAction = selectedId ? logInteractionInline.bind(null, selectedId) : undefined;
+  const callInlineAction = selectedId ? logCallAction.bind(null, selectedId) : undefined;
   const quickBatches = selected && !mock
     ? await getUpcomingBatchesForQuickReplies(selected.interestedCourseId).catch(() => [])
     : [];
@@ -624,7 +626,7 @@ export default async function ConversationsPage({
       <section className="ibx-v5-card ibx-v5-actions-card" aria-label="Quick actions and follow-up">
         <InboxQuickActions key={`qa-${selected.id}`} phone={selectedPhone} canCall={Boolean(hasTelephoneContact)}
           profileHref={`/leads/${selected.id}`} channel={selected.currentContactChannel}
-          replies={quickReplies!} logAction={mock ? undefined : logInlineAction} stageAction={mock ? undefined : stageInlineAction} mock={mock}/>
+          replies={quickReplies!} logAction={mock ? undefined : logInlineAction} callAction={mock ? undefined : callInlineAction} leadId={selected.id} leadName={selected.name} stageAction={mock ? undefined : stageInlineAction} mock={mock}/>
         <div id="inbox-next-steps" className="ibx-v2-next-step-card">
           <ConversationIntelligencePanel
             compact
