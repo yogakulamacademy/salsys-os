@@ -71,6 +71,30 @@ test('SA-12 private lifecycle authorization requires explicit permission and mat
     }
     assert.equal((await db.query('select status from public.organizations where id=$1',[target])).rows[0].status,'active');
     await db.query(readFileSync('supabase/drafts/r13_sa12_lifecycle_transitions.sql','utf8'));
+    await db.query(readFileSync('supabase/drafts/r13_sa12_lifecycle_read_preview.sql','utf8'));
+    const readLifecycle=async(org=target,platformId=platform)=>(await db.query('select saas_lifecycle.read_preview($1,$2) as value',[platformId,org])).rows[0].value;
+    await assert.rejects(readLifecycle(),e=>e.code==='42501');
+    await db.query("insert into saas_lifecycle.readers values($1,$2,true)",[actor,platform]);
+    const readOnly=await readLifecycle();
+    assert.deepEqual(readOnly,{state:'available',organization_id:target,status:'active',revision:0,may_suspend:false,may_restore:false,events:[]});
+    assert.deepEqual(await readLifecycle(platform),{state:'unavailable'});
+    assert.deepEqual(await readLifecycle(randomUUID()),{state:'unavailable'});
+    assert.equal((await readLifecycle(other)).status,'archived');
+    await assert.rejects(readLifecycle(target,other),e=>e.code==='42501');
+    for(const invalid of [{role:'service_role'},{session_id:'invalid'},{sub:'invalid'},{session_id:randomUUID()}]){
+      await claims(invalid);await assert.rejects(readLifecycle(),e=>e.code==='42501');
+    }
+    await claims();
+    await db.query('update saas_lifecycle.readers set active=false');
+    await assert.rejects(readLifecycle(),e=>e.code==='42501');
+    await db.query('update saas_lifecycle.readers set active=true');
+    await db.query("update auth.sessions set not_after=now()-interval '1 second'");
+    await assert.rejects(readLifecycle(),e=>e.code==='42501');
+    await db.query('update auth.sessions set not_after=null');
+    for(const role of ['anon','authenticated','service_role']){
+      assert.equal((await db.query("select has_function_privilege($1,'saas_lifecycle.read_preview(uuid,uuid)','EXECUTE') as value",[role])).rows[0].value,false);
+      assert.equal((await db.query("select has_table_privilege($1,'saas_lifecycle.readers','SELECT,INSERT,UPDATE,DELETE,TRUNCATE') as value",[role])).rows[0].value,false);
+    }
     await db.query(readFileSync('supabase/drafts/r13_sa12_lifecycle_work_revision.sql','utf8'));
     const bind=async(id,revision,channel='instagram',org=target)=>(await db.query('select saas_lifecycle.bind_new_work($1,$2,$3,$4) as value',[org,channel,id,revision])).rows[0].value;
     const allowed=async(id,channel='instagram',org=target)=>(await db.query('select saas_lifecycle.work_revision_allowed($1,$2,$3) as value',[org,channel,id])).rows[0].value;
@@ -146,6 +170,11 @@ test('SA-12 private lifecycle authorization requires explicit permission and mat
     const request=randomUUID();
     const first=await change(db,'suspend',0,request);
     assert.equal(first.new_status,'suspended');assert.equal(first.revision,1);
+    const suspendedView=await readLifecycle();
+    assert.equal(suspendedView.status,'suspended');assert.equal(suspendedView.revision,1);
+    assert.equal(suspendedView.may_suspend,false);assert.equal(suspendedView.may_restore,true);
+    assert.deepEqual(Object.keys(suspendedView.events[0]).sort(),['action','new_status','occurred_at','previous_status','reason','revision']);
+    assert.equal(suspendedView.events[0].reason,reason);
     assert.equal(await state(),'suspended');assert.equal(await count(),1);
     assert.equal(await allowed(oldWork),false);
     assert.equal(await allowed(oldBroadcast,'whatsapp'),false);
@@ -160,6 +189,12 @@ test('SA-12 private lifecycle authorization requires explicit permission and mat
     assert.equal(await count(),1);
     const restore=await change(db,'restore',1,randomUUID());
     assert.equal(restore.revision,2);assert.equal(await state(),'active');
+    const restoredView=await readLifecycle();
+    assert.equal(restoredView.status,'active');assert.equal(restoredView.may_suspend,true);assert.equal(restoredView.may_restore,false);
+    assert.deepEqual(restoredView.events.map(e=>e.revision),[2,1]);
+    await db.query("update public.organizations set status='suspended' where id=$1",[target]);
+    assert.deepEqual(await readLifecycle(),{state:'unavailable'});
+    await db.query("update public.organizations set status='active' where id=$1",[target]);
     assert.equal(await allowed(oldWork),false);
     assert.equal(await allowed(oldBroadcast,'whatsapp'),false);
     assert.equal(await bind(oldWork,2),false);
