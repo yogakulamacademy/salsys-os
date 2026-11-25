@@ -397,14 +397,14 @@ jobs:
           # and transaction. No migration ledger write; no cloud connection.
           {
             printf 'begin;\n'
-            for candidate in r13_sa12_lifecycle_authority r13_sa12_lifecycle_transitions r13_sa12_lifecycle_read_preview r13_sa12_lifecycle_work_revision r13_sa12_lifecycle_claim_adapters r13_sa12_lifecycle_queue_binding r13_sa12_organization_write_boundary r13_sa12_platform_effective_quota; do
+            for candidate in r13_sa12_lifecycle_authority r13_sa12_lifecycle_transitions r13_sa12_lifecycle_read_preview r13_sa12_lifecycle_work_revision r13_sa12_lifecycle_claim_adapters r13_sa12_lifecycle_queue_binding r13_sa12_organization_write_boundary r13_sa12_platform_effective_quota r13_sa12_platform_read_api; do
               cat "supabase/drafts/$candidate.sql"
               printf '\n'
             done
             cat tests/database/r13-sa12-full-schema-local.sql
             printf '\nrollback;\n'
           } | docker exec -i "$db_containers" psql -X -v ON_ERROR_STOP=1 -U postgres -d postgres
-          test "$(docker exec "$db_containers" psql -X -v ON_ERROR_STOP=1 -U postgres -d postgres -Atc "select to_regnamespace('saas_lifecycle') is null and to_regclass('saas_governance.platform_quota_readers') is null")" = t
+          test "$(docker exec "$db_containers" psql -X -v ON_ERROR_STOP=1 -U postgres -d postgres -Atc "select to_regnamespace('saas_lifecycle') is null and to_regnamespace('saas_platform_read_api') is null and to_regclass('saas_governance.platform_quota_readers') is null")" = t
           echo "SA-12 full-schema rehearsal rolled back"
 
       - name: Rehearse one-time owner catalog bootstrap
