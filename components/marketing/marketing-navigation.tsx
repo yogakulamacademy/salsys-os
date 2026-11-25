@@ -96,7 +96,7 @@ function subActive(where: Where, href: string) {
   return where.path === path;
 }
 
-function NavigationLinks({ where }: { where: Where }) {
+function NavigationLinks({ where, scope }: { where: Where; scope: string }) {
   return (
     <nav className="space-y-1" aria-label="Marketing workspace views">
       {items.map((item) => {
@@ -106,6 +106,8 @@ function NavigationLinks({ where }: { where: Where }) {
           <div key={item.key}>
             <Link
               href={item.href}
+              aria-label={item.label}
+              aria-describedby={`marketing-nav-${scope}-${item.key}`}
               aria-current={active && (!item.subs || subActive(where, item.href)) ? 'page' : undefined}
               className={`group relative flex min-h-10 items-start gap-2.5 rounded-ui px-3 py-2.5 transition ${
                 active ? 'bg-brand-50' : 'hover:bg-surface-muted'
@@ -115,7 +117,7 @@ function NavigationLinks({ where }: { where: Where }) {
               <Icon size={16} className={`mt-0.5 shrink-0 ${active ? 'text-brand-700' : 'text-copy-subtle group-hover:text-brand-700'}`} />
               <span className="min-w-0">
                 <span className={`block text-[13.5px] ${active ? 'font-bold text-brand-700' : 'font-semibold text-copy-strong'}`}>{item.label}</span>
-                <span className="block text-[11.5px] leading-4 text-copy-muted">{item.description}</span>
+                <span id={`marketing-nav-${scope}-${item.key}`} className="block text-[11.5px] leading-4 text-copy-muted">{item.description}</span>
               </span>
             </Link>
             {active && item.subs ? (
@@ -157,7 +159,7 @@ function NavigationBody({ where }: { where: Where }) {
           <ChevronDown size={16} className="text-copy-subtle transition group-open:rotate-180" />
         </summary>
         <div className="border-t border-line p-3">
-          <NavigationLinks where={where} />
+          <NavigationLinks where={where} scope="m" />
         </div>
       </details>
 
@@ -172,7 +174,7 @@ function NavigationBody({ where }: { where: Where }) {
               Where enquiries come from and what they cost.
             </p>
           </div>
-          <NavigationLinks where={where} />
+          <NavigationLinks where={where} scope="d" />
           <div className="mt-auto border-t border-line px-3 pt-4 text-[12px] leading-5 text-copy-muted">
             <Link href="/settings/integrations" className="inline-flex items-center gap-1.5 font-semibold text-copy-strong hover:text-brand-700">
               <Globe2 size={13} /> Connections
