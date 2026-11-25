@@ -33,7 +33,7 @@ async function runPreview(options = {}) {
       if (table === 'instagram_history_sync_cursor_v1') {
         const q = {
           select(columns) {
-            assert.equal(columns, 'next_cursor,completed_cycles,conversations_scanned,messages_imported,messages_already_present');
+            assert.equal(columns, 'next_cursor,completed_cycles,conversations_scanned,messages_imported,messages_already_present,last_scanned_at');
             return q;
           },
           eq(key, value) {
