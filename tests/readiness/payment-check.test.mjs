@@ -1,0 +1,51 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+
+import { duplicateHints, looksLikeOwnBusiness, moneyText, sortForChecking, suggestedAmount } from '../../lib/payment-check.ts';
+
+const person = (o) => ({
+  leadId: o.leadId, personId: o.personId ?? null, name: o.name, stage: 'payment_pending', courseId: null, courseName: null,
+  value: o.value ?? null, currency: o.currency ?? 'INR', channel: null, daysWaiting: o.days ?? 0, lastInbound: null,
+  saysPaid: Boolean(o.saysPaid), attempts: o.attempts ?? [],
+});
+
+test('“Younita Pandey” and “younita005” are flagged; already-merged people say “same person”', () => {
+  const a = person({ leadId: 'a', name: 'Younita Pandey' });
+  const b = person({ leadId: 'b', name: 'younita005' });
+  const c = person({ leadId: 'c', name: 'Sanika Godbole' });
+  const hints = duplicateHints([a, b, c]);
+  assert.ok(hints.some((h) => h.leadId === 'a' && h.otherLeadId === 'b' && !h.samePerson));
+  assert.equal(hints.some((h) => h.leadId === 'c' || h.otherLeadId === 'c'), false);
+  const merged = duplicateHints([{ ...a, personId: 'p1' }, { ...b, personId: 'p1' }]);
+  assert.ok(merged.every((h) => h.samePerson));
+});
+
+test('short first names never match by accident', () => {
+  assert.equal(duplicateHints([person({ leadId: 'a', name: 'Riya S' }), person({ leadId: 'b', name: 'riyaz_yoga' })]).length, 0);
+});
+
+test('the business’s own number is spotted', () => {
+  assert.equal(looksLikeOwnBusiness('Yogakulam Academy International', 'Yogakulam Academy'), true);
+  assert.equal(looksLikeOwnBusiness('Padmavathy', 'Yogakulam Academy'), false);
+  assert.equal(looksLikeOwnBusiness('Anyone', null), false);
+});
+
+test('says paid first, then a checkout, then longest waiting', () => {
+  const order = sortForChecking([
+    person({ leadId: 'old', name: 'Old', days: 37 }),
+    person({ leadId: 'checkout', name: 'C', days: 2, attempts: [{ id: 'x', amount: 20000, currency: 'INR', provider: 'direct_upi', kind: 'full', createdAt: '2026-11-23' }] }),
+    person({ leadId: 'paid', name: 'P', days: 6, saysPaid: true }),
+  ]).map((p) => p.leadId);
+  assert.deepEqual(order, ['paid', 'checkout', 'old']);
+});
+
+test('the amount is filled from the biggest checkout, with the matching method', () => {
+  const g = suggestedAmount(person({ leadId: 'r', name: 'R', attempts: [
+    { id: 's', amount: 200, currency: 'USD', provider: 'paypal', kind: 'deposit', createdAt: '2026-11-12' },
+    { id: 'f', amount: 2490, currency: 'USD', provider: 'paypal', kind: 'full', createdAt: '2026-11-12' },
+  ] }));
+  assert.deepEqual(g, { amount: 2490, currency: 'USD', checkoutId: 'f', method: 'paypal' });
+  assert.equal(suggestedAmount(person({ leadId: 'n', name: 'N', value: 30000 })).checkoutId, null);
+  assert.equal(moneyText(25000, 'INR'), '₹25,000');
+  assert.equal(moneyText(2490, 'USD'), '$2,490');
+});
