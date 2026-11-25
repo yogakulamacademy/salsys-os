@@ -38,6 +38,11 @@ begin
  begin perform saas_lifecycle.require_operator(v_platform,v_target,'suspend');
  exception when insufficient_privilege then v_denied:=true; end;
  if not v_denied then raise exception 'Service claim authorized lifecycle mutation'; end if;
+ v_denied:=false;
+ begin perform saas_lifecycle.read_preview(v_platform,v_target);
+ exception when insufficient_privilege then v_denied:=true; end;
+ if not v_denied then raise exception 'Service claim authorized lifecycle read'; end if;
+ if exists(select 1 from saas_lifecycle.readers) then raise exception 'Lifecycle reader seeded unexpectedly'; end if;
  if saas_governance.platform_effective_quota_preview(v_target)->>'state' is distinct from 'managed_separately' then
    raise exception 'Actual resolver legacy quota state mismatch';
  end if;
