@@ -37,10 +37,19 @@ export function duplicateHints(people: PaymentCheckPerson[]): DuplicateHint[] {
 }
 
 /** "Yogakulam Academy International" at Payment pending is the business's own number. */
-export function looksLikeOwnBusiness(name: string, businessName: string | null): boolean {
-  const word = letters((businessName ?? "").split(/\s+/)[0] ?? "");
-  return word.length >= 5 && letters(name).includes(word);
+export function looksLikeOwnBusiness(name: string, businessNames: string | null | Array<string | null | undefined>): boolean {
+  const names = Array.isArray(businessNames) ? businessNames : [businessNames];
+  return names.some((n) => {
+    const word = letters((n ?? "").split(/\s+/)[0] ?? "");
+    return word.length >= 5 && letters(name).includes(word);
+  });
 }
+
+/** Rough rupee value, only to compare checkouts in different currencies. */
+const ROUGH_INR: Record<string, number> = { INR: 1, USD: 85, EUR: 92, GBP: 108, AUD: 56, CAD: 62, AED: 23 };
+export const roughInr = (amount: number, currency: string) => amount * (ROUGH_INR[(currency || "INR").toUpperCase()] ?? 85);
+/** The checkout worth the most (in rupee terms), whatever its currency. */
+export const largestAttempt = (attempts: CheckoutAttempt[]) => [...attempts].sort((a, b) => roughInr(b.amount, b.currency) - roughInr(a.amount, a.currency))[0];
 
 /** Most likely to have paid first: says they paid, then started a checkout, then longest waiting. */
 export function sortForChecking(people: PaymentCheckPerson[]): PaymentCheckPerson[] {
@@ -50,7 +59,7 @@ export function sortForChecking(people: PaymentCheckPerson[]): PaymentCheckPerso
 
 /** The largest checkout they started is the best guess for the amount; otherwise the course price. */
 export function suggestedAmount(p: PaymentCheckPerson): { amount: number | null; currency: string; checkoutId: string | null; method: string } {
-  const best = [...p.attempts].sort((a, b) => b.amount - a.amount)[0];
+  const best = largestAttempt(p.attempts);
   if (best) {
     const provider = best.provider.toLowerCase();
     const method = provider.includes("paypal") ? "paypal" : provider.includes("upi") ? "upi" : provider.includes("icici") || provider.includes("razorpay") || provider.includes("stripe") ? "gateway" : "bank_transfer";

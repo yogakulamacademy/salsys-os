@@ -3,14 +3,15 @@ import 'server-only';
 import { saysTheyPaid } from '@/lib/home-story';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createClient } from '@/lib/supabase/server';
-import { requireCurrentOrganizationId } from '@/lib/workspace';
+import { getWorkspaceContextForUser, requireCurrentOrganizationId } from '@/lib/workspace';
 import type { CheckoutAttempt, PaymentCheckPerson } from '@/lib/payment-check';
 
 export type PaymentCheckData = {
   people: PaymentCheckPerson[];
   checkoutOnly: PaymentCheckPerson[];
   courses: Array<{ id: string; name: string; batches: Array<{ id: string; label: string }> }>;
-  businessName: string | null;
+  /** Names the business goes by (header name and record name), to spot its own number. */
+  businessNames: string[];
   isAdmin: boolean;
   canMerge: boolean;
 };
@@ -29,6 +30,7 @@ export async function getPaymentCheckData(): Promise<PaymentCheckData | null> {
     if (!user) return null;
     const org = await requireCurrentOrganizationId(supabase, user.id);
     const admin = createAdminClient();
+    const workspace = await getWorkspaceContextForUser(supabase, user.id).catch(() => null);
 
     const [{ data: canManage }, { data: canAdminister }, orgRow, pendingLeads, checkouts, courses, batches] = await Promise.all([
       supabase.rpc('can_manage_organization', { p_organization_id: org }),
@@ -103,7 +105,7 @@ export async function getPaymentCheckData(): Promise<PaymentCheckData | null> {
       people: (pendingLeads.data ?? []).map(toPerson),
       checkoutOnly: (checkoutLeads ?? []).map(toPerson),
       courses: (courses.data ?? []).map((c) => ({ id: String(c.id), name: String(c.name), batches: batchByCourse.get(String(c.id)) ?? [] })),
-      businessName: (orgRow.data?.name as string | undefined) ?? null,
+      businessNames: [workspace?.activeWorkspace?.organizationName, orgRow.data?.name as string | undefined].filter((x): x is string => Boolean(x && x.trim())),
       isAdmin: canManage === true,
       canMerge: canAdminister === true,
     };
