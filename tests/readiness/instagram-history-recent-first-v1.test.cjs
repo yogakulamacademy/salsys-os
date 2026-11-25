@@ -10,10 +10,23 @@ function thread(id, customer, updated) {
   return { id, updated_time: updated, participants: { data: [{ id: ACCOUNT }, { id: customer }] } };
 }
 
-async function runApply(state) {
-  const seen = { messageThreads: [], upserts: [], conversationParams: [] };
+async function runApply(state, options = {}) {
+  const seen = { messageThreads: [], upserts: [], conversationParams: [], statusChecks: 0, runtimeReads: 0, rawWrites: 0, projections: 0 };
+  options.observe?.(seen);
   const admin = {
     from(table) {
+      if (table === 'organizations') {
+        const q = {
+          select(columns) { assert.equal(columns, 'id,status'); return q; },
+          eq(key,value) { assert.equal(key,'id'); assert.equal(value,ORG); return q; },
+          maybeSingle: async () => {
+            seen.statusChecks++;
+            if (options.statusError) return { data:null,error:{message:'private error'} };
+            return { data:options.statusRow ? options.statusRow(seen) : {id:ORG,status:'active'},error:null };
+          },
+        };
+        return q;
+      }
       if (table === 'instagram_history_sync_cursor_v1') {
         const q = {
           select() { return q; },
@@ -33,15 +46,17 @@ async function runApply(state) {
       }
       throw Error('Unexpected table ' + table);
     },
-    rpc: async name => name === 'ingest_raw_event'
-      ? { data: { event_id: 'raw-1' }, error: null }
-      : { data: { ok: true, imported: true }, error: null },
+    rpc: async name => {
+      if(name==='ingest_raw_event'){seen.rawWrites++;return {data:{event_id:'raw-1'},error:null};}
+      assert.equal(name,'ingest_instagram_history_message_v1');
+      seen.projections++;return {data:{ok:true,imported:true},error:null};
+    },
   };
   const worker = load('lib/integrations/instagram-history-reconciliation.ts', {
     'server-only': {},
     '@/lib/supabase/admin': { createAdminClient: () => admin },
     '@/lib/integrations/instagram-connection': {
-      getInstagramRuntimeForOrganization: async () => ({ accessToken: 'synthetic' }),
+      getInstagramRuntimeForOrganization: async () => {seen.runtimeReads++;return { accessToken: 'synthetic' };},
     },
   });
   const oldFetch = global.fetch;
@@ -95,4 +110,30 @@ test('each pass rechecks conversations updated since the last scan before the de
 test('first run without a cursor does not double-read the newest page', async () => {
   const { seen } = await runApply(null);
   assert.equal(seen.conversationParams.length, 1);
+});
+
+test('inactive, missing, mismatched and failed organization lookups stop before credentials or provider calls',async()=>{
+  for(const options of [
+    {statusRow:()=>({id:ORG,status:'suspended'})},
+    {statusRow:()=>({id:ORG,status:'archived'})},
+    {statusRow:()=>({id:ORG,status:'unknown'})},
+    {statusRow:()=>null},
+    {statusRow:()=>({id:'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',status:'active'})},
+    {statusError:true},
+  ]){
+    let seen;
+    await assert.rejects(runApply(null,{...options,observe:v=>seen=v}),/Instagram history organization unavailable/);
+    assert.equal(seen.runtimeReads,0);assert.equal(seen.conversationParams.length,0);
+    assert.equal(seen.rawWrites,0);assert.equal(seen.projections,0);assert.equal(seen.upserts.length,0);
+  }
+});
+test('suspension after raw evidence write preserves receipt and stops projection and cursor advancement',async()=>{
+  let seen;
+  await assert.rejects(runApply(null,{observe:v=>seen=v,statusRow:s=>({id:ORG,status:s.rawWrites?'suspended':'active'})}),/Instagram history organization unavailable/);
+  assert.equal(seen.rawWrites,1);assert.equal(seen.projections,0);assert.equal(seen.upserts.length,0);
+});
+test('suspension after projection prevents cursor advancement',async()=>{
+  let seen;
+  await assert.rejects(runApply(null,{observe:v=>seen=v,statusRow:s=>({id:ORG,status:s.projections?'suspended':'active'})}),/Instagram history organization unavailable/);
+  assert.equal(seen.rawWrites,1);assert.equal(seen.projections,1);assert.equal(seen.upserts.length,0);
 });
