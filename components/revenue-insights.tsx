@@ -320,11 +320,11 @@ export function RevenueInsights({
 
           <FinanceMetric
             icon={<Target size={17} />}
-            label="Outstanding"
+            label="Open enquiry value"
             value={formatMoney(summary.outstanding, currency)}
-            note={`${summary.balanceLeads} ${
-              summary.balanceLeads === 1 ? "lead" : "leads"
-            } with balance`}
+            note={`${summary.balanceLeads} open ${
+              summary.balanceLeads === 1 ? "enquiry" : "enquiries"
+            } · not owed yet`}
           />
         </div>
 
