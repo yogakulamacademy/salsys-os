@@ -8,11 +8,10 @@ import type { LeadPayment } from '@/lib/data';
 import { getRefundOptions } from '@/lib/refund-options';
 
 import {
-  recordRefundInline,
-  reportPaymentClaimInline,
-  verifyPaymentInline,
-} from "@/app/leads/inline-actions";
-import { ToastForm } from "@/components/toast-form";
+  recordRefundAction,
+  reportPaymentClaimAction,
+  verifyPaymentAction,
+} from "@/app/actions/payments";
 
 export function PaymentActionsClient({
   currency,
@@ -33,9 +32,9 @@ export function PaymentActionsClient({
 
   if (!leadId) return null;
 
-  const reportAction = reportPaymentClaimInline.bind(null, leadId);
-  const verifyAction = verifyPaymentInline.bind(null, leadId);
-  const refundAction = recordRefundInline.bind(null, leadId);
+  const reportAction = reportPaymentClaimAction.bind(null, leadId);
+  const verifyAction = verifyPaymentAction.bind(null, leadId);
+  const refundAction = recordRefundAction.bind(null, leadId);
 
   return (
     <div className="mt-6 space-y-3 border-t border-line pt-5">
@@ -43,7 +42,7 @@ export function PaymentActionsClient({
         <summary className="cursor-pointer select-none px-4 py-3 text-sm font-semibold text-brand-700">
           Report customer payment
         </summary>
-        <ToastForm action={reportAction} className="border-t border-line p-4">
+        <form action={reportAction} className="border-t border-line p-4">
           <div className="mb-4 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-[11px] leading-5 text-amber-800">
             <AlertTriangle size={14} className="mt-0.5 shrink-0" />
             <span>
@@ -97,7 +96,7 @@ export function PaymentActionsClient({
               Create verification task
             </button>
           </div>
-        </ToastForm>
+        </form>
       </details>
 
       {canVerifyPayment ? (
@@ -105,7 +104,7 @@ export function PaymentActionsClient({
           <summary className="cursor-pointer select-none px-4 py-3 text-sm font-semibold text-brand-700">
             Verify received payment
           </summary>
-          <ToastForm
+          <form
             action={verifyAction}
             onSubmit={(event) => {
               const confirmed = window.confirm(
@@ -197,7 +196,7 @@ export function PaymentActionsClient({
                 Verify & record paid
               </button>
             </div>
-          </ToastForm>
+          </form>
         </details>
       ) : (
         <div className="rounded-xl border border-line bg-surface-soft px-4 py-3 text-[11px] leading-5 text-copy-muted">
@@ -210,7 +209,7 @@ export function PaymentActionsClient({
           <summary className="cursor-pointer select-none px-4 py-3 text-sm font-semibold text-copy-muted">
             Record refund
           </summary>
-          <ToastForm
+          <form
             action={refundAction}
             onSubmit={(event) => {
               if (!window.confirm("Record this refund as a financial transaction?")) {
@@ -265,7 +264,7 @@ export function PaymentActionsClient({
             <div className="mt-4 flex justify-end">
               <RefundSubmitButton disabled={!selectedPayment} />
             </div>
-          </ToastForm>
+          </form>
         </details>
       ) : null}
     </div>

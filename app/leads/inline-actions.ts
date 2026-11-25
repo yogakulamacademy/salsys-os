@@ -5,7 +5,6 @@ import {
   logLeadContactAction,
   updateLeadStageAction,
 } from '@/app/actions/crm';
-import { recordRefundAction, reportPaymentClaimAction, verifyPaymentAction } from '@/app/actions/payments';
 import { asResult } from '@/lib/action-result';
 
 /**
@@ -27,14 +26,5 @@ export async function logLeadContactInline(leadId: string, fd: FormData) {
   return asResult(() => logLeadContactAction(leadId, fd), 'Contact recorded on the lead.', paths(leadId));
 }
 
-export async function reportPaymentClaimInline(leadId: string, fd: FormData) {
-  return asResult(() => reportPaymentClaimAction(leadId, fd), 'Payment reported · waiting for an admin to verify.', paths(leadId));
-}
-
-export async function verifyPaymentInline(leadId: string, fd: FormData) {
-  return asResult(() => verifyPaymentAction(leadId, fd), 'Payment verified.', [...paths(leadId), '/enrollments']);
-}
-
-export async function recordRefundInline(leadId: string, fd: FormData) {
-  return asResult(() => recordRefundAction(leadId, fd), 'Refund recorded.', [...paths(leadId), '/enrollments']);
-}
+// Report / verify payment and refunds keep their own flow: their financial
+// tests pin the error behaviour, so they are not wrapped here.
