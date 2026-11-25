@@ -6,7 +6,7 @@ import { getInstagramRuntimeForOrganization } from '@/lib/integrations/instagram
 // Official Conversations API only. Never scrape Instagram or send DMs.
 // This API can omit inactive Requests chats and older messages.
 const META_GRAPH_VERSION = 'v26.0';
-const MAX_CONVERSATIONS_PER_PASS = 3;
+const MAX_CONVERSATIONS_PER_PASS = 10;
 const MAX_MESSAGES_PER_CONVERSATION = 20;
 const GRAPH_TIMEOUT_MS = 7_000;
 // Every pass first rechecks the newest conversations, so replies typed in the

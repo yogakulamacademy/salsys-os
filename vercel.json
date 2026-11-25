@@ -49,7 +49,7 @@
     },
     {
       "path": "/api/instagram/history-sync",
-      "schedule": "*/15 * * * *"
+      "schedule": "*/5 * * * *"
     },
     {
       "path": "/api/ad-activation/meta/runner",
