@@ -6,6 +6,7 @@ import { useMemo, useState, useTransition } from "react";
 import {
   checkoutNotReceivedAction, confirmPaidAction, markTestLeadAction, mergePeopleAction, notJoiningAction, stillDecidingAction,
 } from "@/app/admissions/payment-check-actions";
+import { toast } from "@/lib/toast";
 import {
   duplicateHints, largestAttempt, looksLikeOwnBusiness, moneyText, sortForChecking, suggestedAmount,
   type PaymentCheckPerson,
@@ -32,39 +33,66 @@ const initials = (n: string) => n.replace(/[_.]/g, " ").split(/\s+/).filter(Bool
 const today = () => new Date().toISOString().slice(0, 10);
 const METHODS = [["upi", "UPI"], ["bank_transfer", "Bank transfer"], ["gateway", "Card / payment gateway"], ["paypal", "PayPal"], ["cash", "Cash"]] as const;
 
+type Line = { key: number; courseId: string; batchId: string; amount: string };
+
 function PaidForm({ p, courses, isAdmin, onDone, onCancel }: { p: PaymentCheckPerson; courses: Course[]; isAdmin: boolean; onDone: (msg: string) => void; onCancel: () => void }) {
   const guess = suggestedAmount(p);
-  const [courseId, setCourseId] = useState(p.courseId ?? "");
-  const [error, setError] = useState<string | null>(null);
+  // One payment can cover several courses (owner request, 25 Nov 2026).
+  const [lines, setLines] = useState<Line[]>([{ key: 0, courseId: p.courseId ?? "", batchId: "", amount: guess.amount != null ? String(guess.amount) : "" }]);
   const [pending, start] = useTransition();
-  const batches = courses.find((c) => c.id === courseId)?.batches ?? [];
   const field = "h-9 w-full rounded-[9px] border border-line bg-surface px-2.5 text-[13px] text-copy-strong";
   const label = "mb-1 block text-[11.5px] font-bold text-copy-muted";
+  const update = (key: number, patch: Partial<Line>) => setLines((ls) => ls.map((l) => (l.key === key ? { ...l, ...patch } : l)));
+  const add = () => setLines((ls) => [...ls, { key: Math.max(...ls.map((l) => l.key)) + 1, courseId: "", batchId: "", amount: "" }]);
+  const remove = (key: number) => setLines((ls) => (ls.length > 1 ? ls.filter((l) => l.key !== key) : ls));
+  const multi = lines.length > 1;
   return (
     <form
       className="ml-12 mt-1.5 grid grid-cols-2 gap-2.5 rounded-xl border border-emerald-200 bg-emerald-50/50 p-3.5 dark:border-emerald-900/50 dark:bg-emerald-950/10 md:grid-cols-4 xl:grid-cols-7"
-      action={(form) => start(async () => {
-        setError(null);
-        const res = await confirmPaidAction(p.leadId, form);
-        if (res.ok) onDone(res.message); else setError(res.error);
-      })}
+      onSubmit={(event) => {
+        event.preventDefault();
+        const form = new FormData(event.currentTarget);
+        start(async () => {
+          const res = await confirmPaidAction(p.leadId, form);
+          if (res.ok) { toast.success(`${p.name}: ${res.message}`); onDone(res.message); }
+          else toast.error("Something went wrong", { description: res.error });
+        });
+      }}
     >
       <input type="hidden" name="as_admin" value={isAdmin ? "1" : "0"} />
       {guess.checkoutId ? <input type="hidden" name="checkout_id" value={guess.checkoutId} /> : null}
-      <label className="col-span-2"><span className={label}>Course</span>
-        <select name="course_id" value={courseId} onChange={(e) => setCourseId(e.target.value)} className={field} required>
-          <option value="">Choose…</option>
-          {courses.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-        </select>
-      </label>
-      <label><span className={label}>Batch</span>
-        <select name="batch_id" className={field} defaultValue=""><option value="">Not chosen yet</option>{batches.map((b) => <option key={b.id} value={b.id}>{b.label}</option>)}</select>
-      </label>
-      <label><span className={label}>Amount paid</span>
-        <div className="flex gap-1">
-          <select name="currency" defaultValue={guess.currency} className={`${field} w-[70px] px-1.5`}><option>INR</option><option>USD</option><option>EUR</option><option>GBP</option></select>
-          <input name="amount" inputMode="decimal" defaultValue={guess.amount ?? ""} className={field} required />
-        </div>
+      <div className="col-span-full space-y-2">
+        {lines.map((line, i) => {
+          const batches = courses.find((c) => c.id === line.courseId)?.batches ?? [];
+          return (
+            <div key={line.key} className="grid grid-cols-2 items-end gap-2.5 md:grid-cols-[minmax(0,2fr)_minmax(0,1.4fr)_minmax(0,1fr)_auto]">
+              <label className="col-span-2 md:col-span-1"><span className={label}>{multi ? `Course ${i + 1}` : "Course"}</span>
+                <select name="course_id" value={line.courseId} onChange={(e) => update(line.key, { courseId: e.target.value, batchId: "" })} className={field} required>
+                  <option value="">Choose…</option>
+                  {courses.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+              </label>
+              <label><span className={label}>Batch</span>
+                <select name="batch_id" value={line.batchId} onChange={(e) => update(line.key, { batchId: e.target.value })} className={field}>
+                  <option value="">Not chosen yet</option>
+                  {batches.map((b) => <option key={b.id} value={b.id}>{b.label}</option>)}
+                </select>
+              </label>
+              <label><span className={label}>{multi ? "Paid for this course" : "Amount paid"}</span>
+                <input name="amount" inputMode="decimal" value={line.amount} onChange={(e) => update(line.key, { amount: e.target.value })} className={field} required />
+              </label>
+              {multi ? (
+                <button type="button" onClick={() => remove(line.key)} className="btn-secondary h-9" aria-label={`Remove course ${i + 1}`}>Remove</button>
+              ) : <span className="hidden md:block" />}
+            </div>
+          );
+        })}
+        {lines.length < 6 ? (
+          <button type="button" onClick={add} className="text-[12.5px] font-bold text-emerald-800 hover:underline dark:text-emerald-300">+ Add another course</button>
+        ) : null}
+      </div>
+      <label><span className={label}>Currency</span>
+        <select name="currency" defaultValue={guess.currency} className={field}><option>INR</option><option>USD</option><option>EUR</option><option>GBP</option></select>
       </label>
       <label><span className={label}>Paid on</span><input type="date" name="paid_on" defaultValue={today()} max={today()} className={field} required /></label>
       <label><span className={label}>How</span>
@@ -73,19 +101,18 @@ function PaidForm({ p, courses, isAdmin, onDone, onCancel }: { p: PaymentCheckPe
       <label><span className={label}>Type</span>
         <select name="kind" defaultValue="full" className={field}><option value="full">Paid in full</option><option value="deposit">Deposit / first part</option></select>
       </label>
-      <label className="col-span-2 md:col-span-3 xl:col-span-4"><span className={label}>Reference (optional)</span>
+      <label className="col-span-2 md:col-span-4 xl:col-span-3"><span className={label}>Reference (optional)</span>
         <input name="reference" maxLength={120} placeholder="UPI or bank reference, receipt number…" className={field} />
       </label>
-      <div className="col-span-2 flex items-end gap-2 md:col-span-1 xl:col-span-3">
-        <button type="submit" disabled={pending} className="btn-primary">{pending ? "Saving…" : isAdmin ? "Confirm and enrol" : "Log for admin to verify"}</button>
+      <div className="col-span-full flex items-end gap-2">
+        <button type="submit" disabled={pending} className="btn-primary">{pending ? "Saving…" : isAdmin ? (multi ? `Confirm and enrol in ${lines.length} courses` : "Confirm and enrol") : "Log for admin to verify"}</button>
         <button type="button" onClick={onCancel} className="btn-secondary">Cancel</button>
       </div>
       <p className="col-span-full text-[12px] text-copy-muted">
         {guess.checkoutId ? "Filled from the checkout they started on your website. " : "Filled from the course price. "}
-        Check it against your bank, UPI or PayPal before saving. Never enter card or bank account numbers.
-        {isAdmin ? " Confirming marks the payment paid, enrols them and moves them to Closed won." : " An admin will verify it before it counts as paid."}
+        Past batches are listed too, marked “started”. Check it against your bank, UPI or PayPal before saving. Never enter card or bank account numbers.
+        {isAdmin ? " Confirming marks the payment paid, enrols them in each course and moves them to Closed won." : " An admin will verify it before it counts as paid."}
       </p>
-      {error ? <p className="col-span-full text-[12.5px] font-semibold text-red-700">{error}</p> : null}
     </form>
   );
 }
@@ -95,12 +122,11 @@ function Row({ p, courses, isAdmin, canMerge, dup, own, onDone }: {
   dup: { otherLeadId: string; otherName: string; samePerson: boolean } | null; own: boolean; onDone: (msg: string) => void;
 }) {
   const [open, setOpen] = useState<null | "paid" | "deciding" | "not">(null);
-  const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
   const run = (fn: () => Promise<{ ok: boolean; message?: string; error?: string }>) => start(async () => {
-    setError(null);
     const r = await fn();
-    if (r.ok) onDone(r.message ?? "Done"); else setError(r.error ?? "Something went wrong");
+    if (r.ok) { toast.success(`${p.name}: ${r.message ?? "Done"}`); onDone(r.message ?? "Done"); }
+    else toast.error("Something went wrong", { description: r.error ?? "Please try again." });
   });
   const biggest = largestAttempt(p.attempts);
   return (
@@ -157,7 +183,6 @@ function Row({ p, courses, isAdmin, canMerge, dup, own, onDone }: {
           ) : null}
         </div>
       ) : null}
-      {error ? <p className="ml-12 mt-1 text-[12.5px] font-semibold text-red-700">{error}</p> : null}
     </div>
   );
 }
@@ -170,7 +195,6 @@ export function PaymentCheckQueue({ people, checkoutOnly, courses, businessNames
   const total = people.length;
   const checked = people.filter((p) => done[p.leadId]).length;
   const visible = (list: PaymentCheckPerson[]) => list.filter((p) => !done[p.leadId]);
-  const recent = Object.entries(done).slice(-3);
   const row = (p: PaymentCheckPerson) => {
     const h = hints.find((x) => x.leadId === p.leadId && !done[x.otherLeadId]);
     return <Row key={p.leadId} p={p} courses={courses} isAdmin={isAdmin} canMerge={canMerge}
@@ -187,7 +211,6 @@ export function PaymentCheckQueue({ people, checkoutOnly, courses, businessNames
         </div>
         <p className="text-[13px] text-copy-muted">Sorted: says they paid first, then started paying on the website, then the longest waiting. Each answer becomes a real example of who enrols.{isAdmin ? "" : " Payments you log wait for an admin to verify."}</p>
         <div className="h-2.5 overflow-hidden rounded-full bg-surface-muted"><div className="h-full rounded-full bg-emerald-600 transition-all" style={{ width: `${total ? (checked / total) * 100 : 0}%` }} /></div>
-        {recent.length ? <div className="space-y-0.5">{recent.map(([id, msg]) => <p key={id} className="text-[12.5px] font-semibold text-emerald-700 dark:text-emerald-300">✓ {msg}</p>)}</div> : null}
         <div>{visible(sorted).map(row)}</div>
         {!visible(sorted).length ? <p className="py-3 text-[13px] text-copy-muted">Everyone at Payment pending has been checked.</p> : null}
       </section>
