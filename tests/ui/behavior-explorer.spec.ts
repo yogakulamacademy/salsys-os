@@ -35,10 +35,13 @@ test.beforeEach(async ({ context, request }) => {
 });
 
 test("Keyboard navigation marks the active Marketing view and preserves existing Funnel and Analytics", async ({ page }) => {
+  // Marketing menu (owner-approved revamp, 25 Nov 2026): Behavior is "Clicks and forms" and Analytics
+  // "Visits and sources" under Website; Funnel is "Where enquiries come from".
   const nav = page.getByRole("navigation", { name: "Marketing workspace views" });
-  const behavior = nav.getByRole("link", { name: "Behavior", exact: true });
-  const funnel = nav.getByRole("link", { name: "Funnel", exact: true });
-  const analytics = nav.getByRole("link", { name: "Analytics", exact: true });
+  const behavior = nav.getByRole("link", { name: "Clicks and forms", exact: true });
+  const funnel = nav.getByRole("link", { name: "Where enquiries come from", exact: true });
+  const analytics = nav.getByRole("link", { name: "Visits and sources", exact: true });
+  const website = nav.getByRole("link", { name: "Website", exact: true });
 
   await page.goto("/marketing?view=behavior");
   await expect(behavior).toHaveAttribute("aria-current", "page");
@@ -57,6 +60,9 @@ test("Keyboard navigation marks the active Marketing view and preserves existing
   await expect(funnel).toHaveAttribute("aria-current", "page");
   await expect(page.getByRole("heading", { name: "Funnel", exact: true })).toBeVisible();
 
+  // Website's sub-pages show once Website is open.
+  await website.click();
+  await expect(page).toHaveURL(/view=analytics/);
   await behavior.focus();
   await expect(behavior).toBeFocused();
   await page.keyboard.press("Enter");
@@ -253,7 +259,7 @@ test("Funnel builder enforces five distinct stages and never changes the origina
   await page.getByRole("button", { name: "Remove step 5" }).click();
   await expect(page.getByRole("combobox", { name: "Funnel step 5" })).toHaveCount(0);
 
-  await page.getByRole("navigation", { name: "Marketing workspace views" }).getByRole("link", { name: "Funnel", exact: true }).click();
+  await page.getByRole("navigation", { name: "Marketing workspace views" }).getByRole("link", { name: "Where enquiries come from", exact: true }).click();
   await expect(page).toHaveURL(/view=funnel/);
   await expect(page.getByRole("heading", { name: "Funnel", exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Behavior explorer" })).toHaveCount(0);
@@ -302,10 +308,13 @@ test("Switching synthetic tenants refreshes all behavior reports without retaini
 });
 
 test("Soft Marketing navigation after synthetic tenant switch never reuses prior Behavior paths or counts", async ({ page, request }) => {
+  // Marketing menu (owner-approved revamp, 25 Nov 2026): Behavior is "Clicks and forms" and Analytics
+  // "Visits and sources" under Website; Funnel is "Where enquiries come from".
   const nav = page.getByRole("navigation", { name: "Marketing workspace views" });
-  const behavior = nav.getByRole("link", { name: "Behavior", exact: true });
-  const funnel = nav.getByRole("link", { name: "Funnel", exact: true });
-  const analytics = nav.getByRole("link", { name: "Analytics", exact: true });
+  const behavior = nav.getByRole("link", { name: "Clicks and forms", exact: true });
+  const funnel = nav.getByRole("link", { name: "Where enquiries come from", exact: true });
+  const analytics = nav.getByRole("link", { name: "Visits and sources", exact: true });
+  const website = nav.getByRole("link", { name: "Website", exact: true });
   const paths = page.getByRole("region", { name: "Popular navigation paths" });
   const pages = page.getByRole("region", { name: "Event page breakdown" });
   const primaryPath = "/courses/200-hour-ytt.php";
@@ -326,6 +335,8 @@ test("Soft Marketing navigation after synthetic tenant switch never reuses prior
     expect(switchTenant.ok()).toBe(true);
     await funnel.click();
     await expect(page).toHaveURL(/view=funnel/);
+    await website.click();
+    await expect(page).toHaveURL(/view=analytics/);
     await behavior.click();
     await expect(page).toHaveURL(/view=behavior/);
 
