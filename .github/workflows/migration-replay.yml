@@ -15,6 +15,7 @@ on:
       - 'tests/database/r2-behavior-rpc-positive-tenant-local.sql'
       - 'tests/database/r13-commercial-state-full-local.sql'
       - 'tests/database/r13-manual-full-local.sql'
+      - 'tests/database/r13-sa12-full-schema-local.sql'
       - 'tests/database/r13-real-auth-local*'
       - 'tests/database/r13-local-browser-rehearsal.mjs'
       - '.github/workflows/migration-replay.yml'
@@ -383,6 +384,28 @@ jobs:
             done
             docker exec -i "$db_containers" psql -X -v ON_ERROR_STOP=1 -U postgres -d postgres < tests/database/r13-dormant-schema-local.sql
           fi
+
+      - name: Rehearse SA-12 drafts against full disposable schema
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_ACTIONS" = true && test "$RUNNER_ENVIRONMENT" = github-hosted
+          if [ ! -f tests/database/r13-sa12-full-schema-local.sql ]; then exit 0; fi
+          db_containers="$(docker ps --format '{{.Names}}' | grep '^supabase_db_' || true)"
+          test "$(printf '%s\n' "$db_containers" | grep -c .)" -eq 1
+          # The complete draft install and all synthetic rows share ONE session
+          # and transaction. No migration ledger write; no cloud connection.
+          {
+            printf 'begin;\n'
+            for candidate in r13_sa12_lifecycle_authority r13_sa12_lifecycle_transitions r13_sa12_lifecycle_work_revision r13_sa12_lifecycle_claim_adapters r13_sa12_lifecycle_queue_binding r13_sa12_organization_write_boundary r13_sa12_platform_effective_quota; do
+              cat "supabase/drafts/$candidate.sql"
+              printf '\n'
+            done
+            cat tests/database/r13-sa12-full-schema-local.sql
+            printf '\nrollback;\n'
+          } | docker exec -i "$db_containers" psql -X -v ON_ERROR_STOP=1 -U postgres -d postgres
+          test "$(docker exec "$db_containers" psql -X -v ON_ERROR_STOP=1 -U postgres -d postgres -Atc "select to_regnamespace('saas_lifecycle') is null and to_regclass('saas_governance.platform_quota_readers') is null")" = t
+          echo "SA-12 full-schema rehearsal rolled back"
 
       - name: Rehearse one-time owner catalog bootstrap
         if: env.SALSYS_R13_PROMOTED == '1'
