@@ -4,6 +4,7 @@ import { ArrowRight, CalendarClock, GitBranch, Sparkles, Target, WalletCards } f
 import { ExecutiveDecisionBrief } from "@/components/marketing/executive-decision-brief";
 import { RevenueCashPanel } from "@/components/revenue-cash-panel";
 import { RevenueInsights } from "@/components/revenue-insights";
+import { RevenueReadinessNotice } from "@/components/revenue-readiness-notice";
 import { SmartRevenueBriefing } from "@/components/revenue/smart-revenue-briefing";
 import { Notice, PageHeader } from "@/components/ui";
 import {
@@ -164,9 +165,12 @@ export default async function RevenuePage({ searchParams }: RevenuePageProps) {
             <Link href="/marketing?view=campaigns" className="btn-secondary"><Target size={15} /> Campaigns</Link>
             <Link href="/marketing?view=funnel" className="btn-secondary"><GitBranch size={15} /> Funnel</Link>
             <Link href="/marketing?view=attribution" className="btn-secondary">Attribution</Link>
+            {unvaluedLeads > 0 ? <Link href="/revenue/valuation" className="btn-secondary">Missing prices</Link> : null}
           </span>
         </summary>
         <div className="space-y-4 border-t border-line px-3 py-4 sm:px-4">
+      <RevenueReadinessNotice />
+
       <ExecutiveDecisionBrief
         eyebrow="Revenue decision brief"
         title={brief.title}
@@ -218,19 +222,6 @@ export default async function RevenuePage({ searchParams }: RevenuePageProps) {
 
       {workspace.warning ? <Notice tone="warning">{workspace.warning}</Notice> : null}
 
-      {unvaluedLeads > 0 ? (
-        <Notice
-          tone="warning"
-          title={`${unvaluedLeads} open ${unvaluedLeads === 1 ? "lead is" : "leads are"} missing potential value`}
-          action={
-            <Link href="/revenue/valuation" className="btn-secondary">
-              Review unvalued opportunities <ArrowRight size={13} />
-            </Link>
-          }
-        >
-          Forecast readiness is incomplete.
-        </Notice>
-      ) : null}
 
       {cash ? <RevenueCashPanel summary={cash} /> : null}
 
