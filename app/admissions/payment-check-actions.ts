@@ -18,40 +18,57 @@ const str = (v: FormDataEntryValue | null) => { const s = String(v ?? "").trim()
 const num = (v: FormDataEntryValue | null) => { const n = Number(String(v ?? "").replace(/[, ]/g, "")); return Number.isFinite(n) && String(v ?? "").trim() !== "" ? n : null; };
 const uuid = (v: FormDataEntryValue | null) => { const s = str(v); return s && /^[0-9a-f-]{36}$/i.test(s) ? s : null; };
 
-/** Paid: admins confirm in one step; others log it for an admin to verify. */
+/**
+ * Paid: admins confirm in one step; others log it for an admin to verify.
+ * One payment can cover several courses (owner request, 25 Nov 2026): the form
+ * sends course_id / batch_id / amount once per course. Each course becomes its
+ * own enrolment; the website checkout, if any, is matched to the first one.
+ */
 export async function confirmPaidAction(leadId: string, form: FormData): Promise<Result> {
   const supabase = await createClient();
   const paidOn = str(form.get("paid_on"));
   const paidAt = paidOn ? new Date(`${paidOn}T12:00:00+05:30`).toISOString() : null;
-  const common = {
-    amount: num(form.get("amount")),
-    currency: str(form.get("currency")) ?? "INR",
-    method: str(form.get("method")),
-    reference: str(form.get("reference")),
-    courseId: uuid(form.get("course_id")),
-    batchId: uuid(form.get("batch_id")),
-    kind: str(form.get("kind")) === "deposit" ? "deposit" : "full",
-  };
-  if (form.get("as_admin") === "1") {
-    const { error } = await supabase.rpc("confirm_payment_and_enrol_v1", {
-      p_lead_id: leadId, p_amount: common.amount, p_currency: common.currency, p_paid_at: paidAt,
-      p_method: common.method, p_payment_kind: common.kind, p_reference: common.reference,
-      p_course_id: common.courseId, p_batch_id: common.batchId, p_checkout_payment_id: uuid(form.get("checkout_id")),
-      p_note: "Confirmed from Check who paid",
-    });
-    if (error) return { ok: false, error: error.message };
-    refresh([leadId]);
-    return { ok: true, message: "Payment confirmed · enrolled · moved to Closed won" };
+  const currency = str(form.get("currency")) ?? "INR";
+  const method = str(form.get("method"));
+  const reference = str(form.get("reference"));
+  const kind = str(form.get("kind")) === "deposit" ? "deposit" : "full";
+  const courseIds = form.getAll("course_id");
+  const batchIds = form.getAll("batch_id");
+  const amounts = form.getAll("amount");
+  const lines = courseIds.map((c, i) => ({ courseId: uuid(c), batchId: uuid(batchIds[i] ?? null), amount: num(amounts[i] ?? null) })).slice(0, 6);
+  if (!lines.length || lines.some((l) => !l.courseId)) return { ok: false, error: "Choose the course for each line" };
+  if (lines.some((l) => !l.amount || l.amount <= 0)) return { ok: false, error: "Enter the amount paid for each course" };
+  if (new Set(lines.map((l) => `${l.courseId}:${l.batchId ?? ""}`)).size !== lines.length) return { ok: false, error: "The same course and batch is listed twice" };
+  const asAdmin = form.get("as_admin") === "1";
+  const checkoutId = uuid(form.get("checkout_id"));
+
+  let done = 0;
+  for (const [i, line] of lines.entries()) {
+    const { error } = asAdmin
+      ? await supabase.rpc("confirm_payment_and_enrol_v1", {
+          p_lead_id: leadId, p_amount: line.amount, p_currency: currency, p_paid_at: paidAt,
+          p_method: method, p_payment_kind: kind, p_reference: reference,
+          p_course_id: line.courseId, p_batch_id: line.batchId, p_checkout_payment_id: i === 0 ? checkoutId : null,
+          p_note: lines.length > 1 ? `Confirmed from Check who paid (course ${i + 1} of ${lines.length})` : "Confirmed from Check who paid",
+        })
+      : await supabase.rpc("record_enrollment_v1", {
+          p_lead_id: leadId, p_payment_plan: kind === "deposit" ? "instalment" : "full", p_amount_paid: line.amount,
+          p_paid_at: paidAt, p_payment_method: method, p_payment_reference: reference,
+          p_expected_payment_date: null, p_course_id: line.courseId, p_batch_id: line.batchId,
+          p_total_value: null, p_currency: currency,
+          p_note: lines.length > 1 ? `Logged from Check who paid (course ${i + 1} of ${lines.length})` : "Logged from Check who paid",
+        });
+    if (error) {
+      if (done) refresh([leadId]);
+      return { ok: false, error: done ? `${done} of ${lines.length} courses saved. The next one failed: ${error.message}` : error.message };
+    }
+    done += 1;
   }
-  const { error } = await supabase.rpc("record_enrollment_v1", {
-    p_lead_id: leadId, p_payment_plan: common.kind === "deposit" ? "instalment" : "full", p_amount_paid: common.amount,
-    p_paid_at: paidAt, p_payment_method: common.method, p_payment_reference: common.reference,
-    p_expected_payment_date: null, p_course_id: common.courseId, p_batch_id: common.batchId,
-    p_total_value: null, p_currency: common.currency, p_note: "Logged from Check who paid",
-  });
-  if (error) return { ok: false, error: error.message };
   refresh([leadId]);
-  return { ok: true, message: "Logged · an admin will verify the payment" };
+  const courses = lines.length > 1 ? `${lines.length} courses` : "1 course";
+  return asAdmin
+    ? { ok: true, message: `Payment confirmed · enrolled in ${courses} · moved to Closed won` }
+    : { ok: true, message: `Logged for ${courses} · an admin will verify the payment` };
 }
 
 /** Still deciding: a follow-up on the chosen day. */

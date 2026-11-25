@@ -4,7 +4,7 @@ import { saysTheyPaid } from '@/lib/home-story';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createClient } from '@/lib/supabase/server';
 import { getWorkspaceContextForUser, requireCurrentOrganizationId } from '@/lib/workspace';
-import type { CheckoutAttempt, PaymentCheckPerson } from '@/lib/payment-check';
+import { batchLabel, orderBatches, type CheckoutAttempt, type PaymentCheckPerson } from '@/lib/payment-check';
 
 export type PaymentCheckData = {
   people: PaymentCheckPerson[];
@@ -41,8 +41,9 @@ export async function getPaymentCheckData(): Promise<PaymentCheckData | null> {
       admin.from('payments').select('id, lead_id, amount, currency, provider, payment_kind, created_at')
         .eq('organization_id', org).eq('status', 'pending').not('provider', 'like', 'team_%').limit(500),
       admin.from('courses').select('id, name').eq('organization_id', org).order('name').limit(200),
+      // Every batch, past ones too: people often pay for a batch that has already started (owner request, 25 Nov 2026).
       admin.from('course_batches').select('id, course_id, start_date, location').eq('organization_id', org)
-        .gte('start_date', new Date(Date.now() - 30 * DAY).toISOString().slice(0, 10)).order('start_date').limit(400),
+        .order('start_date', { ascending: false }).limit(1000),
     ]);
 
     const attemptsByLead = new Map<string, CheckoutAttempt[]>();
@@ -98,10 +99,9 @@ export async function getPaymentCheckData(): Promise<PaymentCheckData | null> {
     };
 
     const batchByCourse = new Map<string, Array<{ id: string; label: string }>>();
-    for (const b of batches.data ?? []) {
+    for (const b of orderBatches(batches.data ?? [], new Date().toISOString().slice(0, 10))) {
       const list = batchByCourse.get(String(b.course_id)) ?? [];
-      const date = new Date(`${b.start_date}T00:00:00`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
-      list.push({ id: String(b.id), label: [date, b.location].filter(Boolean).join(' · ') });
+      list.push({ id: String(b.id), label: batchLabel(b) });
       batchByCourse.set(String(b.course_id), list);
     }
 

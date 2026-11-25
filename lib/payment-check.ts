@@ -73,3 +73,25 @@ export function moneyText(amount: number | null, currency: string | null): strin
   const cur = (currency || "INR").toUpperCase();
   return cur === "INR" ? `₹${Math.round(amount).toLocaleString("en-IN")}` : `${cur === "USD" ? "$" : cur + " "}${amount.toLocaleString("en-US")}`;
 }
+
+// ---- Batches (owner request, 25 Nov 2026: past batches must be choosable) ----
+
+type BatchRow = { id: unknown; course_id: unknown; start_date: unknown; location?: unknown };
+
+/** Upcoming and current batches first (soonest first), then past batches (most recent first). */
+export function orderBatches<T extends BatchRow>(rows: T[], todayIso: string): T[] {
+  const date = (r: T) => String(r.start_date ?? "");
+  const upcoming = rows.filter((r) => date(r) >= todayIso).sort((a, b) => date(a).localeCompare(date(b)));
+  const past = rows.filter((r) => date(r) < todayIso).sort((a, b) => date(b).localeCompare(date(a)));
+  return [...upcoming, ...past];
+}
+
+/** "12 Jan 2026 · Mysore", with "(started)" for a batch that has already begun. */
+export function batchLabel(row: BatchRow, todayIso: string = new Date().toISOString().slice(0, 10)): string {
+  const iso = String(row.start_date ?? "");
+  const d = /^\d{4}-\d{2}-\d{2}$/.test(iso)
+    ? new Date(`${iso}T00:00:00`).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })
+    : "Date not set";
+  const place = typeof row.location === "string" && row.location.trim() ? row.location.trim() : null;
+  return [d, place].filter(Boolean).join(" · ") + (iso && iso < todayIso ? " (started)" : "");
+}

@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { duplicateHints, looksLikeOwnBusiness, moneyText, sortForChecking, suggestedAmount } from '../../lib/payment-check.ts';
+import { batchLabel, orderBatches, duplicateHints, looksLikeOwnBusiness, moneyText, sortForChecking, suggestedAmount } from '../../lib/payment-check.ts';
 
 const person = (o) => ({
   leadId: o.leadId, personId: o.personId ?? null, name: o.name, stage: 'payment_pending', courseId: null, courseName: null,
@@ -54,4 +54,28 @@ test('the amount is filled from the biggest checkout, with the matching method',
   assert.equal(suggestedAmount(person({ leadId: 'n', name: 'N', value: 30000 })).checkoutId, null);
   assert.equal(moneyText(25000, 'INR'), '₹25,000');
   assert.equal(moneyText(2490, 'USD'), '$2,490');
+});
+
+test("past batches stay choosable: upcoming soonest first, then past newest first, marked started", () => {
+  const rows = [
+    { id: "a", course_id: "c", start_date: "2026-01-10", location: "Mysore" },
+    { id: "b", course_id: "c", start_date: "2026-12-01", location: null },
+    { id: "d", course_id: "c", start_date: "2026-11-30", location: "Goa" },
+    { id: "e", course_id: "c", start_date: "2025-06-01", location: "" },
+  ];
+  assert.deepEqual(orderBatches(rows, "2026-11-25").map((r) => r.id), ["d", "b", "a", "e"]);
+  assert.match(batchLabel(rows[0], "2026-11-25"), /Jan 2026 · Mysore \(started\)$/);
+  assert.doesNotMatch(batchLabel(rows[1], "2026-11-25"), /started/);
+});
+
+test("Paid can enrol in several courses from one payment", async () => {
+  const fs = await import("node:fs");
+  const action = fs.readFileSync(new URL("../../app/admissions/payment-check-actions.ts", import.meta.url), "utf8");
+  assert.match(action, /form\.getAll\("course_id"\)/);
+  assert.match(action, /p_checkout_payment_id: i === 0 \? checkoutId : null/);
+  const queue = fs.readFileSync(new URL("../../components/admissions/payment-check-queue.tsx", import.meta.url), "utf8");
+  assert.match(queue, /\+ Add another course/);
+  assert.match(queue, /toast\.success/);
+  const data = fs.readFileSync(new URL("../../lib/payment-check-data.ts", import.meta.url), "utf8");
+  assert.doesNotMatch(data, /\.gte\('start_date'/);
 });
