@@ -8,7 +8,7 @@ const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 type Views={lifecycle:LifecycleView;quota:EffectiveQuotaView};
 const unavailable=():Views=>({lifecycle:{state:'unavailable'},quota:{state:'unavailable'}});
 
-// Kept disconnected from the page until the database read API is verified.
+// Used by the profile only after the dedicated read API feature is enabled.
 // Independent opt-in, no registry fallback and no privileged service client.
 export async function loadPlatformLifecycleAndQuota(target:string):Promise<Views|null>{
   if(process.env.SALSYS_PLATFORM_ADMIN_ENABLED!=='true'||process.env.SALSYS_PLATFORM_READ_API_ENABLED!=='true')return null;
