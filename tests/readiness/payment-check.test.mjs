@@ -28,6 +28,7 @@ test('the business’s own number is spotted', () => {
   assert.equal(looksLikeOwnBusiness('Yogakulam Academy International', 'Yogakulam Academy'), true);
   assert.equal(looksLikeOwnBusiness('Padmavathy', 'Yogakulam Academy'), false);
   assert.equal(looksLikeOwnBusiness('Anyone', null), false);
+  assert.equal(looksLikeOwnBusiness('Yogakulam Academy International', ['Demo Org', 'Yogakulam Academy']), true);
 });
 
 test('says paid first, then a checkout, then longest waiting', () => {
@@ -45,6 +46,11 @@ test('the amount is filled from the biggest checkout, with the matching method',
     { id: 'f', amount: 2490, currency: 'USD', provider: 'paypal', kind: 'full', createdAt: '2026-11-12' },
   ] }));
   assert.deepEqual(g, { amount: 2490, currency: 'USD', checkoutId: 'f', method: 'paypal' });
+  const mixed = suggestedAmount(person({ leadId: 'm', name: 'M', attempts: [
+    { id: 'inr', amount: 6000, currency: 'INR', provider: 'direct_upi', kind: 'other', createdAt: '2026-11-11' },
+    { id: 'usd', amount: 2490, currency: 'USD', provider: 'paypal', kind: 'full', createdAt: '2026-11-12' },
+  ] }));
+  assert.equal(mixed.checkoutId, 'usd');
   assert.equal(suggestedAmount(person({ leadId: 'n', name: 'N', value: 30000 })).checkoutId, null);
   assert.equal(moneyText(25000, 'INR'), '₹25,000');
   assert.equal(moneyText(2490, 'USD'), '$2,490');

@@ -7,7 +7,7 @@ import {
   checkoutNotReceivedAction, confirmPaidAction, mergePeopleAction, notJoiningAction, stillDecidingAction,
 } from "@/app/admissions/payment-check-actions";
 import {
-  duplicateHints, looksLikeOwnBusiness, moneyText, sortForChecking, suggestedAmount,
+  duplicateHints, largestAttempt, looksLikeOwnBusiness, moneyText, sortForChecking, suggestedAmount,
   type PaymentCheckPerson,
 } from "@/lib/payment-check";
 
@@ -16,7 +16,7 @@ import {
 // confirm in one step, others log it for an admin. Nothing is sent to anyone.
 
 type Course = { id: string; name: string; batches: Array<{ id: string; label: string }> };
-type Props = { people: PaymentCheckPerson[]; checkoutOnly: PaymentCheckPerson[]; courses: Course[]; businessName: string | null; isAdmin: boolean; canMerge: boolean };
+type Props = { people: PaymentCheckPerson[]; checkoutOnly: PaymentCheckPerson[]; courses: Course[]; businessNames: string[]; isAdmin: boolean; canMerge: boolean };
 
 const pill = (tone: "green" | "amber" | "blue" | "grey" | "red") => ({
   green: "bg-emerald-50 text-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-300",
@@ -102,7 +102,7 @@ function Row({ p, courses, isAdmin, canMerge, dup, own, onDone }: {
     const r = await fn();
     if (r.ok) onDone(r.message ?? "Done"); else setError(r.error ?? "Something went wrong");
   });
-  const biggest = [...p.attempts].sort((a, b) => b.amount - a.amount)[0];
+  const biggest = largestAttempt(p.attempts);
   return (
     <div className="border-t border-line py-3 first:border-t-0">
       <div className="flex flex-wrap items-center gap-3.5">
@@ -159,7 +159,7 @@ function Row({ p, courses, isAdmin, canMerge, dup, own, onDone }: {
   );
 }
 
-export function PaymentCheckQueue({ people, checkoutOnly, courses, businessName, isAdmin, canMerge }: Props) {
+export function PaymentCheckQueue({ people, checkoutOnly, courses, businessNames, isAdmin, canMerge }: Props) {
   const [done, setDone] = useState<Record<string, string>>({});
   const all = useMemo(() => [...people, ...checkoutOnly], [people, checkoutOnly]);
   const hints = useMemo(() => duplicateHints(all), [all]);
@@ -172,7 +172,7 @@ export function PaymentCheckQueue({ people, checkoutOnly, courses, businessName,
     const h = hints.find((x) => x.leadId === p.leadId && !done[x.otherLeadId]);
     return <Row key={p.leadId} p={p} courses={courses} isAdmin={isAdmin} canMerge={canMerge}
       dup={h ? { otherLeadId: h.otherLeadId, otherName: h.otherName, samePerson: h.samePerson } : null}
-      own={looksLikeOwnBusiness(p.name, businessName)}
+      own={looksLikeOwnBusiness(p.name, businessNames)}
       onDone={(msg) => setDone((d) => ({ ...d, [p.leadId]: `${p.name}: ${msg}` }))} />;
   };
   return (
