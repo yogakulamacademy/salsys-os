@@ -16,10 +16,12 @@ test('unknown, invalid and mismatched quota observations fail closed',()=>{
   }
   for(const state of ['unavailable','managed_separately','organization_inactive'])assert.deepEqual(parse({...row,state}),{state});
 });
-test('quota panel has no API access or fabricated data; existing profile remains disconnected',()=>{
+test('quota panel has no API access or fabricated data; profile renders only gated views',()=>{
   const panel=readFileSync('components/platform-effective-quota-panel.tsx','utf8');
   assert.doesNotMatch(panel,/createAdminClient|\.rpc\(|fetch\(|<form|<button/);
   assert.match(panel,/aria-valuetext/);
   const page=readFileSync('app/platform-admin/organization/page.tsx','utf8');
-  assert.doesNotMatch(page,/EffectiveQuotaPanel|parseEffectiveQuotaPreview/);
+  assert.match(page,/readViews&&/);
+  assert.match(page,/<EffectiveQuotaPanel quota={readViews.quota}/);
+  assert.doesNotMatch(page,/parseEffectiveQuotaPreview/);
 });
