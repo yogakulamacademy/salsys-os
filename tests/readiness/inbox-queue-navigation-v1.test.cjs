@@ -60,7 +60,7 @@ test("reset clears all queue state and keeps the open chat", () => {
 
 test("default values canonicalize without reintroducing stale selected lead", () => {
   const values = [
-    ["sort", "created_desc"], ["filter", "waiting"], ["priority", "all"], // Waiting is the default tab
+    ["sort", "created_desc"], ["filter", "all"], ["priority", "all"], // All is the default tab (25 Nov 2026)
     ["channel", "all"], ["page", "1"],
   ];
   for (const [key, value] of values) {

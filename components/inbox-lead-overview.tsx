@@ -2,7 +2,8 @@
 
 import { useFormStatus } from "react-dom";
 import { Check, ChevronDown, Info, UserRound } from "lucide-react";
-import { assignConversationOwnerAction, changeInboxLeadStageAction } from "@/app/conversations/team-actions";
+import { assignOwnerInline, changeStageInline } from "@/app/conversations/inline-actions";
+import { ToastForm } from "@/components/toast-form";
 import type { LeadStage, Channel } from "@/types/crm";
 
 type Candidate={id:string;name:string;role:string};
@@ -22,15 +23,15 @@ export function InboxLeadOverview({
   leadId,stage,ownerUserId,ownerName,candidates,canAssign,mock,channel,attributionSource,
   interest,country,lastContacted,state,
 }:Props){
-  const stageAction=changeInboxLeadStageAction.bind(null,leadId);
-  const ownerAction=assignConversationOwnerAction.bind(null,leadId);
+  const stageAction=changeStageInline.bind(null,leadId);
+  const ownerAction=assignOwnerInline.bind(null,leadId);
   return <section className="ibx-v3-overview" aria-label="Lead overview">
     <div className="ibx-v3-card-title"><UserRound size={18}/><h3>Lead overview</h3></div>
     <dl>
       <div className="ibx-v3-overview-line ibx-v3-editable">
         <dt>Stage</dt>
         <dd>
-          <form action={stageAction}>
+          <ToastForm action={stageAction} resetOnSuccess={false}>
             <label className="sr-only" htmlFor="inbox-lead-stage">Lead stage</label>
             <select id="inbox-lead-stage" name="stage" defaultValue={stage} disabled={mock}
               onChange={event=>event.currentTarget.form?.requestSubmit()} aria-label="Lead stage">
@@ -38,13 +39,13 @@ export function InboxLeadOverview({
             </select>
             <ChevronDown size={12} aria-hidden="true"/>
             <SavingIndicator/>
-          </form>
+          </ToastForm>
         </dd>
       </div>
       <div className="ibx-v3-overview-line ibx-v3-editable">
         <dt>Owner</dt>
         <dd>
-          {canAssign&&!mock?<form action={ownerAction}>
+          {canAssign&&!mock?<ToastForm action={ownerAction} resetOnSuccess={false}>
             <label className="sr-only" htmlFor="inbox-lead-owner">Lead owner</label>
             <select id="inbox-lead-owner" name="owner_user_id" defaultValue={ownerUserId||""}
               onChange={event=>event.currentTarget.form?.requestSubmit()} aria-label="Lead owner">
@@ -54,7 +55,7 @@ export function InboxLeadOverview({
               {candidates.map(candidate=><option key={candidate.id} value={candidate.id}>{candidate.name}</option>)}
             </select>
             <ChevronDown size={12} aria-hidden="true"/><SavingIndicator/>
-          </form>:<span>{ownerName||"Unassigned"}</span>}
+          </ToastForm>:<span>{ownerName||"Unassigned"}</span>}
         </dd>
       </div>
       <div className="ibx-v3-overview-line"><dt>Channel</dt><dd>{pretty(channel)}</dd></div>

@@ -1,67 +1,50 @@
 'use server';
 
-import { revalidatePath } from 'next/cache';
-
 import { logLeadInteractionAction } from '@/app/actions/crm';
+import { sendWhatsAppTemplateAction } from '@/app/conversations/actions';
+import { updateConversationLeadContextWithActivityAction } from '@/app/conversations/context-actions';
 import {
   assignConversationOwnerAction,
   changeInboxLeadStageAction,
   setConversationDoneAction,
   snoozeConversationAction,
 } from '@/app/conversations/team-actions';
-import { noticeFor } from '@/lib/inbox-notices';
+import { asResult, type ActionResult } from '@/lib/action-result';
 
 /**
- * Inbox buttons that update in place (owner request, 20 Nov 2026): no page
- * navigation, a small toast instead of a banner. These wrap the existing
- * actions, which end in redirect(...?notice=|error=); the redirect is read
- * here and turned into a result, and the Inbox data is refreshed in place.
+ * Inbox buttons that update in place (owner requests, 20 and 25 Nov 2026): no
+ * page reload, a toast instead. These wrap the existing actions, which end in
+ * redirect(...?notice=|error=); asResult reads the redirect, refreshes the
+ * Inbox data in place and returns { ok, message }.
  */
-export type InboxActionResult = { ok: boolean; message: string };
+export type InboxActionResult = ActionResult;
 
-type Action = (formData: FormData) => Promise<unknown>;
+const INBOX = ['/conversations'];
 
-function redirectTarget(error: unknown): string | null {
-  const digest = (error as { digest?: unknown } | null)?.digest;
-  if (typeof digest !== 'string' || !digest.startsWith('NEXT_REDIRECT')) return null;
-  return digest.split(';')[2] ?? '';
+export async function assignOwnerInline(leadId: string, fd: FormData) {
+  return asResult(() => assignConversationOwnerAction(leadId, fd), 'Owner updated.', INBOX);
 }
 
-async function run(action: Action, formData: FormData, fallback: string): Promise<InboxActionResult> {
-  try {
-    await action(formData);
-    revalidatePath('/conversations');
-    return { ok: true, message: fallback };
-  } catch (error) {
-    const target = redirectTarget(error);
-    if (target === null) {
-      console.error('[inbox] inline action failed', error instanceof Error ? error.message : error);
-      return { ok: false, message: 'That did not go through. Please try again.' };
-    }
-    const params = new URL(target, 'https://inbox.local').searchParams;
-    const failure = params.get('error');
-    if (failure) return { ok: false, message: failure };
-    revalidatePath('/conversations');
-    return { ok: true, message: noticeFor(params.get('notice')) ?? fallback };
-  }
+export async function snoozeInline(leadId: string, fd: FormData) {
+  return asResult(() => snoozeConversationAction(leadId, fd), 'Conversation snoozed.', INBOX);
 }
 
-export async function assignOwnerInline(leadId: string, formData: FormData) {
-  return run((fd) => assignConversationOwnerAction(leadId, fd), formData, 'Owner updated.');
+export async function setDoneInline(leadId: string, fd: FormData) {
+  return asResult(() => setConversationDoneAction(leadId, fd), 'Conversation updated.', INBOX);
 }
 
-export async function snoozeInline(leadId: string, formData: FormData) {
-  return run((fd) => snoozeConversationAction(leadId, fd), formData, 'Conversation snoozed.');
+export async function changeStageInline(leadId: string, fd: FormData) {
+  return asResult(() => changeInboxLeadStageAction(leadId, fd), 'Lead stage updated.', [...INBOX, '/leads', '/admissions']);
 }
 
-export async function setDoneInline(leadId: string, formData: FormData) {
-  return run((fd) => setConversationDoneAction(leadId, fd), formData, 'Conversation updated.');
+export async function logInteractionInline(leadId: string, fd: FormData) {
+  return asResult(() => logLeadInteractionAction(leadId, fd), 'Contact recorded on the lead.', INBOX);
 }
 
-export async function changeStageInline(leadId: string, formData: FormData) {
-  return run((fd) => changeInboxLeadStageAction(leadId, fd), formData, 'Lead stage updated.');
+export async function sendWhatsAppTemplateInline(leadId: string, fd: FormData) {
+  return asResult(() => sendWhatsAppTemplateAction(leadId, fd), 'WhatsApp template sent.', INBOX);
 }
 
-export async function logInteractionInline(leadId: string, formData: FormData) {
-  return run((fd) => logLeadInteractionAction(leadId, fd), formData, 'Call recorded on the lead.');
+export async function updateLeadContextInline(leadId: string, fd: FormData) {
+  return asResult(() => updateConversationLeadContextWithActivityAction(leadId, fd), 'Lead details updated.', [...INBOX, '/leads']);
 }

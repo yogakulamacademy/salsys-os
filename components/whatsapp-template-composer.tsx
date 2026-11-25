@@ -1,5 +1,6 @@
 'use client';
 
+import { ToastForm, type ToastActionResult } from "@/components/toast-form";
 import { useEffect, useMemo, useState } from "react";
 
 import {
@@ -29,9 +30,7 @@ type TemplateOption = {
 };
 
 type WhatsAppTemplateComposerProps = {
-  action:
-    | ((formData: FormData) => void)
-    | ((formData: FormData) => Promise<void>);
+  action: (formData: FormData) => Promise<ToastActionResult>;
   leadId?: string;
   templates: TemplateOption[];
   loadError?: string | null;
@@ -317,7 +316,7 @@ export function WhatsAppTemplateComposer({
           ) : null}
 
           {!loadError && usableTemplates.length > 0 ? (
-            <form
+            <ToastForm
               action={action}
               onKeyDown={(event) => {
                 if (event.key === "Enter" && !(event.target instanceof HTMLButtonElement)) {
@@ -449,7 +448,7 @@ export function WhatsAppTemplateComposer({
               >
                 {templateConnectionLabel(connectionState)}
               </div>
-            </form>
+            </ToastForm>
           ) : null}
 
           {templates.some((template) => !template.supported) ? (

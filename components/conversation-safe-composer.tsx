@@ -1,5 +1,6 @@
 "use client";
 
+import { ToastForm, type ToastActionResult } from "@/components/toast-form";
 import { FileText, Mail, MessageSquareText, RefreshCw, Save, Send } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
@@ -9,9 +10,7 @@ import { sendInstagramMessageAction } from "@/app/conversations/instagram-action
 import type { MessagingEligibility } from "@/lib/messaging-eligibility";
 import type { Channel } from "@/types/crm";
 
-type ServerAction =
-  | ((formData: FormData) => void)
-  | ((formData: FormData) => Promise<void>);
+type ServerAction = (formData: FormData) => Promise<ToastActionResult>;
 
 type ComposeMode = "reply" | "note";
 type DraftState = "idle" | "unsaved" | "saved" | "memory-only";
@@ -360,7 +359,7 @@ export function ConversationSafeComposer({
       {interactionAction && !isInstagram ? (
         <details className="mt-2 rounded-lg border border-[#E6ECE8] bg-[#F9FBF9] px-3 py-2">
           <summary className="cursor-pointer text-[9px] font-semibold text-[#596E64]">Record a completed contact</summary>
-          <form action={interactionAction} className="mt-2 grid gap-2 border-t border-[#E6ECE8] pt-2 sm:grid-cols-[105px_120px_minmax(0,1fr)_auto]">
+          <ToastForm action={interactionAction} className="mt-2 grid gap-2 border-t border-[#E6ECE8] pt-2 sm:grid-cols-[105px_120px_minmax(0,1fr)_auto]">
             <select className="input" name="direction" defaultValue="outbound" aria-label="Interaction direction">
               <option value="outbound">Outbound</option>
               <option value="inbound">Inbound</option>
@@ -370,7 +369,7 @@ export function ConversationSafeComposer({
             </select>
             <input className="input" name="body" required placeholder="Record the completed interaction…" aria-label="Interaction note" />
             <button className="btn-primary" type="submit">Log</button>
-          </form>
+          </ToastForm>
           <p className="mt-2 text-[8px] text-[#71847A]">Logging records an interaction; it does not transmit one.</p>
         </details>
       ) : null}
