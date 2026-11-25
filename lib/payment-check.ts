@@ -8,6 +8,8 @@ export type PaymentCheckPerson = {
   stage: string;
   courseId: string | null;
   courseName: string | null;
+  /** Every course they are asking about, main one first (lead_course_interests). */
+  interests?: string[];
   value: number | null;
   currency: string | null;
   channel: string | null;
@@ -94,4 +96,11 @@ export function batchLabel(row: BatchRow, todayIso: string = new Date().toISOStr
     : "Date not set";
   const place = typeof row.location === "string" && row.location.trim() ? row.location.trim() : null;
   return [d, place].filter(Boolean).join(" · ") + (iso && iso < todayIso ? " (started)" : "");
+}
+
+/** The "Interested in" pill (owner request, 25 Nov 2026): main course first, at most two names then "+N more". */
+export function interestText(p: Pick<PaymentCheckPerson, "interests" | "courseName">): string | null {
+  const names = [...new Set([...(p.interests ?? []), ...(p.courseName ? [p.courseName] : [])].filter(Boolean))];
+  if (!names.length) return null;
+  return names.length > 2 ? `${names.slice(0, 2).join(", ")} +${names.length - 2} more` : names.join(", ");
 }
