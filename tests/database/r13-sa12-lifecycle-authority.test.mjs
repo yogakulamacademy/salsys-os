@@ -217,6 +217,58 @@ test('SA-12 private lifecycle authorization requires explicit permission and mat
       }
     }finally{await peer.end();}
 
+    // Minimal actual-table-name fixtures, not a full production migration replay.
+    // Pre-existing unbound records must not be silently adopted on approval.
+    await db.query('update saas_lifecycle.operators set active=true');
+    await db.query(`
+      create table public.instagram_automation_runs(id uuid primary key,organization_id uuid not null,status text not null,approved_by uuid,approved_at timestamptz,provider_message_id text);
+      create table public.whatsapp_broadcast_campaigns(id uuid primary key,organization_id uuid not null,status text not null,approved_by uuid,approved_at timestamptz);
+    `);
+    const legacyIg=randomUUID(),legacyWa=randomUUID(),newIg=randomUUID(),newWa=randomUUID(),rolledBack=randomUUID(),postRestoreIg=randomUUID(),postRestoreWa=randomUUID();
+    await db.query("insert into public.instagram_automation_runs(id,organization_id,status) values($1,$2,'pending_approval')",[legacyIg,target]);
+    await db.query("insert into public.whatsapp_broadcast_campaigns(id,organization_id,status) values($1,$2,'ready')",[legacyWa,target]);
+    await db.query(readFileSync('supabase/drafts/r13_sa12_lifecycle_queue_binding.sql','utf8'));
+    const insertIg=(id,org=target)=>db.query("insert into public.instagram_automation_runs(id,organization_id,status) values($1,$2,'pending_approval') on conflict do nothing",[id,org]);
+    const insertWa=id=>db.query("insert into public.whatsapp_broadcast_campaigns(id,organization_id,status) values($1,$2,'draft')",[id,target]);
+    const approveIg=id=>db.query("update public.instagram_automation_runs set status='approved',approved_by=$2,approved_at=now() where id=$1",[id,actor]);
+    const approveWa=id=>db.query("update public.whatsapp_broadcast_campaigns set status='scheduled',approved_by=$2,approved_at=now() where id=$1",[id,actor]);
+    await assert.rejects(approveIg(legacyIg),e=>e.code==='42501');
+    await assert.rejects(approveWa(legacyWa),e=>e.code==='42501');
+    await insertIg(newIg); await insertWa(newWa);
+    assert.equal(await allowed(newIg),true);assert.equal(await allowed(newWa,'whatsapp'),true);
+    assert.equal((await insertIg(newIg)).rowCount,0);
+    assert.equal((await db.query("select count(*)::int as n from saas_lifecycle.work_revision_bindings where work_id=$1",[newIg])).rows[0].n,1);
+    await approveIg(newIg);await approveWa(newWa);
+    await db.query('begin');
+    try{await insertIg(rolledBack);assert.equal(await allowed(rolledBack),true);}
+    finally{await db.query('rollback');}
+    assert.equal(await allowed(rolledBack),false);
+    assert.equal((await db.query("select count(*)::int as n from public.instagram_automation_runs where id=$1",[rolledBack])).rows[0].n,0);
+    await assert.rejects(db.query("update public.instagram_automation_runs set organization_id=$2 where id=$1",[newIg,other]),e=>e.code==='42501');
+    await change(db,'suspend',4,randomUUID());
+    await assert.rejects(insertIg(postRestoreIg),e=>e.code==='42501');
+    await assert.rejects(insertWa(postRestoreWa),e=>e.code==='42501');
+    await assert.rejects(db.query("update public.instagram_automation_runs set status='running' where id=$1",[newIg]),e=>e.code==='42501');
+    await change(db,'restore',5,randomUUID());
+    await assert.rejects(approveIg(newIg),e=>e.code==='42501');
+    await assert.rejects(db.query("update public.whatsapp_broadcast_campaigns set status='running' where id=$1",[newWa]),e=>e.code==='42501');
+    // Evidence/finalization must not be blocked merely because a revision is stale.
+    await db.query("update public.instagram_automation_runs set status='sent',provider_message_id='synthetic-receipt' where id=$1",[newIg]);
+    await db.query("update public.whatsapp_broadcast_campaigns set status='cancelled' where id=$1",[newWa]);
+    assert.equal((await db.query("select provider_message_id from public.instagram_automation_runs where id=$1",[newIg])).rows[0].provider_message_id,'synthetic-receipt');
+    await insertIg(postRestoreIg);await insertWa(postRestoreWa);
+    await approveIg(postRestoreIg);await approveWa(postRestoreWa);
+    assert.equal(await allowed(postRestoreIg),true);assert.equal(await allowed(postRestoreWa,'whatsapp'),true);
+    assert.equal(await allowed(newIg),false);assert.equal(await allowed(newWa,'whatsapp'),false);
+    // Even deleting the fixture row cannot reset an existing immutable work ID.
+    await db.query("delete from public.instagram_automation_runs where id=$1",[newIg]);
+    await assert.rejects(insertIg(newIg),e=>e.code==='42501');
+    for(const role of ['anon','authenticated','service_role']){
+      for(const sig of ['bind_inserted_queue_work()','guard_queue_activation()']){
+        assert.equal((await db.query("select has_function_privilege($1,$2,'EXECUTE') as value",[role,'saas_lifecycle.'+sig])).rows[0].value,false);
+      }
+    }
+
   }finally{
     if(db)await db.end();
     if(created)await admin.query('drop database "'+dbName+'"');
