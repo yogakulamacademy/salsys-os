@@ -1,512 +1,287 @@
-import { dismissIdentityResolutionConflictInline, mergeIdentityResolutionConflictInline } from '@/app/data-quality/inline-actions';
-import { ToastForm } from '@/components/toast-form';
-import Link from 'next/link';
-import {
-  AlertTriangle,
-  ArrowRight,
-  DatabaseZap,
-  ShieldCheck,
-  UsersRound,
-} from 'lucide-react';
+import Link from "next/link";
 
-import styles from '@/components/crm/crm-studio.module.css';
-import { getLeads } from '@/lib/data';
-import { createClient } from '@/lib/supabase/server';
-import { requireCurrentOrganizationId } from '@/lib/workspace';
-import type { LeadOverview } from '@/types/crm';
+import { clearConflictsAction } from "@/app/data-quality/actions";
+import { dismissIdentityResolutionConflictInline, mergeIdentityResolutionConflictInline } from "@/app/data-quality/inline-actions";
+import { FillCourseTable } from "@/components/data-quality/fill-course-table";
+import { SubmitButton } from "@/components/submit-button";
+import { ToastForm } from "@/components/toast-form";
+import { PageHeader } from "@/components/ui";
+import { courseSuggestions, dqHeadline, pct, pctText } from "@/lib/data-quality";
+import { getDataQuality } from "@/lib/data-quality-data";
+import { mentionedCourse } from "@/lib/person-checks";
+import { createClient } from "@/lib/supabase/server";
+import { requireCurrentOrganizationId } from "@/lib/workspace";
 
-type Gap = 'Ownership' | 'Contact fields' | 'Source unknown' | 'Course missing';
+// Data quality, a CRM tab for admins (owner-approved mockup, 25 Nov 2026):
+// ranked fixes with their evidence, four coverage numbers, and a worklist.
+// Every number comes from data_quality_v1 over all open enquiries.
 
-type IdentityConflictRow = {
-  id: string;
-  lead_id: string;
-  person_id: string | null;
-  conflict_type: string;
-  candidate_person_ids: string[] | null;
-  evidence: unknown;
-  detected_at: string | null;
-};
+type Tab = "fill" | "same" | "noclue" | "owner";
+type Props = { searchParams: Promise<{ tab?: string | string[]; merge?: string | string[] }> };
 
-type DataQualityPageProps = {
-  searchParams: Promise<{
-    notice?: string | string[];
-    error?: string | string[];
-    merge?: string | string[];
-  }>;
-};
+type LiveConflict = { id: string; lead_id: string; person_id: string | null; conflict_type: string; candidate_person_ids: string[] | null; evidence: Record<string, unknown> | null; detected_at: string | null };
 
-function gaps(lead: LeadOverview): Gap[] {
-  const items: Gap[] = [];
-  if (!lead.owner || lead.owner === 'Unassigned') items.push('Ownership');
-  if (!lead.email && !lead.phone) items.push('Contact fields');
-  if (!lead.firstTouchSource || lead.firstTouchSource === 'Unknown') items.push('Source unknown');
-  if (!lead.course || lead.course === 'Not selected') items.push('Course missing');
-  return items;
-}
+const card = "flex min-w-0 flex-col gap-3 rounded-2xl border border-line bg-surface p-5 shadow-xs";
+const n = (x: number) => x.toLocaleString("en-IN");
+const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);
+const STAGE: Record<string, string> = { new: "New", contacted: "Contacted", engaged: "Engaged", qualified: "Qualified", high_intent: "High intent", payment_pending: "Payment pending", nurture: "Nurture", not_now: "Not now" };
+const ID_TYPE: Record<string, string> = { phone: "Phone", whatsapp: "WhatsApp", email: "Email", instagram: "Instagram" };
 
-function prettyStage(value: string) {
-  return value
-    .split('_')
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(' ');
-}
-
-function gapClass(gap: Gap) {
-  if (gap === 'Source unknown') return styles.pillAmber;
-  if (gap === 'Contact fields') return styles.pillRed;
-  return styles.pillGray;
-}
-
-export default async function DataQualityPage({ searchParams }: DataQualityPageProps) {
-  const params = await searchParams;
-  const notice = one(params.notice);
-  const error = one(params.error);
-  const mergeConflictId = one(params.merge);
-
-  const supabase = await createClient();
-  const {
-    data: { user },
-    error: userError,
-  } = await supabase.auth.getUser();
-
-  if (userError || !user) return null;
-
-  const organizationId = await requireCurrentOrganizationId(supabase, user.id);
-
-  const [leads, conflictsResult, reviewPermissionResult] = await Promise.all([
-    getLeads(),
-    supabase
-      .from('identity_resolution_conflicts')
-      .select(
-        'id,lead_id,person_id,conflict_type,candidate_person_ids,evidence,detected_at',
-      )
-      .eq('organization_id', organizationId)
-      .eq('status', 'open')
-      .order('detected_at', { ascending: false })
-      .limit(50),
-    (supabase as any).rpc('can_administer_organization_crm', {
-      p_organization_id: organizationId,
-    }),
-  ]);
-
-  const canReviewIdentityConflicts =
-    !reviewPermissionResult.error && reviewPermissionResult.data === true;
-
-  const identityConflicts = conflictsResult.error
-    ? []
-    : ((conflictsResult.data ?? []) as IdentityConflictRow[]);
-  const identityConflictLoadError = conflictsResult.error
-    ? 'Identity conflict evidence is temporarily unavailable. No conflict count is inferred while the canonical read is degraded.'
-    : null;
-
-  const unassigned = leads.filter((lead) => !lead.owner || lead.owner === 'Unassigned').length;
-  const missingContact = leads.filter((lead) => !lead.email && !lead.phone).length;
-  const unknownSource = leads.filter(
-    (lead) => !lead.firstTouchSource || lead.firstTouchSource === 'Unknown',
-  ).length;
-  const missingCourse = leads.filter(
-    (lead) => !lead.course || lead.course === 'Not selected',
-  ).length;
-  const repairRows = leads.filter((lead) => gaps(lead).length > 0).slice(0, 50);
-  const knownCampaigns = leads.filter(
-    (lead) => lead.firstTouchCampaign && lead.firstTouchCampaign !== 'Unattributed',
-  ).length;
-  const leadById = new Map(leads.map((lead) => [lead.id, lead]));
-
+function Bars({ rows }: { rows: Array<{ label: string; value: number; tone: string }> }) {
+  const max = Math.max(...rows.map((r) => r.value), 1);
   return (
-    <div>
-      <header className={styles.pageHeader}>
-        <div>
-          <div className={styles.pageKicker}>SalsysOS / CRM Operations</div>
-          <h1>Data Quality Center</h1>
-          <p>
-            Repair missing information without inventing attribution, contact details or customer identity.
-            Every correction should remain evidence-backed and reviewable.
-          </p>
+    <div className="space-y-1.5">
+      {rows.map((r) => (
+        <div key={r.label} className="grid grid-cols-[160px_minmax(0,1fr)_52px] items-center gap-2.5 text-[12.5px]">
+          <span className="truncate text-copy-muted">{r.label}</span>
+          <span className="h-3 overflow-hidden rounded bg-surface-muted"><span className={`block h-full rounded ${r.tone}`} style={{ width: `${(r.value / max) * 100}%` }} /></span>
+          <strong className="text-right tabular-nums text-copy-strong">{n(r.value)}</strong>
         </div>
-        <div className={styles.pageActions}>
-          <Link href="/customer-360" className={styles.button}>
-            <UsersRound size={14} /> Customer 360
-          </Link>
-          <Link href="/leads" className={styles.buttonPrimary}>
-            Review lead records <ArrowRight size={13} />
-          </Link>
-        </div>
-      </header>
+      ))}
+    </div>
+  );
+}
 
-      {notice === 'identity-conflict-dismissed' ? (
-        <div className={styles.emptyNote}>
-          <ShieldCheck size={18} />
-          <div>
-            <strong>Identity conflict reviewed</strong>
-            The conflict was dismissed after human review. No Person records, identifiers or lead links were merged or rewritten.
-          </div>
-        </div>
-      ) : null}
-
-      {notice === 'identity-conflict-merged' ? (
-        <div className={styles.emptyNote}>
-          <ShieldCheck size={18} />
-          <div>
-            <strong>Identity merge completed</strong>
-            The candidate Contact was merged into the current canonical Contact after human approval. Identity, opportunity and session ownership were reconciled transactionally and the source Contact was retained as a merged audit record.
-          </div>
-        </div>
-      ) : null}
-
-      {error ? (
-        <div className={styles.emptyNote}>
-          <AlertTriangle size={18} />
-          <div>
-            <strong>Review action could not be completed</strong>
-            {error}
-          </div>
-        </div>
-      ) : null}
-
-      <section className={styles.metricGrid}>
-        <Metric label="Ownership" value={unassigned} note="Unassigned lead records" />
-        <Metric label="Contact coverage" value={missingContact} note="No phone or email available" />
-        <Metric label="Acquisition" value={unknownSource} note="Unknown first-touch source" />
-        <Metric label="Profile completeness" value={missingCourse} note="Course not selected" />
-        <Metric
-          label="Identity review"
-          value={identityConflicts.length}
-          note={
-            identityConflictLoadError
-              ? 'Canonical conflict read unavailable'
-              : 'Open conflicts awaiting human review'
-          }
-        />
-      </section>
-
-      <section className={styles.panel}>
-        <div className={styles.panelHead}>
-          <div>
-            <div className={styles.pageKicker}>Repair worklist</div>
-            <h2>Records requiring validation</h2>
-            <p>Open the lead to verify missing fields. Unknown values remain unknown until evidence exists.</p>
-          </div>
-          <span className={styles.pillAmber}>{repairRows.length} visible issues</span>
-        </div>
-
-        <div className={styles.tableViewport}>
-          <table className={styles.dataTable}>
-            <thead>
-              <tr>
-                <th>Lead</th>
-                <th>Stage</th>
-                <th>Validation gaps</th>
-                <th>Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {repairRows.length ? (
-                repairRows.map((lead) => (
-                  <tr key={lead.id}>
-                    <td>
-                      <div className={styles.leadName}>{lead.name}</div>
-                      <div className={styles.micro}>{lead.leadCode}</div>
-                    </td>
-                    <td><span className={styles.pill}>{prettyStage(lead.stage)}</span></td>
-                    <td>
-                      {gaps(lead).map((gap) => (
-                        <span key={gap} className={gapClass(gap)}>{gap}</span>
-                      ))}
-                    </td>
-                    <td>
-                      <Link href={`/leads/${lead.id}`} className={styles.button}>
-                        Review <ArrowRight size={12} />
-                      </Link>
-                    </td>
-                  </tr>
-                ))
-              ) : (
-                <tr>
-                  <td colSpan={4}>
-                    <div className={styles.emptyNote}>
-                      <ShieldCheck size={18} />
-                      <div>
-                        <strong>No validation gaps in the loaded CRM snapshot</strong>
-                        The current accessible lead records have ownership, contact coverage, source and course values.
-                      </div>
-                    </div>
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      <section className={styles.panel}>
-        <div className={styles.panelHead}>
-          <div>
-            <div className={styles.pageKicker}>Identity conflict review</div>
-            <h2>Canonical identity decisions requiring a person</h2>
-            <p>
-              Exact identifier conflicts are surfaced here rather than silently merging Contacts. Compare both Contact records before deciding whether the evidence represents one person or two distinct people.
-            </p>
-          </div>
-          <span className={identityConflictLoadError ? styles.pillRed : styles.pillAmber}>
-            {identityConflictLoadError ? 'Unavailable' : `${identityConflicts.length} open`}
-          </span>
-        </div>
-
-        {identityConflictLoadError ? (
-          <div className={styles.panelBody}>
-            <div className={styles.emptyNote}>
-              <AlertTriangle size={18} />
-              <div>
-                <strong>Identity evidence is temporarily unavailable</strong>
-                {identityConflictLoadError}
-              </div>
-            </div>
-          </div>
-        ) : identityConflicts.length ? (
-          <div className={styles.tableViewport}>
-            <table className={styles.dataTable}>
-              <thead>
-                <tr>
-                  <th>Lead</th>
-                  <th>Conflict</th>
-                  <th>Evidence</th>
-                  <th>Candidate</th>
-                  <th>Detected</th>
-                  <th>Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {identityConflicts.map((conflict) => {
-                  const lead = leadById.get(conflict.lead_id);
-                  const evidence = asRecord(conflict.evidence);
-                  const identifierType = pretty(
-                    stringValue(evidence?.identifier_type) || 'identifier',
-                  );
-                  const sourceSystem = pretty(
-                    stringValue(evidence?.source_system) || 'identity engine',
-                  );
-                  const candidateIds = Array.isArray(conflict.candidate_person_ids)
-                    ? conflict.candidate_person_ids.filter(Boolean)
-                    : [];
-                  const firstCandidateId = candidateIds[0] ?? null;
-                  const mergeEligible = Boolean(
-                    conflict.person_id
-                    && firstCandidateId
-                    && candidateIds.length === 1
-                    && firstCandidateId !== conflict.person_id,
-                  );
-                  const mergeConfirmationOpen = mergeConflictId === conflict.id;
-
-                  return (
-                    <tr key={conflict.id}>
-                      <td>
-                        <div className={styles.leadName}>{lead?.name || 'Accessible lead'}</div>
-                        <div className={styles.micro}>{lead?.leadCode || conflict.lead_id}</div>
-                      </td>
-                      <td>
-                        <span className={styles.pillAmber}>{pretty(conflict.conflict_type)}</span>
-                      </td>
-                      <td>
-                        <div>{identifierType}</div>
-                        <div className={styles.micro}>Source · {sourceSystem}</div>
-                      </td>
-                      <td>
-                        <div>{candidateIds.length} candidate contact{candidateIds.length === 1 ? '' : 's'}</div>
-                        <div className={styles.micro}>Exact value is intentionally not shown in this queue.</div>
-                      </td>
-                      <td>{formatDateTime(conflict.detected_at)}</td>
-                      <td>
-                        <div className={styles.pageActions}>
-                          <Link href={`/leads/${conflict.lead_id}`} className={styles.button}>
-                            Lead <ArrowRight size={12} />
-                          </Link>
-                          {conflict.person_id ? (
-                            <Link
-                              href={`/customer-360/${conflict.person_id}?opportunity=${conflict.lead_id}`}
-                              className={styles.button}
-                            >
-                              Current contact
-                            </Link>
-                          ) : null}
-                          {firstCandidateId ? (
-                            <Link href={`/customer-360/${firstCandidateId}`} className={styles.button}>
-                              Candidate
-                            </Link>
-                          ) : null}
-                          {canReviewIdentityConflicts ? (
-                            <>
-                              <ToastForm action={dismissIdentityResolutionConflictInline}>
-                                <input type="hidden" name="conflict_id" value={conflict.id} />
-                                <button type="submit" className={styles.button}>
-                                  Dismiss as distinct
-                                </button>
-                              </ToastForm>
-
-                              {mergeEligible ? (
-                                mergeConfirmationOpen ? (
-                                  <>
-                                    <ToastForm action={mergeIdentityResolutionConflictInline}>
-                                      <input type="hidden" name="conflict_id" value={conflict.id} />
-                                      <button type="submit" className={styles.buttonPrimary}>
-                                        Confirm same person & merge
-                                      </button>
-                                    </ToastForm>
-                                    <Link href="/data-quality" className={styles.button}>
-                                      Cancel merge
-                                    </Link>
-                                  </>
-                                ) : (
-                                  <Link
-                                    href={`/data-quality?merge=${encodeURIComponent(conflict.id)}`}
-                                    className={styles.button}
-                                  >
-                                    Same person
-                                  </Link>
-                                )
-                              ) : candidateIds.length > 1 ? (
-                                <span className={styles.pillGray}>Multi-candidate review only</span>
-                              ) : null}
-                            </>
-                          ) : (
-                            <span className={styles.pillGray}>Manager review required</span>
-                          )}
-                        </div>
-                        {mergeConfirmationOpen && mergeEligible ? (
-                          <div className={styles.micro}>
-                            Confirm only after comparing both Contact records. The database will still block the merge if active privacy, legal or ad-delivery state makes the operation unsafe.
-                          </div>
-                        ) : null}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          <div className={styles.panelBody}>
-            <div className={styles.emptyNote}>
-              <ShieldCheck size={18} />
-              <div>
-                <strong>No open identity conflicts</strong>
-                The canonical identity graph has no conflicts waiting for human review.
-              </div>
-            </div>
-          </div>
-        )}
-
-        <div className={styles.panelBody}>
-          <div className={styles.emptyNote}>
-            <AlertTriangle size={18} />
-            <div>
-              <strong>No automatic merge from this workspace</strong>
-              One-candidate conflicts can be merged only through an explicit two-step manager/admin confirmation after comparing both Contact records. Multi-candidate conflicts remain review-only, and the database fails closed around active privacy, legal and ad-activation dependencies.
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <div className={styles.splitGrid}>
-        <section className={styles.panel}>
-          <div className={styles.panelHead}>
-            <div>
-              <div className={styles.pageKicker}>Identity integrity</div>
-              <h2>Duplicate-review safeguards</h2>
-              <p>Similarity is a review signal, never proof that two records belong to the same person.</p>
-            </div>
-            <DatabaseZap size={17} />
-          </div>
-          <div className={styles.panelBody}>
-            <div className={styles.emptyNote}>
-              <ShieldCheck size={18} />
-              <div>
-                <strong>Primary-contact uniqueness is enforced at the database boundary</strong>
-                Each lead can have at most one primary contact per contact type. Ingestion paths cannot create duplicate primary email, phone or messaging identities.
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <section className={styles.panel}>
-          <div className={styles.panelHead}>
-            <div>
-              <div className={styles.pageKicker}>Attribution readiness</div>
-              <h2>Evidence requirements</h2>
-              <p>Source, campaign and conversion credit remain separate evidence layers.</p>
-            </div>
-          </div>
-          <div className={styles.panelBody}>
-            <div className={styles.evidenceList}>
-              <Evidence label="CRM source label" value={`${leads.length - unknownSource} / ${leads.length} known`} />
-              <Evidence label="Exact first-touch campaign" value={`${knownCampaigns} / ${leads.length} known`} />
-              <Evidence label="Linked click / session lineage" value="Review tracking evidence" muted />
-              <Evidence label="Consent & lawful join state" value="Not inferred here" muted />
-            </div>
-          </div>
-        </section>
+function Rank({ rank, impact, title, children }: { rank: number; impact: string; title: string; children: React.ReactNode }) {
+  const first = rank === 1;
+  return (
+    <article className={`${card} ${first ? "border-brand-200 shadow-[0_8px_24px_rgba(87,67,197,0.10)]" : ""}`}>
+      <div className="flex items-center gap-2">
+        <span className={`grid size-6 place-items-center rounded-lg text-[12.5px] font-extrabold ${first ? "bg-copy-strong text-surface" : "bg-brand-50 text-brand-700"}`}>{rank}</span>
+        <span className="text-[12px] font-extrabold uppercase tracking-wide text-brand-700 dark:text-brand-300">{impact}</span>
       </div>
-    </div>
+      <h3 className="text-[16px] font-extrabold leading-snug text-copy-strong">{title}</h3>
+      {children}
+    </article>
   );
 }
 
-function Metric({ label, value, note }: { label: string; value: number; note: string }) {
+function Kpi({ label, value, sub }: { label: string; value: string; sub: string }) {
   return (
-    <div className={styles.metricCard}>
-      <small>{label}</small>
-      <div className={styles.metricValue}>{value.toLocaleString('en-IN')}</div>
-      <p>{note}</p>
+    <div className="flex min-w-0 flex-col gap-1 rounded-2xl border border-line bg-surface px-4 py-3.5 shadow-xs">
+      <span className="text-[12.5px] font-semibold text-copy-muted">{label}</span>
+      <span className="text-[28px] font-extrabold tracking-tight text-copy-strong tabular-nums">{value}</span>
+      <span className="truncate text-[12px] text-copy-muted">{sub}</span>
     </div>
   );
 }
 
-function Evidence({
-  label,
-  value,
-  muted = false,
-}: {
-  label: string;
-  value: string;
-  muted?: boolean;
+/**
+ * Same-person review. Reads open checks live under the user's own access, and
+ * keeps the safety rules: exact values are not shown, merging needs two
+ * clicks and only for a single candidate, and nothing merges automatically.
+ */
+function SameList({ live, names, testLeads, canReview, mergeId }: {
+  live: LiveConflict[]; names: Map<string, string>; testLeads: Set<string>; canReview: boolean; mergeId: string | null;
 }) {
   return (
-    <div className={styles.evidenceRow}>
-      <span>{label}</span>
-      <span className={muted ? styles.pillGray : styles.pill}>{value}</span>
+    <div>
+      <div className="border-b border-line bg-surface-soft px-4 py-2.5">
+        <h2 className="text-[13px] font-bold text-copy-strong">Identity conflict review</h2>
+        <p className="text-[12.5px] text-copy-muted">A contact detail on one person already belongs to another. Exact value is intentionally not shown in this queue.</p>
+      </div>
+      {!live.length ? <p className="px-4 py-8 text-center text-[13px] text-copy-muted">No same-person checks are open.</p> : null}
+      {live.map((c) => {
+        const candidateIds = c.candidate_person_ids ?? [];
+        const firstCandidateId = candidateIds[0] ?? null;
+        const idType = String(c.evidence?.identifier_type ?? "");
+        const mergeConfirmationOpen = mergeId === c.id;
+        return (
+          <div key={c.id} className="flex flex-wrap items-center gap-4 border-t border-line px-4 py-3 text-[13px] first:border-t-0">
+            <div className="min-w-[220px] flex-1">
+              <Link href={`/leads/${c.lead_id}`} className="font-bold text-copy-strong hover:underline">{names.get(c.lead_id) ?? "Lead"}</Link>
+              {testLeads.has(c.lead_id) ? <span className="ml-2 rounded-full bg-amber-50 px-2 py-0.5 text-[11.5px] font-bold text-amber-800 dark:bg-amber-950/30 dark:text-amber-300">Test lead</span> : null}
+              <p className="text-[12.5px] text-copy-muted">
+                Their {ID_TYPE[idType] ?? "contact detail"} already belongs to another person
+                {c.detected_at ? ` · since ${new Date(c.detected_at).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}` : ""}
+                {candidateIds.length > 1 ? ` · ${candidateIds.length} possible matches` : ""}
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {c.person_id ? <Link href={`/customer-360/${c.person_id}?opportunity=${c.lead_id}`} className="btn-secondary h-8 px-3 text-[12.5px]">This person</Link> : null}
+              {firstCandidateId ? <Link href={`/customer-360/${firstCandidateId}`} className="btn-secondary h-8 px-3 text-[12.5px]">The other person</Link> : null}
+              {canReview ? (
+                <>
+                  <ToastForm action={dismissIdentityResolutionConflictInline}>
+                    <input type="hidden" name="conflict_id" value={c.id} />
+                    <button type="submit" className="btn-secondary h-8 px-3 text-[12.5px]">Dismiss as distinct</button>
+                  </ToastForm>
+                  {candidateIds.length === 1 ? (
+                    mergeConfirmationOpen ? (
+                      <>
+                        <ToastForm action={mergeIdentityResolutionConflictInline}>
+                          <input type="hidden" name="conflict_id" value={c.id} />
+                          <button type="submit" className="btn-primary h-8 px-3 text-[12.5px]">Confirm same person & merge</button>
+                        </ToastForm>
+                        <Link href="/data-quality?tab=same#worklist" className="btn-secondary h-8 px-3 text-[12.5px]">Cancel merge</Link>
+                      </>
+                    ) : (
+                      <Link href={`/data-quality?tab=same&merge=${encodeURIComponent(c.id)}#worklist`} className="btn-secondary h-8 px-3 text-[12.5px]">Same person</Link>
+                    )
+                  ) : candidateIds.length > 1 ? (
+                    <span className="self-center text-[12px] font-semibold text-copy-muted">Multi-candidate review only</span>
+                  ) : null}
+                </>
+              ) : <span className="self-center text-[12px] font-semibold text-copy-muted">Manager review required</span>}
+            </div>
+            {mergeConfirmationOpen ? (
+              <p className="w-full text-[12px] text-copy-muted">Compare both people first. Both enquiries are kept. The database still blocks the merge if active privacy, legal or ad-delivery state makes it unsafe.</p>
+            ) : null}
+          </div>
+        );
+      })}
+      <p className="border-t border-line px-4 py-2.5 text-[12px] text-copy-muted">No automatic merge from this workspace: every merge is a person’s decision, two clicks, one possible match at a time.</p>
     </div>
   );
 }
 
-function one(value: string | string[] | undefined) {
-  if (Array.isArray(value)) return value[0] ?? '';
-  return value ?? '';
-}
+export default async function DataQualityPage({ searchParams }: Props) {
+  const params = await searchParams;
+  const loaded = await getDataQuality();
+  if (!loaded) {
+    return (
+      <div className="flex flex-col gap-4">
+        <PageHeader title="Data quality" description="This page could not be loaded right now. Please refresh in a moment." />
+      </div>
+    );
+  }
+  const { data: d, courses } = loaded;
 
-function asRecord(value: unknown): Record<string, unknown> | null {
-  return value && typeof value === 'object' && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : null;
-}
+  // Same-person checks, read live under the user's own access.
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  const organizationId = user ? await requireCurrentOrganizationId(supabase, user.id) : null;
+  const [liveResult, reviewResult] = organizationId
+    ? await Promise.all([
+        supabase.from('identity_resolution_conflicts')
+          .select("id,lead_id,person_id,conflict_type,candidate_person_ids,evidence,detected_at")
+          .eq("organization_id", organizationId).eq('status', 'open')
+          .order("detected_at", { ascending: false }).limit(50),
+        supabase.rpc("can_administer_organization_crm", { p_organization_id: organizationId }),
+      ])
+    : [{ data: [] as LiveConflict[] }, { data: false }];
+  const live = ((liveResult.data ?? []) as LiveConflict[]);
+  const canReview = reviewResult.data === true;
+  const conflictNames = new Map(d.conflicts.map((c) => [c.leadId, c.leadName]));
+  const testLeads = new Set(d.conflicts.filter((c) => c.testLead).map((c) => c.leadId));
+  const { fill, noClue } = courseSuggestions(d, courses, mentionedCourse);
+  const fromAd = fill.filter((r) => r.source === "ad").length;
+  const fromWords = fill.length - fromAd;
+  const tabParam = one(params.tab);
+  const tab: Tab = tabParam === "same" || tabParam === "noclue" || tabParam === "owner" ? tabParam : "fill";
+  const mergeId = one(params.merge) ?? null;
+  const owners = d.open - d.noOwner;
+  const allTest = d.conflicts.length > 0 && d.conflicts.every((c) => c.testLead);
+  const byLead = [...d.conflicts.reduce((m, c) => m.set(c.leadName, (m.get(c.leadName) ?? 0) + 1), new Map<string, number>())];
 
-function stringValue(value: unknown) {
-  return value == null ? '' : String(value).trim();
-}
+  const ranks: React.ReactNode[] = [];
+  if (fill.length) {
+    ranks.push(
+      <Rank key="fill" rank={ranks.length + 1} impact={`${n(fill.length)} courses we can fill`} title={fromAd >= fromWords ? "Fill the course from the ad they clicked" : "Fill the course from what they wrote"}>
+        <Bars rows={[
+          { label: "From the ad they clicked", value: fromAd, tone: "bg-emerald-600" },
+          { label: "From their own words", value: fromWords, tone: "bg-emerald-600" },
+          { label: "No clue yet", value: noClue.length, tone: "bg-slate-300" },
+        ]} />
+        <p className="text-[13px] leading-5 text-copy">For these ads, <strong>90% or more of the people who came from them already have that course</strong>. Each suggestion shows its evidence; nothing changes until you press Fill.</p>
+        <div className="mt-auto flex flex-wrap gap-2"><Link href="/data-quality?tab=fill#worklist" className="btn-primary">Review and fill {n(fill.length)}</Link></div>
+        <p className="text-[11.5px] text-copy-subtle">Ad each person clicked · courses of others from the same ad</p>
+      </Rank>,
+    );
+  }
+  if (d.conflicts.length) {
+    ranks.push(
+      <Rank key="same" rank={ranks.length + 1} impact={`${n(d.conflicts.length)} same-person check${d.conflicts.length === 1 ? "" : "s"}`} title={allTest ? `All ${n(d.conflicts.length)} come from your own test leads` : "Check who might be the same person"}>
+        <Bars rows={byLead.slice(0, 4).map(([label, value]) => ({ label, value, tone: "bg-orange-700" }))} />
+        <p className="text-[13px] leading-5 text-copy">
+          {allTest
+            ? <>A phone, WhatsApp or email on a test lead already belongs to someone else. <strong>Clear them</strong> so they stop showing as identity problems.</>
+            : <>A contact detail on one person already belongs to another. Compare both, then merge or keep them apart.</>}
+        </p>
+        <div className="mt-auto flex flex-wrap gap-2">
+          {allTest ? (
+            <ToastForm action={clearConflictsAction}>
+              {d.conflicts.map((c) => <input key={c.id} type="hidden" name="conflict_id" value={c.id} />)}
+              <SubmitButton pendingLabel="Clearing…" className="btn-primary">Clear the {n(d.conflicts.length)}</SubmitButton>
+            </ToastForm>
+          ) : null}
+          <Link href="/data-quality?tab=same#worklist" className={allTest ? "btn-secondary" : "btn-primary"}>Compare first</Link>
+        </div>
+        <p className="text-[11.5px] text-copy-subtle">Open identity checks</p>
+      </Rank>,
+    );
+  }
+  if (d.noOwner) {
+    ranks.push(
+      <Rank key="owner" rank={ranks.length + 1} impact={`${n(d.noOwner)} without an owner`} title="Give leads an owner">
+        <Bars rows={[{ label: "No owner", value: d.noOwner, tone: "bg-red-700" }, { label: "Has an owner", value: owners, tone: "bg-brand-600" }]} />
+        <p className="text-[13px] leading-5 text-copy">Nobody is reminded about a lead with no owner. Owning leads by course gives each person a short list of their own.</p>
+        <div className="mt-auto"><Link href="/team-performance" className="btn-primary">Assign owners</Link></div>
+        <p className="text-[11.5px] text-copy-subtle">Open enquiries today</p>
+      </Rank>,
+    );
+  }
 
-function pretty(value: string) {
-  return value
-    .replace(/[_-]+/g, ' ')
-    .replace(/\b\w/g, (character) => character.toUpperCase());
-}
+  const tabs: Array<[Tab, string, number]> = [["fill", "Fill course", fill.length], ["same", "Same person?", d.conflicts.length], ["noclue", "No course, no clue", noClue.length], ["owner", "No owner", d.noOwner]];
 
-function formatDateTime(value: string | null) {
-  if (!value) return '—';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return '—';
-  return new Intl.DateTimeFormat('en-IN', {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(date);
+  return (
+    <div className="flex flex-col gap-4">
+      <PageHeader
+        title="Data quality"
+        description={<span className="text-[15px] leading-7 text-copy"><strong className="font-semibold text-copy-strong">{dqHeadline(d, fill.length)}</strong></span>}
+        actions={<><Link href="/customer-360" className="btn-secondary">Customer 360</Link>{fill.length ? <Link href="/data-quality?tab=fill#worklist" className="btn-primary">Review and fill {n(fill.length)}</Link> : null}</>}
+      />
+
+      {ranks.length ? <div className="grid gap-3.5 lg:grid-cols-3">{ranks}</div> : null}
+
+      <div className="grid gap-3.5 sm:grid-cols-2 xl:grid-cols-4">
+        <Kpi label="Identity confirmed" value={pctText(pct(d.personsVerified, d.persons))} sub={`${n(d.personsVerified)} of ${n(d.persons)} people`} />
+        <Kpi label="Course known" value={pctText(pct(d.open - d.noCourse, d.open))} sub={`${n(d.open - d.noCourse)} of ${n(d.open)} open`} />
+        <Kpi label="Value set" value={pctText(pct(d.open - d.noValue, d.open))} sub={`${n(d.open - d.noValue)} of ${n(d.open)} open`} />
+        <Kpi label="Owner set" value={pctText(pct(owners, d.open))} sub={`${n(owners)} of ${n(d.open)} open`} />
+      </div>
+
+      <section id="worklist" className="overflow-hidden rounded-2xl border border-line bg-surface shadow-xs">
+        <nav aria-label="Worklist" className="flex flex-wrap gap-1 border-b border-line p-3">
+          <div className="flex flex-wrap gap-0.5 rounded-xl bg-brand-50/70 p-1 dark:bg-brand-950/30">
+            {tabs.map(([key, label, count]) => (
+              <Link key={key} href={`/data-quality?tab=${key}#worklist`} aria-current={tab === key ? "page" : undefined}
+                className={`inline-flex h-8 items-center gap-1.5 rounded-lg px-3 text-[13px] ${tab === key ? "bg-brand-600 font-bold text-white" : "font-semibold text-copy-muted hover:text-copy-strong"}`}>
+                {label} <span className="text-[12px] opacity-80">{n(count)}</span>
+              </Link>
+            ))}
+          </div>
+        </nav>
+
+        {tab === "fill" ? <FillCourseTable rows={fill} /> : null}
+        {tab === "same" ? <SameList live={live} names={conflictNames} testLeads={testLeads} canReview={canReview} mergeId={mergeId} /> : null}
+        {tab === "noclue" ? (
+          <div>
+            <p className="border-b border-line bg-surface-soft px-4 py-2.5 text-[12.5px] text-copy-muted">They didn’t name a course and didn’t come from an ad we can trace. Ask which course they mean when you reply; the newest 60 are shown.</p>
+            {noClue.slice(0, 60).map((l) => (
+              <div key={l.leadId} className="grid grid-cols-[240px_110px_minmax(0,1fr)_90px] items-center gap-4 border-t border-line px-4 py-2.5 text-[13px] first:border-t-0">
+                <Link href={`/conversations?lead=${l.leadId}`} className="truncate font-bold text-copy-strong hover:underline">{l.name}</Link>
+                <span className="text-[12.5px] text-copy-muted">{STAGE[l.stage] ?? l.stage}</span>
+                <span className="truncate text-copy">{l.lastIn ? `“${l.lastIn.replace(/\s+/g, " ")}”` : "No message yet"}</span>
+                <Link href={`/conversations?lead=${l.leadId}`} className="btn-secondary h-8 px-3 text-[12.5px]">Open chat</Link>
+              </div>
+            ))}
+          </div>
+        ) : null}
+        {tab === "owner" ? (
+          <div>
+            <p className="border-b border-line bg-surface-soft px-4 py-2.5 text-[12.5px] text-copy-muted">The newest 100 of {n(d.noOwner)} open enquiries without an owner. Assign them from Team performance, or from each lead.</p>
+            {d.noOwnerSample.map((l) => (
+              <div key={l.leadId} className="grid grid-cols-[240px_110px_minmax(0,1fr)_110px] items-center gap-4 border-t border-line px-4 py-2.5 text-[13px] first:border-t-0">
+                <Link href={`/leads/${l.leadId}`} className="truncate font-bold text-copy-strong hover:underline">{l.name}</Link>
+                <span className="text-[12.5px] text-copy-muted">{STAGE[l.stage] ?? l.stage}</span>
+                <span className="truncate text-copy">{l.course ?? "Course not known yet"}</span>
+                <Link href={`/leads/${l.leadId}`} className="btn-secondary h-8 px-3 text-[12.5px]">+ Assign</Link>
+              </div>
+            ))}
+          </div>
+        ) : null}
+      </section>
+    </div>
+  );
 }
