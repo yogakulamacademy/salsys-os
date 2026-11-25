@@ -9,13 +9,14 @@ import {
 } from "lucide-react";
 
 import {
-  closeSettledTasksAction,
-  completeFollowUpAction,
-  confirmLostFromTaskAction,
-  snoozeFollowUpAction,
-} from "@/app/actions/crm";
+  closeSettledTasksInline,
+  completeFollowUpInline,
+  confirmLostFromTaskInline,
+  snoozeFollowUpInline,
+} from "@/app/follow-ups/inline-actions";
 
 import { SubmitButton } from "@/components/submit-button";
+import { ToastForm } from "@/components/toast-form";
 import { ActionCards, initialsOf, type ActionCardItem } from "@/components/crm/action-cards";
 import { EmptyState, PageHeader } from "@/components/ui";
 import { getFollowUpsWorkspace } from "@/lib/followups-data";
@@ -145,12 +146,12 @@ export default async function FollowUpsPage({ searchParams }: FollowUpsPageProps
             </strong>{" "}
             ({settled.slice(0, 3).map((t) => t.leadName).join(", ")}{settled.length > 3 ? ` and ${settled.length - 3} more` : ""}).
           </p>
-          <form action={closeSettledTasksAction}>
+          <ToastForm action={closeSettledTasksInline}>
             {settled.map((t) => <input key={t.id} type="hidden" name="task_id" value={t.id} />)}
             <SubmitButton pendingLabel="Closing…" className="text-[13px] font-semibold text-emerald-800 hover:underline dark:text-emerald-200">
               Close {settled.length === 1 ? "it" : `all ${settled.length}`} →
             </SubmitButton>
-          </form>
+          </ToastForm>
         </section>
       ) : null}
 
@@ -254,19 +255,19 @@ function TaskRow({ task, view }: { task: ShapedTask; view: View }) {
           <span className="text-[12px] font-semibold text-emerald-700 dark:text-emerald-300">{task.settledLabel}</span>
         ) : task.kind === "lost" ? (
           <>
-            <form action={confirmLostFromTaskAction}>
+            <ToastForm action={confirmLostFromTaskInline}>
               <input type="hidden" name="task_id" value={task.id} />
               <input type="hidden" name="lead_id" value={task.leadId} />
               <input type="hidden" name="view" value={view} />
               <SubmitButton pendingLabel="Saving…" className="h-8 rounded-lg bg-copy-strong px-3 text-[13px] font-semibold text-surface hover:opacity-90">Mark Lost</SubmitButton>
-            </form>
-            <form action={completeFollowUpAction}>
+            </ToastForm>
+            <ToastForm action={completeFollowUpInline}>
               <input type="hidden" name="task_id" value={task.id} />
               <input type="hidden" name="lead_id" value={task.leadId} />
               <input type="hidden" name="return_to" value="follow-ups" />
               <input type="hidden" name="view" value={view} />
               <SubmitButton pendingLabel="Saving…" className="h-8 rounded-lg border border-line px-3 text-[13px] font-semibold text-copy-strong hover:border-line-strong">Keep them</SubmitButton>
-            </form>
+            </ToastForm>
             <ChatLink leadId={task.leadId} label="Read the chat" />
           </>
         ) : (
@@ -275,7 +276,7 @@ function TaskRow({ task, view }: { task: ShapedTask; view: View }) {
             <LaterMenu task={task} view={view} />
           </>
         )}
-        <form action={completeFollowUpAction}>
+        <ToastForm action={completeFollowUpInline}>
           <input type="hidden" name="task_id" value={task.id} />
           <input type="hidden" name="lead_id" value={task.leadId} />
           <input type="hidden" name="return_to" value="follow-ups" />
@@ -288,7 +289,7 @@ function TaskRow({ task, view }: { task: ShapedTask; view: View }) {
           >
             <Check size={14} aria-hidden="true" />
           </SubmitButton>
-        </form>
+        </ToastForm>
       </div>
     </div>
   );
@@ -317,14 +318,14 @@ function LaterMenu({ task, view }: { task: ShapedTask; view: View }) {
       </summary>
       <div className="absolute right-0 top-9 z-20 flex w-72 flex-col gap-1 rounded-xl border border-line bg-surface p-2 shadow-card">
         {presets.map(([days, label]) => (
-          <form key={days} action={snoozeFollowUpAction}>
+          <ToastForm key={days} action={snoozeFollowUpInline} resetOnSuccess={false}>
             <input type="hidden" name="task_id" value={task.id} />
             <input type="hidden" name="snooze_days" value={days} />
             <input type="hidden" name="view" value={view} />
             <SubmitButton pendingLabel="…" className="h-8 w-full rounded-lg px-2.5 text-left text-[13px] font-medium text-copy-strong hover:bg-surface-soft">{label}</SubmitButton>
-          </form>
+          </ToastForm>
         ))}
-        <form action={snoozeFollowUpAction} className="flex items-center gap-1.5 border-t border-line pt-2">
+        <ToastForm action={snoozeFollowUpInline} className="flex items-center gap-1.5 border-t border-line pt-2">
           <input type="hidden" name="task_id" value={task.id} />
           <input type="hidden" name="view" value={view} />
           <input
@@ -335,7 +336,7 @@ function LaterMenu({ task, view }: { task: ShapedTask; view: View }) {
             className="h-8 min-w-0 flex-1 rounded-lg border border-line bg-surface px-1.5 text-[12px] text-copy-strong"
           />
           <SubmitButton pendingLabel="…" className="h-8 rounded-lg bg-brand-600 px-2 text-[12px] font-semibold text-white">Reschedule</SubmitButton>
-        </form>
+        </ToastForm>
       </div>
     </details>
   );

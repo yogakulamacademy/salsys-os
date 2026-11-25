@@ -19,12 +19,13 @@ import {
   UserRound,
 } from "lucide-react";
 
+import { recordPaymentAction } from "@/app/actions/crm";
 import {
-  createFollowUpAction,
-  logLeadContactAction,
-  recordPaymentAction,
-  updateLeadStageAction,
-} from "@/app/actions/crm";
+  createFollowUpInline,
+  logLeadContactInline,
+  updateLeadStageInline,
+} from "@/app/leads/inline-actions";
+import { ToastForm } from "@/components/toast-form";
 
 import { ContractValueCard } from "@/components/contract-value-card";
 import { PaymentCard } from "@/components/payment-card";
@@ -237,19 +238,19 @@ export default async function LeadDetailPage({
     contactSummaryResult.error?.message ??
     null;
 
-  const stageAction = updateLeadStageAction.bind(
+  const stageAction = updateLeadStageInline.bind(
     null,
 
     id,
   );
 
-  const followUpAction = createFollowUpAction.bind(
+  const followUpAction = createFollowUpInline.bind(
     null,
 
     id,
   );
 
-  const contactAction = logLeadContactAction.bind(
+  const contactAction = logLeadContactInline.bind(
     null,
 
     id,
@@ -840,7 +841,7 @@ export default async function LeadDetailPage({
 
             <div className="section-title mt-1">Schedule follow-up</div>
 
-            <form action={followUpAction} className="mt-4 space-y-3">
+            <ToastForm action={followUpAction} className="mt-4 space-y-3">
               <input
                 className="input"
                 name="title"
@@ -865,7 +866,7 @@ export default async function LeadDetailPage({
                 <CalendarClock size={15} />
                 Create follow-up
               </button>
-            </form>
+            </ToastForm>
 
             {lead.nextFollowupAt && (
               <div className={`mt-3 text-xs ${followUpOverdue ? "font-semibold text-rose-600" : "text-slate-400"}`}>
@@ -886,7 +887,7 @@ export default async function LeadDetailPage({
               audit and conversion intelligence.
             </p>
 
-            <form action={contactAction} className="mt-4 space-y-3">
+            <ToastForm action={contactAction} className="mt-4 space-y-3">
               <div className="grid gap-2 sm:grid-cols-2">
                 <label className="block">
                   <span className="field-label">Method</span>
@@ -985,7 +986,7 @@ export default async function LeadDetailPage({
                 <MessageSquarePlus size={15} />
                 Log contact
               </button>
-            </form>
+            </ToastForm>
           </div>
 
           <div className="card-pad">
@@ -993,7 +994,7 @@ export default async function LeadDetailPage({
 
             <div className="section-title mt-1">Change stage</div>
 
-            <form action={stageAction} className="mt-4 space-y-3">
+            <ToastForm action={stageAction} resetOnSuccess={false} className="mt-4 space-y-3">
               <select className="input" name="stage" defaultValue={lead.stage}>
                 {stages.map(([value, label]) => (
                   <option key={value} value={value}>
@@ -1011,7 +1012,7 @@ export default async function LeadDetailPage({
               <button className="btn-secondary w-full" type="submit">
                 Update stage
               </button>
-            </form>
+            </ToastForm>
           </div>
 
           <div className="rounded-2xl bg-brand p-5 text-white shadow-card">
