@@ -23,11 +23,11 @@ export function RecordVsConversation({ check, leadId, personId, messages }: { ch
       </div>
       <dl className="mt-2 divide-y divide-line">
         {check.flags.map((f) => (
-          <div key={f.label} className="grid grid-cols-[150px_minmax(0,1fr)] gap-3 py-2 text-[13px]">
+          <div key={f.label} className="grid grid-cols-[120px_minmax(0,1fr)] gap-3 py-2 text-[13px]">
             <dt className="text-copy-muted">{f.label}</dt>
-            <dd className={`flex min-w-0 items-center gap-1.5 font-semibold ${f.warn ? "text-orange-700 dark:text-orange-300" : "text-copy-strong"}`}>
-              <span className="truncate" title={f.value}>{f.value}</span>
-              {f.warn ? <AlertTriangle size={13} className="shrink-0" aria-label="Check this" /> : null}
+            <dd className={`flex min-w-0 items-start gap-1.5 font-semibold ${f.warn ? "text-orange-700 dark:text-orange-300" : "text-copy-strong"}`}>
+              <span className="min-w-0 break-words">{f.value}</span>
+              {f.warn ? <AlertTriangle size={13} className="mt-[3px] shrink-0" aria-label="Check this" /> : null}
             </dd>
           </div>
         ))}
