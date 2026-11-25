@@ -7,6 +7,7 @@ declare
  v_platform uuid; v_target uuid; v_actor uuid:=gen_random_uuid();
  v_rule uuid; v_run uuid:=gen_random_uuid(); v_fresh uuid:=gen_random_uuid();
  v_result jsonb; v_denied boolean;
+ v_session uuid:=gen_random_uuid();
 begin
  foreach v_role in array array['anon','authenticated','service_role'] loop
    if has_schema_privilege(v_role,'saas_lifecycle','USAGE') then
@@ -81,5 +82,60 @@ begin
     or saas_lifecycle.claim_whatsapp_broadcast_preview(v_target,gen_random_uuid(),now())->>'provider_call_allowed' is distinct from 'false' then
    raise exception 'Unknown WhatsApp work allowed';
  end if;
+ -- Temporary grants exist only in this rollback-only transaction.
+ foreach v_role in array array['anon','authenticated','service_role'] loop
+   if has_schema_privilege(v_role,'saas_platform_read_api','USAGE')
+     or has_function_privilege(v_role,'public.platform_lifecycle_read_v1(uuid,uuid)','EXECUTE')
+     or has_function_privilege(v_role,'public.platform_effective_quota_read_v1(uuid,uuid)','EXECUTE')
+     or has_function_privilege(v_role,'saas_platform_read_api.lifecycle(uuid,uuid)','EXECUTE')
+     or has_function_privilege(v_role,'saas_platform_read_api.quota(uuid,uuid)','EXECUTE')
+   then raise exception 'Unexpected dormant platform API grant: %',v_role; end if;
+ end loop;
+ insert into public.organization_members(organization_id,user_id,role,active)
+ values(v_platform,v_actor,'owner',true) on conflict(organization_id,user_id) do update set role='owner',active=true;
+ insert into auth.sessions(id,user_id,created_at,updated_at) values(v_session,v_actor,now(),now());
+ insert into public.tenant_session_bindings(session_id,user_id,organization_id) values(v_session,v_actor,v_platform);
+ grant usage on schema saas_platform_read_api to authenticated;
+ grant execute on function saas_platform_read_api.lifecycle(uuid,uuid),saas_platform_read_api.quota(uuid,uuid),
+   public.platform_lifecycle_read_v1(uuid,uuid),public.platform_effective_quota_read_v1(uuid,uuid) to authenticated;
+ perform set_config('request.jwt.claim.role','authenticated',true);
+ perform set_config('request.jwt.claim.sub',v_actor::text,true);
+ perform set_config('request.jwt.claims',jsonb_build_object('role','authenticated','sub',v_actor,'session_id',v_session)::text,true);
+ execute 'set local role authenticated';
+ v_denied:=false;
+ begin perform public.platform_lifecycle_read_v1(v_platform,v_target);
+ exception when insufficient_privilege then v_denied:=true; end;
+ if not v_denied then raise exception 'Unassigned authenticated caller read lifecycle'; end if;
+ execute 'reset role';
+ insert into saas_lifecycle.readers values(v_actor,v_platform,true);
+ execute 'set local role authenticated';
+ v_result:=public.platform_lifecycle_read_v1(v_platform,v_target);
+ if v_result->>'state' is distinct from 'available' or v_result->>'revision' is distinct from '2'
+   or v_result->>'may_suspend' is distinct from 'false' or v_result->>'may_restore' is distinct from 'false'
+   or jsonb_array_length(v_result->'events')<>2 then raise exception 'Lifecycle read RPC contract mismatch'; end if;
+ if public.platform_lifecycle_read_v1(v_platform,v_platform)->>'state' is distinct from 'unavailable' then raise exception 'Platform target exposed'; end if;
+ v_denied:=false;
+ begin perform public.platform_effective_quota_read_v1(v_platform,v_target);
+ exception when insufficient_privilege then v_denied:=true; end;
+ if not v_denied then raise exception 'Lifecycle reader implicitly received quota access'; end if;
+ execute 'reset role';
+ insert into saas_governance.platform_quota_readers values(v_actor,v_platform,true);
+ execute 'set local role authenticated';
+ if public.platform_effective_quota_read_v1(v_platform,v_target)->>'state' is distinct from 'managed_separately' then raise exception 'Quota API legacy projection mismatch'; end if;
+ execute 'reset role';
+ update saas_lifecycle.readers set active=false where user_id=v_actor;
+ execute 'set local role authenticated';
+ v_denied:=false;
+ begin perform public.platform_lifecycle_read_v1(v_platform,v_target);
+ exception when insufficient_privilege then v_denied:=true; end;
+ if not v_denied then raise exception 'Revoked lifecycle reader still allowed'; end if;
+ execute 'reset role';
+ update auth.sessions set not_after=now()-interval '1 second' where id=v_session;
+ execute 'set local role authenticated';
+ v_denied:=false;
+ begin perform public.platform_effective_quota_read_v1(v_platform,v_target);
+ exception when insufficient_privilege then v_denied:=true; end;
+ if not v_denied then raise exception 'Expired session still allowed quota read'; end if;
+ execute 'reset role';
 end;
 $check$;
