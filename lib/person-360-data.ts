@@ -3,6 +3,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { normalizeCountry } from "@/lib/home-command-center";
+import { cleanAdTitle } from "@/lib/enrolment-intelligence";
 import { visitorsForLeads } from "@/lib/interest-profile-data";
 import type { buildPersonTimeline } from "@/lib/person-story";
 
@@ -17,6 +18,8 @@ export type PersonViewData = {
   formAt: string | null;
   lastInboundAt: string | null;
   lastOutboundAt: string | null;
+  /** Click-to-message ads that started their Instagram chats, first one first. */
+  ads: { title: string; firstSeenAt: string }[];
 };
 
 /**
@@ -34,7 +37,7 @@ export async function getPersonViewData(
   if (!leadIds.length) return null;
   try {
     const since = new Date(Date.now() - 180 * 86_400_000).toISOString();
-    const [visitors, stages, messages, forms, identifiers, conversations, lead] = await Promise.all([
+    const [visitors, stages, messages, forms, identifiers, conversations, lead, ads] = await Promise.all([
       visitorsForLeads(admin, organizationId, leadIds),
       admin.from("lead_stage_history").select("lead_id, from_stage, to_stage, changed_by_type, reason, changed_at")
         .in("lead_id", leadIds).order("changed_at", { ascending: false }).limit(40),
@@ -48,6 +51,8 @@ export async function getPersonViewData(
         .eq("organization_id", organizationId).in("lead_id", leadIds).limit(20),
       admin.from("leads").select("preferred_location, preferred_month, preferred_mode, country, geo_country, metadata")
         .eq("organization_id", organizationId).eq("id", activeLeadId).maybeSingle(),
+      admin.from("lead_ad_referrals").select("ad_title, first_seen_at")
+        .eq("organization_id", organizationId).in("lead_id", leadIds).order("first_seen_at", { ascending: true }).limit(10),
     ]);
 
     let pageViews: TimelineInput["pageViews"] = [];
@@ -106,6 +111,8 @@ export async function getPersonViewData(
       formAt: formRows[0]?.received_at ?? null,
       lastInboundAt: lastIn?.created_at ?? null,
       lastOutboundAt: lastOut?.created_at ?? null,
+      ads: ((ads.data ?? []) as { ad_title: string | null; first_seen_at: string }[])
+        .map((a) => ({ title: cleanAdTitle(a.ad_title), firstSeenAt: a.first_seen_at })),
     };
   } catch {
     return null;

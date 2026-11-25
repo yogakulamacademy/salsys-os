@@ -218,6 +218,7 @@ export default async function Customer360DetailPage({
     { label: "When", value: known(view?.facts.month), source: known(view?.facts.month) ? "Their messages" : null },
     { label: "Where", value: leadLocation, source: leadLocation ? "Their messages" : null },
     { label: "Online or in person", value: known(view?.facts.mode) ? pretty(view!.facts.mode!) : null, source: known(view?.facts.mode) ? "Their messages" : null },
+    { label: "Came from the ad", value: view?.ads.length ? `“${view.ads[0].title}”${view.ads.length > 1 ? ` + ${view.ads.length - 1} more` : ""}` : null, source: view?.ads.length ? `Instagram, ${new Date(view.ads[0].firstSeenAt).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}` : null },
     { label: "Country", value: view?.facts.country ? `${view.facts.country}${view.facts.countryLikely ? " (likely)" : ""}` : null, source: view?.facts.country ? (view.facts.countryLikely ? "Worked out from clues" : "Their details") : null },
   ];
   const identityRows = identityList(view);
