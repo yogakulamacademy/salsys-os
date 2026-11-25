@@ -2,6 +2,7 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { enrichmentTenantActive, enrichmentLeadAllowed } from "@/lib/enrichment-tenant-access";
 import { normalizeCountry } from "@/lib/home-command-center";
 import { courseFromText, readStoredShareBody, type CourseRef } from "@/lib/lead-source-context";
 import { getLeadSourceContext } from "@/lib/lead-source-context-data";
@@ -23,13 +24,14 @@ function courseLocation(code: string | null | undefined, hint: string | null): s
 export async function collectLeadSigns(admin: SupabaseClient, leadId: string, courses: Array<CourseRef & { id: string }>): Promise<Sign[]> {
   const byCode = new Map(courses.filter((c) => c.code).map((c) => [String(c.code), c]));
   const signs: Sign[] = [];
-  const [{ data: lead }, { data: ingests }, { data: inbound }, { data: links }] = await Promise.all([
-    admin.from("leads").select("id, organization_id, interested_course_id, preferred_location, updated_at, created_at").eq("id", leadId).maybeSingle(),
+  const { data: lead, error } = await admin.from("leads").select("id, organization_id, interested_course_id, preferred_location, updated_at, created_at").eq("id", leadId).maybeSingle();
+  if (error) throw Error("Interest scan lead unavailable.");
+  if (!lead || lead.id !== leadId || !await enrichmentTenantActive(admin, lead.organization_id)) return signs;
+  const [{ data: ingests }, { data: inbound }, { data: links }] = await Promise.all([
     admin.from("lead_ingest_events").select("received_at, metadata").eq("lead_id", leadId).order("received_at", { ascending: true }).limit(50),
     admin.from("messages").select("body, created_at").eq("lead_id", leadId).eq("direction", "inbound").order("created_at", { ascending: true }).limit(300),
     admin.from("dm_tracked_links").select("course_id, first_opened_at, destination_url").eq("lead_id", leadId).not("first_opened_at", "is", null),
   ]);
-  if (!lead) return signs;
 
   if (lead.interested_course_id) {
     signs.push({ courseId: String(lead.interested_course_id), source: "crm", at: String(lead.created_at), location: lead.preferred_location ?? null });
@@ -70,6 +72,7 @@ export async function collectLeadSigns(admin: SupabaseClient, leadId: string, co
 
   // The Instagram ad that started the conversation (its title or full caption names the course).
   if ((inbound ?? []).length) {
+    if (!await enrichmentLeadAllowed(admin, lead.organization_id, leadId)) return [];
     const ctx = await getLeadSourceContext(admin, String(lead.organization_id), leadId, courses).catch(() => null);
     const adCourse = ctx?.ad?.course as (CourseRef & { id?: string }) | null | undefined;
     if (adCourse?.id) {
@@ -88,6 +91,7 @@ export async function collectLeadSigns(admin: SupabaseClient, leadId: string, co
 
 /** Save signs as interests (merging with what is there), then pick the main course and value. */
 export async function applyLeadSigns(admin: SupabaseClient, organizationId: string, leadId: string, signs: Sign[], today: string) {
+  if (!await enrichmentLeadAllowed(admin, organizationId, leadId)) return;
   const { data: existingRows } = await admin.from("lead_course_interests")
     .select("course_id, strength, sources, first_seen_at, last_seen_at, location, status, set_by").eq("lead_id", leadId);
   const existing = new Map((existingRows ?? []).map((r) => [String(r.course_id), r]));
@@ -105,6 +109,7 @@ export async function applyLeadSigns(admin: SupabaseClient, organizationId: stri
     const prev = existing.get(courseId);
     if (prev && Number(prev.strength) === m.strength && String(prev.last_seen_at) === m.lastSeenAt &&
         JSON.stringify([...(prev.sources as string[])].sort()) === JSON.stringify(m.sources) && (prev.location ?? null) === m.location) continue;
+    if (!await enrichmentLeadAllowed(admin, organizationId, leadId)) return;
     await admin.from("lead_course_interests").upsert({
       organization_id: organizationId, lead_id: leadId, course_id: courseId, location: m.location, strength: m.strength,
       sources: m.sources, first_seen_at: m.firstSeenAt, last_seen_at: m.lastSeenAt, updated_at: new Date().toISOString(),
@@ -115,6 +120,7 @@ export async function applyLeadSigns(admin: SupabaseClient, organizationId: stri
 
 /** Main course and estimated value for the lead, from its interests and the business's prices. */
 export async function recomputeLead(admin: SupabaseClient, organizationId: string, leadId: string, today: string) {
+  if (!await enrichmentLeadAllowed(admin, organizationId, leadId)) return;
   const [{ data: rows }, { data: lead }, { data: prices }, { data: phone }, { data: link }] = await Promise.all([
     admin.from("lead_course_interests").select("id, course_id, strength, last_seen_at, status, set_by, location, is_primary").eq("lead_id", leadId),
     admin.from("leads").select("id, country, geo_country, interested_course_id, potential_value, potential_currency, potential_value_source, location:metadata->location").eq("id", leadId).maybeSingle(),
@@ -140,13 +146,14 @@ export async function recomputeLead(admin: SupabaseClient, organizationId: strin
   for (const r of rows) {
     const est = estimateValue(priceRows, String(r.course_id), r.location ?? null, market, today);
     const isPrimary = primary?.courseId === String(r.course_id);
+    if (!await enrichmentLeadAllowed(admin, organizationId, leadId)) return;
     await admin.from("lead_course_interests").update({
       is_primary: false, estimated_value: est?.value ?? null, value_currency: est?.currency ?? null,
-    }).eq("id", r.id);
+    }).eq("id", r.id).eq("organization_id", organizationId);
     if (isPrimary) r.is_primary = true;
   }
-  if (!primary) return;
-  await admin.from("lead_course_interests").update({ is_primary: true }).eq("lead_id", leadId).eq("course_id", primary.courseId);
+  if (!primary || !await enrichmentLeadAllowed(admin, organizationId, leadId)) return;
+  await admin.from("lead_course_interests").update({ is_primary: true }).eq("lead_id", leadId).eq("course_id", primary.courseId).eq("organization_id", organizationId);
 
   const primaryRow = rows.find((r) => String(r.course_id) === primary.courseId);
   const est = estimateValue(priceRows, primary.courseId, primaryRow?.location ?? null, market, today);
@@ -162,7 +169,7 @@ export async function recomputeLead(admin: SupabaseClient, organizationId: strin
       patch.potential_value_source = source;
     }
   }
-  if (Object.keys(patch).length) await admin.from("leads").update(patch).eq("id", leadId);
+  if (Object.keys(patch).length && await enrichmentLeadAllowed(admin, organizationId, leadId)) await admin.from("leads").update(patch).eq("id", leadId).eq("organization_id", organizationId);
 }
 
 /**
@@ -185,8 +192,9 @@ export async function runInterestScan(admin: SupabaseClient, now = new Date(), b
   let scanned = 0; let errors = 0;
   for (const leadId of ids) {
     try {
-      const { data: lead } = await admin.from("leads").select("id, organization_id, metadata").eq("id", leadId).maybeSingle();
-      if (!lead) continue;
+      const { data: lead, error } = await admin.from("leads").select("id, organization_id, metadata").eq("id", leadId).maybeSingle();
+      if (error) throw Error("Interest scan lead unavailable.");
+      if (!lead || lead.id !== leadId || !await enrichmentTenantActive(admin, lead.organization_id)) continue;
       const org = String(lead.organization_id);
       if (!coursesByOrg.has(org)) {
         const { data: courses } = await admin.from("courses").select("id, code, name, category").eq("organization_id", org).eq("active", true).limit(80);
@@ -194,7 +202,8 @@ export async function runInterestScan(admin: SupabaseClient, now = new Date(), b
       }
       const signs = await collectLeadSigns(admin, leadId, coursesByOrg.get(org)!);
       if (signs.length) await applyLeadSigns(admin, org, leadId, signs, today);
-      await admin.from("leads").update({ metadata: { ...((lead.metadata ?? {}) as Record<string, unknown>), interests_scanned_at: now.toISOString(), interests_scanned_v2_at: now.toISOString() } }).eq("id", leadId);
+      if (!await enrichmentLeadAllowed(admin, org, leadId)) continue;
+      await admin.from("leads").update({ metadata: { ...((lead.metadata ?? {}) as Record<string, unknown>), interests_scanned_at: now.toISOString(), interests_scanned_v2_at: now.toISOString() } }).eq("id", leadId).eq("organization_id", org);
       scanned += 1;
     } catch (err) {
       errors += 1;
