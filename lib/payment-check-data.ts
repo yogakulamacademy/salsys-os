@@ -65,12 +65,14 @@ export async function getPaymentCheckData(): Promise<PaymentCheckData | null> {
     const allLeads = [...realPending, ...realCheckoutLeads];
     const ids = allLeads.map((l) => String(l.id));
 
-    const [persons, stageRows, inbound, convs] = ids.length ? await Promise.all([
+    const [persons, stageRows, inbound, convs, interestRows] = ids.length ? await Promise.all([
       admin.from('person_leads').select('lead_id, person_id').eq('organization_id', org).in('lead_id', ids),
       admin.from('lead_stage_history').select('lead_id, changed_at').in('lead_id', ids).eq('to_stage', 'payment_pending').order('changed_at', { ascending: false }),
       admin.from('messages').select('lead_id, body, created_at').eq('organization_id', org).in('lead_id', ids).eq('direction', 'inbound').order('created_at', { ascending: false }).limit(1000),
       admin.from('conversations').select('lead_id, channel, created_at').eq('organization_id', org).in('lead_id', ids).order('created_at'),
-    ]) : [{ data: [] }, { data: [] }, { data: [] }, { data: [] }];
+      admin.from('lead_course_interests').select('lead_id, course_id, is_primary, last_seen_at').eq('organization_id', org).in('lead_id', ids)
+        .neq('status', 'dropped').order('is_primary', { ascending: false }).order('last_seen_at', { ascending: false }),
+    ]) : [{ data: [] }, { data: [] }, { data: [] }, { data: [] }, { data: [] }];
 
     const personBy = new Map((persons.data ?? []).map((r: { lead_id: string; person_id: string }) => [String(r.lead_id), String(r.person_id)]));
     const enteredBy = new Map<string, string>();
@@ -80,6 +82,14 @@ export async function getPaymentCheckData(): Promise<PaymentCheckData | null> {
     const channelBy = new Map<string, string>();
     for (const r of (convs.data ?? []) as Array<{ lead_id: string; channel: string }>) if (!channelBy.has(r.lead_id)) channelBy.set(r.lead_id, String(r.channel));
     const courseName = new Map((courses.data ?? []).map((c) => [String(c.id), String(c.name)]));
+    const interestsBy = new Map<string, string[]>();
+    for (const r of (interestRows.data ?? []) as Array<{ lead_id: string; course_id: string }>) {
+      const name = courseName.get(String(r.course_id));
+      if (!name) continue;
+      const list = interestsBy.get(String(r.lead_id)) ?? [];
+      if (!list.includes(name)) list.push(name);
+      interestsBy.set(String(r.lead_id), list);
+    }
 
     const toPerson = (l: Record<string, unknown>): PaymentCheckPerson => {
       const id = String(l.id);
@@ -89,6 +99,7 @@ export async function getPaymentCheckData(): Promise<PaymentCheckData | null> {
         leadId: id, personId: personBy.get(id) ?? null, name: String(l.display_name ?? 'Unknown'),
         stage: String(l.current_stage), courseId: (l.interested_course_id as string | null) ?? null,
         courseName: l.interested_course_id ? courseName.get(String(l.interested_course_id)) ?? null : null,
+        interests: interestsBy.get(id) ?? [],
         value: l.potential_value == null ? null : Number(l.potential_value), currency: (l.potential_currency as string | null) ?? null,
         channel: channelBy.get(id) ?? null,
         daysWaiting: entered ? Math.max(0, Math.round((Date.now() - Date.parse(entered)) / DAY)) : null,

@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { batchLabel, orderBatches, duplicateHints, looksLikeOwnBusiness, moneyText, sortForChecking, suggestedAmount } from '../../lib/payment-check.ts';
+import { batchLabel, interestText, orderBatches, duplicateHints, looksLikeOwnBusiness, moneyText, sortForChecking, suggestedAmount } from '../../lib/payment-check.ts';
 
 const person = (o) => ({
   leadId: o.leadId, personId: o.personId ?? null, name: o.name, stage: 'payment_pending', courseId: null, courseName: null,
@@ -78,4 +78,11 @@ test("Paid can enrol in several courses from one payment", async () => {
   assert.match(queue, /toast\.success/);
   const data = fs.readFileSync(new URL("../../lib/payment-check-data.ts", import.meta.url), "utf8");
   assert.doesNotMatch(data, /\.gte\('start_date'/);
+});
+
+test("Interested in pill: main course first, two names then +N more, falls back to the lead's course", () => {
+  assert.equal(interestText({ interests: ["200h TTC"], courseName: "200h TTC" }), "200h TTC");
+  assert.equal(interestText({ interests: ["A", "B", "C"], courseName: null }), "A, B +1 more");
+  assert.equal(interestText({ interests: [], courseName: "Prenatal" }), "Prenatal");
+  assert.equal(interestText({ interests: [], courseName: null }), null);
 });

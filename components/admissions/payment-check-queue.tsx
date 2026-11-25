@@ -8,7 +8,7 @@ import {
 } from "@/app/admissions/payment-check-actions";
 import { toast } from "@/lib/toast";
 import {
-  duplicateHints, largestAttempt, looksLikeOwnBusiness, moneyText, sortForChecking, suggestedAmount,
+  duplicateHints, interestText, largestAttempt, looksLikeOwnBusiness, moneyText, sortForChecking, suggestedAmount,
   type PaymentCheckPerson,
 } from "@/lib/payment-check";
 
@@ -19,7 +19,8 @@ import {
 type Course = { id: string; name: string; batches: Array<{ id: string; label: string }> };
 type Props = { people: PaymentCheckPerson[]; checkoutOnly: PaymentCheckPerson[]; courses: Course[]; businessNames: string[]; isAdmin: boolean; canMerge: boolean };
 
-const pill = (tone: "green" | "amber" | "blue" | "grey" | "red") => ({
+const pill = (tone: "brand" | "green" | "amber" | "blue" | "grey" | "red") => ({
+  brand: "bg-brand-50 text-brand-800 dark:bg-brand-950/30 dark:text-brand-300",
   green: "bg-emerald-50 text-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-300",
   amber: "bg-orange-50 text-orange-800 dark:bg-orange-950/30 dark:text-orange-300",
   blue: "bg-sky-50 text-sky-800 dark:bg-sky-950/30 dark:text-sky-300",
@@ -129,6 +130,7 @@ function Row({ p, courses, isAdmin, canMerge, dup, own, onDone }: {
     else toast.error("Something went wrong", { description: r.error ?? "Please try again." });
   });
   const biggest = largestAttempt(p.attempts);
+  const interest = interestText(p);
   return (
     <div className="border-t border-line py-3 first:border-t-0">
       <div className="flex flex-wrap items-center gap-3.5">
@@ -136,6 +138,8 @@ function Row({ p, courses, isAdmin, canMerge, dup, own, onDone }: {
         <div className="min-w-[260px] flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <Link href={`/leads/${p.leadId}`} className="text-[14px] font-bold text-copy-strong hover:underline">{p.name}</Link>
+            {/* First pill: what they are asking about (owner request, 25 Nov 2026). */}
+            <Pill tone={interest ? "brand" : "grey"}>{interest ? `Interested in · ${interest}` : "Course not set"}</Pill>
             {own ? <Pill tone="amber">Looks like your own number</Pill> : null}
             {p.saysPaid ? <Pill tone="green">Says they paid</Pill> : null}
             {biggest ? <Pill tone="blue">Started paying on the website · {moneyText(biggest.amount, biggest.currency)}{p.attempts.length > 1 ? ` · ${p.attempts.length} tries` : ""}</Pill> : null}
@@ -143,7 +147,7 @@ function Row({ p, courses, isAdmin, canMerge, dup, own, onDone }: {
             {!own && !p.saysPaid && !biggest ? <Pill tone="grey">No sign of payment yet</Pill> : null}
           </div>
           <div className="truncate text-[12px] text-copy-muted">
-            {[p.courseName ?? "Course not set", p.value ? `≈ ${moneyText(p.value, p.currency)}` : null, p.channel ? p.channel[0].toUpperCase() + p.channel.slice(1) : null, p.daysWaiting != null ? `${p.daysWaiting} days at this stage` : null].filter(Boolean).join(" · ")}
+            {[p.value ? `≈ ${moneyText(p.value, p.currency)}` : null, p.channel ? p.channel[0].toUpperCase() + p.channel.slice(1) : null, p.daysWaiting != null ? `${p.daysWaiting} days at this stage` : null].filter(Boolean).join(" · ")}
           </div>
           {p.lastInbound ? <div className="mt-0.5 truncate text-[12.5px] text-copy">“{p.lastInbound}”</div> : null}
         </div>
