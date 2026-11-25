@@ -13,6 +13,13 @@ export type PipelineIntelligence = {
   courses: Array<{ course: string; n: number; inr: number }>;
 };
 
+/** Anything missing (an older database, a test server) means: show the plain overview instead. */
+export function isPipelineIntelligence(x: unknown): x is PipelineIntelligence {
+  const o = x as Partial<PipelineIntelligence> | null;
+  return Boolean(o && typeof o === "object" && o.stages && typeof o.stages === "object" && Array.isArray(o.cells)
+    && o.highIntentWaiting && o.payment && o.moves30 && o.open && Array.isArray(o.courses));
+}
+
 export const HEAT_STAGES = [
   { key: "qualified", label: "Qualified" },
   { key: "high_intent", label: "High intent" },

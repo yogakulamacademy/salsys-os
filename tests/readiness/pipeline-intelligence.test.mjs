@@ -54,3 +54,10 @@ test('rupee text', () => {
   assert.equal(inrText(90000), '₹90,000');
   assert.equal(inrText(100000), '₹1 lakh');
 });
+
+test('an incomplete summary is rejected so the page falls back', async () => {
+  const { isPipelineIntelligence } = await import('../../lib/pipeline-intelligence.ts');
+  assert.equal(isPipelineIntelligence({}), false);
+  assert.equal(isPipelineIntelligence(null), false);
+  assert.equal(isPipelineIntelligence(sample()), true);
+});
