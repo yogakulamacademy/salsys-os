@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useMemo, useState, useTransition } from "react";
 
 import {
-  checkoutNotReceivedAction, confirmPaidAction, mergePeopleAction, notJoiningAction, stillDecidingAction,
+  checkoutNotReceivedAction, confirmPaidAction, markTestLeadAction, mergePeopleAction, notJoiningAction, stillDecidingAction,
 } from "@/app/admissions/payment-check-actions";
 import {
   duplicateHints, largestAttempt, looksLikeOwnBusiness, moneyText, sortForChecking, suggestedAmount,
@@ -151,6 +151,9 @@ function Row({ p, courses, isAdmin, canMerge, dup, own, onDone }: {
           <button type="button" disabled={pending} className="btn-secondary" onClick={() => run(() => notJoiningAction(p.leadId, "lost", "Not joining (Check who paid)"))}>Lost</button>
           {p.attempts.length && isAdmin ? (
             <button type="button" disabled={pending} className="btn-secondary" onClick={() => run(() => checkoutNotReceivedAction(p.leadId, p.attempts.map((a) => a.id)))}>Website payment never arrived</button>
+          ) : null}
+          {canMerge ? (
+            <button type="button" disabled={pending} className="btn-secondary" title="Our own test: moves to Unqualified, cancels its checkouts and leaves it out of every number" onClick={() => run(() => markTestLeadAction(p.leadId))}>This is our test</button>
           ) : null}
         </div>
       ) : null}

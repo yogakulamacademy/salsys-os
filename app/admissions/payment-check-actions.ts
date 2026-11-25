@@ -106,3 +106,12 @@ export async function mergePeopleAction(keepLeadId: string, mergeLeadId: string)
   const changed = (data as { changed?: boolean } | null)?.changed;
   return { ok: true, message: changed === false ? "Already the same person" : "Merged into one person · both enquiries kept" };
 }
+
+/** This is our own test: Unqualified, flagged, checkouts cancelled, left out of all numbers. Manager or admin. */
+export async function markTestLeadAction(leadId: string): Promise<Result> {
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("mark_lead_as_test_v1", { p_lead_id: leadId, p_reason: "Marked from Check who paid" });
+  if (error) return { ok: false, error: error.message };
+  refresh([leadId]);
+  return { ok: true, message: "Marked as a test · left out of all numbers" };
+}

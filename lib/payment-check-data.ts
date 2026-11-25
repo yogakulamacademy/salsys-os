@@ -36,7 +36,7 @@ export async function getPaymentCheckData(): Promise<PaymentCheckData | null> {
       supabase.rpc('can_manage_organization', { p_organization_id: org }),
       supabase.rpc('can_administer_organization_crm', { p_organization_id: org }),
       admin.from('organizations').select('name').eq('id', org).maybeSingle(),
-      admin.from('leads').select('id, display_name, current_stage, interested_course_id, potential_value, potential_currency, updated_at')
+      admin.from('leads').select('id, display_name, current_stage, interested_course_id, potential_value, potential_currency, updated_at, metadata')
         .eq('organization_id', org).eq('current_stage', 'payment_pending').limit(200),
       admin.from('payments').select('id, lead_id, amount, currency, provider, payment_kind, created_at')
         .eq('organization_id', org).eq('status', 'pending').not('provider', 'like', 'team_%').limit(500),
@@ -51,13 +51,17 @@ export async function getPaymentCheckData(): Promise<PaymentCheckData | null> {
       list.push({ id: String(p.id), amount: Number(p.amount ?? 0), currency: String(p.currency ?? 'INR'), provider: String(p.provider ?? ''), kind: String(p.payment_kind ?? ''), createdAt: String(p.created_at) });
       attemptsByLead.set(String(p.lead_id), list);
     }
+    const isTest = (l: Record<string, unknown>) => (l.metadata as Record<string, unknown> | null)?.test_lead === true;
+    const realPending = (pendingLeads.data ?? []).filter((l) => !isTest(l));
     const pendingIds = new Set((pendingLeads.data ?? []).map((l) => String(l.id)));
     const checkoutLeadIds = [...attemptsByLead.keys()].filter((id) => !pendingIds.has(id));
     const { data: checkoutLeads } = checkoutLeadIds.length
-      ? await admin.from('leads').select('id, display_name, current_stage, interested_course_id, potential_value, potential_currency, updated_at')
+      ? await admin.from('leads').select('id, display_name, current_stage, interested_course_id, potential_value, potential_currency, updated_at, metadata')
         .eq('organization_id', org).in('id', checkoutLeadIds).not('current_stage', 'in', '(closed_won,enrolled)')
       : { data: [] as never[] };
-    const allLeads = [...(pendingLeads.data ?? []), ...(checkoutLeads ?? [])];
+    // Test leads (metadata.test_lead) never show here.
+    const realCheckoutLeads = (checkoutLeads ?? []).filter((l) => !isTest(l));
+    const allLeads = [...realPending, ...realCheckoutLeads];
     const ids = allLeads.map((l) => String(l.id));
 
     const [persons, stageRows, inbound, convs] = ids.length ? await Promise.all([
@@ -102,8 +106,8 @@ export async function getPaymentCheckData(): Promise<PaymentCheckData | null> {
     }
 
     return {
-      people: (pendingLeads.data ?? []).map(toPerson),
-      checkoutOnly: (checkoutLeads ?? []).map(toPerson),
+      people: realPending.map(toPerson),
+      checkoutOnly: realCheckoutLeads.map(toPerson),
       courses: (courses.data ?? []).map((c) => ({ id: String(c.id), name: String(c.name), batches: batchByCourse.get(String(c.id)) ?? [] })),
       businessNames: [workspace?.activeWorkspace?.organizationName, orgRow.data?.name as string | undefined].filter((x): x is string => Boolean(x && x.trim())),
       isAdmin: canManage === true,
