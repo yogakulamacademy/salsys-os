@@ -38,10 +38,10 @@ begin
  begin perform saas_lifecycle.require_operator(v_platform,v_target,'suspend');
  exception when insufficient_privilege then v_denied:=true; end;
  if not v_denied then raise exception 'Service claim authorized lifecycle mutation'; end if;
- if saas_lifecycle.platform_effective_quota_preview(v_target)->>'state' is distinct from 'managed_separately' then
+ if saas_governance.platform_effective_quota_preview(v_target)->>'state' is distinct from 'managed_separately' then
    raise exception 'Actual resolver legacy quota state mismatch';
  end if;
- if saas_lifecycle.platform_effective_quota_preview(v_platform)->>'state' is distinct from 'unavailable' then
+ if saas_governance.platform_effective_quota_preview(v_platform)->>'state' is distinct from 'unavailable' then
    raise exception 'Internal platform quota exposed';
  end if;
  insert into public.instagram_automation_rules(organization_id,name,trigger_type,response_text)
