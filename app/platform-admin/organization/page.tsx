@@ -3,6 +3,9 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { ArrowLeft, Building2, CreditCard, UsersRound, Layers3, Plug, BarChart3 } from 'lucide-react';
 import { PlatformAdminFrame } from '@/components/platform-admin-frame';
+import { EffectiveQuotaPanel } from '@/components/platform-effective-quota-panel';
+import { PlatformLifecyclePanel } from '@/components/platform-lifecycle-panel';
+import { loadPlatformLifecycleAndQuota } from '@/lib/platform-lifecycle-quota-loader';
 import { loadPlatformOrganizationProfile, validOrganizationId } from '@/lib/platform-organization-profile';
 
 export const dynamic='force-dynamic';
@@ -22,6 +25,9 @@ export default async function OrganizationProfilePage({searchParams}:{searchPara
   const profile=await loadPlatformOrganizationProfile(org.toLowerCase());
   if(!profile) notFound();
   const {organization,onboarding,subscription,events}=profile;
+  // Existing profile authorization runs first. The loader separately checks
+  // its feature flag, actor/session, platform scope and each reader capability.
+  const readViews=profile.internal?null:await loadPlatformLifecycleAndQuota(organization.id);
   return <PlatformAdminFrame section="customers"><main className="min-w-0 space-y-6">
     <Link href="/settings/organizations" className="inline-flex items-center gap-2 text-sm font-semibold text-brand-700"><ArrowLeft size={16} aria-hidden="true"/> Organizations</Link>
     <header className="flex flex-wrap items-center gap-4"><span className="grid h-12 w-12 place-items-center rounded-xl bg-brand-50 text-brand-700"><Building2 size={23} aria-hidden="true"/></span><div className="min-w-0"><p className="text-xs font-bold uppercase tracking-wider text-brand-700">{profile.internal?'Internal platform workspace':'Registered organization'}</p><h1 className="break-words text-[28px] font-bold">{organization.name}</h1><p className="break-all text-sm text-copy-muted">{organization.slug} · {human(organization.status)} · Created {date(organization.created_at)}</p></div></header>
@@ -41,6 +47,10 @@ export default async function OrganizationProfilePage({searchParams}:{searchPara
       </div>
       <p className="mt-3 text-xs text-copy-muted">Exact table counts and current referenced catalog limits are separate observations. They are not verified quota counters, effective contract allowances, product activity or enforcement decisions. No customer lead content is fetched.</p>
     </section>
+    {readViews&&<div className="grid gap-4 xl:grid-cols-2">
+      <EffectiveQuotaPanel quota={readViews.quota}/>
+      <PlatformLifecyclePanel key={organization.id+':'+(readViews.lifecycle.state==='available'?readViews.lifecycle.revision+':'+readViews.lifecycle.status+':'+readViews.lifecycle.action:'unavailable')} view={readViews.lifecycle}/>
+    </div>}
     <section className="rounded-xl border border-line bg-surface p-5 shadow-sm">
       <h2 className="flex items-center gap-2 font-semibold"><Plug size={18} className="text-brand-700" aria-hidden="true"/> Integration inventory</h2>
       {profile.integrationInventory===null?<p role="status" className="mt-3 text-sm">Integration inventory unavailable.</p>:<div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{profile.integrationInventory.map(({provider,states})=><article key={provider} className="rounded-lg border border-line p-4"><h3 className="font-semibold capitalize">{provider}</h3><div className="mt-2 flex flex-wrap gap-1">{states.length?states.map((state,index)=><span key={index} className="rounded-md bg-surface-soft px-2 py-1 text-xs capitalize">{human(state)}</span>):<span className="text-xs text-copy-muted">No connection record</span>}</div></article>)}</div>}
