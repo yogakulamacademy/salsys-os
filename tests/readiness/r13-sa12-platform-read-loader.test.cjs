@@ -37,9 +37,12 @@ test('independent authenticated RPCs use exact bound platform and target, fail c
  for(const options of [{denyLifecycle:true},{wrongTarget:true}]){const r=await run(options);assert.equal(r.views.lifecycle.state,'unavailable');assert.equal(r.views.quota.state,'managed_separately');}
  const failed=await run({rejectQuota:true});assert.equal(failed.views.lifecycle.status,'active');assert.equal(failed.views.quota.state,'unavailable');
 });
-test('loader remains server-only, has no mutation or service-role access and is disconnected from profile',()=>{
+test('loader remains server-only, has no mutation or service-role access and uses gated profile wiring',()=>{
  const source=readFileSync('lib/platform-lifecycle-quota-loader.ts','utf8');
  assert.match(source,/import 'server-only'/);
  assert.doesNotMatch(source,/createAdminClient|\.from\(|\.update\(|\.insert\(/);
- assert.doesNotMatch(readFileSync('app/platform-admin/organization/page.tsx','utf8'),/loadPlatformLifecycleAndQuota/);
+ const page=readFileSync('app/platform-admin/organization/page.tsx','utf8');
+ assert.match(page,/profile.internal\?null:await loadPlatformLifecycleAndQuota\(organization.id\)/);
+ assert.ok(page.indexOf('await loadPlatformOrganizationProfile(')<page.indexOf('await loadPlatformLifecycleAndQuota('));
+ assert.match(page,/readViews&&/);
 });
