@@ -2,7 +2,8 @@ import "server-only";
 
 import { googleErrorText } from "@/lib/marketing-pages";
 import { managedOrganization } from "@/lib/marketing-pages-data";
-import { buildSearchStory, buildTrackingStory, buildWebStory, isSearchData, isTrackingData, isWebData, type SearchStory, type TrackingStory, type WebStory } from "@/lib/marketing-web";
+import { buildSearchStory, buildTrackingStory, buildWebStory, isSearchData, isTrackingData, isWebData, pageLabel, type SearchStory, type TrackingStory, type WebStory } from "@/lib/marketing-web";
+import { buildClicksStory, buildVisitsStory, isWebsiteDetail, type ClicksStory, type VisitsStory } from "@/lib/marketing-website-detail";
 import { normalizeBehaviorRequest } from "@/lib/native-behavior-contract";
 import { getNativeBehaviorWorkspace } from "@/lib/native-behavior-data";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -45,6 +46,19 @@ export async function getTrackingStory(): Promise<TrackingStory | null> {
     const { data, error } = await createAdminClient().rpc("marketing_tracking_v1", { p_organization_id: org });
     if (error || !isTrackingData(data)) return null;
     return buildTrackingStory(data, googleErrorText);
+  } catch {
+    return null;
+  }
+}
+
+/** "Visits and sources" and "Clicks and forms" share one read (owner-approved, 26 Nov 2026). */
+export async function getWebsiteDetailStories(): Promise<{ visits: VisitsStory; clicks: ClicksStory } | null> {
+  try {
+    const org = await managedOrganization();
+    if (!org) return null;
+    const { data, error } = await createAdminClient().rpc("marketing_website_detail_v1", { p_organization_id: org });
+    if (error || !isWebsiteDetail(data)) return null;
+    return { visits: buildVisitsStory(data, pageLabel), clicks: buildClicksStory(data, pageLabel) };
   } catch {
     return null;
   }
