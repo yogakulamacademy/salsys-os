@@ -1,5 +1,7 @@
 import { setCourseBatchEnrollmentStateInline, setCourseBatchActiveStateInline, updateCourseBatchAdminInline } from "@/app/course-management/inline-actions";
 import { ToastForm } from "@/components/toast-form";
+import { BatchesBoard } from "@/components/operations/batches-board";
+import { getBatchBoard } from "@/lib/batches-board-data";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { AlertTriangle, ArrowRight, CalendarDays, CircleDollarSign, GraduationCap, LockKeyhole, MapPin, PauseCircle, PlayCircle, Save, ShieldCheck, UnlockKeyhole, Users, } from "lucide-react";
@@ -14,6 +16,8 @@ type SearchParams = {
     batch?: string | string[];
     notice?: string | string[];
     error?: string | string[];
+    view?: string | string[];
+    focus?: string | string[];
 };
 export default async function CourseManagementPage({ searchParams, }: {
     searchParams?: Promise<SearchParams>;
@@ -28,6 +32,15 @@ export default async function CourseManagementPage({ searchParams, }: {
         location: "all",
         state: "all",
     });
+    // Programs & Batches board (owner-approved prototype, 26 Nov 2026); "?view=classic"
+    // keeps the single-batch editor for new batches and course details.
+    if (one(resolved.view) !== "classic" && !notice && !error) {
+        const board = await getBatchBoard(workspace.batches);
+        if (board && board.batches.length > 0) {
+            const focus = (one(resolved.focus) ?? "").split(",").map((x) => x.trim()).filter(Boolean).slice(0, 50);
+            return <BatchesBoard board={board} focus={focus}/>;
+        }
+    }
     const courses: CourseRow[] = workspace.courses;
     const batches: BatchRow[] = workspace.batches;
     const audits: AuditRow[] = workspace.audits;

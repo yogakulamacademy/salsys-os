@@ -41,7 +41,7 @@ export default async function CourseManagementLayout({ children }: { children: R
       <OperationsJourneyBar />
 
       {missingCapacityCount == null ? (
-        <section className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50/70 px-4 py-3 text-sm text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/20 dark:text-amber-100">
+        <section data-capacity-banner className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50/70 px-4 py-3 text-sm text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/20 dark:text-amber-100">
           <AlertTriangle size={16} className="mt-0.5 shrink-0" />
           <div>
             <strong>Future capacity readiness unavailable</strong>
@@ -51,7 +51,7 @@ export default async function CourseManagementLayout({ children }: { children: R
           </div>
         </section>
       ) : missingCapacityCount > 0 ? (
-        <section className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50/70 px-4 py-3 text-sm text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/20 dark:text-amber-100">
+        <section data-capacity-banner className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50/70 px-4 py-3 text-sm text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/20 dark:text-amber-100">
           <DatabaseZap size={16} className="mt-0.5 shrink-0" />
           <div>
             <strong>Future capacity setup incomplete</strong>

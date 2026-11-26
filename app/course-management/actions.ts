@@ -358,3 +358,122 @@ export async function setCourseBatchActiveStateAction(formData: FormData) {
         ? "batch-activated"
         : "batch-deactivated"));
 }
+export type BatchBoardChange = {
+    batchId: string;
+    capacity?: number | null;
+    fee?: number | null;
+    currency?: string | null;
+    open?: boolean;
+};
+/**
+ * Saves several batches from the Programs & Batches board in one go (owner-approved
+ * prototype, 26 Nov 2026). Uses the same audited RPCs as the single-batch form, on the
+ * signed-in user's session; untouched fields keep their current values.
+ */
+export async function saveBatchBoardChangesAction(changes: BatchBoardChange[]): Promise<{ ok: boolean; message: string }> {
+    const list = Array.isArray(changes) ? changes.slice(0, 200) : [];
+    if (!list.length) {
+        return { ok: false, message: "Nothing to save." };
+    }
+    for (const c of list) {
+        if (!c || typeof c.batchId !== "string" || !c.batchId) {
+            return { ok: false, message: "A batch is missing." };
+        }
+        if (c.capacity != null && (!Number.isInteger(c.capacity) || c.capacity < 1 || c.capacity > 10000)) {
+            return { ok: false, message: "Seats must be a whole number of 1 or more." };
+        }
+        if (c.fee != null && (!Number.isFinite(c.fee) || c.fee < 0)) {
+            return { ok: false, message: "The fee must be a number of 0 or more." };
+        }
+        if (c.currency != null && !/^[A-Za-z]{3}$/.test(c.currency)) {
+            return { ok: false, message: "Currency must be a 3-letter code such as INR or USD." };
+        }
+    }
+    const supabase = await createClient();
+    const organizationId = await getCurrentOrganizationId(supabase);
+    const ids = list.map((c) => c.batchId);
+    const { data: rows, error: loadError } = await supabase
+        .from("course_batches")
+        .select("id, capacity, seats_remaining, expected_value, currency, enrollment_note, enrollment_open")
+        .eq("organization_id", organizationId)
+        .in("id", ids);
+    if (loadError) {
+        return { ok: false, message: "Couldn’t load those batches. Please try again." };
+    }
+    const byId = new Map((rows ?? []).map((r: any) => [String(r.id), r]));
+    const failed: string[] = [];
+    let saved = 0;
+    for (const c of list) {
+        const row: any = byId.get(c.batchId);
+        if (!row) {
+            failed.push("A batch was not found in this workspace.");
+            continue;
+        }
+        const touchesDetails = "capacity" in c || "fee" in c || "currency" in c;
+        if (touchesDetails) {
+            const capacity = "capacity" in c ? (c.capacity ?? null) : (row.capacity == null ? null : Number(row.capacity));
+            let published = row.seats_remaining == null ? null : Number(row.seats_remaining);
+            if (published != null && capacity != null && published > capacity) {
+                published = capacity;
+            }
+            const { error } = await supabase.rpc("update_course_batch_admin_v2", {
+                p_organization_id: organizationId,
+                p_batch_id: c.batchId,
+                p_capacity: capacity,
+                p_published_seats_remaining: published,
+                p_expected_value: "fee" in c ? (c.fee ?? null) : (row.expected_value == null ? null : Number(row.expected_value)),
+                p_currency: "currency" in c && c.currency ? c.currency.toUpperCase() : row.currency,
+                p_enrollment_note: row.enrollment_note,
+            });
+            if (error) {
+                failed.push(error.message);
+                continue;
+            }
+        }
+        if (typeof c.open === "boolean" && c.open !== (row.enrollment_open !== false)) {
+            const { error } = await supabase.rpc("set_course_batch_enrollment_state_v2", {
+                p_organization_id: organizationId,
+                p_batch_id: c.batchId,
+                p_open: c.open,
+                p_note: null,
+            });
+            if (error) {
+                failed.push(error.message);
+                continue;
+            }
+        }
+        saved += 1;
+    }
+    revalidateBatchPages();
+    revalidatePath("/operations");
+    revalidatePath("/enrollments");
+    if (failed.length) {
+        return { ok: false, message: `Saved ${saved} of ${list.length}. ${failed[0]}` };
+    }
+    return { ok: true, message: `Saved ${saved} batch${saved === 1 ? "" : "es"}.` };
+}
+/** Puts a paid enrolment into a batch of the same course (owner-approved write path, 26 Nov 2026). */
+export async function assignEnrollmentBatchAction(enrollmentId: string, batchId: string): Promise<{ ok: boolean; message: string }> {
+    if (typeof enrollmentId !== "string" || !enrollmentId || typeof batchId !== "string" || !batchId) {
+        return { ok: false, message: "Pick a batch first." };
+    }
+    const supabase = await createClient();
+    const organizationId = await getCurrentOrganizationId(supabase);
+    const { error } = await supabase.rpc("assign_enrollment_batch_v1", {
+        p_organization_id: organizationId,
+        p_enrollment_id: enrollmentId,
+        p_batch_id: batchId,
+    });
+    if (error) {
+        const message = /capacity exceeded/i.test(error.message)
+            ? "That batch is full. Raise its seats in Programs & Batches or pick another date."
+            : /not authorized/i.test(error.message)
+                ? "You don’t have permission to change batches."
+                : error.message;
+        return { ok: false, message };
+    }
+    revalidateBatchPages();
+    revalidatePath("/operations");
+    revalidatePath("/enrollments");
+    return { ok: true, message: "Student assigned to the batch." };
+}

@@ -230,3 +230,9 @@
     min-height: 42px;
   }
 }
+
+/* The Programs & Batches board explains missing seats itself, so the layout's
+   capacity banner only shows with the classic single-batch editor. */
+.course-management-scope:has([aria-label="Programs and batches"]) > [data-capacity-banner] {
+  display: none;
+}

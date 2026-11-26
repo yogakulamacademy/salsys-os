@@ -8,6 +8,8 @@ import { PaymentsToVerify } from "@/components/payments-to-verify";
 import { getPaymentsToVerify } from "@/lib/enrollment-panel-data";
 import { requireCurrentOrganizationId } from "@/lib/workspace";
 import { createClient } from "@/lib/supabase/server";
+import { EnrolmentsBoard } from "@/components/operations/enrolments-board";
+import { buildEnrolBoard, type EnrolBatchOption } from "@/lib/enrolments-board";
 
 export default async function EnrollmentsPage() {
   const workspace = await getEnrollmentsWorkspace();
@@ -22,33 +24,11 @@ export default async function EnrollmentsPage() {
     return isAdmin === true ? getPaymentsToVerify(supabase, organizationId) : null;
   })().catch(() => null);
 
-  return (
-    <div className="space-y-4">
-      <OperationsJourneyBar />
+  const board = await loadEnrolBoard(rows).catch(() => null);
 
-      <PageHeader
-        eyebrow="Operations · Enrollments"
-        title="Enrollments"
-        description="Review authoritative enrollment records by customer, program and batch. Lead stage is shown only as context and never substitutes for Enrollment status."
-        actions={
-          <div className="flex flex-wrap gap-2">
-            <Link href="/course-management" className="btn-secondary">Programs & Batches</Link>
-            <Link href="/admissions" className="btn-primary">Admissions</Link>
-          </div>
-        }
-      />
-
-      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
-        <Metric label="Total records" value={summary.total} icon={<UsersRound size={16} />} />
-        <Metric label="Pending" value={summary.pending} icon={<CalendarDays size={16} />} />
-        <Metric label="Confirmed" value={summary.confirmed} icon={<FileCheck2 size={16} />} />
-        <Metric label="Completed" value={summary.completed} icon={<FileCheck2 size={16} />} />
-        <Metric label="Deferred" value={summary.deferred} icon={<PauseCircle size={16} />} />
-        <Metric label="Cancelled" value={summary.cancelled} icon={<XCircle size={16} />} />
-      </section>
-
-      {verify ? <PaymentsToVerify payments={verify} /> : null}
-
+  // Enrolments board (owner-approved prototype, 26 Nov 2026); the full record
+  // table stays underneath in "All enrolment records".
+  const records = (
       <section className="card-pad overflow-hidden p-0">
         <div className="border-b border-line px-5 py-4">
           <div className="eyebrow">Enrollment truth</div>
@@ -118,8 +98,90 @@ export default async function EnrollmentsPage() {
           </div>
         )}
       </section>
+  );
+
+  if (board && rows.length > 0) {
+    return (
+      <div className="space-y-4">
+        <OperationsJourneyBar />
+        <EnrolmentsBoard board={board} />
+        {verify ? <PaymentsToVerify payments={verify} /> : null}
+        <details className="group rounded-2xl border border-line bg-surface">
+          <summary className="cursor-pointer list-none px-5 py-4">
+            <span className="text-[15px] font-extrabold text-copy-strong">All enrolment records</span>
+            <span className="mt-0.5 block text-[12.5px] text-copy-muted">Status, value and lead stage for every enrolment. Lead stage is shown only as context and never substitutes for Enrollment status.</span>
+          </summary>
+          <div className="border-t border-line">{records}</div>
+        </details>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <OperationsJourneyBar />
+
+      <PageHeader
+        eyebrow="Operations · Enrollments"
+        title="Enrollments"
+        description="Review authoritative enrollment records by customer, program and batch. Lead stage is shown only as context and never substitutes for Enrollment status."
+        actions={
+          <div className="flex flex-wrap gap-2">
+            <Link href="/course-management" className="btn-secondary">Programs & Batches</Link>
+            <Link href="/admissions" className="btn-primary">Admissions</Link>
+          </div>
+        }
+      />
+
+      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
+        <Metric label="Total records" value={summary.total} icon={<UsersRound size={16} />} />
+        <Metric label="Pending" value={summary.pending} icon={<CalendarDays size={16} />} />
+        <Metric label="Confirmed" value={summary.confirmed} icon={<FileCheck2 size={16} />} />
+        <Metric label="Completed" value={summary.completed} icon={<FileCheck2 size={16} />} />
+        <Metric label="Deferred" value={summary.deferred} icon={<PauseCircle size={16} />} />
+        <Metric label="Cancelled" value={summary.cancelled} icon={<XCircle size={16} />} />
+      </section>
+
+      {verify ? <PaymentsToVerify payments={verify} /> : null}
+
+      {records}
     </div>
   );
+}
+
+async function loadEnrolBoard(rows: Awaited<ReturnType<typeof getEnrollmentsWorkspace>>["rows"]) {
+  const courseIds = [...new Set(rows.map((r) => r.courseId).filter((x): x is string => Boolean(x)))];
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(new Date());
+  if (!courseIds.length) return buildEnrolBoard({ today, enrolments: [], batches: [] });
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return null;
+  const organizationId = await requireCurrentOrganizationId(supabase, user.id);
+  const { data, error } = await supabase
+    .from("course_batches")
+    .select("id, course_id, start_date, end_date, location, mode, capacity, enrollment_open, active")
+    .eq("organization_id", organizationId)
+    .in("course_id", courseIds)
+    .eq("active", true)
+    .gte("start_date", today)
+    .order("start_date", { ascending: true })
+    .limit(300);
+  if (error) return null;
+  const taken = new Map<string, number>();
+  for (const r of rows) if (r.batchId && (r.status === "confirmed" || r.status === "completed")) taken.set(r.batchId, (taken.get(r.batchId) ?? 0) + 1);
+  const batches: EnrolBatchOption[] = (data ?? []).map((b: any) => {
+    const online = /online/i.test(`${b.mode ?? ""} ${b.location ?? ""}`);
+    return {
+      id: String(b.id), courseId: String(b.course_id), start: String(b.start_date).slice(0, 10), end: b.end_date ? String(b.end_date).slice(0, 10) : null,
+      place: online ? "Online" : (b.location || "No place set"), capacity: b.capacity == null ? null : Number(b.capacity),
+      enrolled: taken.get(String(b.id)) ?? 0, open: b.enrollment_open !== false,
+    };
+  });
+  return buildEnrolBoard({
+    today,
+    enrolments: rows.map((r) => ({ id: r.id, leadId: r.leadId, leadName: r.leadName, courseId: r.courseId, courseName: r.courseName, batchId: r.batchId, status: r.status, totalValue: r.totalValue, currency: r.currency, createdAt: r.enrolledAt || r.createdAt })),
+    batches,
+  });
 }
 
 function Metric({ label, value, icon }: { label: string; value: number; icon: React.ReactNode }) {
