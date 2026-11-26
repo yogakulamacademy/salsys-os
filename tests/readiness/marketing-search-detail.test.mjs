@@ -91,3 +91,23 @@ test('site health and AI answers', () => {
   assert.equal(none.checkHost, null);
   assert.deepEqual(none.signals.map((x) => x.id), ['site']);
 });
+
+test('site health groups broken links and skips images', () => {
+  const pg = (path, status, reason = null) => ({ path, status, ms: 200, title: '404 | Yogakulam Academy', titleLength: 23, descLength: 0, descShared: 0, h1: 1, words: 10, indexable: status < 300 && reason !== 'noindex', reason });
+  const crawl = { ...d.crawl, at: '2026-11-26T10:00:00Z', fetched: 8, pages: [
+    ...d.crawl.pages,
+    pg('/courses/mysore/courses/mysore/200-hour-yoga-teacher-training-in-mysore.php', 404, 'noindex'),
+    pg('/mysore/courses/mysore/sound-healing.php', 404, 'noindex'),
+    pg('/courses/mysore/assets/images/gallery/courses/mysore/a.webp', 404, 'noindex'),
+    pg('/careers.php', 404, 'noindex'),
+    pg('/assets/images/a.webp', 200, 'non_html'),
+  ] };
+  const s = buildHealthStory({ ...d, crawl }, pageLabel, 'Yogakulam Academy', now);
+  assert.match(text(s.headline), /^The last site check ran on 26 Nov: 4 pages open fine and 4 links lead nowhere\. It found most broken links|^The last site check ran on 26 Nov: 4 pages open fine and 4 links lead nowhere\./);
+  assert.equal(s.ranks[0].id, 'broken');
+  assert.match(text(s.ranks[0].body), /^3 of them repeat a folder/);
+  assert.equal(s.fixes[0].label, '3 broken links with a repeated folder');
+  assert.ok(s.fixes.some((f) => f.path === '/careers.php'));
+  assert.ok(!s.fixes.some((f) => f.path.endsWith('.webp') && f.problem !== 'Page doesn’t open'));
+  assert.ok(!s.fixes.some((f) => f.problem === 'Title too short' && f.now === '23 characters'));
+});

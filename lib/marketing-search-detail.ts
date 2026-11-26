@@ -238,10 +238,17 @@ export function buildHealthStory(d: SearchDetail, pageLabel: (p: string) => stri
   const c = d.crawl;
   const label = (p: string) => (isHome(p) ? "Home page" : pageLabel(p));
   const fixes: FixRow[] = [];
-  for (const p of c?.pages ?? []) {
+  // Images and other files aren't pages; a page that doesn't open only needs its link fixed.
+  const pages = (c?.pages ?? []).filter((p) => p.reason !== "non_html");
+  const broken = pages.filter((p) => p.status != null && p.status >= 400);
+  // A link missing its leading "/" repeats a folder: /courses/mysore/courses/mysore/…
+  const doubled = broken.filter((p) => /\/(courses|assets)\/.*\/(courses|assets)\//.test(p.path) || /^\/([^/]+)\/.+\/\1\//.test(p.path));
+  const healthy = pages.filter((p) => p.status != null && p.status < 300);
+  if (doubled.length) fixes.push({ path: doubled[0].path, label: `${n(doubled.length)} broken links with a repeated folder`, problem: "Page doesn’t open", now: "error 404", fix: "Start the links on course pages with “/” so they don’t add the folder twice", severity: "high" });
+  for (const p of broken.filter((x) => !doubled.includes(x))) fixes.push({ path: p.path, label: label(p.path), problem: "Page doesn’t open", now: `error ${p.status}`, fix: "Fix the link or redirect it to the right page", severity: "high" });
+  for (const p of healthy) {
     const l = label(p.path);
-    if (p.status != null && p.status >= 400) fixes.push({ path: p.path, label: l, problem: "Page doesn’t open", now: `error ${p.status}`, fix: "Fix the link or redirect it to the right page", severity: "high" });
-    else if (p.indexable === false && p.status != null && p.status < 300) fixes.push({ path: p.path, label: l, problem: "Hidden from Google", now: p.reason === "noindex" ? "noindex" : p.reason ?? "not indexable", fix: "Remove the noindex tag", severity: "high" });
+    if (p.indexable === false) fixes.push({ path: p.path, label: l, problem: "Hidden from Google", now: p.reason === "noindex" ? "noindex" : p.reason ?? "not indexable", fix: "Remove the noindex tag", severity: "high" });
     if (p.titleLength > 0 && p.titleLength < 25) fixes.push({ path: p.path, label: l, problem: "Title too short", now: `${p.titleLength} characters`, fix: `Say what and where, e.g. “${(p.title ?? l).replace(/\s+/g, " ").trim()} | ${orgName}”`, severity: "medium" });
     else if (p.titleLength > 65) fixes.push({ path: p.path, label: l, problem: "Title too long", now: `${p.titleLength} characters`, fix: "Keep it under 60 characters so Google shows it in full", severity: "medium" });
     if (p.descLength === 0) fixes.push({ path: p.path, label: l, problem: "No description", now: "missing", fix: "Add a one-line description of the page", severity: "medium" });
@@ -265,19 +272,27 @@ export function buildHealthStory(d: SearchDetail, pageLabel: (p: string) => stri
 
   const headline: Part[] = [];
   if (c) {
-    headline.push({ text: `The last site check ran on ${dayShort(c.at)} and looked at ${n(c.fetched)} of ${n(known)} pages.`, strong: true });
-    const found = [hidden ? `${hidden.label === "Home page" ? "the Home page" : `the ${hidden.label} page`} hidden from Google` : "", shortTitles.length ? `${n(shortTitles.length)} ${shortTitles.length === 1 ? "page" : "pages"} with titles too short to say what they are` : ""].filter(Boolean);
+    headline.push({ text: broken.length
+      ? `The last site check ran on ${dayShort(c.at)}: ${n(healthy.length)} pages open fine and ${n(broken.length)} links lead nowhere.`
+      : `The last site check ran on ${dayShort(c.at)} and looked at ${n(c.fetched)} of ${n(known)} pages.`, strong: true });
+    const found = [doubled.length >= 10 ? "most broken links come from course pages linking without a leading “/”" : "", hidden ? `${hidden.label === "Home page" ? "the Home page" : `the ${hidden.label} page`} hidden from Google` : "", shortTitles.length ? `${n(shortTitles.length)} ${shortTitles.length === 1 ? "page" : "pages"} with titles too short to say what they are` : ""].filter(Boolean);
     if (found.length) headline.push({ text: ` It found ${found.join(", and ")}.`, strong: true });
   } else headline.push({ text: "The site hasn’t been checked yet.", strong: true });
   if (lastAi) headline.push({ text: ` AI answers were checked ${ai.length === 1 ? "once" : `${n(ai.length)} times`}, last on ${dayShort(lastAi.at)}, and ${orgName} was ${lastAi.mentioned ? "mentioned" : "not mentioned"}${aiWrongHost ? `; that check also used ${aiWrongHost} instead of ${d.webHost}` : ""}.` });
   else headline.push({ text: " AI answers haven’t been checked yet." });
 
   const ranks: PageRank[] = [];
+  if (broken.length >= 3) ranks.push({ id: "broken", impact: `${n(broken.length)} links lead nowhere`, title: doubled.length >= broken.length / 2 ? "Fix the broken links on course pages" : `Fix ${n(broken.length)} broken links`,
+    bars: [{ label: "Pages that open", value: healthy.length, shown: n(healthy.length), tone: "green" }, { label: "Links that lead nowhere", value: broken.length, shown: n(broken.length), tone: "red" }],
+    body: doubled.length >= broken.length / 2
+      ? [{ text: `${n(doubled.length)} of them repeat a folder, like ${doubled[0].path.length > 60 ? `${doubled[0].path.slice(0, 57)}…` : doubled[0].path}. That happens when a link or image on a course page is missing its leading “/”. ` }, { text: "Ask the web developer to start those links with “/”; it also lets the site check reach every real page.", strong: true }]
+      : [{ text: `For example ${broken[0].path}. ` }, { text: "Fix the links or redirect them to the right pages.", strong: true }],
+    actions: [{ label: "See the pages to fix", href: "#fixes", primary: true }], basis: "Site check" });
   if (hidden) ranks.push({ id: "hidden", impact: `Found in the ${c ? dayShort(c.at) : ""} check`, title: `Let Google see ${hidden.label === "Home page" ? "the Home page" : `the ${hidden.label} page`}`,
     bars: [{ label: "Pages hidden from Google", value: fixes.filter((f) => f.problem === "Hidden from Google").length, shown: n(fixes.filter((f) => f.problem === "Hidden from Google").length), tone: "red" }],
     body: [{ text: `${hidden.path} is marked as hidden from Google (“${hidden.now}”), so it can’t appear in search. ` }, { text: "Ask the web developer to remove the tag.", strong: true }],
-    actions: [{ label: "See the pages to fix", href: "#fixes", primary: true }], basis: "Site check" });
-  if (shortTitles.length) ranks.push({ id: "titles", impact: `${n(shortTitles.length)} of ${n(c?.fetched ?? 0)} pages checked`, title: `Give ${n(shortTitles.length)} ${shortTitles.length === 1 ? "page a proper title" : "pages proper titles"}`,
+    actions: [{ label: "See the pages to fix", href: "#fixes", primary: !ranks.length }], basis: "Site check" });
+  if (shortTitles.length) ranks.push({ id: "titles", impact: `${n(shortTitles.length)} of ${n(healthy.length)} pages`, title: `Give ${n(shortTitles.length)} ${shortTitles.length === 1 ? "page a proper title" : "pages proper titles"}`,
     bars: shortTitles.slice(0, 4).map((f) => ({ label: f.label, value: Number(f.now.split(" ")[0]), shown: f.now, tone: "amber" as const })), max: 60,
     body: [{ text: `${shortTitles.slice(0, 5).map((f) => `${f.label} (${f.now.split(" ")[0]})`).join(", ")}. ` }, { text: "Titles of 50–60 characters say what the page is and where.", strong: true }],
     actions: [{ label: "See the titles", href: "#fixes", primary: !ranks.length }], basis: "Site check" });
