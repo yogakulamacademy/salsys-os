@@ -12,7 +12,6 @@ import {
 } from "lucide-react";
 
 import { DecisionMetricCard } from "@/components/intelligence/decision-metric-card";
-import { OperationsJourneyBar } from "@/components/operations/operations-journey-bar";
 import { SmartOperationsOverview } from "@/components/operations/smart-operations-overview";
 import { PageHeader } from "@/components/ui";
 import { getCommerceReadinessForCurrentWorkspace } from "@/lib/commerce-readiness-data";
@@ -203,12 +202,6 @@ export default async function OperationsOverviewPage() {
   if (story) {
     return (
       <div className="space-y-4">
-        <nav aria-label="Operations pages" className="flex flex-wrap gap-1.5">
-          {([["/operations", "Overview"], ["/course-management", "Programs & Batches"], ["/enrollments", "Enrolments"], ["/admissions", "Admissions"]] as const).map(([href, label]) => (
-            <Link key={href} href={href} aria-current={href === "/operations" ? "page" : undefined}
-              className={`inline-flex h-9 items-center rounded-xl border px-3.5 text-[13px] font-bold ${href === "/operations" ? "border-brand-600 bg-brand-600 text-white" : "border-line bg-surface text-copy-muted hover:text-copy-strong"}`}>{label}</Link>
-          ))}
-        </nav>
         <SmartOperationsOverview story={story} />
         <details className="group rounded-panel border border-line bg-surface shadow-card">
           <summary className="cursor-pointer list-none px-4 py-3.5 sm:px-5">
@@ -223,7 +216,6 @@ export default async function OperationsOverviewPage() {
 
   return (
     <div className="space-y-4">
-      <OperationsJourneyBar />
 
       <PageHeader
         eyebrow="Operations · Capacity & delivery"

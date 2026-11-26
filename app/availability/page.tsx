@@ -9,7 +9,6 @@ import {
   UsersRound,
 } from "lucide-react";
 
-import { OperationsJourneyBar } from "@/components/operations/operations-journey-bar";
 import { PageHeader } from "@/components/ui";
 import { getCourseManagementWorkspace, type CourseManagementBatchRow } from "@/lib/course-management-data";
 
@@ -33,7 +32,6 @@ export default async function AvailabilityPage() {
 
   return (
     <div className="space-y-4">
-      <OperationsJourneyBar />
 
       <PageHeader
         eyebrow="Operations · Availability"

@@ -15,6 +15,12 @@ const MarketingWorkspaceFrame = dynamic(() =>
   ),
 );
 
+const OperationsWorkspaceFrame = dynamic(() =>
+  import('@/components/operations/operations-workspace-frame').then(
+    (module) => module.OperationsWorkspaceFrame,
+  ),
+);
+
 const InvestigationContextBar = dynamic(() =>
   import('@/components/investigation-context-bar').then(
     (module) => module.InvestigationContextBar,
@@ -51,6 +57,12 @@ function isMarketingPath(pathname: string) {
     '/analytics',
     '/tracking',
   ].some((href) => pathname === href || pathname.startsWith(`${href}/`));
+}
+
+function isOperationsPath(pathname: string) {
+  return ['/operations', '/course-management', '/enrollments', '/availability'].some(
+    (href) => pathname === href || pathname.startsWith(`${href}/`),
+  );
 }
 
 function hasInvestigationContext(pathname: string) {
@@ -93,6 +105,8 @@ export function RootShell({ children, platformAdminEnabled = false }: { children
 
   const content = isMarketingPath(pathname) ? (
     <MarketingWorkspaceFrame>{routeContent}</MarketingWorkspaceFrame>
+  ) : isOperationsPath(pathname) ? (
+    <OperationsWorkspaceFrame>{routeContent}</OperationsWorkspaceFrame>
   ) : (
     routeContent
   );
