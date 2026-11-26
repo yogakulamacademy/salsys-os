@@ -143,7 +143,9 @@ export function buildVisitsStory(d: WebsiteDetail, pageLabel: (p: string) => str
   if (chat && chat.visits >= 30) signals.push({ id: "ai", tag: "New", tone: "teal", title: "ChatGPT sends steady visitors", summary: `${n(chat.visits)} visits and ${n(chat.enquiries)} enquiries in 30 days (${pct1(chat.enquiries, chat.visits)} per 100).`, detail: "Google search › AI answers shows what these assistants say about you." });
 
   const weeks = d.weeks.map((w, i, all) => ({ label: dayShort(w.week), visits: Number(w.visits), engaged: Number(w.engaged), partial: i === all.length - 1 }));
-  const pages = d.pages.map((p) => ({ path: p.path || "/", label: pageLabel(p.path || "/"), visits: Number(p.visits), leads: Number(p.leads) })).filter((p) => !/\(not set\)/.test(p.path));
+  // Error and system pages (404/403, "(not set)") aren't landing pages anyone can improve.
+  const pages = d.pages.map((p) => ({ path: p.path || "/", label: pageLabel(p.path || "/"), visits: Number(p.visits), leads: Number(p.leads) }))
+    .filter((p) => !/\(not set\)/.test(p.path) && !/^\/?(40[0-9]|50[0-9])(\.\w+)?$/.test(p.path));
   const { matrix, matrixActions } = buildMatrix(d.pageSources ?? [], pageLabel);
   return { headline, ranks, kpis, signals, weeks, countries, sources, pages, dataTo: d.dataTo, matrix, matrixActions };
 }
