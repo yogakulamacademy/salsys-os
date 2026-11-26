@@ -130,7 +130,7 @@ export function buildSearchesStory(d: SearchDetail, pageLabel: (p: string) => st
     const home = rows.find((r) => isHome(r.path));
     const rule = ruleOf(query);
     const course = rows.filter((r) => !isHome(r.path) && /\/course/.test(r.path) && (!rule || !/^[cp]-/.test(rule.key) || rule.re.test(pathText(r.path)))).sort((a, b) => Number(b.views) - Number(a.views))[0];
-    return home && course && Number(home.views) >= 80 && Number(home.position ?? 99) <= 12 ? { query, home, course } : null;
+    return home && course && Number(home.views) >= 80 && Number(home.position ?? 99) <= 12 && Number(course.views) >= 20 && Number(course.position ?? 99) <= 20 ? { query, home, course } : null;
   }).filter((x): x is NonNullable<typeof x> => Boolean(x)).sort((a, b) => Number(b.home.views) - Number(a.home.views))[0];
 
   const near: NearRow[] = [...byQuery.entries()].map(([query, rows]) => {
@@ -150,7 +150,7 @@ export function buildSearchesStory(d: SearchDetail, pageLabel: (p: string) => st
       body: [{ text: `For “${clash.query}” Google shows your Home page at #${clash.home.position} (${n(Number(clash.home.views))} views, ${n(Number(clash.home.clicks))} clicks) and the course page at #${clash.course.position}. ` }, { text: "Link the course page clearly from the Home page and give each course page its own title.", strong: true }],
       actions: [{ label: "See the searches", href: "#topics", primary: true }], basis: "Search Console, last 30 days" });
   }
-  const best = near.find((r) => r.views >= 150);
+  const best = near.find((r) => r.views >= 150 && r.query !== clash?.query);
   if (best) {
     ranks.push({ id: "near", impact: `${n(best.views)} views · ${n(best.clicks)} clicks · position ${best.position}`, title: `Win clicks for “${best.query}”`,
       bars: [{ label: "Views", value: best.views, shown: n(best.views), tone: "soft" }, { label: "Clicks", value: best.clicks, shown: n(best.clicks), tone: "brand" }],
@@ -198,12 +198,12 @@ export function buildIdeasStory(d: SearchDetail, pageLabel: (p: string) => strin
     const ctr = t.clicks / Math.max(t.views, 1);
     const weak = t.homeShare >= 50 || t.position > 20;
     if (!weak || ctr >= 0.02) continue;
-    const meta = `${n(t.views)} views · ${n(t.clicks)} clicks · position ~${Math.round(t.position)} · ${n(t.searches.length)}+ searches`;
+    const meta = `${n(t.views)} views · ${plural(t.clicks, "click")} · position ~${Math.round(t.position)}`;
     const top = t.searches.slice(0, 5).map((s) => s.query);
     if (t.key === "india" || t.key === "general") {
       const placeNames = d.places.filter((p) => !/online/i.test(p)).map((p) => p.split(/\s*-\s*/)[0]);
       ideas.push({ key: t.key, title: t.key === "india" ? "A guide page: yoga teacher training in India" : "A page that answers “yoga teacher training course”", meta,
-        why: `Google shows ${t.homeShare >= 50 ? `your Home page for ${t.homeShare}% of these` : "no single page for these"}. A guide comparing ${placeNames.join(", ")}${d.places.some((p) => /online/i.test(p)) ? " and online" : ""}, with dates, fees and how to choose, would answer them directly.`,
+        why: t.key === "general" ? `Google shows ${t.homeShare >= 50 ? `your Home page for ${t.homeShare}% of these` : "no single page for these"}. One page explaining your teacher training courses, from 100 to 500 hours, in person and online, would answer them.` : `Google shows ${t.homeShare >= 50 ? `your Home page for ${t.homeShare}% of these` : "no single page for these"}. A guide comparing ${placeNames.join(", ")}${d.places.some((p) => /online/i.test(p)) ? " and online" : ""}, with dates, fees and how to choose, would answer them directly.`,
         outline: `Title: ${t.key === "india" ? "Yoga Teacher Training in India" : "Yoga Teacher Training Courses"}: ${placeNames.slice(0, 3).join(", ")}${d.places.some((p) => /online/i.test(p)) ? " or Online" : ""} | ${orgName}\nSections: How to choose · 200, 300 and 500-hour courses · ${placeNames.slice(0, 2).join(" vs ")} · Online option · Next dates · Fees · FAQ (certification, food, stay)`,
         searches: top });
     } else if (t.key === "online") {
@@ -220,7 +220,7 @@ export function buildIdeasStory(d: SearchDetail, pageLabel: (p: string) => strin
         why: "People searching for classes land on teacher-training or Home pages. Clear titles on your classes pages would catch them.", outline: `Title: Yoga Classes in ${d.places.find((p) => !/online/i.test(p))?.split(/\s*-\s*/)[0] ?? "Your City"} and Online | ${orgName}\nAdd: timetable, trial class, location map, price per month`, searches: top });
     } else {
       ideas.push({ key: t.key, title: `Make the ${lc(t.label)} page the answer`, meta,
-        why: `${t.label} searches are on page ${t.position <= 20 ? 2 : 3} or later. A clearer title and a FAQ on the course page would lift them.`, outline: `Title: ${t.label} Teacher Training | ${orgName}\nAdd: next dates near the top, what you learn, who it’s for, FAQ`, searches: top });
+        why: `${t.label} searches are on page ${t.position <= 20 ? 2 : 3} or later. A clearer title and a FAQ on the course page would lift them.`, outline: `Title: ${t.label} Yoga Teacher Training | ${orgName}\nAdd: next dates near the top, what you learn, who it’s for, FAQ`, searches: top });
     }
   }
   const first = ideas[0];
@@ -278,7 +278,7 @@ export function buildHealthStory(d: SearchDetail, pageLabel: (p: string) => stri
     bars: [{ label: "Pages hidden from Google", value: fixes.filter((f) => f.problem === "Hidden from Google").length, shown: n(fixes.filter((f) => f.problem === "Hidden from Google").length), tone: "red" }],
     body: [{ text: `${hidden.path} is marked as hidden from Google (“${hidden.now}”), so it can’t appear in search. ` }, { text: "Ask the web developer to remove the tag.", strong: true }],
     actions: [{ label: "See the pages to fix", href: "#fixes", primary: true }], basis: "Site check" });
-  if (shortTitles.length) ranks.push({ id: "titles", impact: `${n(shortTitles.length)} of ${n(c?.pages.length ?? 0)} pages checked`, title: `Give ${n(shortTitles.length)} ${shortTitles.length === 1 ? "page a proper title" : "pages proper titles"}`,
+  if (shortTitles.length) ranks.push({ id: "titles", impact: `${n(shortTitles.length)} of ${n(c?.fetched ?? 0)} pages checked`, title: `Give ${n(shortTitles.length)} ${shortTitles.length === 1 ? "page a proper title" : "pages proper titles"}`,
     bars: shortTitles.slice(0, 4).map((f) => ({ label: f.label, value: Number(f.now.split(" ")[0]), shown: f.now, tone: "amber" as const })), max: 60,
     body: [{ text: `${shortTitles.slice(0, 5).map((f) => `${f.label} (${f.now.split(" ")[0]})`).join(", ")}. ` }, { text: "Titles of 50–60 characters say what the page is and where.", strong: true }],
     actions: [{ label: "See the titles", href: "#fixes", primary: !ranks.length }], basis: "Site check" });

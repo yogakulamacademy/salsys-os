@@ -17,7 +17,7 @@ const d = {
     q('/', '200 hour yoga teacher training bangalore', 153, 0, 3.6), q(BLR, '200 hour yoga teacher training bangalore', 94, 3, 5.8), q('/', 'yoga teacher training bangalore', 76, 1, 6),
     q(DAILY, 'yoga classes', 148, 0, 6.8), q('/', 'yoga classes near me', 119, 2, 4.9), q(DAILY, 'pregnancy yoga classes near me', 82, 0, 11.2),
     q(FACE, 'face yoga course', 50, 3, 5), q(FACE, 'face yoga certification course', 45, 7, 4.1), q(FACE, 'face yoga teacher training course', 49, 4, 4.8),
-    q(FACE, 'face yoga course online free with certificate', 51, 4, 3.8), q(FACE, 'face yoga course online', 42, 3, 5.6),
+    q(FACE, 'face yoga course online free with certificate', 51, 4, 3.8), q(FACE, 'face yoga course online', 42, 3, 5.6), q('/', 'yoga courses online', 1, 0, 6), q('/courses/online/online-nutrition-course.php', 'yoga courses online', 8, 0, 78.6),
     q('/', 'yoga teacher training in delhi', 55, 0, 5.9),
   ],
   courses: [{ name: '200-Hour Yoga Teacher Training', next: '2026-12-07' }, { name: '85-Hour Prenatal & Postnatal Yoga TTC', next: '2026-12-01' }, { name: 'Online Face Yoga TTC', next: '2026-12-15' }, { name: 'Online 200-Hour Yoga Teacher Training', next: '2026-12-15' }],
@@ -53,6 +53,7 @@ test('searches and pages', () => {
   assert.deepEqual(s.ranks.map((r) => r.id), ['home', 'near', 'star']);
   assert.match(text(s.ranks[0].body), /“200 hour yoga teacher training bangalore”.*Home page at #3\.6.*course page at #5\.8/);
   assert.match(s.ranks[1].title, /yoga teacher training course/);
+  assert.notEqual(s.ranks[1].title, s.ranks[0].title);
   assert.match(s.ranks[2].title, /face yoga$/);
   assert.equal(s.kpis[2].value, '65%');
   assert.equal(s.kpis[3].value, '32%');
@@ -70,6 +71,7 @@ test('content ideas', () => {
   assert.match(text(s.headline), /^The biggest gap is “teacher training in India”: 720 views in 30 days, 1 click, and Google shows your Home page at around position 25\./);
   assert.match(s.ideas[0].outline, /Bengaluru, Kerala, Mysore or Online \| Yogakulam Academy/);
   assert.ok(s.ideas.some((i) => i.key === 'p-bengaluru'));
+  assert.doesNotMatch(s.ideas[0].meta, /1 clicks|\+ searches/);
   assert.ok(!s.ideas.some((i) => i.key === 'c-face'));
 });
 
