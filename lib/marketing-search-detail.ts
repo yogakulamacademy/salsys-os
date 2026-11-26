@@ -259,7 +259,8 @@ export function buildHealthStory(d: SearchDetail, pageLabel: (p: string) => stri
   fixes.sort((a, b) => (a.severity === b.severity ? 0 : a.severity === "high" ? -1 : 1));
 
   const stale = !c || now - Date.parse(c.at) > 21 * 86_400_000;
-  const known = c ? Math.max(Number(c.known), Number(c.discovered)) : 0;
+  // A finished check found every page it could reach; older page records (from earlier checks) don't count.
+  const known = c ? (Number(c.fetched) >= Number(c.discovered) ? Number(c.discovered) : Math.max(Number(c.known), Number(c.discovered))) : 0;
   const shortTitles = fixes.filter((f) => f.problem === "Title too short");
   const hidden = fixes.find((f) => f.problem === "Hidden from Google");
   const ai = d.ai ?? [];
@@ -275,8 +276,8 @@ export function buildHealthStory(d: SearchDetail, pageLabel: (p: string) => stri
     headline.push({ text: broken.length
       ? `The last site check ran on ${dayShort(c.at)}: ${n(healthy.length)} pages open fine and ${n(broken.length)} links lead nowhere.`
       : `The last site check ran on ${dayShort(c.at)} and looked at ${n(c.fetched)} of ${n(known)} pages.`, strong: true });
-    const found = [doubled.length >= 10 ? "most broken links come from course pages linking without a leading “/”" : "", hidden ? `${hidden.label === "Home page" ? "the Home page" : `the ${hidden.label} page`} hidden from Google` : "", shortTitles.length ? `${n(shortTitles.length)} ${shortTitles.length === 1 ? "page" : "pages"} with titles too short to say what they are` : ""].filter(Boolean);
-    if (found.length) headline.push({ text: ` It found ${found.join(", and ")}.`, strong: true });
+    const found = [doubled.length >= 10 ? "that most broken links come from course pages linking without a leading “/”" : "", hidden ? `${hidden.label === "Home page" ? "the Home page" : `the ${hidden.label} page`} hidden from Google` : "", shortTitles.length ? `${n(shortTitles.length)} ${shortTitles.length === 1 ? "page" : "pages"} with titles too short to say what they are` : ""].filter(Boolean);
+    if (found.length) headline.push({ text: ` It found ${found.length > 1 ? `${found.slice(0, -1).join(", ")} and ${found.at(-1)}` : found[0]}.`, strong: true });
   } else headline.push({ text: "The site hasn’t been checked yet.", strong: true });
   if (lastAi) headline.push({ text: ` AI answers were checked ${ai.length === 1 ? "once" : `${n(ai.length)} times`}, last on ${dayShort(lastAi.at)}, and ${orgName} was ${lastAi.mentioned ? "mentioned" : "not mentioned"}${aiWrongHost ? `; that check also used ${aiWrongHost} instead of ${d.webHost}` : ""}.` });
   else headline.push({ text: " AI answers haven’t been checked yet." });

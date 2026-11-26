@@ -77,7 +77,7 @@ test('content ideas', () => {
 
 test('site health and AI answers', () => {
   const s = buildHealthStory(d, pageLabel, 'Yogakulam Academy', now);
-  assert.match(text(s.headline), /^The last site check ran on 14 Oct and looked at 20 of 195 pages\. It found the All courses list page hidden from Google, and 2 pages with titles too short/);
+  assert.match(text(s.headline), /^The last site check ran on 14 Oct and looked at 20 of 195 pages\. It found the All courses list page hidden from Google and 2 pages with titles too short/);
   assert.match(text(s.headline), /not mentioned; that check also used yogakulamacademy\.com instead of www\.yogakulam\.com\.$/);
   assert.deepEqual(s.ranks.map((r) => r.id), ['hidden', 'titles', 'ai']);
   assert.equal(s.fixes[0].problem, 'Hidden from Google');
