@@ -134,7 +134,7 @@ function SiteCheckButton({ host }: { host: string }) {
   const run = async () => {
     setState({ busy: true, text: "Starting the check…" });
     let step = await siteCheckStepAction({ host });
-    for (let i = 0; step.ok && !step.done && step.runId && i < 40; i += 1) {
+    for (let i = 0; step.ok && !step.done && step.runId && i < 120; i += 1) {
       setState({ busy: true, text: `Checking pages: ${step.fetched ?? 0} of ${step.discovered ?? 0} found so far…` });
       step = await siteCheckStepAction({ runId: step.runId });
     }
