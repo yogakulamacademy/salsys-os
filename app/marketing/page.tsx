@@ -18,6 +18,7 @@ type MarketingPageProps = {
     stage?: string;
     days?: string;
     steps?: string;
+    classic?: string;
   }>;
 };
 
