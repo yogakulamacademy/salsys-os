@@ -23,8 +23,9 @@ import { isMockMode } from "@/lib/data";
 import { getAdsStory, getFunnelStories, getSourcesStory } from "@/lib/marketing-pages-data";
 import { SmartCreditPage, SmartStagesPage } from "@/components/marketing/smart-funnel-pages";
 import { FunnelAdvisorPage } from "@/components/marketing/funnel-advisor-page";
+import { SmartClicksPage, SmartVisitsPage } from "@/components/marketing/smart-website-detail-pages";
 import { getFunnelAdvisor } from "@/lib/funnel-advisor-data";
-import { getSearchStory, getTrackingStory, getWebStory } from "@/lib/marketing-web-data";
+import { getSearchStory, getTrackingStory, getWebStory, getWebsiteDetailStories } from "@/lib/marketing-web-data";
 import { normalizeBehaviorRequest, normalizeBehaviorBreakdownEvent } from "@/lib/native-behavior-contract";
 import { getNativeBehaviorPageBreakdown } from "@/lib/native-behavior-breakdown-data";
 import { getNativeBehaviorWorkspace } from "@/lib/native-behavior-data";
@@ -89,7 +90,7 @@ export default async function MarketingPage({ searchParams }: MarketingPageProps
 
   // Smart pages (owner-approved prototype "Marketing step 2", 25 Nov 2026) carry their own
   // heading; if their story can't be read, the older views are shown instead.
-  const [sourcesStory, adsStory, webStory, searchStory, trackingStory, funnelStories, advisor] = await Promise.all([
+  const [sourcesStory, adsStory, webStory, searchStory, trackingStory, funnelStories, advisor, siteDetail] = await Promise.all([
     view === "sources" ? getSourcesStory() : Promise.resolve(null),
     view === "campaigns" ? getAdsStory() : Promise.resolve(null),
     view === "website" ? getWebStory() : Promise.resolve(null),
@@ -97,8 +98,9 @@ export default async function MarketingPage({ searchParams }: MarketingPageProps
     view === "tracking" ? getTrackingStory() : Promise.resolve(null),
     view === "funnel" || view === "attribution" ? getFunnelStories() : Promise.resolve(null),
     view === "advisor" ? getFunnelAdvisor() : Promise.resolve(null),
+    view === "analytics" || view === "behavior" ? getWebsiteDetailStories() : Promise.resolve(null),
   ]);
-  const smart = Boolean(sourcesStory || adsStory || webStory || searchStory || trackingStory || funnelStories || advisor);
+  const smart = Boolean(sourcesStory || adsStory || webStory || searchStory || trackingStory || funnelStories || advisor || siteDetail);
   const campaignFilters = Boolean(query.q || query.platform || query.outcome || query.page || query.sort);
 
   return (
@@ -125,7 +127,18 @@ export default async function MarketingPage({ searchParams }: MarketingPageProps
       {view === "website" ? (webStory ? <SmartWebsitePage story={webStory} /> : <AnalyticsView />) : null}
       {view === "search" ? (searchStory ? <SmartSearchPage story={searchStory} /> : <Notice tone="warning">Google search data couldn’t be read right now. The detailed SEO pages are under Google search in the menu.</Notice>) : null}
       {view === "tracking" ? (trackingStory ? <SmartTrackingPage story={trackingStory} /> : <Notice tone="warning">The tracking check couldn’t be read right now. Tracking details are under Tracking check in the menu.</Notice>) : null}
-      {view === "analytics" ? <AnalyticsView /> : null}
+      {view === "analytics" ? (siteDetail ? (
+        <>
+          <SmartVisitsPage story={siteDetail.visits} />
+          <details className="group rounded-panel border border-line bg-surface shadow-card">
+            <summary className="cursor-pointer list-none px-4 py-3.5 sm:px-5">
+              <span className="block text-[15px] font-bold text-copy-strong">Detailed Google Analytics numbers</span>
+              <span className="block text-[12.5px] text-copy-muted">The full analytics explorer with every source, page and country</span>
+            </summary>
+            <div className="border-t border-line px-3 py-4 sm:px-4"><AnalyticsView /></div>
+          </details>
+        </>
+      ) : <AnalyticsView />) : null}
       {view === "funnel" ? (funnelStories ? (
         <>
           <SmartStagesPage story={funnelStories.funnel} />
@@ -138,6 +151,9 @@ export default async function MarketingPage({ searchParams }: MarketingPageProps
           </details>
         </>
       ) : <FunnelView />) : null}
+      {view === "behavior" && siteDetail ? <SmartClicksPage story={siteDetail.clicks} /> : null}
+      {view === "behavior" && siteDetail ? <h2 className="pt-2 text-[16px] font-extrabold text-copy-strong">Explore every click yourself</h2> : null}
+      {/* The behaviour explorer stays fully open under the smart page: the team uses its filters directly. */}
       {view === "behavior" ? <BehaviorView query={query} /> : null}
       {view === "attribution" ? (funnelStories ? (
         <>
