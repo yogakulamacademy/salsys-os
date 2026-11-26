@@ -11,7 +11,7 @@ import type { ClicksStory, VisitsStory } from "@/lib/marketing-website-detail";
 
 const n = (x: number) => Math.round(x).toLocaleString("en-IN");
 const pct1 = (a: number, b: number) => (b ? Math.round((a / b) * 1000) / 10 : 0);
-const chg = (a: number, b: number) => (b ? Math.round(((a - b) / b) * 100) : null);
+const chg = (a: number, b: number) => (b >= 10 ? Math.round(((a - b) / b) * 100) : null);
 const Change = ({ a, b }: { a: number; b: number }) => {
   const c = chg(a, b);
   if (c == null) return <span className="text-copy-subtle">—</span>;
