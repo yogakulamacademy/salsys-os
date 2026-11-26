@@ -173,7 +173,7 @@ export type AdsData = {
 export type AdsCampaign = AdsData["campaigns"][number] & { label: string; cpc: number | null };
 export type AdsWeek = { week: string; label: string; meta: number | null; google: number | null; blind: boolean };
 export type AdsView = { key: "all" | Platform; headline: Part[]; ranks: PageRank[]; kpis: PageKpi[]; signals: PageSignal[] };
-export type AdsStory = { views: Record<string, AdsView>; filters: Array<"all" | Platform>; campaigns: AdsCampaign[]; weeks: AdsWeek[]; blindFrom: string | null; connected: boolean; tagged: boolean };
+export type AdsStory = { views: Record<string, AdsView>; filters: Array<"all" | Platform>; campaigns: AdsCampaign[]; weeks: AdsWeek[]; blindFrom: string | null; connected: boolean; tagged: boolean; enquiries?: { n: number; withCampaign: number } };
 
 export function isAdsData(v: unknown): v is AdsData {
   const d = v as AdsData | null;
@@ -330,5 +330,5 @@ export function buildAdsStory(d: AdsData, now = new Date()): AdsStory {
     views[f] = { key: f, headline, ranks: ranks.slice(0, 3), kpis, signals: signals.filter((s) => f === "all" || !s.platforms || s.platforms.includes(f)) };
   }
 
-  return { views, filters, campaigns, weeks, blindFrom, connected, tagged: d.enquiries.withCampaign > 0 };
+  return { views, filters, campaigns, weeks, blindFrom, connected, tagged: d.enquiries.withCampaign > 0, enquiries: { n: Number(d.enquiries.n), withCampaign: Number(d.enquiries.withCampaign) } };
 }

@@ -49,7 +49,8 @@ test("navigation aggregates do not expose visitors and hide small/sensitive path
 test("SalsysOS exposes the behavior workspace without replacing existing CRM funnel", () => {
   assert.match(marketing, /MarketingView = .*"behavior"/);
   assert.match(marketing, /view === "behavior" \? <BehaviorView/);
-  assert.match(marketing, /view === "funnel" \? <FunnelView/);
+  // Stage by stage became a smart page (26 Nov 2026); the full funnel explorer stays underneath.
+  assert.match(marketing, /view === "funnel" \?[\s\S]{0,900}<FunnelView \/>/);
   assert.match(marketing, /getNativeBehaviorWorkspace\(request\)/);
   assert.match(client, /router\.push\("\/marketing\?" \+ search\.toString\(\)\)/);
   assert.match(client, /role="status"/);
