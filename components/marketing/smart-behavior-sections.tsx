@@ -34,7 +34,7 @@ export function SmartBehaviorSections({ story }: { story: BehaviorStory }) {
   const cell = (r: PageRow, k: Exclude<SortKey, "label" | "visits">, warnHigh = false) => {
     const v = per100(r[k], r.visits);
     const hi = r.visits >= 50 && v > 0 && v === best(k);
-    return <td className={`${td} ${hi ? (warnHigh ? "font-bold text-amber-700 dark:text-amber-300" : "font-bold text-emerald-700 dark:text-emerald-300") : ""}`} title={`${n(r[k])} of ${n(r.visits)} visits`}>{r[k] ? v : "—"}</td>;
+    return <td className={`${td} ${hi ? (warnHigh ? "font-bold text-amber-700 dark:text-amber-300" : "font-bold text-emerald-700 dark:text-emerald-300") : ""}`} title={`${n(r[k])} of ${n(r.visits)} visits`}>{r[k] ? (v < 1 ? "<1" : v) : "—"}</td>;
   };
 
   return (

@@ -32,6 +32,7 @@ test('how people move and what they do', () => {
   assert.match(s.actions[2].title, /^200-Hour YTT in Mysore: fees checked/);
   assert.match(s.actions[2].body, /27 visits looked at the fees and 5 sent a form \(7 started one and gave up\)/);
   assert.equal(s.moves[0].back, 64);
+  assert.ok(!s.moves.some((m) => m.from === 'All courses list' && m.to === 'Home page'));
   assert.deepEqual(s.signals.map((x) => x.id), ['leaves', 'best']);
   assert.match(s.signals[0].title, /^63% of visits to the all-courses list end there$/);
 });

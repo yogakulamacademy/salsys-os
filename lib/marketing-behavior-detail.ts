@@ -29,7 +29,10 @@ export function buildBehaviorStory(d: BehaviorDetail, pageLabel: (p: string) => 
   const label = (p: string) => (isHome(p) ? "Home page" : pageLabel(p));
   const key = (a: string, b: string) => `${a}→${b}`;
   const bySessions = new Map(d.moves.map((m) => [key(m.from, m.to), Number(m.sessions)]));
-  const moves: MoveRow[] = d.moves.map((m) => ({ key: key(m.from, m.to), from: label(m.from), to: label(m.to), visits: Number(m.sessions), back: bySessions.get(key(m.to, m.from)) ?? 0 }));
+  // A move and its reverse are one row: the bigger direction, with the reverse as "came back".
+  const moves: MoveRow[] = d.moves
+    .filter((m) => { const rev = bySessions.get(key(m.to, m.from)) ?? 0; return Number(m.sessions) > rev || (Number(m.sessions) === rev && m.from < m.to); })
+    .map((m) => ({ key: key(m.from, m.to), from: label(m.from), to: label(m.to), visits: Number(m.sessions), back: bySessions.get(key(m.to, m.from)) ?? 0 }));
   const pages: PageRow[] = d.pages.map((p) => ({ path: p.path, label: label(p.path), visits: Number(p.visits), fees: Number(p.price), dates: Number(p.dates), started: Number(p.formStarted), sent: Number(p.formSent), left: Number(p.exits) }));
 
   const actions: MoveAction[] = [];
