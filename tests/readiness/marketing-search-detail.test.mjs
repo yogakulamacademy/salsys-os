@@ -84,6 +84,10 @@ test('site health and AI answers', () => {
   assert.ok(s.fixes.some((f) => f.path === '/teachers.php' && f.problem === 'Same description as other pages'));
   assert.ok(!s.fixes.some((f) => f.path === '/contact.php' && f.problem === 'Same description as other pages'));
   assert.ok(s.crawl.stale);
-  assert.deepEqual(s.signals.map((x) => x.id), ['site']);
-  assert.match(s.siteNote, /runs at www\.yogakulam\.com, but the site saved for checks is yogakulamacademy\.com and yogakulam\.com/);
+  assert.deepEqual(s.signals.map((x) => x.id), ['stale']);
+  assert.equal(s.siteNote, null);
+  assert.equal(s.checkHost, 'yogakulam.com');
+  const none = buildHealthStory({ ...d, sites: [{ host: 'other.com', active: true }] }, pageLabel, 'Yogakulam Academy', now);
+  assert.equal(none.checkHost, null);
+  assert.deepEqual(none.signals.map((x) => x.id), ['site']);
 });

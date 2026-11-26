@@ -30,7 +30,7 @@ export type FixRow = { path: string; label: string; problem: string; now: string
 export type HealthStory = {
   headline: Part[]; ranks: PageRank[]; fixes: FixRow[]; signals: PageSignal[];
   crawl: { at: string | null; fetched: number; known: number; host: string | null; stale: boolean };
-  ai: SearchDetail["ai"]; aiVisits: number; aiEnquiries: number; siteNote: string | null;
+  ai: SearchDetail["ai"]; aiVisits: number; aiEnquiries: number; siteNote: string | null; checkHost: string | null;
 };
 
 const n = (x: number) => Math.round(x).toLocaleString("en-IN");
@@ -259,10 +259,9 @@ export function buildHealthStory(d: SearchDetail, pageLabel: (p: string) => stri
   const lastAi = ai[0];
   const web = host(d.webHost);
   const aiWrongHost = lastAi && web && host(lastAi.host) && host(lastAi.host) !== web ? lastAi.host : null;
-  const activeHosts = d.sites.filter((s) => s.active).map((s) => s.host.toLowerCase());
-  const siteNote = d.webHost && !activeHosts.includes(d.webHost.toLowerCase())
-    ? `Your website runs at ${d.webHost}, but the site saved for checks is ${activeHosts.join(" and ") || "not set"}. A new check needs ${d.webHost} saved as the website.`
-    : null;
+  // The site checker accepts the saved site and its www / non-www twin (seo-crawler v1.2).
+  const checkHost = d.sites.find((s) => s.active && web && host(s.host) === web)?.host ?? null;
+  const siteNote = d.webHost && !checkHost ? `Your website runs at ${d.webHost}, but it isn’t saved for site checks yet.` : null;
 
   const headline: Part[] = [];
   if (c) {
@@ -288,7 +287,7 @@ export function buildHealthStory(d: SearchDetail, pageLabel: (p: string) => stri
     actions: [{ label: "See what AI said", href: "#ai", primary: !ranks.length }], basis: "AI answer checks" });
 
   const signals: PageSignal[] = [];
-  if (siteNote) signals.push({ id: "site", tag: "Fix", tone: "red", title: stale ? "The site check is out of date and can’t run yet" : "The saved website address doesn’t match your site", summary: siteNote, detail: `Once ${d.webHost} is saved as the website, a full check of every page can run.` });
-  else if (stale && c) signals.push({ id: "stale", tag: "Check", tone: "amber", title: "The site check is out of date", summary: `Last run ${dayShort(c.at)}, ${n(c.fetched)} of ${n(known)} pages.`, detail: "Run a full check so every page is covered." });
-  return { headline, ranks, fixes, signals, crawl: { at: c?.at ?? null, fetched: Number(c?.fetched ?? 0), known, host: c?.host ?? null, stale }, ai, aiVisits: Number(d.aiVisits), aiEnquiries: Number(d.aiEnquiries), siteNote };
+  if (siteNote) signals.push({ id: "site", tag: "Fix", tone: "red", title: "Your website isn’t saved for site checks", summary: siteNote, detail: "Ask an admin to add it in Settings › Website." });
+  else if (stale && c) signals.push({ id: "stale", tag: "Check", tone: "amber", title: "The site check is out of date", summary: `Last run ${dayShort(c.at)}, ${n(c.fetched)} of ${n(known)} pages.`, detail: "Use “Check all pages now” at the top so every page is covered." });
+  return { headline, ranks, fixes, signals, crawl: { at: c?.at ?? null, fetched: Number(c?.fetched ?? 0), known, host: c?.host ?? null, stale }, ai, aiVisits: Number(d.aiVisits), aiEnquiries: Number(d.aiEnquiries), siteNote, checkHost };
 }
