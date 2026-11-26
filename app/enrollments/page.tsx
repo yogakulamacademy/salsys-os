@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { CalendarDays, CircleDollarSign, FileCheck2, PauseCircle, UsersRound, XCircle } from "lucide-react";
 
-import { OperationsJourneyBar } from "@/components/operations/operations-journey-bar";
 import { PageHeader } from "@/components/ui";
 import { getEnrollmentsWorkspace, type EnrollmentStatus } from "@/lib/enrollments-data";
 import { PaymentsToVerify } from "@/components/payments-to-verify";
@@ -103,7 +102,6 @@ export default async function EnrollmentsPage() {
   if (board && rows.length > 0) {
     return (
       <div className="space-y-4">
-        <OperationsJourneyBar />
         <EnrolmentsBoard board={board} />
         {verify ? <PaymentsToVerify payments={verify} /> : null}
         <details className="group rounded-2xl border border-line bg-surface">
@@ -119,7 +117,6 @@ export default async function EnrollmentsPage() {
 
   return (
     <div className="space-y-4">
-      <OperationsJourneyBar />
 
       <PageHeader
         eyebrow="Operations · Enrollments"

@@ -1,7 +1,6 @@
 import type { ReactNode } from "react";
 import { AlertTriangle, DatabaseZap } from "lucide-react";
 
-import { OperationsJourneyBar } from "@/components/operations/operations-journey-bar";
 import { isWellnessResidentialEnabledForCurrentSession } from "@/lib/education-access";
 import { requireOperationsAccess } from "@/lib/operations-access";
 import { createClient } from "@/lib/supabase/server";
@@ -38,7 +37,6 @@ export default async function CourseManagementLayout({ children }: { children: R
       }`}
       data-wellness-residential={residentialEnabled ? "enabled" : "disabled"}
     >
-      <OperationsJourneyBar />
 
       {missingCapacityCount == null ? (
         <section data-capacity-banner className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50/70 px-4 py-3 text-sm text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/20 dark:text-amber-100">
