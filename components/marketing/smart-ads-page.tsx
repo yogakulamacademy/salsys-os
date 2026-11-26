@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { KpiRow, PageHead, RankCards, SignalList, SortButton, card } from "@/components/marketing/smart-blocks";
@@ -166,14 +168,47 @@ export function SmartAdsPage({ story }: { story: AdsStory }) {
                     <td className="py-2 text-right tabular-nums">{n(c.clicks)}</td>
                     <td className={`py-2 text-right font-bold tabular-nums ${cpcTone(c)}`}>{c.cpc === null ? "—" : inr(c.cpc)}</td>
                     <td className="py-2 text-right text-copy-muted">{c.conversions === null ? (/lead/i.test(c.name) && c.platform === "meta" ? "Lead forms (not in CRM)" : "—") : `${n(c.conversions)} ${c.conversions === 1 ? "conversion" : "conversions"}`}</td>
-                    <td className="py-2 text-right text-copy-muted">{story.tagged ? "See Enquiries from ads" : "Can’t tell"}</td>
+                    <td className="py-2 text-right text-copy-muted">{story.tagged ? <Link href="/paid-media-leads" className="font-semibold text-brand-700 hover:underline">See enquiries</Link> : "Can’t tell"}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-        </section>
+                </section>
       ) : null}
+
+      {/* "Enquiries from ads" lives here (owner-approved, 26 Nov 2026); the full list stays at /paid-media-leads. */}
+      <section className={card} aria-label="Enquiries from ads">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="text-[16px] font-extrabold text-copy-strong">Enquiries from ads</h2>
+            <p className="text-[12.5px] text-copy-muted">
+              {story.enquiries ? `${n(story.enquiries.withCampaign)} of ${n(story.enquiries.n)} enquiries in the last 30 days carry an ad’s name.` : "Enquiries that carry an ad’s name."}
+              {story.tagged ? "" : " Until ads carry tracked links, the CRM can’t tell which ad brought whom."}
+            </p>
+          </div>
+          {story.tagged ? <Link href="/paid-media-leads" className="btn-primary">See enquiries from ads</Link> : null}
+        </div>
+        {story.tagged ? null : (
+          <ol className="grid gap-2 md:grid-cols-2">
+            {[
+              ["Reconnect each ad account", "Spend must sync so cost per enquiry can be worked out.", "/settings/integrations"],
+              ["Put a tracked link in every ad", "Use your go-links or add utm_campaign to the ad URL, so each enquiry carries the ad’s name.", null],
+              ["Use “Send message” ads on Instagram", "Instagram then passes the ad along with the chat.", null],
+              ["Connect lead forms", "If you use Instagram or Facebook lead forms, connect them so form enquiries arrive with their ad.", "/settings/integrations"],
+            ].map(([t, d, href], i) => (
+              <li key={t} className="flex gap-3 rounded-xl border border-line p-3">
+                <span className="grid size-6 shrink-0 place-items-center rounded-lg bg-brand-50 text-[12px] font-extrabold text-brand-700 dark:bg-brand-950/40 dark:text-brand-200">{i + 1}</span>
+                <span className="min-w-0 text-[13px]">
+                  <span className="block font-bold text-copy-strong">{t}</span>
+                  <span className="block text-copy-muted">{d}</span>
+                  {href ? <Link href={href} className="mt-1 inline-block text-[12.5px] font-semibold text-brand-700 hover:underline">Open Settings</Link> : null}
+                </span>
+              </li>
+            ))}
+          </ol>
+        )}
+      </section>
     </div>
   );
 }

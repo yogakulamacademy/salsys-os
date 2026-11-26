@@ -20,7 +20,8 @@ import { getAttributionWorkspace } from "@/lib/attribution-data";
 import { getCampaignsWorkspace } from "@/lib/campaigns-data";
 import { buildAttributionIntelligence } from "@/lib/commercial-intelligence";
 import { isMockMode } from "@/lib/data";
-import { getAdsStory, getSourcesStory } from "@/lib/marketing-pages-data";
+import { getAdsStory, getFunnelStories, getSourcesStory } from "@/lib/marketing-pages-data";
+import { SmartCreditPage, SmartStagesPage } from "@/components/marketing/smart-funnel-pages";
 import { getSearchStory, getTrackingStory, getWebStory } from "@/lib/marketing-web-data";
 import { normalizeBehaviorRequest, normalizeBehaviorBreakdownEvent } from "@/lib/native-behavior-contract";
 import { getNativeBehaviorPageBreakdown } from "@/lib/native-behavior-breakdown-data";
@@ -84,14 +85,15 @@ export default async function MarketingPage({ searchParams }: MarketingPageProps
 
   // Smart pages (owner-approved prototype "Marketing step 2", 25 Nov 2026) carry their own
   // heading; if their story can't be read, the older views are shown instead.
-  const [sourcesStory, adsStory, webStory, searchStory, trackingStory] = await Promise.all([
+  const [sourcesStory, adsStory, webStory, searchStory, trackingStory, funnelStories] = await Promise.all([
     view === "sources" ? getSourcesStory() : Promise.resolve(null),
     view === "campaigns" ? getAdsStory() : Promise.resolve(null),
     view === "website" ? getWebStory() : Promise.resolve(null),
     view === "search" ? getSearchStory() : Promise.resolve(null),
     view === "tracking" ? getTrackingStory() : Promise.resolve(null),
+    view === "funnel" || view === "attribution" ? getFunnelStories() : Promise.resolve(null),
   ]);
-  const smart = Boolean(sourcesStory || adsStory || webStory || searchStory || trackingStory);
+  const smart = Boolean(sourcesStory || adsStory || webStory || searchStory || trackingStory || funnelStories);
   const campaignFilters = Boolean(query.q || query.platform || query.outcome || query.page || query.sort);
 
   return (
@@ -118,9 +120,31 @@ export default async function MarketingPage({ searchParams }: MarketingPageProps
       {view === "search" ? (searchStory ? <SmartSearchPage story={searchStory} /> : <Notice tone="warning">Google search data couldn’t be read right now. The detailed SEO pages are under Google search in the menu.</Notice>) : null}
       {view === "tracking" ? (trackingStory ? <SmartTrackingPage story={trackingStory} /> : <Notice tone="warning">The tracking check couldn’t be read right now. Tracking details are under Tracking check in the menu.</Notice>) : null}
       {view === "analytics" ? <AnalyticsView /> : null}
-      {view === "funnel" ? <FunnelView /> : null}
+      {view === "funnel" ? (funnelStories ? (
+        <>
+          <SmartStagesPage story={funnelStories.funnel} />
+          <details className="group rounded-panel border border-line bg-surface shadow-card">
+            <summary className="cursor-pointer list-none px-4 py-3.5 sm:px-5">
+              <span className="block text-[15px] font-bold text-copy-strong">Detailed stage numbers</span>
+              <span className="block text-[12.5px] text-copy-muted">The full funnel explorer with its filters and evidence</span>
+            </summary>
+            <div className="border-t border-line px-3 py-4 sm:px-4"><FunnelView /></div>
+          </details>
+        </>
+      ) : <FunnelView />) : null}
       {view === "behavior" ? <BehaviorView query={query} /> : null}
-      {view === "attribution" ? <AttributionView query={query} /> : null}
+      {view === "attribution" ? (funnelStories ? (
+        <>
+          <SmartCreditPage story={funnelStories.credit} />
+          <details className="group rounded-panel border border-line bg-surface shadow-card">
+            <summary className="cursor-pointer list-none px-4 py-3.5 sm:px-5">
+              <span className="block text-[15px] font-bold text-copy-strong">Detailed credit models</span>
+              <span className="block text-[12.5px] text-copy-muted">All four models, coverage and the evidence behind each source</span>
+            </summary>
+            <div className="border-t border-line px-3 py-4 sm:px-4"><AttributionView query={query} /></div>
+          </details>
+        </>
+      ) : <AttributionView query={query} />) : null}
     </div>
   );
 }

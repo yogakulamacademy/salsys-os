@@ -1,6 +1,7 @@
 import "server-only";
 
 import { buildAdsStory, buildSourcesStory, isAdsData, isSourcesData, type AdsStory, type SourcesStory } from "@/lib/marketing-pages";
+import { buildCreditStory, buildFunnelStory, isFunnelData, type CreditStory, type FunnelStory } from "@/lib/marketing-funnel";
 import { sourceLabel } from "@/lib/marketing-story";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
@@ -38,6 +39,19 @@ export async function getAdsStory(): Promise<AdsStory | null> {
     const { data, error } = await createAdminClient().rpc("marketing_ads_v1", { p_organization_id: org });
     if (error || !isAdsData(data)) return null;
     return buildAdsStory(data);
+  } catch {
+    return null;
+  }
+}
+
+/** "Stage by stage" and "Credit by source" share one read (owner-approved, 26 Nov 2026). */
+export async function getFunnelStories(): Promise<{ funnel: FunnelStory; credit: CreditStory } | null> {
+  try {
+    const org = await managedOrganization();
+    if (!org) return null;
+    const { data, error } = await createAdminClient().rpc("marketing_funnel_credit_v1", { p_organization_id: org, p_days: 90 });
+    if (error || !isFunnelData(data)) return null;
+    return { funnel: buildFunnelStory(data), credit: buildCreditStory(data) };
   } catch {
     return null;
   }
