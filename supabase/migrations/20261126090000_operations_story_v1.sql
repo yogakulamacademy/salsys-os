@@ -12,8 +12,13 @@ security definer
 set search_path = public, pg_temp
 as $$
 with
+-- Seat, price and enrolment columns are read via jsonb: some predate the tracked migrations.
 future as (
-  select cb.* from public.course_batches cb
+  select cb.id, cb.course_id, cb.start_date, j ->> 'end_date' as end_date, j ->> 'location' as location, j ->> 'mode' as mode,
+         (j ->> 'capacity')::numeric as capacity, (j ->> 'seats_remaining')::numeric as seats_remaining,
+         coalesce(j ->> 'price_course_only', j ->> 'price_shared', j ->> 'price_private', j ->> 'expected_value') is not null as has_price,
+         coalesce((j ->> 'enrollment_open')::boolean, true) as enrollment_open
+  from public.course_batches cb, lateral (select to_jsonb(cb) as j) x
   where cb.organization_id = p_organization_id and cb.active and cb.start_date >= (now() at time zone 'Asia/Kolkata')::date
 ),
 soon as (
@@ -40,8 +45,8 @@ select jsonb_build_object(
   'batches', coalesce((select jsonb_agg(jsonb_build_object(
       'id', s.id, 'courseId', s.course_id, 'course', s.course, 'location', s.location, 'mode', s.mode,
       'start', s.start_date, 'end', s.end_date, 'capacity', s.capacity, 'seatsRemaining', s.seats_remaining,
-      'hasPrice', coalesce(s.price_course_only, s.price_shared, s.price_private, s.expected_value) is not null,
-      'open', coalesce(s.enrollment_open, true),
+      'hasPrice', s.has_price,
+      'open', s.enrollment_open,
       'warmCourse', (select count(distinct w.lead_id) from warm w where w.course_id = s.course_id),
       'warmPlace', (select count(distinct w.lead_id) from warm w where w.course_id = s.course_id
           and (w.loc = '' or lower(coalesce(s.location, '')) = ''
@@ -50,8 +55,8 @@ select jsonb_build_object(
     ) order by s.start_date, s.course) from soon s), '[]'::jsonb),
   'future', (select count(*) from future),
   'futureWithSeats', (select count(*) from future where coalesce(capacity, 0) > 0),
-  'futureWithPrice', (select count(*) from future where coalesce(price_course_only, price_shared, price_private, expected_value) is not null),
-  'enrolments', coalesce((select jsonb_agg(jsonb_build_object('course', c.name, 'withBatch', x.with_batch, 'noBatch', x.no_batch) order by x.with_batch + x.no_batch desc) from (
+  'futureWithPrice', (select count(*) from future where has_price),
+  'enrolments', coalesce((select jsonb_agg(jsonb_build_object('course', c.name, 'withBatch', x.with_batch, 'noBatch', x.no_batch) order by coalesce(x.with_batch, 0) + coalesce(x.no_batch, 0) desc) from (
       select course_id, sum(n) filter (where batch_id is not null) as with_batch, sum(n) filter (where batch_id is null) as no_batch
       from enr group by 1) x join public.courses c on c.id = x.course_id
       where coalesce(x.with_batch, 0) + coalesce(x.no_batch, 0) > 0), '[]'::jsonb),
