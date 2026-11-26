@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { runAutopilot } from "@/lib/ai-autopilot-runner";
+import { runAnswerEngineShadow } from "@/lib/answer-engine-runner";
 import { bearerMatchesAnySecret } from "@/lib/security/machine-bearer-auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -24,8 +25,16 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ ok: true, skipped: "Autopilot and follow-up drafts are both off" });
   }
   try {
-    const summary = await runAutopilot(createAdminClient());
-    return NextResponse.json({ ok: true, ranAt: new Date().toISOString(), ...summary });
+    const admin = createAdminClient();
+    const summary = await runAutopilot(admin);
+    // Answer Engine shadow mode (owner-approved 26 Nov 2026) also rides on this
+    // 2-minute schedule, about every 10 minutes. It never sends; a failure there
+    // never affects Autopilot.
+    let answerEngine: unknown = null;
+    if (process.env.ANSWER_ENGINE_SHADOW !== "off" && new Date().getUTCMinutes() % 10 < 2) {
+      answerEngine = await runAnswerEngineShadow(admin).catch((e) => ({ error: e instanceof Error ? e.message : String(e) }));
+    }
+    return NextResponse.json({ ok: true, ranAt: new Date().toISOString(), ...summary, answerEngine });
   } catch (error) {
     console.error("Autopilot run failed", error);
     return NextResponse.json({ ok: false, error: error instanceof Error ? error.message : "Autopilot run failed" }, { status: 500 });
