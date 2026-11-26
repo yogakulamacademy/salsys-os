@@ -16,6 +16,7 @@ import {
 import { ServerTrackingSourceCreator } from '@/components/server-tracking-source-creator';
 import { TrackingSourceCreator } from '@/components/tracking-source-creator';
 import { PageHeader } from '@/components/ui';
+import { TrackingInstallGuide } from '@/components/tracking/tracking-install-guide';
 import {
   getTrackingPlatformWorkspace,
   type TrackingPlatformSource,
@@ -125,10 +126,14 @@ export default async function TrackingSourcesPage() {
   return (
     <div className="space-y-4">
       <PageHeader
-        eyebrow="Universal Tracking Platform"
-        title="Tracking sources"
-        description="Use browser tracking for journeys and server tracking for durable business events. Both feed one canonical Salsys event, attribution and intelligence layer."
+        eyebrow="Marketing · Tracking check"
+        title="Setup"
+        description="The tracking code for your website, the other code snippets, and every tracking source. Browser tracking records journeys; server tracking records bookings and payments."
       />
+
+      <TrackingInstallGuide />
+
+      <div className="pt-2 text-[16px] font-extrabold text-copy-strong">Tracking sources</div>
 
       {workspace.warning ? (
         <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">

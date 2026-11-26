@@ -1,7 +1,6 @@
 import type { ReactNode } from "react";
 import { AlertTriangle } from "lucide-react";
 
-import { MeasurementControlNav } from "@/components/marketing/measurement-control-nav";
 import { requireAdminWorkspaceAccess } from "@/lib/route-access";
 import { getTrackingWorkspace } from "@/lib/tracking-data";
 
@@ -28,7 +27,7 @@ export default async function TrackingLayout({ children }: { children: ReactNode
 
   return (
     <div className="tracking-workspace">
-      <MeasurementControlNav />
+      {/* The Marketing side menu now carries these pages, so the old top bar is gone (26 Nov 2026). */}
       {evidenceWarning ? (
         <div className="mb-4 flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
           <AlertTriangle size={17} className="mt-0.5 shrink-0" />

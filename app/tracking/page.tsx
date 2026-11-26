@@ -1,3 +1,5 @@
+import { SmartConnectionsPage } from "@/components/marketing/smart-tracking-detail-pages";
+import { getTrackingDetailStories } from "@/lib/marketing-web-data";
 import Link from "next/link";
 
 import {
@@ -25,7 +27,7 @@ import { isMockMode } from "@/lib/data";
 
 import { getTrackingWorkspace } from "@/lib/tracking-data";
 
-export default async function TrackingPage() {
+async function TrackingPage() {
   const workspace = await getTrackingWorkspace();
 
   const { health, capture, funnel } = workspace;
@@ -688,4 +690,14 @@ function Mini({
       <p className="mt-1.5 text-xs leading-5 text-slate-500">{text}</p>
     </div>
   );
+}
+
+// Smart page first (owner-approved prototype "Tracking check inner pages"); ?classic=1 keeps the old view.
+export default async function ConnectionsAndDataPage({ searchParams }: { searchParams: Promise<{ classic?: string }> }) {
+  const params = await searchParams;
+  if (!params.classic) {
+    const stories = await getTrackingDetailStories();
+    if (stories) return <SmartConnectionsPage story={stories.connections} />;
+  }
+  return TrackingPage();
 }
