@@ -2,6 +2,7 @@ import "server-only";
 
 import { googleErrorText } from "@/lib/marketing-pages";
 import { managedOrganization } from "@/lib/marketing-pages-data";
+import { buildConnectionsStory, buildFormsStory, isTrackingDetail, type ConnectionsStory, type FormsStory } from "@/lib/marketing-tracking-detail";
 import { buildHealthStory, buildIdeasStory, buildSearchesStory, isSearchDetail, type HealthStory, type IdeasStory, type SearchesStory } from "@/lib/marketing-search-detail";
 import { buildSearchStory, buildTrackingStory, buildWebStory, isSearchData, isTrackingData, isWebData, pageLabel, type SearchStory, type TrackingStory, type WebStory } from "@/lib/marketing-web";
 import { buildClicksStory, buildVisitsStory, isWebsiteDetail, type ClicksStory, type VisitsStory } from "@/lib/marketing-website-detail";
@@ -78,6 +79,19 @@ export async function getSearchDetailStories(): Promise<{ searches: SearchesStor
     if (error || !isSearchDetail(data)) return null;
     const orgName = String((orgRow as { name?: string } | null)?.name ?? "").trim() || "Your school";
     return { searches: buildSearchesStory(data, pageLabel), ideas: buildIdeasStory(data, pageLabel, orgName), health: buildHealthStory(data, pageLabel, orgName) };
+  } catch {
+    return null;
+  }
+}
+
+// Tracking check › inner pages (owner-approved prototype, 26 Nov 2026).
+export async function getTrackingDetailStories(): Promise<{ connections: ConnectionsStory; forms: FormsStory } | null> {
+  try {
+    const org = await managedOrganization();
+    if (!org) return null;
+    const { data, error } = await createAdminClient().rpc("marketing_tracking_detail_v1", { p_organization_id: org });
+    if (error || !isTrackingDetail(data)) return null;
+    return { connections: buildConnectionsStory(data), forms: buildFormsStory(data, pageLabel) };
   } catch {
     return null;
   }

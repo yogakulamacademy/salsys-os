@@ -87,10 +87,9 @@ const items: NavigationItem[] = [
     match: ({ path, view }) => (path === '/marketing' && view === 'tracking') || under(path, '/tracking') || under(path, '/marketing/tracking-sources') || under(path, '/marketing/integrations'),
     subs: [
       { href: '/marketing?view=tracking', label: 'Overview' },
-      { href: '/tracking', label: 'Tracking details' },
-      { href: '/tracking/conversion-health', label: 'Form and lead matching' },
-      { href: '/tracking/data-coverage', label: 'Data coverage' },
-      { href: '/marketing/tracking-sources', label: 'Tracking sources' },
+      { href: '/tracking', label: 'Connections and data' },
+      { href: '/tracking/conversion-health', label: 'Forms and links' },
+      { href: '/marketing/tracking-sources', label: 'Setup' },
     ],
   },
 ];

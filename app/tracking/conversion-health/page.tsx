@@ -1,10 +1,12 @@
+import { SmartFormsPage } from "@/components/marketing/smart-tracking-detail-pages";
+import { getTrackingDetailStories } from "@/lib/marketing-web-data";
 import Link from 'next/link';
 
 import { getCampaignsWorkspace } from '@/lib/campaigns-data';
 import { getTrackingWorkspace } from '@/lib/tracking-data';
 import styles from '@/components/marketing/measurement-reference.module.css';
 
-export default async function ConversionHealthPage() {
+async function ConversionHealthPage() {
   const [tracking, campaigns] = await Promise.all([
     getTrackingWorkspace(),
     getCampaignsWorkspace({ query:'', platform:'all', outcome:'all', sortMode:'spend_desc', page:1, pageSize:50 }),
@@ -47,3 +49,13 @@ export default async function ConversionHealthPage() {
 function Metric({label,value,note}:{label:string;value:string;note:string}){return <div className={styles.metric}><span>{label}</span><strong>{value}</strong><small>{note}</small></div>}
 function num(v:number){return Number(v||0).toLocaleString('en-IN',{maximumFractionDigits:0})}
 function percent(v:number,d:number){return d>0?`${(v/d*100).toFixed(1)}%`:'—'}
+
+// Smart page first (owner-approved prototype "Tracking check inner pages"); ?classic=1 keeps the old view.
+export default async function FormsAndLinksPage({ searchParams }: { searchParams: Promise<{ classic?: string }> }) {
+  const params = await searchParams;
+  if (!params.classic) {
+    const stories = await getTrackingDetailStories();
+    if (stories) return <SmartFormsPage story={stories.forms} />;
+  }
+  return ConversionHealthPage();
+}
