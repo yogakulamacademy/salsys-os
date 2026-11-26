@@ -119,7 +119,7 @@ export function FunnelAdvisorPage({ page }: { page: FunnelAdvisorPage }) {
                   <div key={m.label} className="grid grid-cols-[minmax(0,190px)_repeat(3,minmax(0,1fr))] items-center gap-3 border-t border-line py-2 text-[13px]">
                     <span><span className="block font-bold text-copy-strong">{m.label}</span><span className="block text-[11.5px] text-copy-muted">{m.note}</span></span>
                     {cell(m.visits, maxV, "#C9C1F2")}
-                    {cell(m.enquiries, maxE, "#5743C5", m.visits ? ` · ${Math.round((m.enquiries / m.visits) * 1000) / 10}%` : "")}
+                    {cell(m.enquiries, maxE, "#5743C5", m.visits && m.enquiries <= m.visits ? ` · ${Math.round((m.enquiries / m.visits) * 1000) / 10}%` : "")}
                     {cell(m.paid, maxP, "#15803D")}
                   </div>
                 );
