@@ -11,6 +11,7 @@ export type WebsiteDetail = {
   sources: Array<{ source: string; medium: string; visits: number; before: number }>;
   countries: Array<{ country: string; visits: number; before: number }>;
   pages: Array<{ path: string; visits: number; leads: number }>;
+  pageSources?: Array<{ path: string; source: string; visits: number; leads: number }>;
   webLeads: Array<{ source: string; n: number }>;
   tracked: { sessions: number; formStarted: number; formSent: number };
   forms: Array<{ path: string; started: number; sent: number }>;
@@ -27,7 +28,11 @@ export type VisitsStory = {
   weeks: Array<{ label: string; visits: number; engaged: number; partial: boolean }>;
   countries: WebsiteDetail["countries"]; sources: SourceGroup[];
   pages: Array<{ path: string; label: string; visits: number; leads: number }>; dataTo: string | null;
+  matrix: { sources: Array<{ key: MatrixKey; label: string }>; rows: MatrixRow[] };
+  matrixActions: Array<{ id: string; title: string; body: string; basis: string; href: string; cta: string }>;
 };
+export type MatrixKey = "search" | "typed" | "instagram" | "ai" | "facebook" | "other";
+export type MatrixRow = { path: string; label: string; visits: number; leads: number; cells: Partial<Record<MatrixKey, { visits: number; leads: number }>> };
 export type ClicksStory = {
   headline: Part[]; ranks: PageRank[]; signals: PageSignal[];
   journey: Array<{ label: string; sub: string; value: number; detail: string; leak?: boolean; done?: boolean }>;
@@ -139,7 +144,60 @@ export function buildVisitsStory(d: WebsiteDetail, pageLabel: (p: string) => str
 
   const weeks = d.weeks.map((w, i, all) => ({ label: dayShort(w.week), visits: Number(w.visits), engaged: Number(w.engaged), partial: i === all.length - 1 }));
   const pages = d.pages.map((p) => ({ path: p.path || "/", label: pageLabel(p.path || "/"), visits: Number(p.visits), leads: Number(p.leads) })).filter((p) => !/\(not set\)/.test(p.path));
-  return { headline, ranks, kpis, signals, weeks, countries, sources, pages, dataTo: d.dataTo };
+  const { matrix, matrixActions } = buildMatrix(d.pageSources ?? [], pageLabel);
+  return { headline, ranks, kpis, signals, weeks, countries, sources, pages, dataTo: d.dataTo, matrix, matrixActions };
+}
+
+const MATRIX_SOURCES: Array<{ key: MatrixKey; label: string }> = [
+  { key: "search", label: "Google & search" }, { key: "typed", label: "Typed / unknown" }, { key: "instagram", label: "Instagram" },
+  { key: "ai", label: "ChatGPT & AI" }, { key: "facebook", label: "Facebook" }, { key: "other", label: "Other" },
+];
+const isHome = (p: string) => p === "/" || p === "" || /^\/index\.(php|html?)$/.test(p);
+const isCourse = (p: string) => /\/course/.test(p) && !/courses\.php$/.test(p);
+
+/** Which pages get traffic from where (SalsysOS website tracking), and what to do about it. */
+export function buildMatrix(raw: NonNullable<WebsiteDetail["pageSources"]>, pageLabel: (p: string) => string) {
+  const byPath = new Map<string, MatrixRow>();
+  for (const r of raw) {
+    const key = (MATRIX_SOURCES.some((m) => m.key === r.source) ? r.source : "other") as MatrixKey;
+    const path = r.path || "/";
+    const row = byPath.get(path) ?? { path, label: isHome(path) ? "Home page" : pageLabel(path), visits: 0, leads: 0, cells: {} };
+    const c = row.cells[key] ?? { visits: 0, leads: 0 };
+    c.visits += Number(r.visits); c.leads += Number(r.leads);
+    row.cells[key] = c; row.visits += Number(r.visits); row.leads += Number(r.leads);
+    byPath.set(path, row);
+  }
+  const rows = [...byPath.values()].filter((r) => !/\(not set\)/.test(r.path)).sort((a, b) => b.visits - a.visits).slice(0, 12);
+  const used = MATRIX_SOURCES.filter((m) => rows.some((r) => (r.cells[m.key]?.visits ?? 0) > 0));
+  const rate = (c?: { visits: number; leads: number }) => (c && c.visits ? (c.leads / c.visits) * 100 : 0);
+  const actions: VisitsStory["matrixActions"] = [];
+
+  const igTotal = sum(rows, (r) => r.cells.instagram?.visits ?? 0);
+  const home = rows.find((r) => isHome(r.path));
+  const homeIg = home?.cells.instagram;
+  const courseRows = rows.filter((r) => isCourse(r.path) && r.visits >= 50);
+  const courseRate = courseRows.length ? (sum(courseRows, (r) => r.leads) / sum(courseRows, (r) => r.visits)) * 100 : 0;
+  if (homeIg && igTotal >= 30 && homeIg.visits >= igTotal * 0.6 && courseRate > rate(homeIg) * 1.3) {
+    actions.push({ id: "ig-home", title: "Send Instagram links to course pages, not the Home page",
+      body: `${n(homeIg.visits)} of ${n(igTotal)} Instagram visits land on the Home page, and ${Math.round(rate(homeIg))} in 100 enquire. Course pages turn about ${Math.round(courseRate)} in 100 visitors into enquiries.`,
+      basis: `Instagram → Home page: ${n(homeIg.visits)} visits, ${n(homeIg.leads)} enquiries`, href: "/marketing?view=advisor", cta: "Open the Funnel advisor" });
+  }
+  const searchPages = rows.filter((r) => isCourse(r.path) && (r.cells.search?.visits ?? 0) >= 10);
+  const best = [...searchPages].filter((r) => (r.cells.search?.visits ?? 0) >= 40).sort((a, b) => rate(b.cells.search) - rate(a.cells.search))[0];
+  const weak = best ? [...searchPages].filter((r) => r !== best && rate(r.cells.search) < rate(best.cells.search) / 2).sort((a, b) => (b.cells.search?.visits ?? 0) - (a.cells.search?.visits ?? 0))[0] : undefined;
+  if (best && weak && rate(best.cells.search) >= 4) {
+    actions.push({ id: "search-copy", title: `Use the ${best.label} page as the model for ${weak.label}`,
+      body: `Google sends ${best.label} ${n(best.cells.search!.visits)} visits and ${n(best.cells.search!.leads)} ${best.cells.search!.leads === 1 ? "enquires" : "enquire"}. ${weak.label} gets ${n(weak.cells.search!.visits)} from Google and ${weak.cells.search!.leads ? `${n(weak.cells.search!.leads)} enquire` : "none enquire"}.`,
+      basis: `${best.label}: ${Math.round(rate(best.cells.search))} per 100 from Google`, href: "/marketing?view=advisor", cta: "Open the Funnel advisor" });
+  }
+  const leaky = rows.filter((r) => isCourse(r.path) && (r.cells.typed?.visits ?? 0) >= 40 && rate(r.cells.typed) < 3).sort((a, b) => (b.cells.typed?.visits ?? 0) - (a.cells.typed?.visits ?? 0))[0];
+  if (leaky) {
+    const sibling = rows.find((r) => r !== leaky && isCourse(r.path) && (r.cells.typed?.visits ?? 0) >= 20 && rate(r.cells.typed) >= 3 * Math.max(rate(leaky.cells.typed), 1) && r.label.split(" ")[0] === leaky.label.split(" ")[0]);
+    actions.push({ id: "typed-leak", title: `Fix the ${leaky.label} page`,
+      body: `${n(leaky.cells.typed!.visits)} people reach it directly and ${n(leaky.cells.typed!.leads)} ${leaky.cells.typed!.leads === 1 ? "enquires" : "enquire"}.${sibling ? ` ${sibling.label} gets ${n(sibling.cells.typed!.leads)} from ${n(sibling.cells.typed!.visits)}.` : ""} Put the next dates and the form near the top.`,
+      basis: "Direct visits and enquiries, last 30 days", href: "/marketing?view=advisor", cta: "See the page changes" });
+  }
+  return { matrix: { sources: used, rows }, matrixActions: actions.slice(0, 3) };
 }
 
 const PROVIDER: Record<string, string> = { paypal: "PayPal", icici: "Card (ICICI)", direct_upi: "UPI", upi: "UPI", razorpay: "Razorpay", stripe: "Card (Stripe)" };

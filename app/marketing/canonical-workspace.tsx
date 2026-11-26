@@ -127,18 +127,9 @@ export default async function MarketingPage({ searchParams }: MarketingPageProps
       {view === "website" ? (webStory ? <SmartWebsitePage story={webStory} /> : <AnalyticsView />) : null}
       {view === "search" ? (searchStory ? <SmartSearchPage story={searchStory} /> : <Notice tone="warning">Google search data couldn’t be read right now. The detailed SEO pages are under Google search in the menu.</Notice>) : null}
       {view === "tracking" ? (trackingStory ? <SmartTrackingPage story={trackingStory} /> : <Notice tone="warning">The tracking check couldn’t be read right now. Tracking details are under Tracking check in the menu.</Notice>) : null}
-      {view === "analytics" ? (siteDetail ? (
-        <>
-          <SmartVisitsPage story={siteDetail.visits} />
-          <details className="group rounded-panel border border-line bg-surface shadow-card">
-            <summary className="cursor-pointer list-none px-4 py-3.5 sm:px-5">
-              <span className="block text-[15px] font-bold text-copy-strong">Detailed Google Analytics numbers</span>
-              <span className="block text-[12.5px] text-copy-muted">The full analytics explorer with every source, page and country</span>
-            </summary>
-            <div className="border-t border-line px-3 py-4 sm:px-4"><AnalyticsView /></div>
-          </details>
-        </>
-      ) : <AnalyticsView />) : null}
+      {/* The old analytics explorer is no longer shown under the smart page (owner request, 26 Nov 2026):
+          its numbers disagreed with Enrolments and everything useful moved up. It stays as the fallback. */}
+      {view === "analytics" ? (siteDetail ? <SmartVisitsPage story={siteDetail.visits} /> : <AnalyticsView />) : null}
       {view === "funnel" ? (funnelStories ? (
         <>
           <SmartStagesPage story={funnelStories.funnel} />

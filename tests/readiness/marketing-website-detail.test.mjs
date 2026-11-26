@@ -46,3 +46,22 @@ test('clicks and forms', () => {
   assert.deepEqual(c.providers.map((p) => p.label), ['Card (ICICI)', 'PayPal', 'UPI']);
   assert.equal(c.clicks[0].sub, '56% of visits');
 });
+
+test('pages by source: table and actions', () => {
+  const rows = [
+    ['/', 'typed', 603, 6], ['/', 'search', 274, 10], ['/', 'instagram', 239, 10], ['/', 'other', 47, 0],
+    ['/courses/online/online-face-yoga-teacher-training.php', 'search', 111, 10], ['/courses/online/online-face-yoga-teacher-training.php', 'typed', 56, 5],
+    ['/courses/online/online-200-hour-yoga-teacher-training.php', 'typed', 81, 4], ['/courses/online/online-200-hour-yoga-teacher-training.php', 'search', 15, 0],
+    ['/courses/mysore/200-hour-yoga-teacher-training-in-mysore.php', 'typed', 63, 1], ['/courses/mysore/200-hour-yoga-teacher-training-in-mysore.php', 'search', 13, 0],
+    ['/courses/kerala/200-hour-yoga-teacher-training-in-kerala.php', 'typed', 45, 5],
+    ['/courses/yoga-classes/online-pregnancy-yoga-classes.php', 'instagram', 24, 0], ['/courses/yoga-classes/online-pregnancy-yoga-classes.php', 'typed', 28, 2],
+  ].map(([path, source, visits, leads]) => ({ path, source, visits, leads }));
+  const s = buildVisitsStory({ ...d, pageSources: rows }, label, Date.parse('2026-11-26T10:00:00Z'));
+  assert.equal(s.matrix.rows[0].label, 'Home page');
+  assert.equal(s.matrix.rows[0].cells.instagram.visits, 239);
+  assert.ok(!s.matrix.sources.some((x) => x.key === 'facebook'));
+  assert.deepEqual(s.matrixActions.map((a) => a.id), ['ig-home', 'search-copy', 'typed-leak']);
+  assert.match(s.matrixActions[0].body, /^239 of 263 Instagram visits land on the Home page, and 4 in 100 enquire\./);
+  assert.match(s.matrixActions[1].title, /online face yoga teacher training.*online 200 hour/);
+  assert.match(s.matrixActions[2].body, /^63 people reach it directly and 1 enquires\. 200 hour yoga teacher training in kerala gets 5 from 45\./);
+});
