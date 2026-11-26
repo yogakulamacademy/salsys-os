@@ -48,12 +48,14 @@ const money = (v: number, c: "INR" | "USD") => (c === "INR" ? `₹${v.toLocaleSt
 
 export function understand(input: EngineInput): Understanding {
   const m = lower(input.message);
-  const topics = TOPIC_RULES.filter(([, re]) => re.test(m)).map(([t]) => t);
+  let topics = TOPIC_RULES.filter(([, re]) => re.test(m)).map(([t]) => t);
+  // "the online course fee": "online" only names the course, it isn't a question about the format.
+  if (topics.length > 1 && topics.includes("online_offline") && !/\b(offline|recorded|recordings?|zoom|live|in person|in-person|or online|online or)\b/.test(m)) topics = topics.filter((t) => t !== "online_offline");
   const risk = RISK.exec(m)?.[0] ?? null;
   const named = input.courses.filter((c) => c.aliases.test(m));
-  // The most specific name wins ("online 200 hour" beats "200 hour").
-  named.sort((a, b) => (b.aliases.source.length - a.aliases.source.length));
-  const fromMessage = named.length === 1 || (named.length > 1 && named[0].online === /\bonline\b/.test(m)) ? named[0] : null;
+  // Two names match ("online 200 hour" → online and in-person 200-hour): "online" in the message decides.
+  const sameMode = named.filter((c) => c.online === /\bonline\b/.test(m));
+  const fromMessage = named.length === 1 ? named[0] : sameMode.length === 1 ? sameMode[0] : null;
   const leadCourse = input.lead.courseId ? input.courses.find((c) => c.id === input.lead.courseId) ?? null : null;
   const course = fromMessage ?? (named.length ? null : leadCourse);
   const place = PLACE_RULES.find(([, re]) => re.test(m))?.[0] ?? null;

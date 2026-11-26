@@ -98,6 +98,10 @@
     {
       "path": "/api/leads/location/scan",
       "schedule": "7-57/10 * * * *"
+    },
+    {
+      "path": "/api/ai/answer-engine",
+      "schedule": "*/10 * * * *"
     }
   ]
 }
