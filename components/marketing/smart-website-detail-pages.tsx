@@ -18,11 +18,15 @@ const Change = ({ a, b }: { a: number; b: number }) => {
   return <span className={`font-bold ${c >= 0 ? "text-emerald-700 dark:text-emerald-300" : "text-red-700 dark:text-red-300"}`}>{c >= 0 ? "▲" : "▼"} {Math.abs(c)}%</span>;
 };
 const th = "pb-1.5 text-right text-[11.5px] font-semibold text-copy-muted";
+const thL = "pb-1.5 pl-1 text-left text-[11.5px] font-semibold text-copy-muted";
 const td = "border-t border-line py-2 text-right tabular-nums";
+// First column: left-aligned (a separate class so it doesn’t fight text-right).
+const tdL = "border-t border-line py-2 pl-1 text-left";
 
 export function SmartVisitsPage({ story }: { story: VisitsStory }) {
   const [pick, setPick] = useState(story.sources[0]?.key ?? "");
   const [sort, setSort] = useState<{ k: "label" | "visits" | "leads" | "rate"; d: 1 | -1 }>({ k: "visits", d: -1 });
+  const [allPages, setAllPages] = useState(false);
   const src = story.sources.find((s) => s.key === pick) ?? story.sources[0];
   const maxWeek = Math.max(1, ...story.weeks.map((w) => w.visits));
   const maxCountry = Math.max(1, ...story.countries.map((c) => c.visits));
@@ -71,11 +75,11 @@ export function SmartVisitsPage({ story }: { story: VisitsStory }) {
         <section className={card}>
           <div><h2 className="text-[16px] font-extrabold text-copy-strong">Where visits come from</h2><p className="text-[12.5px] text-copy-muted">Click a source to see what it brings</p></div>
           <table className="w-full border-collapse text-[13px]">
-            <thead><tr><th className={`${th} text-left`}>Source</th><th className={th}>Visits</th><th className={th}>Change</th><th className={th}>Enquiries</th><th className={th}>Per 100 visits</th></tr></thead>
+            <thead><tr><th className={thL}>Source</th><th className={th}>Visits</th><th className={th}>Change</th><th className={th}>Enquiries</th><th className={th}>Per 100 visits</th></tr></thead>
             <tbody>
               {story.sources.map((s) => (
                 <tr key={s.key} onClick={() => setPick(s.key)} className={`cursor-pointer hover:bg-surface-muted ${s.key === src?.key ? "bg-surface-muted" : ""}`}>
-                  <td className={`${td} pl-1 text-left font-semibold text-copy-strong`}>{s.label}</td>
+                  <td className={`${tdL} font-semibold text-copy-strong`}>{s.label}</td>
                   <td className={td}>{n(s.visits)}</td>
                   <td className={td}><Change a={s.visits} b={s.before} /></td>
                   <td className={td}>{n(s.enquiries)}</td>
@@ -100,20 +104,21 @@ export function SmartVisitsPage({ story }: { story: VisitsStory }) {
       <section className={card}>
         <div><h2 className="text-[16px] font-extrabold text-copy-strong">Pages people land on</h2><p className="text-[12.5px] text-copy-muted">Visits that started on each page, and enquiries from those visits · click a column to sort</p></div>
         <table className="w-full border-collapse text-[13px]">
-          <thead><tr><th className={`${th} text-left`}>{sortBtn("label", "Page")}</th><th className={th}>{sortBtn("visits", "Visits")}</th><th className={th}>{sortBtn("leads", "Enquiries")}</th><th className={th}>{sortBtn("rate", "Per 100 visits")}</th></tr></thead>
+          <thead><tr><th className={thL}>{sortBtn("label", "Page")}</th><th className={th}>{sortBtn("visits", "Visits")}</th><th className={th}>{sortBtn("leads", "Enquiries")}</th><th className={th}>{sortBtn("rate", "Per 100 visits")}</th></tr></thead>
           <tbody>
-            {pages.map((p) => {
+            {(allPages ? pages : pages.slice(0, 15)).map((p) => {
               const rate = pct1(p.leads, p.visits);
               const flag = p.visits >= 50 && rate < 2 && p.path !== "/" ? ["leaks", "bg-red-50 text-red-800 dark:bg-red-950/30 dark:text-red-300"] : p.visits >= 20 && rate >= 10 ? ["works", "bg-emerald-50 text-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-300"] : null;
               return (
                 <tr key={p.path} className="hover:bg-surface-muted">
-                  <td className={`${td} pl-1 text-left`} title={p.path}><span className="font-semibold text-copy-strong">{p.label}</span>{flag ? <span className={`ml-2 inline-flex h-5 items-center rounded-full px-2 text-[11px] font-extrabold ${flag[1]}`}>{flag[0]}</span> : null}</td>
+                  <td className={tdL} title={p.path}><span className="font-semibold text-copy-strong">{p.label}</span>{flag ? <span className={`ml-2 inline-flex h-5 items-center rounded-full px-2 text-[11px] font-extrabold ${flag[1]}`}>{flag[0]}</span> : null}</td>
                   <td className={td}>{n(p.visits)}</td><td className={td}>{n(p.leads)}</td><td className={`${td} pr-1`}>{rate}</td>
                 </tr>
               );
             })}
           </tbody>
         </table>
+        {pages.length > 15 ? <button type="button" className="self-start text-[12.5px] font-semibold text-brand-700 hover:underline" onClick={() => setAllPages((v) => !v)}>{allPages ? "Show the top 15" : `Show all ${n(pages.length)} pages`}</button> : null}
       </section>
       {story.matrix.rows.length ? <PageSourceTable story={story} /> : null}
       <section className={card}>
@@ -162,11 +167,11 @@ export function SmartClicksPage({ story }: { story: ClicksStory }) {
         <section id="forms" className={`${card} scroll-mt-20`}>
           <div><h2 className="text-[16px] font-extrabold text-copy-strong">Forms on each page</h2><p className="text-[12.5px] text-copy-muted">Visits that started a form, and how many sent it</p></div>
           <table className="w-full border-collapse text-[13px]">
-            <thead><tr><th className={`${th} text-left`}>Page</th><th className={th}>Started</th><th className={th}>Sent</th><th className={th}>Finished</th></tr></thead>
+            <thead><tr><th className={thL}>Page</th><th className={th}>Started</th><th className={th}>Sent</th><th className={th}>Finished</th></tr></thead>
             <tbody>
               {story.forms.map((f) => (
                 <tr key={f.path}>
-                  <td className={`${td} pl-1 text-left`} title={f.path}><span className="font-semibold text-copy-strong">{f.label}</span>
+                  <td className={tdL} title={f.path}><span className="font-semibold text-copy-strong">{f.label}</span>
                     {f.flag === "leak" ? <span className="ml-2 inline-flex h-5 items-center rounded-full bg-red-50 px-2 text-[11px] font-extrabold text-red-800 dark:bg-red-950/30 dark:text-red-300">people give up</span> : null}
                     {f.flag === "test" ? <span className="ml-2 inline-flex h-5 items-center rounded-full bg-amber-50 px-2 text-[11px] font-extrabold text-orange-800 dark:bg-amber-950/30 dark:text-amber-300">test page</span> : null}</td>
                   <td className={td}>{n(f.started)}</td><td className={td}>{n(f.sent)}</td><td className={`${td} pr-1 font-bold`}>{f.finished}%</td>
@@ -247,11 +252,11 @@ function PageSourceTable({ story }: { story: VisitsStory }) {
         </div>
         <div className="overflow-x-auto">
           <table className="w-full border-collapse text-[13px]">
-            <thead><tr><th className={`${th} text-left`}>Page</th>{sources.map((s) => <th key={s.key} className={th}>{s.label}</th>)}<th className={th}>Total</th></tr></thead>
+            <thead><tr><th className={thL}>Page</th>{sources.map((s) => <th key={s.key} className={th}>{s.label}</th>)}<th className={th}>Total</th></tr></thead>
             <tbody>
               {rows.map((r) => (
                 <tr key={r.path}>
-                  <td className={`${td} pl-1 text-left font-semibold text-copy-strong`} title={r.path}>{r.label}</td>
+                  <td className={`${tdL} font-semibold text-copy-strong`} title={r.path}>{r.label}</td>
                   {sources.map((s) => {
                     const c = r.cells[s.key];
                     if (!c || !c.visits) return <td key={s.key} className={`${td} text-copy-subtle`}>—</td>;
