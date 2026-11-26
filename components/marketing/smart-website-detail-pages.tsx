@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 
 import { KpiRow, PageHead, RankCards, SignalList, card } from "@/components/marketing/smart-blocks";
-import type { ClicksStory, VisitsStory } from "@/lib/marketing-website-detail";
+import type { ClicksStory, MatrixKey, VisitsStory } from "@/lib/marketing-website-detail";
 
 // Website › "Visits and sources" and "Clicks and forms" (owner-approved prototype
 // "Website inner pages", 26 Nov 2026).
@@ -115,6 +115,7 @@ export function SmartVisitsPage({ story }: { story: VisitsStory }) {
           </tbody>
         </table>
       </section>
+      {story.matrix.rows.length ? <PageSourceTable story={story} /> : null}
       <section className={card}>
         <div><h2 className="text-[16px] font-extrabold text-copy-strong">What SalsysOS noticed</h2><p className="text-[12.5px] text-copy-muted">Click to open</p></div>
         <SignalList signals={story.signals} />
@@ -217,5 +218,81 @@ export function SmartClicksPage({ story }: { story: ClicksStory }) {
         </section>
       </div>
     </div>
+  );
+}
+
+function PageSourceTable({ story }: { story: VisitsStory }) {
+  const { sources, rows } = story.matrix;
+  const [mode, setMode] = useState<"visits" | "rate">("visits");
+  const [cell, setCell] = useState<[string, MatrixKey] | null>(() => {
+    const home = rows.find((r) => r.label === "Home page" && r.cells.instagram);
+    return home ? [home.path, "instagram"] : rows[0] && sources[0] ? [rows[0].path, sources[0].key] : null;
+  });
+  const max = Math.max(1, ...rows.flatMap((r) => Object.values(r.cells).map((c) => c?.visits ?? 0)));
+  const picked = cell ? rows.find((r) => r.path === cell[0]) : undefined;
+  const pc = picked && cell ? picked.cells[cell[1]] : undefined;
+  const seg = (on: boolean) => `h-8 rounded-lg px-3 text-[12.5px] font-bold ${on ? "bg-brand-600 text-white" : "text-copy-muted hover:text-copy-strong"}`;
+  return (
+    <>
+      <section className={card} aria-label="Which pages get traffic from where">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="text-[16px] font-extrabold text-copy-strong">Which pages get traffic from where</h2>
+            <p className="text-[12.5px] text-copy-muted">SalsysOS website tracking, last 30 days · each cell: visits (enquiries) · click a cell</p>
+          </div>
+          <div className="inline-flex gap-1 rounded-xl border border-line bg-surface p-1" role="group" aria-label="Show">
+            <button type="button" aria-pressed={mode === "visits"} onClick={() => setMode("visits")} className={seg(mode === "visits")}>Visits</button>
+            <button type="button" aria-pressed={mode === "rate"} onClick={() => setMode("rate")} className={seg(mode === "rate")}>Enquiries per 100</button>
+          </div>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full border-collapse text-[13px]">
+            <thead><tr><th className={`${th} text-left`}>Page</th>{sources.map((s) => <th key={s.key} className={th}>{s.label}</th>)}<th className={th}>Total</th></tr></thead>
+            <tbody>
+              {rows.map((r) => (
+                <tr key={r.path}>
+                  <td className={`${td} pl-1 text-left font-semibold text-copy-strong`} title={r.path}>{r.label}</td>
+                  {sources.map((s) => {
+                    const c = r.cells[s.key];
+                    if (!c || !c.visits) return <td key={s.key} className={`${td} text-copy-subtle`}>—</td>;
+                    const rate = Math.round((c.leads / c.visits) * 100);
+                    const strength = mode === "visits" ? Math.sqrt(c.visits / max) : Math.min(1, rate / 25);
+                    const weak = mode === "rate" && c.visits >= 10 && rate < 3;
+                    const on = cell?.[0] === r.path && cell?.[1] === s.key;
+                    return (
+                      <td key={s.key} className={`${td} cursor-pointer px-2`} onClick={() => setCell([r.path, s.key])}
+                        style={{ background: `color-mix(in srgb, ${weak ? "#B42318" : "#5743C5"} ${Math.round(strength * 45)}%, transparent)`, outline: on ? "2px solid #5743C5" : undefined, outlineOffset: -2 }}>
+                        <strong className="text-copy-strong">{mode === "visits" ? n(c.visits) : `${rate}%`}</strong>{" "}
+                        <span className="text-[11.5px] text-copy-muted">{mode === "visits" ? `(${n(c.leads)})` : `${n(c.visits)} visits`}</span>
+                      </td>
+                    );
+                  })}
+                  <td className={`${td} pr-1`}><strong className="text-copy-strong">{n(r.visits)}</strong> <span className="text-[11.5px] text-copy-muted">({n(r.leads)})</span></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        {picked && pc && cell ? (
+          <p className="rounded-lg border-l-[3px] border-brand-600 bg-brand-50/70 px-3 py-2.5 text-[12.5px] leading-5 text-copy dark:bg-brand-950/30">
+            <strong className="text-copy-strong">{picked.label} · {sources.find((s) => s.key === cell[1])?.label}:</strong> {n(pc.visits)} visits, {n(pc.leads)} {pc.leads === 1 ? "enquiry" : "enquiries"} ({Math.round((pc.leads / Math.max(pc.visits, 1)) * 100)} per 100). This page gets {Math.round((pc.visits / Math.max(picked.visits, 1)) * 100)}% of its visits from here.
+          </p>
+        ) : null}
+        <p className="text-[11.5px] text-copy-subtle">“Typed / unknown” also includes visits where the browser hid where they came from, so it is higher than in Google Analytics.</p>
+      </section>
+      {story.matrixActions.length ? (
+        <div className={`grid gap-3.5 ${story.matrixActions.length >= 3 ? "xl:grid-cols-3" : story.matrixActions.length === 2 ? "xl:grid-cols-2" : ""}`}>
+          {story.matrixActions.map((a, i) => (
+            <article key={a.id} className={card}>
+              <div className="flex items-center gap-2"><span className="grid size-6 place-items-center rounded-lg bg-brand-50 text-[12.5px] font-extrabold text-brand-700">{i + 1}</span><span className="text-[12px] font-extrabold uppercase tracking-wide text-brand-700 dark:text-brand-300">From this table</span></div>
+              <h3 className="text-[16px] font-extrabold leading-snug text-copy-strong">{a.title}</h3>
+              <p className="text-[13px] leading-5 text-copy">{a.body}</p>
+              <p className="text-[11.5px] text-copy-subtle">{a.basis}</p>
+              <div className="mt-auto"><Link href={a.href} className="btn-secondary">{a.cta}</Link></div>
+            </article>
+          ))}
+        </div>
+      ) : null}
+    </>
   );
 }
