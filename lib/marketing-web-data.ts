@@ -2,6 +2,7 @@ import "server-only";
 
 import { googleErrorText } from "@/lib/marketing-pages";
 import { managedOrganization } from "@/lib/marketing-pages-data";
+import { buildBehaviorStory, isBehaviorDetail, type BehaviorStory } from "@/lib/marketing-behavior-detail";
 import { buildConnectionsStory, buildFormsStory, isTrackingDetail, type ConnectionsStory, type FormsStory } from "@/lib/marketing-tracking-detail";
 import { buildHealthStory, buildIdeasStory, buildSearchesStory, isSearchDetail, type HealthStory, type IdeasStory, type SearchesStory } from "@/lib/marketing-search-detail";
 import { buildSearchStory, buildTrackingStory, buildWebStory, isSearchData, isTrackingData, isWebData, pageLabel, type SearchStory, type TrackingStory, type WebStory } from "@/lib/marketing-web";
@@ -92,6 +93,19 @@ export async function getTrackingDetailStories(): Promise<{ connections: Connect
     const { data, error } = await createAdminClient().rpc("marketing_tracking_detail_v1", { p_organization_id: org });
     if (error || !isTrackingDetail(data)) return null;
     return { connections: buildConnectionsStory(data), forms: buildFormsStory(data, pageLabel) };
+  } catch {
+    return null;
+  }
+}
+
+// Website › Clicks and forms, lower half (owner-approved 26 Nov 2026).
+export async function getBehaviorStory(): Promise<BehaviorStory | null> {
+  try {
+    const org = await managedOrganization();
+    if (!org) return null;
+    const { data, error } = await createAdminClient().rpc("marketing_behavior_detail_v1", { p_organization_id: org });
+    if (error || !isBehaviorDetail(data)) return null;
+    return buildBehaviorStory(data, pageLabel);
   } catch {
     return null;
   }

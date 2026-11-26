@@ -25,7 +25,8 @@ import { SmartCreditPage, SmartStagesPage } from "@/components/marketing/smart-f
 import { FunnelAdvisorPage } from "@/components/marketing/funnel-advisor-page";
 import { SmartClicksPage, SmartVisitsPage } from "@/components/marketing/smart-website-detail-pages";
 import { getFunnelAdvisor } from "@/lib/funnel-advisor-data";
-import { getSearchStory, getTrackingStory, getWebStory, getWebsiteDetailStories } from "@/lib/marketing-web-data";
+import { getBehaviorStory, getSearchStory, getTrackingStory, getWebStory, getWebsiteDetailStories } from "@/lib/marketing-web-data";
+import { SmartBehaviorSections } from "@/components/marketing/smart-behavior-sections";
 import { normalizeBehaviorRequest, normalizeBehaviorBreakdownEvent } from "@/lib/native-behavior-contract";
 import { getNativeBehaviorPageBreakdown } from "@/lib/native-behavior-breakdown-data";
 import { getNativeBehaviorWorkspace } from "@/lib/native-behavior-data";
@@ -52,6 +53,7 @@ type MarketingPageProps = {
     days?: string;
     steps?: string;
     breakdown?: string;
+    classic?: string;
   }>;
 };
 
@@ -90,7 +92,7 @@ export default async function MarketingPage({ searchParams }: MarketingPageProps
 
   // Smart pages (owner-approved prototype "Marketing step 2", 25 Nov 2026) carry their own
   // heading; if their story can't be read, the older views are shown instead.
-  const [sourcesStory, adsStory, webStory, searchStory, trackingStory, funnelStories, advisor, siteDetail] = await Promise.all([
+  const [sourcesStory, adsStory, webStory, searchStory, trackingStory, funnelStories, advisor, siteDetail, behaviorStory] = await Promise.all([
     view === "sources" ? getSourcesStory() : Promise.resolve(null),
     view === "campaigns" ? getAdsStory() : Promise.resolve(null),
     view === "website" ? getWebStory() : Promise.resolve(null),
@@ -99,7 +101,9 @@ export default async function MarketingPage({ searchParams }: MarketingPageProps
     view === "funnel" || view === "attribution" ? getFunnelStories() : Promise.resolve(null),
     view === "advisor" ? getFunnelAdvisor() : Promise.resolve(null),
     view === "analytics" || view === "behavior" ? getWebsiteDetailStories() : Promise.resolve(null),
+    view === "behavior" ? getBehaviorStory() : Promise.resolve(null),
   ]);
+  const showExplorer = !siteDetail || !behaviorStory || Boolean(query.classic || query.steps || query.days || query.breakdown);
   const smart = Boolean(sourcesStory || adsStory || webStory || searchStory || trackingStory || funnelStories || advisor || siteDetail);
   const campaignFilters = Boolean(query.q || query.platform || query.outcome || query.page || query.sort);
 
@@ -143,9 +147,9 @@ export default async function MarketingPage({ searchParams }: MarketingPageProps
         </>
       ) : <FunnelView />) : null}
       {view === "behavior" && siteDetail ? <SmartClicksPage story={siteDetail.clicks} /> : null}
-      {view === "behavior" && siteDetail ? <h2 className="pt-2 text-[16px] font-extrabold text-copy-strong">Explore every click yourself</h2> : null}
-      {/* The behaviour explorer stays fully open under the smart page: the team uses its filters directly. */}
-      {view === "behavior" ? <BehaviorView query={query} /> : null}
+      {view === "behavior" && siteDetail && behaviorStory ? <SmartBehaviorSections story={behaviorStory} /> : null}
+      {/* The old behaviour explorer (owner-approved swap, 26 Nov 2026) shows only on request (?classic=1 or its own filters), or if the smart sections can't be read. */}
+      {showExplorer && view === "behavior" ? <BehaviorView query={query} /> : null}
       {view === "attribution" ? (funnelStories ? (
         <>
           <SmartCreditPage story={funnelStories.credit} />
