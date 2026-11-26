@@ -14,6 +14,8 @@ export type CourseFact = {
   family?: string;
   batches: Array<{ place: Place; start: string }>;
   includes?: string; certificate?: string;
+  /** Saved facts say the classes are live (online courses). */
+  live?: boolean;
 };
 export type Price = { courseId: string; place: Place; variant?: string; currency: "INR" | "USD"; regular?: number; offer?: number; twin?: number; private?: number; note?: string };
 export type EngineInput = {
@@ -151,6 +153,7 @@ export function decide(input: EngineInput): Decision {
       text: `Namaste 🙏 The ${decided.short}${decided.online ? "" : ` in ${place}`} is ${feeText}.${inc}${dateLine ? ` ${dateLine}` : ""} We also offer a 2-instalment option.${alsoIn}${tail}\nWould you like to reserve a seat?` };
   }
   if (topic === "dates") {
+    if (/\b(timings?|time|schedule|daily routine|what time)\b/.test(lower(input.message))) return no("class timings not saved");
     if (!batches.length) return no("no upcoming batch saved");
     if (!place && !decided.online && new Set(decided.batches.map((b) => b.place)).size > 1) {
       const byPlace = [...new Set(decided.batches.map((b) => b.place))].map((p) => { const b = nextBatches(decided, p, input.now, 1)[0]; return b ? `${p}: ${day(b.start)}` : null; }).filter(Boolean);
@@ -162,7 +165,7 @@ export function decide(input: EngineInput): Decision {
     const places = [...new Set(decided.batches.map((b) => b.place))];
     if (!places.length) return no("no places saved");
     return { answer: true, topic, u, facts: ["places from batches"], text: decided.online
-      ? `Namaste 🙏 The ${decided.short} is fully online with live classes, so you can join from anywhere.${tail}`
+      ? `Namaste 🙏 The ${decided.short} is fully online${decided.live ? " with live classes" : ""}, so you can join from anywhere.${tail}`
       : `Namaste 🙏 The ${decided.short} runs in ${places.join(" and ")}${places.includes("Bengaluru") ? " (RT Nagar)" : ""}. ${dateLine}${tail}` };
   }
   if (topic === "online_offline") {
@@ -173,11 +176,12 @@ export function decide(input: EngineInput): Decision {
       const nOn = nextBatches(on, null, input.now, 1)[0];
       const offPlace = resolvePlace(off, u, input.lead.preferredPlace, input.defaultPlace ?? null);
       const nOff = nextBatches(off, offPlace, input.now, 1)[0];
-      return { answer: true, topic, u, facts: ["both versions"], text: `Namaste 🙏 We run it both ways: the ${on.short} with live classes on Zoom${nOn ? ` (next batch ${day(nOn.start)})` : ""}, and the in-person ${off.short}${offPlace ? ` in ${offPlace}` : ""}${nOff ? ` (next batch ${day(nOff.start)})` : ""}. Which would you prefer?` };
+      return { answer: true, topic, u, facts: ["both versions"], text: `Namaste 🙏 We run it both ways: the ${on.short} online${on.live ? " with live classes" : ""}${nOn ? ` (next batch ${day(nOn.start)})` : ""}, and the in-person ${off.short}${offPlace ? ` in ${offPlace}` : ""}${nOff ? ` (next batch ${day(nOff.start)})` : ""}. Which would you prefer?` };
     }
-    return { answer: true, topic, u, facts: ["decided mode"], text: decided.online
-      ? `Namaste 🙏 The ${decided.short} is online, with live classes on Zoom. ${dateLine}${tail}`
-      : `Namaste 🙏 The ${decided.short} is an in-person course${place ? ` in ${place}` : ""}. We also run online courses; let me know if you'd prefer that. ${dateLine}${tail}` };
+    const inPersonPlaces = [...new Set(decided.batches.map((b) => b.place))].filter((p) => p !== "Online");
+    return { answer: true, topic, u, facts: ["course mode"], text: decided.online
+      ? `Namaste 🙏 The ${decided.short} is an online course${decided.live ? " with live classes" : ""}. ${dateLine}${tail}`
+      : `Namaste 🙏 The ${decided.short} is an in-person course${inPersonPlaces.length ? ` in ${inPersonPlaces.join(" and ")}` : ""}. ${dateLine}${tail}` };
   }
   if (topic === "accommodation") {
     if (decided.online || !decided.includes) return no("stay details not saved for this course");

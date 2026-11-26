@@ -119,6 +119,7 @@ export function buildCourseFacts(courses: CourseRow[], batches: BatchRow[], incl
       batches: batches.filter((b) => b.course_id === c.id).map((b) => ({ place: (online ? "Online" : placeOf(b.location)) as Place, start: b.start_date })).filter((b) => b.place),
       includes: !online && inc ? inc.replace(/,?\s*(and\s+)?(a\s+)?Yoga Alliance[^,]*certificat\w*/i, "").replace(/\s*,\s*$/, "").trim() || undefined : undefined,
       certificate: inc && /yoga alliance/i.test(inc) ? "a Yoga Alliance certificate" : undefined,
+      live: online && Boolean(inc && /\blive\b/i.test(inc)),
     };
   });
   // Courses that run both online and in person (same subject) form a family.

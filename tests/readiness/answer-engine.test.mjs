@@ -78,6 +78,13 @@ test('stays quiet when it should', () => {
 test('online or offline about a course that runs both ways gives both', () => {
   const a = ask('Is it online or offline?', { courseId: 'pre' });
   assert.equal(a.answer, true);
-  assert.match(a.text, /both ways: the Online Prenatal & Postnatal TTC with live classes on Zoom \(next batch 10 Dec\), and the in-person 85-Hour Prenatal & Postnatal Yoga TTC in Mysore \(next batch 1 Dec\)/);
+  assert.match(a.text, /both ways: the Online Prenatal & Postnatal TTC online with live classes \(next batch 10 Dec\), and the in-person 85-Hour Prenatal & Postnatal Yoga TTC in Mysore \(next batch 1 Dec\)/);
   assert.match(ask('When is the next batch?', { courseId: 'face' }).text, /The next Online Face Yoga TTC batch starts on 15 Dec/);
+});
+
+test('says only what the saved facts support (Claude check, 26 Nov)', () => {
+  assert.match(ask('Is it online?', { courseId: 'face' }).text, /^Namaste 🙏 The Online Face Yoga TTC is an online course with live classes\./);
+  assert.doesNotMatch(ask('Is it online?', { courseId: 'face' }).text, /Zoom/);
+  assert.match(ask('Is it offline?', { courseId: 'y200' }).text, /in-person course in Mysore and Kerala and Bengaluru\./);
+  assert.equal(ask('Can you share the detailed schedule and timings?', { courseId: 'face' }).reason, 'class timings not saved');
 });
