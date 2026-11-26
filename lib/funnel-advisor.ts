@@ -291,7 +291,11 @@ export function buildAdvisor(raw: MeasureData, today: string): Advisor {
   if (follow.length) {
     const waiting = sum(follow, (f) => f.c.qualified - f.c.paid);
     top.push({ id: "follow", type: "funnel", title: `Follow up ${n(waiting)} Qualified people before their batches start`,
-      body: follow.slice(0, 3).map((f) => `${f.c.name} (${n(f.c.qualified - f.c.paid)})`).join(", ") + " have people at Qualified and batches within 30 days.",
+      body: (() => {
+        const byWaiting = [...follow].sort((a, b) => (b.c.qualified - b.c.paid) - (a.c.qualified - a.c.paid));
+        const more = byWaiting.length - 3;
+        return byWaiting.slice(0, 3).map((f) => `${f.c.name} (${n(f.c.qualified - f.c.paid)})`).join(", ") + (more > 0 ? ` and ${n(more)} more ${more === 1 ? "course" : "courses"}` : "") + " have people at Qualified and batches within 30 days.";
+      })(),
       why: follow.map((f) => `${f.c.name}: next batch ${shortDay(f.c.next!)}`).slice(0, 3).join(" · "), draft: follow[0].s.draft });
   }
   const sw = [...d.switches].sort((a, b) => b.n - a.n)[0];
