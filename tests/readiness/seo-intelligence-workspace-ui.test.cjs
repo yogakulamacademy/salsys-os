@@ -12,8 +12,9 @@ const nav = source("components/marketing/marketing-navigation.tsx");
 const seoHome = source("app/seo/page.tsx");
 const css = source("app/seo/intelligence/intelligence.module.css");
 
-test("Organic Intelligence is discoverable from existing growth navigation and SEO overview", () => {
-  assert.match(nav, /href: '\/seo\/intelligence'/);
+test("Organic Intelligence stays reachable from the SEO overview; the Google search menu keeps the three smart pages", () => {
+  // Menu merged 6 → 3 sub-pages (owner-approved prototype "Google search inner pages", 26 Nov 2026).
+  for (const href of ["/seo/search-performance", "/seo/content-opportunities", "/seo/technical"]) assert.ok(nav.includes(`href: '${href}'`), href);
   assert.match(seoHome, /href="\/seo\/intelligence"/);
 });
 

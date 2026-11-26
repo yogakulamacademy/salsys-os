@@ -1,9 +1,11 @@
+import { SmartIdeasPage } from "@/components/marketing/smart-search-detail-pages";
+import { getSearchDetailStories } from "@/lib/marketing-web-data";
 import Link from 'next/link';
 
 import { getSeoWorkspace } from '@/lib/seo-data';
 import styles from '@/components/marketing/organic-reference.module.css';
 
-export default async function ContentOpportunitiesPage() {
+async function ContentOpportunitiesPage() {
   const workspace = await getSeoWorkspace();
   const opportunities = workspace.opportunities;
   const pageActions = workspace.contentPageActions;
@@ -49,3 +51,13 @@ function num(v:number){return v.toLocaleString('en-IN',{maximumFractionDigits:0}
 function display(v:number){return v? v.toLocaleString('en-IN',{maximumFractionDigits:1}):'—'}
 function pretty(v:string){return String(v||'').replaceAll('_',' ').replace(/\b\w/g,c=>c.toUpperCase())}
 function opportunityValue(row: Awaited<ReturnType<typeof getSeoWorkspace>>['opportunities'][number]) { const type=(row.opportunity_type||'').toLowerCase(); if(type.includes('ctr')) return `${(n(row.ctr)>1?n(row.ctr):n(row.ctr)*100).toFixed(1)}%`; if(type.includes('distance')||type.includes('position')) return display(n(row.avg_position)); return num(n(row.impressions)); }
+
+// Smart page first (owner-approved prototype "Google search inner pages"); ?classic=1 keeps the old view.
+export default async function ContentIdeasPage({ searchParams }: { searchParams: Promise<{ classic?: string }> }) {
+  const params = await searchParams;
+  if (!params.classic) {
+    const stories = await getSearchDetailStories();
+    if (stories) return <SmartIdeasPage story={stories.ideas} />;
+  }
+  return ContentOpportunitiesPage();
+}
