@@ -26,11 +26,12 @@ const d = {
 test('visits and sources', () => {
   assert.ok(isWebsiteDetail(d));
   const s = buildVisitsStory(d, label, Date.parse('2026-11-26T10:00:00Z'));
-  assert.match(text(s.headline), /^3,166 visits in the last 30 days\. Google search is growing \(1,410 visits, up 10%\), but only 2\.5 in 100 of them become enquiries, against 6\.4 for people who type your address\. The total is down 21% on the month before, mostly fewer visits from Substack and email, and the last day hasn’t synced yet\.$/);
+  assert.match(text(s.headline), /^3,166 visits in the last 30 days\. Google search is growing \(1,410 visits, up 10%\), but only 2\.5 in 100 of them become enquiries, against 6\.4 for people who type your address\. The total is down 21% on the month before, and the last day hasn’t synced yet\.$/);
   const ig = s.sources.find((x) => x.key === 'instagram');
   assert.deepEqual([ig.visits, ig.before, ig.enquiries], [407, 384, 11]);
   assert.equal(s.sources.find((x) => x.key === 'ai').visits, 11);
   assert.deepEqual(s.ranks.map((r) => r.id), ['google', 'links', 'leak']);
+  assert.match(s.ranks[1].title, /Substack and email/);
   assert.equal(s.kpis[3].value, '39%');
   assert.ok(s.signals.some((x) => x.id === 'grow' && /Germany nearly tripled/.test(x.title)));
 });

@@ -82,7 +82,7 @@ export function buildVisitsStory(d: WebsiteDetail, pageLabel: (p: string) => str
   const google = sources.find((s) => s.key === "google");
   const typed = sources.find((s) => s.key === "typed");
   const chat = sources.find((s) => s.key === "chatgpt");
-  const countries = d.countries.map((c) => ({ ...c, visits: Number(c.visits), before: Number(c.before) }));
+  const countries = d.countries.map((c) => ({ ...c, country: !c.country || c.country === "(not set)" ? "Unknown" : c.country, visits: Number(c.visits), before: Number(c.before) }));
   const home = countries[0];
   const abroad = home ? visits - home.visits : 0;
   const ch = change(visits, before);
@@ -95,8 +95,10 @@ export function buildVisitsStory(d: WebsiteDetail, pageLabel: (p: string) => str
     headline.push({ text: `${n(visits)} visits in the last 30 days. Google search ${gch != null && gch > 0 ? `is growing (${n(google.visits)} visits, up ${gch}%)` : `brings ${n(google.visits)} visits`}, but only ${pct1(google.enquiries, google.visits)} in 100 of them become enquiries${best && pct1(best.enquiries, best.visits) > pct1(google.enquiries, google.visits) * 1.5 ? `, against ${pct1(best.enquiries, best.visits)} for ${best.key === "typed" ? "people who type your address" : "ChatGPT visitors"}` : ""}.`, strong: true });
   } else headline.push({ text: `${n(visits)} visits in the last 30 days.`, strong: true });
   if (ch != null && Math.abs(ch) >= 10) {
-    const falls = sources.filter((s) => s.before >= 20 && s.visits < s.before * 0.7).sort((a, b) => (b.before - b.visits) - (a.before - a.visits)).slice(0, 2);
-    headline.push({ text: ` The total is ${ch > 0 ? "up" : "down"} ${Math.abs(ch)}% on the month before${ch < 0 && falls.length ? `, mostly fewer visits from ${falls.map((f) => f.label).join(" and ")}` : ""}${missingDays >= 1 ? `, and the last ${missingDays === 1 ? "day hasn’t" : `${missingDays} days haven’t`} synced yet` : ""}.` });
+    const falls = sources.filter((s) => s.key !== "typed" && s.before >= 20 && s.visits < s.before * 0.7).sort((a, b) => (b.before - b.visits) - (a.before - a.visits)).slice(0, 2);
+    // Only name sources when their drop explains at least half of the total drop.
+    const explained = ch < 0 && sum(falls, (f) => f.before - f.visits) >= (before - visits) * 0.5;
+    headline.push({ text: ` The total is ${ch > 0 ? "up" : "down"} ${Math.abs(ch)}% on the month before${explained ? `, mostly fewer visits from ${falls.map((f) => f.label).join(" and ")}` : ""}${missingDays >= 1 ? `, and the last ${missingDays === 1 ? "day hasn’t" : `${missingDays} days haven’t`} synced yet` : ""}.` });
   }
 
   const ranks: PageRank[] = [];
@@ -106,7 +108,7 @@ export function buildVisitsStory(d: WebsiteDetail, pageLabel: (p: string) => str
       body: [{ text: `Google brings the most visits but only ${pct1(google.enquiries, google.visits)} in 100 enquire. ` }, { text: "Course pages with dates and the form near the top do much better.", strong: true }],
       actions: [{ label: "Open the Funnel advisor", href: "/marketing?view=advisor", primary: true }], basis: "Google Analytics visits · website enquiries by first source" });
   }
-  const falling = sources.filter((s) => s.key !== "typed" && s.before >= 30 && s.visits < s.before * 0.7).sort((a, b) => (b.before - b.visits) - (a.before - a.visits));
+  const falling = sources.filter((s) => ["instagram", "newsletter", "facebook", "other"].includes(s.key) && s.before >= 30 && s.visits < s.before * 0.7).sort((a, b) => (b.before - b.visits) - (a.before - a.visits));
   if (falling.length) {
     ranks.push({ id: "links", impact: falling.slice(0, 2).map((f) => `${f.label} ${n(f.before)} → ${n(f.visits)}`).join(" · "), title: `Put course links back in ${falling.slice(0, 2).map((f) => f.label.replace(/ links$/, "")).join(" and ")}`,
       bars: falling.slice(0, 3).map((f) => ({ label: f.label, value: f.visits, shown: `${n(f.before)} → ${n(f.visits)}`, tone: "amber" as const })), max: Math.max(...falling.slice(0, 3).map((f) => f.before)),
