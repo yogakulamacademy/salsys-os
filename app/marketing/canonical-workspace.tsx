@@ -22,6 +22,8 @@ import { buildAttributionIntelligence } from "@/lib/commercial-intelligence";
 import { isMockMode } from "@/lib/data";
 import { getAdsStory, getFunnelStories, getSourcesStory } from "@/lib/marketing-pages-data";
 import { SmartCreditPage, SmartStagesPage } from "@/components/marketing/smart-funnel-pages";
+import { FunnelAdvisorPage } from "@/components/marketing/funnel-advisor-page";
+import { getFunnelAdvisor } from "@/lib/funnel-advisor-data";
 import { getSearchStory, getTrackingStory, getWebStory } from "@/lib/marketing-web-data";
 import { normalizeBehaviorRequest, normalizeBehaviorBreakdownEvent } from "@/lib/native-behavior-contract";
 import { getNativeBehaviorPageBreakdown } from "@/lib/native-behavior-breakdown-data";
@@ -32,7 +34,7 @@ import {
   type FunnelIntelligenceWorkspace as FunnelWorkspace,
 } from "@/lib/funnel-intelligence-data";
 
-type MarketingView = "overview" | "sources" | "campaigns" | "website" | "search" | "tracking" | "analytics" | "funnel" | "behavior" | "attribution";
+type MarketingView = "overview" | "advisor" | "sources" | "campaigns" | "website" | "search" | "tracking" | "analytics" | "funnel" | "behavior" | "attribution";
 
 type MarketingPageProps = {
   searchParams: Promise<{
@@ -54,6 +56,7 @@ type MarketingPageProps = {
 
 const PAGE_SIZE = 50;
 const VIEW_HEAD: Record<MarketingView, { group: string; title: string; description: string }> = {
+  advisor: { group: "Marketing", title: "Funnel advisor", description: "What to change to get more payments, and the funnels you track." },
   overview: { group: "Marketing", title: "Overview", description: "What’s bringing enquiries and what’s broken." },
   sources: { group: "Marketing", title: "Where enquiries come from", description: "Where every enquiry from each source is now." },
   website: { group: "Marketing", title: "Website", description: "Visits, sources, pages and the enquiries they bring." },
@@ -66,6 +69,7 @@ const VIEW_HEAD: Record<MarketingView, { group: string; title: string; descripti
   attribution: { group: "Marketing · Where enquiries come from", title: "Credit by source", description: "Which source gets the credit for each enquiry, and how the answer changes by model." },
 };
 const validViews = new Set<MarketingView>([
+  "advisor",
   "overview",
   "sources",
   "website",
@@ -85,15 +89,16 @@ export default async function MarketingPage({ searchParams }: MarketingPageProps
 
   // Smart pages (owner-approved prototype "Marketing step 2", 25 Nov 2026) carry their own
   // heading; if their story can't be read, the older views are shown instead.
-  const [sourcesStory, adsStory, webStory, searchStory, trackingStory, funnelStories] = await Promise.all([
+  const [sourcesStory, adsStory, webStory, searchStory, trackingStory, funnelStories, advisor] = await Promise.all([
     view === "sources" ? getSourcesStory() : Promise.resolve(null),
     view === "campaigns" ? getAdsStory() : Promise.resolve(null),
     view === "website" ? getWebStory() : Promise.resolve(null),
     view === "search" ? getSearchStory() : Promise.resolve(null),
     view === "tracking" ? getTrackingStory() : Promise.resolve(null),
     view === "funnel" || view === "attribution" ? getFunnelStories() : Promise.resolve(null),
+    view === "advisor" ? getFunnelAdvisor() : Promise.resolve(null),
   ]);
-  const smart = Boolean(sourcesStory || adsStory || webStory || searchStory || trackingStory || funnelStories);
+  const smart = Boolean(sourcesStory || adsStory || webStory || searchStory || trackingStory || funnelStories || advisor);
   const campaignFilters = Boolean(query.q || query.platform || query.outcome || query.page || query.sort);
 
   return (
@@ -102,6 +107,7 @@ export default async function MarketingPage({ searchParams }: MarketingPageProps
       {smart ? null : <PageHeader eyebrow={VIEW_HEAD[view].group} title={VIEW_HEAD[view].title} description={VIEW_HEAD[view].description} />}
 
       {view === "overview" ? <MarketingOverview /> : null}
+      {view === "advisor" ? (advisor ? <FunnelAdvisorPage page={advisor} /> : <Notice tone="warning">The funnel advisor couldn’t be read right now, or it’s only available to managers and admins.</Notice>) : null}
       {view === "sources" ? (sourcesStory ? <SmartSourcesPage story={sourcesStory} /> : <FunnelView />) : null}
       {view === "campaigns" && adsStory ? (
         <>

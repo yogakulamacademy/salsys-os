@@ -9,6 +9,7 @@ import {
   Gauge,
   Globe2,
   Megaphone,
+  Route,
   Search,
   ShieldCheck,
   UsersRound,
@@ -37,6 +38,11 @@ const items: NavigationItem[] = [
     key: 'overview', href: '/marketing', label: 'Overview', icon: Gauge,
     description: 'What’s bringing enquiries and what’s broken',
     match: ({ path, view }) => path === '/marketing' && (!view || view === 'overview'),
+  },
+  {
+    key: 'advisor', href: '/marketing?view=advisor', label: 'Funnel advisor', icon: Route,
+    description: 'What to change to get more payments',
+    match: ({ path, view }) => path === '/marketing' && view === 'advisor',
   },
   {
     key: 'sources', href: '/marketing?view=sources', label: 'Where enquiries come from', icon: UsersRound,
