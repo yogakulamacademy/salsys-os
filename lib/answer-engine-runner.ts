@@ -12,7 +12,7 @@ import { buildCourseFacts, mainPlace, parseIncludes, parsePriceBook, type BatchR
 import { feeMarketFor } from "./fee-market";
 import { normalizeCountry } from "./home-command-center";
 
-export const ENGINE_VERSION = "v1";
+export const ENGINE_VERSION = "v1.1";
 const MAX_MESSAGES = 200;
 const MAX_VERDICTS = 15;
 
