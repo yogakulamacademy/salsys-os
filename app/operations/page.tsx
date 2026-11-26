@@ -13,21 +13,24 @@ import {
 
 import { DecisionMetricCard } from "@/components/intelligence/decision-metric-card";
 import { OperationsJourneyBar } from "@/components/operations/operations-journey-bar";
+import { SmartOperationsOverview } from "@/components/operations/smart-operations-overview";
 import { PageHeader } from "@/components/ui";
 import { getCommerceReadinessForCurrentWorkspace } from "@/lib/commerce-readiness-data";
+import { getOpsStory } from "@/lib/operations-story-data";
 import {
   getCourseManagementWorkspace,
   type CourseManagementBatchRow,
 } from "@/lib/course-management-data";
 
 export default async function OperationsOverviewPage() {
-  const [workspace, commerce] = await Promise.all([
+  const [workspace, commerce, story] = await Promise.all([
     getCourseManagementWorkspace({
       query: "",
       location: "all",
       state: "all",
     }),
     getCommerceReadinessForCurrentWorkspace(),
+    getOpsStory(),
   ]);
 
   const { courses, batches, summary } = workspace;
@@ -57,21 +60,10 @@ export default async function OperationsOverviewPage() {
     commerce?.healthStatus === "warning" ||
     commerce?.healthStatus === "critical";
 
-  return (
-    <div className="space-y-4">
-      <OperationsJourneyBar />
-
-      <PageHeader
-        eyebrow="Operations · Capacity & delivery"
-        title="Operations Overview"
-        description="Monitor programs, future batches, confirmed enrollments, known capacity and operational pressure from one workspace."
-        actions={
-          <Link href="/course-management" className="btn-primary">
-            Manage programs & batches <ArrowRight size={14} />
-          </Link>
-        }
-      />
-
+  // Smart overview (owner-approved prototype "Operations prototype", 26 Nov 2026);
+  // the previous detail stays underneath in "Detailed numbers".
+  const details = (
+    <>
       {workspace.degraded ? (
         <div className="rounded-xl border border-amber-100 bg-amber-50 px-4 py-3 text-xs text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/20 dark:text-amber-200">
           Operations is using a fallback evidence path. {workspace.degradedReason ?? "Some auxiliary intelligence may be reduced."}
@@ -205,6 +197,46 @@ export default async function OperationsOverviewPage() {
           </div>
         </aside>
       </section>
+    </>
+  );
+
+  if (story) {
+    return (
+      <div className="space-y-4">
+        <nav aria-label="Operations pages" className="flex flex-wrap gap-1.5">
+          {([["/operations", "Overview"], ["/course-management", "Programs & Batches"], ["/enrollments", "Enrolments"], ["/admissions", "Admissions"]] as const).map(([href, label]) => (
+            <Link key={href} href={href} aria-current={href === "/operations" ? "page" : undefined}
+              className={`inline-flex h-9 items-center rounded-xl border px-3.5 text-[13px] font-bold ${href === "/operations" ? "border-brand-600 bg-brand-600 text-white" : "border-line bg-surface text-copy-muted hover:text-copy-strong"}`}>{label}</Link>
+          ))}
+        </nav>
+        <SmartOperationsOverview story={story} />
+        <details className="group rounded-panel border border-line bg-surface shadow-card">
+          <summary className="cursor-pointer list-none px-4 py-3.5 sm:px-5">
+            <span className="block text-[15px] font-bold text-copy-strong">Detailed numbers</span>
+            <span className="block text-[12.5px] text-copy-muted">Seat setup, payment pipeline, capacity pressure and what each number means</span>
+          </summary>
+          <div className="space-y-4 border-t border-line px-3 py-4 sm:px-4">{details}</div>
+        </details>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <OperationsJourneyBar />
+
+      <PageHeader
+        eyebrow="Operations · Capacity & delivery"
+        title="Operations Overview"
+        description="Monitor programs, future batches, confirmed enrollments, known capacity and operational pressure from one workspace."
+        actions={
+          <Link href="/course-management" className="btn-primary">
+            Manage programs & batches <ArrowRight size={14} />
+          </Link>
+        }
+      />
+
+      {details}
     </div>
   );
 }
