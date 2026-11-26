@@ -1,7 +1,10 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
+
+import { siteCheckStepAction } from "@/app/seo/site-check-actions";
 
 import { KpiRow, PageHead, RankCards, SignalList, card } from "@/components/marketing/smart-blocks";
 import type { HealthStory, IdeasStory, SearchesStory } from "@/lib/marketing-search-detail";
@@ -125,13 +128,35 @@ export function SmartIdeasPage({ story }: { story: IdeasStory }) {
   );
 }
 
+function SiteCheckButton({ host }: { host: string }) {
+  const router = useRouter();
+  const [state, setState] = useState<{ busy: boolean; text: string | null; bad?: boolean }>({ busy: false, text: null });
+  const run = async () => {
+    setState({ busy: true, text: "Starting the check…" });
+    let step = await siteCheckStepAction({ host });
+    for (let i = 0; step.ok && !step.done && step.runId && i < 40; i += 1) {
+      setState({ busy: true, text: `Checking pages: ${step.fetched ?? 0} of ${step.discovered ?? 0} found so far…` });
+      step = await siteCheckStepAction({ runId: step.runId });
+    }
+    if (!step.ok) return setState({ busy: false, text: step.message, bad: true });
+    setState({ busy: false, text: step.done ? `Done: ${step.fetched} pages checked${step.failed ? `, ${step.failed} couldn’t be opened` : ""}.` : "Paused. Click again to continue." });
+    router.refresh();
+  };
+  return (
+    <div className="flex items-center gap-3">
+      {state.text ? <span className={`text-[12.5px] ${state.bad ? "text-red-700 dark:text-red-300" : "text-copy-muted"}`} aria-live="polite">{state.text}</span> : null}
+      <button type="button" className="btn-primary" disabled={state.busy} onClick={run}>{state.busy ? "Checking…" : "Check all pages now"}</button>
+    </div>
+  );
+}
+
 export function SmartHealthPage({ story }: { story: HealthStory }) {
   const [all, setAll] = useState(false);
   const fixes = all ? story.fixes : story.fixes.slice(0, 12);
   const last = story.ai[0];
   return (
     <div className="flex flex-col gap-3.5" aria-label="Site health and AI answers">
-      <PageHead eyebrow="Marketing · Google search" title="Site health and AI answers" headline={story.headline} />
+      <PageHead eyebrow="Marketing · Google search" title="Site health and AI answers" headline={story.headline} right={story.checkHost ? <SiteCheckButton host={story.checkHost} /> : undefined} />
       <RankCards ranks={story.ranks} />
       <div className="grid gap-3.5 xl:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
         <section id="fixes" className={card}>
