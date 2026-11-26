@@ -1,9 +1,11 @@
+import { SmartSearchesPage } from "@/components/marketing/smart-search-detail-pages";
+import { getSearchDetailStories } from "@/lib/marketing-web-data";
 import Link from 'next/link';
 
 import { getSeoWorkspace } from '@/lib/seo-data';
 import styles from '@/components/marketing/organic-reference.module.css';
 
-export default async function SearchPerformancePage({ searchParams }: { searchParams: Promise<{ view?: string }> }) {
+async function SearchPerformancePage({ searchParams }: { searchParams: Promise<{ view?: string }> }) {
   const params = await searchParams;
   const workspace = await getSeoWorkspace();
   const overview = workspace.overview;
@@ -31,7 +33,7 @@ export default async function SearchPerformancePage({ searchParams }: { searchPa
     </section>
 
     <section className={styles.panel}>
-      <div className={styles.panelHead}><div><h2>Search Explorer</h2><p>Switch between query and landing-page evidence.</p></div><div className={styles.segmented}><Link href="/seo/search-performance?view=queries">Queries</Link><Link href="/seo/search-performance?view=pages">Pages</Link></div></div>
+      <div className={styles.panelHead}><div><h2>Search Explorer</h2><p>Switch between query and landing-page evidence.</p></div><div className={styles.segmented}><Link href="/seo/search-performance?view=queries&classic=1">Queries</Link><Link href="/seo/search-performance?view=pages&classic=1">Pages</Link></div></div>
       {view === 'pages' ? <PageTable rows={workspace.pages} /> : <QueryTable rows={workspace.queries} />}
     </section>
   </div>;
@@ -47,3 +49,13 @@ function num(value: number) { return value.toLocaleString('en-IN', { maximumFrac
 function pct(value: number) { const normalized = value > 1 ? value : value * 100; return normalized.toFixed(1); }
 function shortDate(value: string) { const d = new Date(`${value.slice(0,10)}T00:00:00Z`); return Number.isNaN(d.getTime()) ? value.slice(5) : new Intl.DateTimeFormat('en', { day:'numeric', month:'short', timeZone:'UTC' }).format(d); }
 function pageName(url: string) { try { const parsed = new URL(url); return parsed.pathname === '/' ? parsed.hostname : parsed.pathname; } catch { return url; } }
+
+// Smart page first (owner-approved prototype "Google search inner pages"); ?classic=1 keeps the old explorer.
+export default async function SearchesAndPagesPage(props: { searchParams: Promise<{ view?: string; classic?: string }> }) {
+  const params = await props.searchParams;
+  if (!params.classic) {
+    const stories = await getSearchDetailStories();
+    if (stories) return <SmartSearchesPage story={stories.searches} />;
+  }
+  return SearchPerformancePage({ searchParams: Promise.resolve(params) });
+}

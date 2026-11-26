@@ -1,7 +1,9 @@
+import { SmartHealthPage } from "@/components/marketing/smart-search-detail-pages";
+import { getSearchDetailStories } from "@/lib/marketing-web-data";
 import { getSeoWorkspace } from '@/lib/seo-data';
 import styles from '@/components/marketing/organic-reference.module.css';
 
-export default async function TechnicalSeoPage() {
+async function TechnicalSeoPage() {
   const workspace = await getSeoWorkspace();
   const actions = workspace.contentPageActions;
   const issueRows = actions.filter((row) => n(row.technical_issue_count) > 0).sort((a,b) => n(b.technical_issue_count)-n(a.technical_issue_count));
@@ -24,3 +26,13 @@ function n(v:number|string|null|undefined){const x=Number(v??0);return Number.is
 function num(v:number){return v.toLocaleString('en-IN',{maximumFractionDigits:0})}
 function display(v:number){return v? v.toLocaleString('en-IN',{maximumFractionDigits:1}):'—'}
 function pretty(v:string|null|undefined){return v?String(v).replaceAll('_',' ').replace(/\b\w/g,c=>c.toUpperCase()):'—'}
+
+// Smart page first (owner-approved prototype "Google search inner pages"); ?classic=1 keeps the old view.
+export default async function SiteHealthPage({ searchParams }: { searchParams: Promise<{ classic?: string }> }) {
+  const params = await searchParams;
+  if (!params.classic) {
+    const stories = await getSearchDetailStories();
+    if (stories) return <SmartHealthPage story={stories.health} />;
+  }
+  return TechnicalSeoPage();
+}

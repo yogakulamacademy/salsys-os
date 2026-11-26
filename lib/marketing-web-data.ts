@@ -2,6 +2,7 @@ import "server-only";
 
 import { googleErrorText } from "@/lib/marketing-pages";
 import { managedOrganization } from "@/lib/marketing-pages-data";
+import { buildHealthStory, buildIdeasStory, buildSearchesStory, isSearchDetail, type HealthStory, type IdeasStory, type SearchesStory } from "@/lib/marketing-search-detail";
 import { buildSearchStory, buildTrackingStory, buildWebStory, isSearchData, isTrackingData, isWebData, pageLabel, type SearchStory, type TrackingStory, type WebStory } from "@/lib/marketing-web";
 import { buildClicksStory, buildVisitsStory, isWebsiteDetail, type ClicksStory, type VisitsStory } from "@/lib/marketing-website-detail";
 import { normalizeBehaviorRequest } from "@/lib/native-behavior-contract";
@@ -59,6 +60,24 @@ export async function getWebsiteDetailStories(): Promise<{ visits: VisitsStory; 
     const { data, error } = await createAdminClient().rpc("marketing_website_detail_v1", { p_organization_id: org });
     if (error || !isWebsiteDetail(data)) return null;
     return { visits: buildVisitsStory(data, pageLabel), clicks: buildClicksStory(data, pageLabel) };
+  } catch {
+    return null;
+  }
+}
+
+// Google search › inner pages (owner-approved prototype, 26 Nov 2026).
+export async function getSearchDetailStories(): Promise<{ searches: SearchesStory; ideas: IdeasStory; health: HealthStory } | null> {
+  try {
+    const org = await managedOrganization();
+    if (!org) return null;
+    const admin = createAdminClient();
+    const [{ data, error }, { data: orgRow }] = await Promise.all([
+      admin.rpc("marketing_search_detail_v1", { p_organization_id: org }),
+      admin.from("organizations").select("name").eq("id", org).maybeSingle(),
+    ]);
+    if (error || !isSearchDetail(data)) return null;
+    const orgName = String((orgRow as { name?: string } | null)?.name ?? "").trim() || "Your school";
+    return { searches: buildSearchesStory(data, pageLabel), ideas: buildIdeasStory(data, pageLabel, orgName), health: buildHealthStory(data, pageLabel, orgName) };
   } catch {
     return null;
   }

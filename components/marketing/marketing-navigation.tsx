@@ -76,12 +76,9 @@ const items: NavigationItem[] = [
     match: ({ path, view }) => (path === '/marketing' && view === 'search') || under(path, '/seo'),
     subs: [
       { href: '/marketing?view=search', label: 'Overview' },
-      { href: '/seo', label: 'SEO details' },
-      { href: '/seo/intelligence', label: 'Insights' },
       { href: '/seo/search-performance', label: 'Searches and pages' },
       { href: '/seo/content-opportunities', label: 'Content ideas' },
-      { href: '/seo/technical', label: 'Technical checks' },
-      { href: '/seo/ai-answer-visibility', label: 'AI answers' },
+      { href: '/seo/technical', label: 'Site health and AI answers' },
     ],
   },
   {
