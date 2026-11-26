@@ -74,3 +74,10 @@ test('stays quiet when it should', () => {
   assert.equal(ask('My kids no where to go', { courseId: 'sh1' }).answer, false);
   assert.equal(ask('Which option allows me to avail the diwali offer fee', { courseId: 'sh1' }).answer, false);
 });
+
+test('online or offline about a course that runs both ways gives both', () => {
+  const a = ask('Is it online or offline?', { courseId: 'pre' });
+  assert.equal(a.answer, true);
+  assert.match(a.text, /both ways: the Online Prenatal & Postnatal TTC with live classes on Zoom \(next batch 10 Dec\), and the in-person 85-Hour Prenatal & Postnatal Yoga TTC in Mysore \(next batch 1 Dec\)/);
+  assert.match(ask('When is the next batch?', { courseId: 'face' }).text, /The next Online Face Yoga TTC batch starts on 15 Dec/);
+});

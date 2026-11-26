@@ -117,7 +117,7 @@ export function decide(input: EngineInput): Decision {
   const decided = course;
   // The decided on the lead's record is a guess when the same decided also runs the other way (online / in person),
   // unless the message says which. Staff often answered such leads about the other version.
-  if (u.courseFrom === "lead" && decided.family && input.courses.some((c) => c.family === decided.family && c.online !== decided.online)
+  if (u.courseFrom === "lead" && topic !== "online_offline" && decided.family && input.courses.some((c) => c.family === decided.family && c.online !== decided.online)
     && !(/\bonline\b/.test(lower(input.message)) || (u.place && u.place !== "Online"))) return no("online or in person not clear");
   const place = resolvePlace(decided, u, input.lead.preferredPlace, input.defaultPlace ?? null);
   const otherPlaces = decided.online ? [] : [...new Set(decided.batches.map((b) => b.place))].filter((p) => p !== place);
@@ -125,7 +125,7 @@ export function decide(input: EngineInput): Decision {
   const batches = nextBatches(decided, place, input.now);
   const link = input.link?.(decided.id) ?? null;
   const tail = link ? `\nFull decided details: ${link}` : "";
-  const dateLine = batches.length ? `The next batch${place && !decided.online ? ` in ${place}` : ""} starts on ${day(batches[0].start)}${batches[1] ? `, then ${day(batches[1].start)}` : ""}.` : "";
+  const dateLine = batches.length ? `The next ${topic === "dates" ? `${decided.short} ` : ""}batch${place && !decided.online ? ` in ${place}` : ""} starts on ${day(batches[0].start)}${batches[1] ? `, then ${day(batches[1].start)}` : ""}.` : "";
   const facts: string[] = [];
 
   if (topic === "fee") {
@@ -166,6 +166,15 @@ export function decide(input: EngineInput): Decision {
       : `Namaste 🙏 The ${decided.short} runs in ${places.join(" and ")}${places.includes("Bengaluru") ? " (RT Nagar)" : ""}. ${dateLine}${tail}` };
   }
   if (topic === "online_offline") {
+    // Asked "online or offline?" about a course that runs both ways: give both.
+    const twin = decided.family ? input.courses.find((c) => c.family === decided.family && c.online !== decided.online) : undefined;
+    if (twin) {
+      const [on, off] = decided.online ? [decided, twin] : [twin, decided];
+      const nOn = nextBatches(on, null, input.now, 1)[0];
+      const offPlace = resolvePlace(off, u, input.lead.preferredPlace, input.defaultPlace ?? null);
+      const nOff = nextBatches(off, offPlace, input.now, 1)[0];
+      return { answer: true, topic, u, facts: ["both versions"], text: `Namaste 🙏 We run it both ways: the ${on.short} with live classes on Zoom${nOn ? ` (next batch ${day(nOn.start)})` : ""}, and the in-person ${off.short}${offPlace ? ` in ${offPlace}` : ""}${nOff ? ` (next batch ${day(nOff.start)})` : ""}. Which would you prefer?` };
+    }
     return { answer: true, topic, u, facts: ["decided mode"], text: decided.online
       ? `Namaste 🙏 The ${decided.short} is online, with live classes on Zoom. ${dateLine}${tail}`
       : `Namaste 🙏 The ${decided.short} is an in-person course${place ? ` in ${place}` : ""}. We also run online courses; let me know if you'd prefer that. ${dateLine}${tail}` };
