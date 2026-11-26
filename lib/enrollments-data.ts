@@ -76,7 +76,7 @@ export async function getEnrollmentsWorkspace(): Promise<EnrollmentWorkspace> {
     leadIds.length
       ? supabase
           .from("leads")
-          .select("id, lead_code, lead_name, display_name, current_stage")
+          .select("id, lead_code, display_name, current_stage")
           .eq("organization_id", organizationId)
           .in("id", leadIds)
       : Promise.resolve({ data: [], error: null }),
@@ -119,7 +119,7 @@ export async function getEnrollmentsWorkspace(): Promise<EnrollmentWorkspace> {
       id: row.id,
       leadId: row.lead_id,
       leadCode: lead?.lead_code ?? "—",
-      leadName: lead?.lead_name || lead?.display_name || lead?.lead_code || "Lead",
+      leadName: lead?.display_name || lead?.lead_code || "Lead",
       leadStage: lead?.current_stage ?? "unknown",
       courseId: row.course_id,
       courseName: course?.name || course?.code || "Not linked",
