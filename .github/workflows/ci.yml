@@ -302,6 +302,10 @@ jobs:
       - name: Verify Ad Activation Canary Boundary
         run: npm run verify:ad-activation-canary-boundary
 
+      - name: Check SEO crawler Edge runtime
+        timeout-minutes: 3
+        run: npm exec --yes --package=deno@2.5.6 -- deno check --frozen --config supabase/functions/seo-crawler/deno.json supabase/functions/seo-crawler/index.ts
+
       - name: Typecheck
         run: npm run typecheck
 

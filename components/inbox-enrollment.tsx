@@ -2,10 +2,10 @@
 import { useFeedbackMessages } from '@/components/use-feedback-messages';
 
 import { CheckCircle2, GraduationCap, Plus } from "lucide-react";
-import { useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 
 import { logEnrollmentPaymentAction, recordEnrollmentAction } from "@/app/enrollments/payment-actions";
-import type { EnrollmentPanel } from "@/lib/enrollment-panel-data";
+import type { EnrollmentCatalog, EnrollmentPanel } from "@/lib/enrollment-panel-data";
 
 const METHODS = [
   { value: "upi", label: "UPI" },
@@ -31,11 +31,44 @@ export function InboxEnrollment({ leadId, panel }: { leadId: string; panel: Enro
   const [payFor, setPayFor] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
+  const [catalog, setCatalog] = useState<EnrollmentCatalog | null>(null);
+  const [catalogLoading, setCatalogLoading] = useState(false);
+  const catalogRequest = useRef<AbortController | null>(null);
+  useEffect(() => () => {
+    const controller = catalogRequest.current;
+    catalogRequest.current = null;
+    controller?.abort();
+  }, []);
   useFeedbackMessages(error);
   useFeedbackMessages(null, done);
   const [pending, start] = useTransition();
 
+  const closeEnrollment = () => {
+    const controller = catalogRequest.current;
+    catalogRequest.current = null;
+    controller?.abort();
+    setCatalogLoading(false); setCatalog(null); setOpen(false);
+  };
+
+  const loadCatalog = async () => {
+    if (catalogRequest.current) return;
+    const controller = new AbortController();
+    catalogRequest.current = controller;
+    setCatalog(null); setCatalogLoading(true); setError(null);
+    try {
+      const response = await fetch(`/api/leads/${encodeURIComponent(leadId)}/enrollment-catalog`, { cache: 'no-store', credentials: 'same-origin', signal: controller.signal });
+      const data = await response.json();
+      if (!response.ok || !Array.isArray(data.courses) || !Array.isArray(data.batches)) throw new Error(data.error || 'Enrollment choices could not be loaded. Please try again.');
+      if (!controller.signal.aborted) setCatalog(data);
+    } catch (cause) {
+      if (!controller.signal.aborted) setError(cause instanceof Error ? cause.message : 'Enrollment choices could not be loaded. Please try again.');
+    } finally {
+      if (catalogRequest.current === controller) { catalogRequest.current = null; setCatalogLoading(false); }
+    }
+  };
+
   const submit = (form: FormData) => start(async () => {
+    if (!catalog || catalogLoading) return;
     setError(null);
     const r = await recordEnrollmentAction(leadId, form);
     if (!r.ok) { setError(r.error); return; }
@@ -54,7 +87,7 @@ export function InboxEnrollment({ leadId, panel }: { leadId: string; panel: Enro
         <GraduationCap size={14} aria-hidden className="text-brand-600" />
         <strong className="text-[12px]">Enrolment</strong>
         {panel.canRecord && !open ? (
-          <button type="button" onClick={() => { setOpen(true); setDone(null); }} className="ml-auto inline-flex items-center gap-1 rounded-md bg-brand-600 px-2 py-1 text-[11px] font-semibold text-white hover:bg-brand-700">
+          <button type="button" onClick={() => { setOpen(true); setDone(null); void loadCatalog(); }} className="ml-auto inline-flex items-center gap-1 rounded-md bg-brand-600 px-2 py-1 text-[11px] font-semibold text-white hover:bg-brand-700">
             <Plus size={12} aria-hidden /> Mark enrolled
           </button>
         ) : null}
@@ -116,6 +149,7 @@ export function InboxEnrollment({ leadId, panel }: { leadId: string; panel: Enro
 
       {open ? (
         <form action={submit} className="mt-2 grid gap-2 rounded-lg border border-brand-200 bg-brand-50/40 p-2">
+          {catalogLoading ? <p role="status" className="text-[11px] text-copy-muted">Loading enrollment choices…</p> : !catalog ? <button type="button" onClick={() => void loadCatalog()} className="text-left text-[11px] font-semibold text-brand-700">Retry loading choices</button> : null}
           <fieldset className="grid gap-1.5">
             <legend className="text-[11px] font-semibold">Payment status <span className="text-rose-700">*</span></legend>
             {([["full", "Paid in full"], ["instalment", "First instalment paid"], ["unpaid", "Not paid yet"]] as const).map(([v, l]) => (
@@ -141,13 +175,13 @@ export function InboxEnrollment({ leadId, panel }: { leadId: string; panel: Enro
               <label className={label}>Course
                 <select name="course_id" value={courseId} onChange={(e) => setCourseId(e.target.value)} className={field}>
                   <option value="">Lead's main course</option>
-                  {panel.courses.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  {(catalog?.courses ?? []).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
                 </select>
               </label>
               <label className={label}>Batch
                 <select name="batch_id" defaultValue="" className={field}>
                   <option value="">Not chosen yet</option>
-                  {panel.batches.filter((b) => b.courseId === (courseId || panel.defaults.courseId)).map((b) => <option key={b.id} value={b.id}>{b.label}</option>)}
+                  {(catalog?.batches ?? []).filter((b) => b.courseId === (courseId || panel.defaults.courseId)).map((b) => <option key={b.id} value={b.id}>{b.label}</option>)}
                 </select>
               </label>
               <div className="grid grid-cols-[1fr_80px] gap-1.5">
@@ -159,8 +193,8 @@ export function InboxEnrollment({ leadId, panel }: { leadId: string; panel: Enro
           </details>
           <p className="text-[10px] text-copy-muted">An admin verifies the payment before the lead is marked Won.</p>
           <div className="flex gap-1.5">
-            <button type="submit" disabled={pending || !plan} className="rounded-md bg-brand-600 px-2.5 py-1 text-[11px] font-semibold text-white disabled:opacity-60">Save enrolment</button>
-            <button type="button" onClick={() => setOpen(false)} className="rounded-md border border-line px-2.5 py-1 text-[11px]">Cancel</button>
+            <button type="submit" disabled={pending || !plan || catalogLoading || !catalog} className="rounded-md bg-brand-600 px-2.5 py-1 text-[11px] font-semibold text-white disabled:opacity-60">Save enrolment</button>
+            <button type="button" onClick={closeEnrollment} className="rounded-md border border-line px-2.5 py-1 text-[11px]">Cancel</button>
           </div>
         </form>
       ) : null}
