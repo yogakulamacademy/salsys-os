@@ -5,6 +5,8 @@ create schema knowledge_import_review;
 revoke all on schema knowledge_import_review from public, anon, authenticated, service_role;
 alter table public.knowledge_import_entries_v1
   add column payload_sha256 text check (payload_sha256 ~ '^[0-9a-f]{64}$'),
+  add column claimed_by_worker name,
+  add check (claimed_by_worker is null or status='leased'),
   add foreign key (document_id,organization_id) references public.knowledge_documents(id,organization_id);
 -- Lock parent first in every transition. Strict user session only; no service role bypass.
 create function knowledge_import_review.lock_job(p_org uuid,p_job uuid)
@@ -40,7 +42,7 @@ declare j public.knowledge_import_jobs_v1%rowtype; t timestamptz;
 begin
   j:=knowledge_import_review.lock_job(p_org,p_job); t:=clock_timestamp();
   if p_limit is null or p_limit not between 1 and 50 or j.status not in ('queued','processing') or t>=j.retention_expires_at then return; end if;
-  update public.knowledge_import_entries_v1 e set status='failed',lease_token=null,lease_expires_at=null,error_code='attempts_exhausted'
+  update public.knowledge_import_entries_v1 e set status='failed',lease_token=null,lease_expires_at=null,claimed_by_worker=null,error_code='attempts_exhausted'
     where e.organization_id=p_org and e.job_id=p_job and e.attempts>=5 and
       (e.status='pending' or (e.status='leased' and e.lease_expires_at<=t));
   return query
@@ -49,7 +51,7 @@ begin
       and ((e.status='pending' and e.available_at<=t) or (e.status='leased' and e.lease_expires_at<=t))
       order by e.entry_index limit p_limit for update)
     update public.knowledge_import_entries_v1 e set status='leased',attempts=e.attempts+1,
-      lease_token=gen_random_uuid(),lease_expires_at=least(t+interval '120 seconds',j.retention_expires_at),error_code=null
+      lease_token=gen_random_uuid(),lease_expires_at=least(t+interval '120 seconds',j.retention_expires_at),claimed_by_worker=null,error_code=null
     from picked where e.organization_id=p_org and e.job_id=p_job and e.entry_index=picked.entry_index
     returning e.entry_index,e.lease_token,e.attempts;
   perform knowledge_import_review.rollup(p_org,p_job);
@@ -66,7 +68,7 @@ begin
   -- Authorized read-back of durable result after a lost response; never write twice.
   if e.status='created' then return e.document_id; end if;
   if j.status not in ('queued','processing') or t>=j.retention_expires_at or e.status<>'leased'
-      or p_token is null or e.lease_token is distinct from p_token or e.attempts is distinct from p_attempt or t>=e.lease_expires_at then raise exception 'stale claim'; end if;
+      or e.claimed_by_worker is not null or p_token is null or e.lease_token is distinct from p_token or e.attempts is distinct from p_attempt or t>=e.lease_expires_at then raise exception 'stale claim'; end if;
   if exists(select 1 from jsonb_object_keys(p_payload) k where k not in ('title','category','content','source_name','source_type','source_uri'))
     or length(coalesce(p_payload->>'content','')) not between 10 and 8000 then raise exception 'invalid payload'; end if;
   v:=public.create_source_backed_knowledge_document_v2(p_org,p_payload->>'title',p_payload->>'category',p_payload->>'content',
@@ -74,7 +76,7 @@ begin
   d:=(v->>'document_id')::uuid;
   if v->>'status' is distinct from 'draft' or not exists(select 1 from public.knowledge_documents
       where id=d and organization_id=p_org and status='draft' and created_by=j.requested_by) then raise exception 'draft verification failed'; end if;
-  update public.knowledge_import_entries_v1 set status='created',document_id=d,lease_token=null,lease_expires_at=null,error_code=null
+  update public.knowledge_import_entries_v1 set status='created',document_id=d,lease_token=null,lease_expires_at=null,claimed_by_worker=null,error_code=null
     where organization_id=p_org and job_id=p_job and entry_index=p_index;
   perform knowledge_import_review.rollup(p_org,p_job);
   return d;
@@ -85,7 +87,7 @@ declare j public.knowledge_import_jobs_v1%rowtype;
 begin
   j:=knowledge_import_review.lock_job(p_org,p_job);
   if j.status not in ('queued','processing') then return false; end if;
-  update public.knowledge_import_entries_v1 set status='cancelled',lease_token=null,lease_expires_at=null
+  update public.knowledge_import_entries_v1 set status='cancelled',lease_token=null,lease_expires_at=null,claimed_by_worker=null
     where organization_id=p_org and job_id=p_job and status in ('pending','leased');
   update public.knowledge_import_jobs_v1 set status='cancelled' where organization_id=p_org and id=p_job;
   return true;
@@ -98,14 +100,14 @@ begin
   j:=knowledge_import_review.lock_job(p_org,p_job); t:=clock_timestamp();
   select * into e from public.knowledge_import_entries_v1 where organization_id=p_org and job_id=p_job and entry_index=p_index for update;
   if not found or j.status not in ('queued','processing') or t>=j.retention_expires_at or e.status<>'leased'
-    or p_token is null or e.lease_token is distinct from p_token or e.attempts is distinct from p_attempt
+    or e.claimed_by_worker is not null or p_token is null or e.lease_token is distinct from p_token or e.attempts is distinct from p_attempt
     or e.lease_expires_at is null or t>=e.lease_expires_at then raise exception 'stale claim'; end if;
   -- Only reviewed, non-sensitive machine codes. No arbitrary exception text.
   if p_error_code is null or p_error_code not in ('db_transient','storage_transient','invalid_payload','permanent_failure') then
     raise exception 'unsupported failure code';
   end if;
   next_status:=case when p_error_code in ('db_transient','storage_transient') and e.attempts<5 then 'pending' else 'failed' end;
-  update public.knowledge_import_entries_v1 set status=next_status,lease_token=null,lease_expires_at=null,
+  update public.knowledge_import_entries_v1 set status=next_status,lease_token=null,lease_expires_at=null,claimed_by_worker=null,
     available_at=case when next_status='pending' then t+make_interval(secs=>30*power(2,e.attempts-1)::integer) else available_at end,
     error_code=p_error_code where organization_id=p_org and job_id=p_job and entry_index=p_index;
   perform knowledge_import_review.rollup(p_org,p_job);
@@ -119,7 +121,7 @@ begin
   j:=knowledge_import_review.lock_job(p_org,p_job); t:=clock_timestamp();
   if not ((j.status='awaiting_upload' and t>=j.upload_expires_at) or
       (j.status in ('queued','processing') and t>=j.retention_expires_at)) then return false; end if;
-  update public.knowledge_import_entries_v1 set status='cancelled',lease_token=null,lease_expires_at=null,error_code='job_expired'
+  update public.knowledge_import_entries_v1 set status='cancelled',lease_token=null,lease_expires_at=null,claimed_by_worker=null,error_code='job_expired'
     where organization_id=p_org and job_id=p_job and status in ('pending','leased');
   update public.knowledge_import_jobs_v1 set status='expired' where organization_id=p_org and id=p_job;
   return true;
@@ -340,5 +342,72 @@ begin
       and m.active and m.role in ('owner','admin') and o.status='active' for share of s,b,m,o;
   return found and clock_timestamp()<d.expires_at and clock_timestamp()<j.retention_expires_at;
 end $$;
+-- Worker entry points: separate from user-session claim/finalize. Review owner only;
+-- test grants only in the disposable fixture. Never set or impersonate Auth claims.
+create function knowledge_import_review.worker_claim(p_org uuid,p_job uuid,p_limit integer)
+returns table(entry_index integer,lease_token uuid,attempts integer)
+language plpgsql security definer set search_path=pg_catalog,public,pg_temp as $$
+declare j public.knowledge_import_jobs_v1%rowtype; expiry timestamptz; t timestamptz;
+begin
+  if not knowledge_import_review.worker_allowed(p_org,p_job) then raise exception 'worker access denied' using errcode='42501'; end if;
+  select * into j from public.knowledge_import_jobs_v1 where organization_id=p_org and id=p_job;
+  select expires_at into expiry from knowledge_import_review.worker_delegations where organization_id=p_org and job_id=p_job;
+  t:=clock_timestamp();
+  if p_limit is null or p_limit not between 1 and 50 then raise exception 'invalid batch size'; end if;
+  if t>=least(expiry,j.retention_expires_at) then raise exception 'worker access denied' using errcode='42501'; end if;
+  update public.knowledge_import_entries_v1 e set status='failed',lease_token=null,lease_expires_at=null,claimed_by_worker=null,error_code='attempts_exhausted'
+    where e.organization_id=p_org and e.job_id=p_job and e.attempts>=5 and
+      (e.status='pending' or (e.status='leased' and e.lease_expires_at<=t));
+  return query with picked as (
+    select e.entry_index from public.knowledge_import_entries_v1 e
+    where e.organization_id=p_org and e.job_id=p_job and e.attempts<5 and e.payload_sha256 is not null
+      and ((e.status='pending' and e.available_at<=t) or (e.status='leased' and e.lease_expires_at<=t))
+    order by e.entry_index limit p_limit for update)
+    update public.knowledge_import_entries_v1 e set status='leased',attempts=e.attempts+1,
+      lease_token=gen_random_uuid(),lease_expires_at=least(t+interval '120 seconds',expiry,j.retention_expires_at),
+      claimed_by_worker=session_user,error_code=null
+    from picked where e.organization_id=p_org and e.job_id=p_job and e.entry_index=picked.entry_index
+    returning e.entry_index,e.lease_token,e.attempts;
+  perform knowledge_import_review.rollup(p_org,p_job);
+end $$;
+-- Draft-only write boundary. Unlike the public RPC, it derives the original actor
+-- from the locked job, never from a worker argument or fabricated user JWT.
+create function knowledge_import_review.worker_finalize(p_org uuid,p_job uuid,p_index integer,p_token uuid,p_attempt integer,p_payload jsonb)
+returns uuid language plpgsql security definer set search_path=pg_catalog,public,pg_temp as $$
+declare j public.knowledge_import_jobs_v1%rowtype; e public.knowledge_import_entries_v1%rowtype;
+  expiry timestamptz; t timestamptz; src uuid; doc uuid; title text; category text; content text; source_name text; source_type text; uri text;
+begin
+  if not knowledge_import_review.worker_allowed(p_org,p_job) then raise exception 'worker access denied' using errcode='42501'; end if;
+  select * into j from public.knowledge_import_jobs_v1 where organization_id=p_org and id=p_job;
+  select expires_at into expiry from knowledge_import_review.worker_delegations where organization_id=p_org and job_id=p_job;
+  select * into e from public.knowledge_import_entries_v1 where organization_id=p_org and job_id=p_job and entry_index=p_index for update;
+  t:=clock_timestamp();
+  if not found or t>=least(expiry,j.retention_expires_at) or e.status<>'leased' or e.claimed_by_worker is distinct from session_user
+      or p_token is null or e.lease_token is distinct from p_token or e.attempts is distinct from p_attempt
+      or e.lease_expires_at is null or t>=e.lease_expires_at then raise exception 'stale worker claim'; end if;
+  if p_payload is null or jsonb_typeof(p_payload)<>'object' or e.payload_sha256 is null
+    or encode(sha256(convert_to(p_payload::text,'UTF8')),'hex')<>e.payload_sha256 then raise exception 'payload mismatch'; end if;
+  if exists(select 1 from jsonb_each(p_payload) kv where kv.key not in ('title','category','content','source_name','source_type','source_uri')
+     or (jsonb_typeof(kv.value)<>'string' and not(kv.key='source_uri' and jsonb_typeof(kv.value)='null'))) then raise exception 'invalid payload'; end if;
+  title:=btrim(p_payload->>'title'); category:=coalesce(nullif(btrim(p_payload->>'category'),''),'general');
+  content:=btrim(p_payload->>'content'); source_name:=btrim(p_payload->>'source_name');
+  source_type:=p_payload->>'source_type'; uri:=nullif(btrim(p_payload->>'source_uri'),'');
+  if title is null or length(title) not between 1 and 180 or length(category)>60
+    or content is null or length(content) not between 10 and 8000 or source_name is null or length(source_name) not between 1 and 240
+    or source_type is null or source_type not in ('manual','website','pdf','drive','faq','policy','course','crm_reply','other')
+    or (uri is not null and (length(uri)>2048 or uri !~* '^https?://[^[:space:]]+$')) then raise exception 'invalid payload'; end if;
+  insert into public.knowledge_sources(organization_id,source_type,name,source_uri,status,metadata,created_by)
+    values(p_org,source_type,source_name,uri,'active',jsonb_build_object('entry_mode','knowledge_import_review'),j.requested_by) returning id into src;
+  insert into public.knowledge_documents(organization_id,source_id,title,category,content,status,created_by,metadata)
+    values(p_org,src,title,category,content,'draft',j.requested_by,jsonb_build_object('entry_mode','knowledge_import_review','import_job_id',j.id,'import_entry_index',p_index)) returning id into doc;
+  insert into public.knowledge_chunks(organization_id,document_id,chunk_index,content,metadata)
+    values(p_org,doc,0,content,jsonb_build_object('source','knowledge_import_review'));
+  update public.knowledge_import_entries_v1 set status='created',document_id=doc,lease_token=null,lease_expires_at=null,claimed_by_worker=null,error_code=null
+    where organization_id=p_org and job_id=p_job and entry_index=p_index;
+  perform knowledge_import_review.rollup(p_org,p_job);
+  return doc;
+end $$;
+-- Deliberately no worker regrant/renew, broad read, or arbitrary failure settlement.
+-- Authorized original administrator can inspect committed results after unknown outcome.
 revoke all on all functions in schema knowledge_import_review from public,anon,authenticated,service_role;
 commit;

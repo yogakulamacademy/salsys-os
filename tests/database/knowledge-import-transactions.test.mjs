@@ -182,6 +182,39 @@ test('disposable PG: exact Knowledge RPC, competing claims, rollback, retry, rev
     const claimJob=async(db,j)=>(await db.query('select * from knowledge_import_review.claim($1,$2,1)',[org,j])).rows[0];
     const finishJob=(db,j,c)=>db.query('select knowledge_import_review.finalize($1,$2,$3,$4,$5,$6::jsonb) as id',[org,j,c.entry_index,c.lease_token,c.attempts,JSON.stringify(payload)]);
     const settle=(db,j,c,code)=>db.query('select knowledge_import_review.settle_failure($1,$2,$3,$4,$5,$6) as status',[org,j,c.entry_index,c.lease_token,c.attempts,code]);
+
+    // Worker-specific processing on a new synthetic job, independently of original-session paths.
+    const wjob=await seedJob(2);
+    await a.query("update knowledge_import_jobs_v1 set object_version='fixture-v2',manifest_sha256=repeat('b',64) where id=$1",[wjob]);
+    assert.equal((await a.query('select knowledge_import_review.delegate_worker($1,$2,$3,$4) as ok',[org,wjob,workerName,new Date(Date.now()+600000)])).rows[0].ok,true);
+    const wclaim=(db,j=wjob,o=org)=>db.query('select * from knowledge_import_review.worker_claim($1,$2,1)',[o,j]);
+    const wfinish=(db,c,p=payload)=>db.query('select knowledge_import_review.worker_finalize($1,$2,$3,$4,$5,$6::jsonb) as id',[org,wjob,c.entry_index,c.lease_token,c.attempts,JSON.stringify(p)]);
+    await assert.rejects(wclaim(worker),e=>e.code==='42501');
+    await a.query('grant execute on function knowledge_import_review.worker_claim(uuid,uuid,integer),knowledge_import_review.worker_finalize(uuid,uuid,integer,uuid,integer,jsonb) to '+workerName);
+    await assert.rejects(wclaim(worker,wjob,other),e=>e.code==='42501');
+    const wc=(await wclaim(worker)).rows[0];assert.ok(wc.lease_token);
+    await assert.rejects(finishJob(a,wjob,wc),/stale claim/);
+    await assert.rejects(wfinish(worker,wc,{...payload,p_approve:true}),/payload mismatch/);
+    await assert.rejects(wfinish(worker,{...wc,lease_token:randomUUID()}),/stale worker claim/);
+    await a.query("create trigger fixture_worker_abort before update on knowledge_import_entries_v1 for each row execute function fixture_abort()");
+    await assert.rejects(wfinish(worker,wc),/fixture crash/);
+    assert.equal((await a.query("select count(*)::int as n from knowledge_documents where metadata->>'import_job_id'=$1",[wjob])).rows[0].n,0);
+    await a.query('drop trigger fixture_worker_abort on knowledge_import_entries_v1');
+    const wd=(await wfinish(worker,wc)).rows[0].id;
+    const madeDraft=(await a.query('select organization_id,created_by,status,approved_by,approved_at from knowledge_documents where id=$1',[wd])).rows[0];
+    assert.deepEqual(madeDraft,{organization_id:org,created_by:actor,status:'draft',approved_by:null,approved_at:null});
+    await assert.rejects(wfinish(worker,wc),/stale worker claim/);
+    const wc2=(await wclaim(worker)).rows[0];assert.notEqual(wc2.entry_index,wc.entry_index);
+    await a.query('update organization_members set active=false where organization_id=$1 and user_id=$2',[org,actor]);
+    await assert.rejects(wfinish(worker,wc2),e=>e.code==='42501');
+    await a.query('update organization_members set active=true where organization_id=$1 and user_id=$2',[org,actor]);
+    await a.query('select knowledge_import_review.revoke_worker($1,$2)',[org,wjob]);
+    await assert.rejects(wfinish(worker,wc2),e=>e.code==='42501');
+    await assert.rejects(wclaim(worker),e=>e.code==='42501');
+    await assert.rejects(worker.query('select * from public.knowledge_documents'),e=>e.code==='42501');
+    await assert.rejects(worker.query('select * from public.knowledge_import_entries_v1'),e=>e.code==='42501');
+    await assert.rejects(worker.query('select knowledge_import_review.cancel($1,$2)',[org,wjob]),e=>e.code==='42501');
+    assert.equal((await a.query('select count(*)::int as n from knowledge_approvals')).rows[0].n,0);
     const retryJob=await seedJob(1);
     for(let attempt=1;attempt<=5;attempt++){
       const c=await claimJob(a,retryJob);assert.equal(c.attempts,attempt);
