@@ -90,5 +90,39 @@ begin
   update public.knowledge_import_jobs_v1 set status='cancelled' where organization_id=p_org and id=p_job;
   return true;
 end $$;
+-- Failure settlement requires the live claim, not a caller-supplied retry time.
+create function knowledge_import_review.settle_failure(p_org uuid,p_job uuid,p_index integer,p_token uuid,p_attempt integer,p_error_code text)
+returns text language plpgsql security invoker set search_path=pg_catalog,public,pg_temp as $
+declare j public.knowledge_import_jobs_v1%rowtype; e public.knowledge_import_entries_v1%rowtype; t timestamptz; next_status text;
+begin
+  j:=knowledge_import_review.lock_job(p_org,p_job); t:=clock_timestamp();
+  select * into e from public.knowledge_import_entries_v1 where organization_id=p_org and job_id=p_job and entry_index=p_index for update;
+  if not found or j.status not in ('queued','processing') or t>=j.retention_expires_at or e.status<>'leased'
+    or p_token is null or e.lease_token is distinct from p_token or e.attempts is distinct from p_attempt
+    or e.lease_expires_at is null or t>=e.lease_expires_at then raise exception 'stale claim'; end if;
+  -- Only reviewed, non-sensitive machine codes. No arbitrary exception text.
+  if p_error_code is null or p_error_code not in ('db_transient','storage_transient','invalid_payload','permanent_failure') then
+    raise exception 'unsupported failure code';
+  end if;
+  next_status:=case when p_error_code in ('db_transient','storage_transient') and e.attempts<5 then 'pending' else 'failed' end;
+  update public.knowledge_import_entries_v1 set status=next_status,lease_token=null,lease_expires_at=null,
+    available_at=case when next_status='pending' then t+make_interval(secs=>30*power(2,e.attempts-1)::integer) else available_at end,
+    error_code=p_error_code where organization_id=p_org and job_id=p_job and entry_index=p_index;
+  perform knowledge_import_review.rollup(p_org,p_job);
+  return next_status;
+end $;
+-- Metadata expiry only. This is not object deletion or a background sweeper.
+create function knowledge_import_review.expire(p_org uuid,p_job uuid)
+returns boolean language plpgsql security invoker set search_path=pg_catalog,public,pg_temp as $
+declare j public.knowledge_import_jobs_v1%rowtype; t timestamptz;
+begin
+  j:=knowledge_import_review.lock_job(p_org,p_job); t:=clock_timestamp();
+  if not ((j.status='awaiting_upload' and t>=j.upload_expires_at) or
+      (j.status in ('queued','processing') and t>=j.retention_expires_at)) then return false; end if;
+  update public.knowledge_import_entries_v1 set status='cancelled',lease_token=null,lease_expires_at=null,error_code='job_expired'
+    where organization_id=p_org and job_id=p_job and status in ('pending','leased');
+  update public.knowledge_import_jobs_v1 set status='expired' where organization_id=p_org and id=p_job;
+  return true;
+end $;
 revoke all on all functions in schema knowledge_import_review from public,anon,authenticated,service_role;
 commit;

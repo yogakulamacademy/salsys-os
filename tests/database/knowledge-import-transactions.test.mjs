@@ -64,6 +64,57 @@ test('disposable PG: exact Knowledge RPC, competing claims, rollback, retry, rev
     await assert.rejects(finalize(b,reclaimed),/stale claim/);
     assert.deepEqual((await a.query('select status,count(*)::int as n from knowledge_import_entries_v1 group by status order by status')).rows,[{status:'cancelled',n:2},{status:'created',n:1}]);
     assert.equal((await a.query('select count(*)::int as n from knowledge_approvals')).rows[0].n,0);
+    // Independent jobs: database-owned backoff, permanent failure and expiry.
+    const seedJob=async(n)=>{
+      const j=randomUUID();
+      await a.query("insert into knowledge_import_jobs_v1(id,organization_id,requested_by,request_session_id,object_path,declared_bytes,verified_bytes,sha256,total_entries,status,upload_expires_at,retention_expires_at) values($1,$2,$3,$4,$5,100,100,repeat('a',64),$6,'queued',now()+interval '1 hour',now()+interval '2 hours')",[j,org,actor,session,org+'/'+j+'/source.json',n]);
+      await a.query("insert into knowledge_import_entries_v1(organization_id,job_id,entry_index,payload_sha256) select $1,$2,i,encode(sha256(convert_to(($3::jsonb)::text,'UTF8')),'hex') from generate_series(0,$4::int-1) i",[org,j,JSON.stringify(payload),n]);return j;
+    };
+    const claimJob=async(db,j)=>(await db.query('select * from knowledge_import_review.claim($1,$2,1)',[org,j])).rows[0];
+    const finishJob=(db,j,c)=>db.query('select knowledge_import_review.finalize($1,$2,$3,$4,$5,$6::jsonb) as id',[org,j,c.entry_index,c.lease_token,c.attempts,JSON.stringify(payload)]);
+    const settle=(db,j,c,code)=>db.query('select knowledge_import_review.settle_failure($1,$2,$3,$4,$5,$6) as status',[org,j,c.entry_index,c.lease_token,c.attempts,code]);
+    const retryJob=await seedJob(1);
+    for(let attempt=1;attempt<=5;attempt++){
+      const c=await claimJob(a,retryJob);assert.equal(c.attempts,attempt);
+      await assert.rejects(settle(b,retryJob,c,'unreviewed_error'),/unsupported failure code/);
+      assert.equal((await settle(a,retryJob,c,'db_transient')).rows[0].status,attempt<5?'pending':'failed');
+      await assert.rejects(settle(b,retryJob,c,'db_transient'),/stale claim/);
+      assert.equal(await claimJob(b,retryJob),undefined);
+      if(attempt<5){
+        const due=(await a.query('select extract(epoch from available_at-clock_timestamp())::float8 as seconds from knowledge_import_entries_v1 where job_id=$1',[retryJob])).rows[0].seconds;
+        assert.ok(due>30*2**(attempt-1)-5 && due<=30*2**(attempt-1));
+        // Advance synthetic fixture only; no production time override.
+        await a.query("update knowledge_import_entries_v1 set available_at=now()-interval '1 second' where job_id=$1",[retryJob]);
+      }
+    }
+    const permanent=await seedJob(1), pc=await claimJob(a,permanent);
+    assert.equal((await settle(a,permanent,pc,'invalid_payload')).rows[0].status,'failed');
+    assert.equal(await claimJob(b,permanent),undefined);
+    const expired=await seedJob(1), ec=await claimJob(a,expired);
+    assert.equal((await a.query('select knowledge_import_review.expire($1,$2) as ok',[org,expired])).rows[0].ok,false);
+    await a.query("update knowledge_import_jobs_v1 set created_at=now()-interval '3 hours',upload_expires_at=now()-interval '2 hours',retention_expires_at=now()-interval '1 hour' where id=$1",[expired]);
+    assert.equal((await a.query('select knowledge_import_review.expire($1,$2) as ok',[org,expired])).rows[0].ok,true);
+    await assert.rejects(finishJob(b,expired,ec),/stale claim/);
+    assert.equal((await a.query('select status from knowledge_import_jobs_v1 where id=$1',[expired])).rows[0].status,'expired');
+    // Two real sessions: cancellation blocks behind a finalization transaction.
+    const race=await seedJob(2), rc=await claimJob(a,race);
+    await a.query('begin');
+    const saved=(await finishJob(a,race,rc)).rows[0].id;
+    const waiting=b.query('select knowledge_import_review.cancel($1,$2) as ok',[org,race]).then(result=>({result}),error=>({error}));
+    const observer=await connect(), pid=(await observer.query("select pid from pg_stat_activity where datname=current_database() and wait_event_type='Lock' and query like '%knowledge_import_review.cancel%'")).rows[0]?.pid;
+    let blocked=Boolean(pid);
+    for(let i=0;!blocked&&i<100;i++){await new Promise(resolve=>setTimeout(resolve,25));blocked=(await observer.query("select exists(select 1 from pg_stat_activity where datname=current_database() and wait_event_type='Lock' and query like '%knowledge_import_review.cancel%') as blocked")).rows[0].blocked;}
+    await a.query('commit');
+    const cancelled=await waiting;assert.equal(blocked,true);assert.ifError(cancelled.error);assert.equal(cancelled.result.rows[0].ok,true);
+    assert.deepEqual((await a.query('select status,document_id from knowledge_import_entries_v1 where job_id=$1 order by entry_index',[race])).rows,[{status:'created',document_id:saved},{status:'cancelled',document_id:null}]);
+    // Cancel-first ordering refuses subsequent creation.
+    const race2=await seedJob(1), rc2=await claimJob(a,race2);
+    await a.query('begin');await a.query('select knowledge_import_review.cancel($1,$2)',[org,race2]);
+    const losing=finishJob(b,race2,rc2).then(result=>({result}),error=>({error}));
+    await a.query('commit');
+    assert.match((await losing).error?.message??'',/stale claim/);
+    assert.equal((await a.query('select count(*)::int as n from knowledge_approvals')).rows[0].n,0);
+
   }finally{
     for(const db of clients)await db.end().catch(()=>{});
     if(made)await admin.query('drop database "'+name+'" with (force)');
