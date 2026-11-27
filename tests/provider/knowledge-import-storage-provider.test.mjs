@@ -6,15 +6,11 @@ import {createRequire} from 'node:module';
 import {createClient} from '@supabase/supabase-js';
 import pg from 'pg';
 
-// Safety boundary: this fixture is permitted only in an explicitly disposable local project.
-const loopback=new Set(['localhost','127.0.0.1','[::1]']);
+import {FIXTURE_API_ORIGIN,validateFixtureStatus,fixtureApiUrl,createFixtureFetch} from './knowledge-import-provider-transport.mjs';
+
+// Safety boundary: fixed disposable local endpoints, not a configurable remote project.
 const bucket='knowledge-import-private-v1';
-const local=(value,protocols)=>{
-  const u=new URL(value);
-  assert.ok(loopback.has(u.hostname),'refusing non-loopback provider');
-  assert.ok(protocols.includes(u.protocol),'unexpected protocol');
-  return u;
-};
+const fixtureFetch=createFixtureFetch();
 const fixtureSql=`
 create table public.organizations(id uuid primary key,status text not null);
 create table public.organization_members(organization_id uuid,user_id uuid,active boolean,role text,primary key(organization_id,user_id));
@@ -29,11 +25,11 @@ const denied=r=>assert.ok([400,401,403,404,409,410,413,422,423].includes(r.statu
 test('actual disposable Supabase Storage authorization and lifecycle',{timeout:240000},async t=>{
   assert.equal(process.env.SALSYS_ALLOW_DISPOSABLE_STORAGE_TEST,'1');
   const status=JSON.parse(readFileSync(process.env.SALSYS_LOCAL_STORAGE_STATUS_FILE,'utf8'));
-  const api=local(status.API_URL,['http:']), dbUrl=local(status.DB_URL,['postgres:','postgresql:']);
-  assert.equal(dbUrl.pathname,'/postgres');assert.equal(dbUrl.username,'postgres');
+  const dbUrl=validateFixtureStatus(status);
+  const api=new URL(FIXTURE_API_ORIGIN);
   const anon=status.ANON_KEY||status.PUBLISHABLE_KEY, service=status.SERVICE_ROLE_KEY||status.SECRET_KEY;
   assert.ok(typeof anon==='string'&&anon.length>10&&typeof service==='string'&&service.length>10,'local stack credentials missing');
-  const options={auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false}};
+  const options={auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false},global:{fetch:fixtureFetch}};
   const admin=createClient(api.origin,service,options);
   const db=new pg.Client({connectionString:dbUrl.href});await db.connect();
   try{
@@ -74,16 +70,16 @@ test('actual disposable Supabase Storage authorization and lifecycle',{timeout:2
     };
     const endpoint=api.origin+'/storage/v1/upload/resumable';
     const request=async(method,url,user,headers={},body)=>{
-      const parsed=local(url,['http:']);assert.equal(parsed.port,api.port);
-      assert.ok(parsed.pathname.startsWith('/storage/v1/upload/resumable'));
-      return fetch(parsed,{method,redirect:'error',signal:AbortSignal.timeout(20000),headers:{apikey:anon,'Tus-Resumable':'1.0.0',...(user?{Authorization:'Bearer '+user.token}:{}),...headers},body});
+      const parsed=fixtureApiUrl(url);
+      assert.ok(parsed.pathname==='/storage/v1/upload/resumable'||parsed.pathname.startsWith('/storage/v1/upload/resumable/'));
+      return fixtureFetch(parsed,{method,redirect:'error',signal:AbortSignal.timeout(20000),headers:{apikey:anon,'Tus-Resumable':'1.0.0',...(user?{Authorization:'Bearer '+user.token}:{}),...headers},body});
     };
     const meta=(path)=>Object.entries({bucketName:bucket,objectName:path,contentType:'application/json',cacheControl:'0'}).map(([k,v])=>k+' '+Buffer.from(v).toString('base64')).join(',');
     const start=(job,user=owner,length=job.length)=>request('POST',endpoint,user,{'Upload-Length':String(length),'Upload-Metadata':meta(job.path)});
     const location=r=>{
       assert.ok([200,201].includes(r.status),'TUS creation failed: '+r.status);
       const value=r.headers.get('location');assert.ok(value,'TUS location missing');
-      const u=local(new URL(value,endpoint).href,['http:']);assert.equal(u.port,api.port);
+      const u=fixtureApiUrl(new URL(value,endpoint).href);
       assert.ok(u.pathname.startsWith('/storage/v1/upload/resumable/'));return u.href;
     };
     const patch=(url,data,offset=0,user=owner)=>request('PATCH',url,user,{'Upload-Offset':String(offset),'Content-Type':'application/offset+octet-stream'},data);
@@ -99,7 +95,7 @@ test('actual disposable Supabase Storage authorization and lifecycle',{timeout:2
       const saved=await read(j);assert.ok(saved);assert.equal(digest(saved),digest(bytes));
       const version=(await db.query('select version from storage.objects where bucket_id=$1 and name=$2',[bucket,j.path])).rows[0]?.version;
       assert.ok(typeof version==='string'&&version.length>0,'provider version unavailable');
-      const direct=await fetch(api.origin+'/storage/v1/object/'+bucket+'/'+j.path,{redirect:'error',headers:{apikey:anon,Authorization:'Bearer '+owner.token},signal:AbortSignal.timeout(20000)});
+      const direct=await fixtureFetch(api.origin+'/storage/v1/object/'+bucket+'/'+j.path,{redirect:'error',headers:{apikey:anon,Authorization:'Bearer '+owner.token},signal:AbortSignal.timeout(20000)});
       denied(direct);
       denied(await start(j));
       // Delete through actual Storage API, then check absence. Not a quota release or proof of TUS quiescence.
@@ -177,7 +173,7 @@ test('actual disposable Supabase Storage authorization and lifecycle',{timeout:2
     });
     await t.test('gateway-only policy denies new direct TUS and ordinary client upload',async()=>{
       const j=await createJob();denied(await start(j));denied(await start(j,outsider));
-      const direct=await fetch(api.origin+'/storage/v1/object/'+bucket+'/'+j.path,{method:'POST',headers:{apikey:anon,Authorization:'Bearer '+owner.token,'Content-Type':'application/json'},body:bytes,redirect:'error',signal:AbortSignal.timeout(20000)});
+      const direct=await fixtureFetch(api.origin+'/storage/v1/object/'+bucket+'/'+j.path,{method:'POST',headers:{apikey:anon,Authorization:'Bearer '+owner.token,'Content-Type':'application/json'},body:bytes,redirect:'error',signal:AbortSignal.timeout(20000)});
       denied(direct);assert.equal(await read(j),null);
     });
     await t.test('server-mediated create-only publication verifies bytes and registers exact provider version',async()=>{

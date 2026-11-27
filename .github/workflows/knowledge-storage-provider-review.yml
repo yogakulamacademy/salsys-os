@@ -1,7 +1,7 @@
 name: Knowledge Storage provider review
 on:
   pull_request:
-    branches: [main]
+    branches: [main, feat/knowledge-import-upload-job-contract-20261127]
     paths:
       - 'docs/sql/knowledge-import-**'
       - 'tests/provider/knowledge-import-**'
@@ -24,6 +24,8 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci --ignore-scripts
+      - name: Verify loopback transport guard without network
+        run: node --test tests/provider/knowledge-import-provider-transport.test.mjs
       - name: Install checksum-pinned local Supabase CLI
         shell: bash
         run: |
