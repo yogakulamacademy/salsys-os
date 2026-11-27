@@ -1,4 +1,5 @@
 'use client';
+import { toast } from '@/lib/toast';
 
 import { useState } from 'react';
 
@@ -44,6 +45,7 @@ export function InstagramHistoryPreview({ connections }: {
         [connectionId]: { status: 'observed', checkedAt: new Date().toISOString(), report },
       }));
     } catch {
+      toast.error('Unable to load the message history preview. Please retry.');
       setStates(previous => ({ ...previous, [connectionId]: { status: 'unavailable' } }));
     }
   }

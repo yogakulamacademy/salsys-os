@@ -1,4 +1,5 @@
 "use client";
+import { useFeedbackMessages } from '@/components/use-feedback-messages';
 
 import {
   Bot,
@@ -56,6 +57,10 @@ export function ConversationCopilot({
   const [assetSelectionError, setAssetSelectionError] = useState<string | null>(null);
   const [assetSelectionNotice, setAssetSelectionNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  useFeedbackMessages(assetError);
+  useFeedbackMessages(assetSelectionError);
+  useFeedbackMessages(error);
+  useFeedbackMessages(null, assetSelectionNotice);
   const [isPending, startTransition] = useTransition();
   const [isAssetPending, startAssetTransition] = useTransition();
 

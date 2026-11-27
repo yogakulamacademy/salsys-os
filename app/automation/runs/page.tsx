@@ -1,3 +1,4 @@
+import { PageFeedback } from '@/components/page-feedback';
 import {
   Activity,
   AlertTriangle,
@@ -86,7 +87,7 @@ export default async function AutomationRunsPage() {
   const workflowName = (id:string|null)=>(id ? workflowMap.get(id)?.name || shortId(id) : '—');
   const leadName = (id:string|null)=> id ? leadMap.get(id)?.lead_code || shortId(id) : '—';
 
-  return (
+  return (<><PageFeedback loadError={loadError} />{(
     <div className="space-y-5">
       <header>
         <div className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-400">Automation · Observability</div>
@@ -136,5 +137,5 @@ export default async function AutomationRunsPage() {
         {customerMessagesSent===0?<CheckCircle2 className="mt-0.5 shrink-0 text-emerald-600" size={17}/>:<AlertTriangle className="mt-0.5 shrink-0 text-amber-600" size={17}/>}<div><div className="text-sm font-bold text-slate-900">{customerMessagesSent===0?'No audited customer sends yet':`${customerMessagesSent} audited customer message${customerMessagesSent===1?'':'s'} sent`}</div><div className="mt-0.5 text-xs leading-5 text-slate-600">Review provider evidence before changing rollout gates.</div></div>
       </div>
     </div>
-  );
+  )}</>);
 }

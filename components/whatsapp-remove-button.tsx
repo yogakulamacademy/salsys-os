@@ -1,4 +1,5 @@
 'use client';
+import { useFeedbackMessages } from '@/components/use-feedback-messages';
 
 import { Trash2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
@@ -21,6 +22,7 @@ export function WhatsAppRemoveButton({
   const [removing, setRemoving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  useFeedbackMessages(error, message);
 
   async function remove() {
     if (removing) return;

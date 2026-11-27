@@ -1,4 +1,5 @@
 "use client";
+import { useOutcomeToast } from '@/components/use-feedback-messages';
 
 import Link from "next/link";
 import { useState, useTransition } from "react";
@@ -18,6 +19,7 @@ export function PaymentsToVerify({ payments }: { payments: PaymentToVerify[] }) 
   const [rejecting, setRejecting] = useState<string | null>(null);
   const [reason, setReason] = useState("");
   const [msg, setMsg] = useState<{ id: string; text: string; ok: boolean } | null>(null);
+  useOutcomeToast(msg ? {tone:msg.ok ? 'success' : 'error', text:msg.text} : null);
   const act = (id: string, decision: "verify" | "reject") => start(async () => {
     const r = await verifyPaymentAction(id, decision, decision === "reject" ? reason : null);
     setMsg({ id, ok: r.ok, text: r.ok ? (decision === "verify" ? "Verified" : "Rejected") : r.error });

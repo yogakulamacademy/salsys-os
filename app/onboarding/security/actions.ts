@@ -1,4 +1,5 @@
 'use server';
+import { redirectWithNotice } from '@/lib/redirect-with-notice';
 
 import { redirect } from 'next/navigation';
 
@@ -101,5 +102,5 @@ export async function replaceProvisionedOwnerPasswordAction(formData: FormData) 
   // flag remains authoritative if refresh is temporarily unavailable.
   await supabase.auth.refreshSession().catch(() => null);
 
-  redirect('/onboarding');
+  await redirectWithNotice('/onboarding', 'Setup changes saved.');
 }

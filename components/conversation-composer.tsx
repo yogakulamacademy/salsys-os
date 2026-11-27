@@ -1,4 +1,6 @@
 "use client";
+import { toast } from '@/lib/toast';
+import { useFeedbackMessages } from '@/components/use-feedback-messages';
 
 import {
   AlertTriangle,
@@ -163,6 +165,9 @@ export function WhatsAppComposer({
   const [noteError, setNoteError] = useState<string | null>(null);
   const [noteSuccess, setNoteSuccess] = useState<string | null>(null);
   const [sendError, setSendError] = useState<string | null>(null);
+  useFeedbackMessages(noteError);
+  useFeedbackMessages(sendError);
+  useFeedbackMessages(null, noteSuccess);
   const [isPending, startTransition] = useTransition();
   const formRef = useRef<HTMLFormElement | null>(null);
   const saveTimerRef = useRef<number | null>(null);
@@ -523,6 +528,7 @@ export function WhatsAppComposer({
         }
 
         persistDraft("");
+        toast.success('Message accepted by WhatsApp.');
         setSelectedAsset(null);
         setSendError(null);
 

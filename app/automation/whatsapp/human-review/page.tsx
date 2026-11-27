@@ -1,3 +1,4 @@
+import { PageFeedback } from '@/components/page-feedback';
 import Link from 'next/link';
 
 import { getCurrentDeskcommHumanReviewQueue } from '@/lib/integrations/deskcomm-human-review-data';
@@ -30,7 +31,7 @@ export default async function WhatsAppHumanReviewQueuePage({
   };
   const notice = typeof query.status === 'string' ? notices[query.status] : null;
   return (
-    <main className="mx-auto max-w-5xl space-y-5 pb-10">
+    <main className="mx-auto max-w-5xl space-y-5 pb-10"><PageFeedback error={['unavailable','invalid'].includes(query.status ?? '') ? notice : null} notice={['assigned','already_assigned','closed','hold_released'].includes(query.status ?? '') ? notice : null} warning={['send_in_flight','disabled'].includes(query.status ?? '') ? notice : null} />
       <header>
         <p className="text-[11px] font-bold uppercase tracking-widest text-slate-500">
           WhatsApp · inbound shadow · owner/admin review

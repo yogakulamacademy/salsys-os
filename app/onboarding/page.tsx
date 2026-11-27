@@ -1,3 +1,4 @@
+import { PageFeedback } from '@/components/page-feedback';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import {
@@ -462,7 +463,7 @@ function NextPhaseStep({ step }: { step: StepKey }) {
 export default async function OnboardingPage({
   searchParams,
 }: {
-  searchParams: Promise<{ step?: string; error?: string }>;
+  searchParams: Promise<{ notice?: string; step?: string; error?: string }>;
 }) {
   const query = await searchParams;
   const requestedStep = query.step ? safeStep(query.step) : null;
@@ -518,7 +519,7 @@ export default async function OnboardingPage({
   if (activeStep === 'team') redirect('/onboarding/team');
   if (activeStep === 'finish') redirect('/onboarding/finish');
 
-  return (
+  return (<><PageFeedback error={query.error} notice={query.notice} />{(
     <main className="min-h-screen bg-[#f5f8f6] text-[#173d32] lg:flex">
       <OnboardingRail
         activeStep={activeStep}
@@ -551,5 +552,5 @@ export default async function OnboardingPage({
         </div>
       </section>
     </main>
-  );
+  )}</>);
 }

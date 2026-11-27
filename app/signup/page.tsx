@@ -1,3 +1,4 @@
+import { PageFeedback } from '@/components/page-feedback';
 import Script from 'next/script';
 import { AuthMessage, AuthShell, authStyles as styles } from '@/components/auth/auth-shell';
 import { EmailField, SignupFields, SignupSteps } from '@/components/auth/account-fields';
@@ -16,7 +17,7 @@ export default async function SignupPage({ searchParams }: {
   const enabled = await isPublicSignupAvailable();
   const resend = params.mode === 'resend';
   const captcha = <div className={styles.captcha}><Script src="https://challenges.cloudflare.com/turnstile/v0/api.js" strategy="afterInteractive" /><div className="cf-turnstile" data-sitekey={siteKey} data-action="signup" data-size="flexible" /></div>;
-  return (
+  return (<><PageFeedback error={params.error} notice={params.notice} />{(
     <AuthShell kind="signup">
       {enabled && !resend && <SignupSteps />}
       <p className={styles.formKicker}>{resend ? 'ONE MORE STEP' : 'LET’S GET YOU STARTED'}</p>
@@ -48,5 +49,5 @@ export default async function SignupPage({ searchParams }: {
       )}
       <p className={styles.switch}>Already have an account? <a href="/login">Sign in</a></p>
     </AuthShell>
-  );
+  )}</>);
 }

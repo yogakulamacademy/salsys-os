@@ -1,4 +1,5 @@
 'use client';
+import { useOutcomeToast } from '@/components/use-feedback-messages';
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -14,6 +15,7 @@ export function ApprovalActions({ approvalId, disabled = false, mode = 'decision
   const router = useRouter();
   const [busy, setBusy] = useState<'approve' | 'reject' | 'execute' | 'retry' | null>(null);
   const [message, setMessage] = useState<{ tone: 'warning' | 'success'; text: string } | null>(null);
+  useOutcomeToast(message);
 
   async function decide(decision: 'approve' | 'reject', executionOnly = false) {
     if (busy || disabled) return;

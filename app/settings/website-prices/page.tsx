@@ -1,3 +1,4 @@
+import { PageFeedback } from '@/components/page-feedback';
 import Link from 'next/link';
 
 import { checkWebsitePricesAction, decideWebsitePriceAction } from '@/app/settings/website-prices/actions';
@@ -37,7 +38,7 @@ export default async function WebsitePricesPage({ searchParams }: { searchParams
   ]);
   const rows = (data ?? []) as unknown as Suggestion[];
 
-  return (
+  return (<><PageFeedback error={query.error} notice={query.notice} />{(
     <main className="mx-auto w-full max-w-6xl space-y-5 px-4 py-6">
       <Link href="/settings" className="text-xs text-copy-muted hover:text-copy">Back to settings</Link>
       <header>
@@ -103,5 +104,5 @@ export default async function WebsitePricesPage({ searchParams }: { searchParams
         </section>
       )}
     </main>
-  );
+  )}</>);
 }

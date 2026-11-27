@@ -1,4 +1,5 @@
 "use client";
+import { useOutcomeToast } from '@/components/use-feedback-messages';
 
 import { useState, useTransition } from "react";
 
@@ -39,6 +40,7 @@ export function InboxOfferCard({ leadId, firstName, channel, suggestion, canMana
   const [validHours, setValidHours] = useState(draft?.validHours ?? 72);
   const [courseLabel, setCourseLabel] = useState(suggestion.courseLabel ?? "");
   const [status, setStatus] = useState<{ tone: "ok" | "error"; text: string } | null>(null);
+  useOutcomeToast(status);
   const [approvedText, setApprovedText] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 

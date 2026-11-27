@@ -1,4 +1,6 @@
 "use client";
+import { toast } from '@/lib/toast';
+import { useFeedbackMessages } from '@/components/use-feedback-messages';
 
 import { Star, X } from "lucide-react";
 import { useTransition, useState } from "react";
@@ -29,10 +31,11 @@ function money(value: number | null, currency: string | null) {
 export function InboxCourseInterests({ leadId, interests, valueNote }: { leadId: string; interests: InboxInterest[]; valueNote: string | null }) {
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  useFeedbackMessages(error);
   const act = (courseId: string, action: "make_main" | "remove") => start(async () => {
     setError(null);
     const r = await setLeadInterestAction(leadId, courseId, action);
-    if (!r.ok) setError(r.error);
+    if (!r.ok) setError(r.error); else toast.success(action === 'remove' ? 'Course interest removed.' : 'Main course updated.');
   });
   const primary = interests.find((i) => i.isPrimary);
   return (

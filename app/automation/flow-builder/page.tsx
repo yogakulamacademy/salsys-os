@@ -1,3 +1,4 @@
+import { PageFeedback } from '@/components/page-feedback';
 import Link from 'next/link';
 import {
   AlertTriangle,
@@ -191,7 +192,7 @@ export default async function FlowBuilderPage({
     Boolean(currentDefinitionHash) &&
     flowVersion?.definition_hash === currentDefinitionHash;
 
-  return (
+  return (<><PageFeedback error={query.error} notice={query.notice} loadError={loadError} />{(
     <div className="space-y-4">
       <header className="flex min-h-[68px] flex-col gap-4 border-b border-[#e0e9e3] pb-4 xl:flex-row xl:items-center xl:justify-between">
         <div className="flex min-w-0 items-start gap-3">
@@ -353,5 +354,5 @@ export default async function FlowBuilderPage({
         </>
       )}
     </div>
-  );
+  )}</>);
 }

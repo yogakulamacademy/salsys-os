@@ -1,3 +1,4 @@
+import { PageFeedback } from '@/components/page-feedback';
 import Link from 'next/link';
 import {
   ArrowRight,
@@ -232,7 +233,7 @@ export default async function AutomationApprovalsPage({
   const selectedCanRetry =
     Boolean(selected && canApprove && selected.status === 'approved' && selectedAudit?.status === 'failed' && selectedAudit.customer_message_sent !== true);
 
-  return (
+  return (<><PageFeedback loadError={loadError} />{(
     <div className="space-y-5">
       <header className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
         <div>
@@ -423,5 +424,5 @@ export default async function AutomationApprovalsPage({
         )}
       </section>
     </div>
-  );
+  )}</>);
 }

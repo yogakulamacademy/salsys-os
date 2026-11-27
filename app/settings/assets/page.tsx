@@ -1,3 +1,4 @@
+import { PageFeedback } from '@/components/page-feedback';
 import {
   Ban,
   Bot,
@@ -158,7 +159,7 @@ export default async function SalesAssetsSettingsPage({
   const drafts = assets.filter((asset) => asset.state === 'draft').length;
   const revoked = assets.filter((asset) => asset.state === 'revoked').length;
 
-  return (
+  return (<><PageFeedback error={query.error} notice={query.notice} loadError={loadError} />{(
     <div className="space-y-6">
       <PageHeader
         eyebrow="AI Intelligence"
@@ -404,7 +405,7 @@ export default async function SalesAssetsSettingsPage({
         </section>
       </div>
     </div>
-  );
+  )}</>);
 }
 
 function Summary({ label, value, note }: { label: string; value: number; note: string }) {

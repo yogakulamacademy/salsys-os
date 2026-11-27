@@ -1,3 +1,4 @@
+import { PageFeedback } from '@/components/page-feedback';
 import { assignTeamPerformanceLeadInline } from '@/app/team-performance/inline-actions';
 import { ToastForm } from '@/components/toast-form';
 import Link from 'next/link';
@@ -1104,7 +1105,7 @@ export default async function TeamPerformancePage({
     },
   ];
 
-  return (
+  return (<><PageFeedback error={query.error} notice={query.notice} />{(
     <div className="space-y-6">
       <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
         <div>
@@ -2444,5 +2445,5 @@ export default async function TeamPerformancePage({
         </div>
       </section>
     </div>
-  );
+  )}</>);
 }

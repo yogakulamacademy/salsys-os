@@ -1,3 +1,4 @@
+import { PageFeedback } from '@/components/page-feedback';
 import Link from 'next/link';
 import {
   AlertTriangle,
@@ -127,7 +128,7 @@ export default async function AutomationSettingsPage({ searchParams }: { searchP
     ? `${senderReadiness?.displayPhoneNumber ?? 'Default sender'} connected${senderReadiness && senderReadiness.unboundActiveAccountCount > 0 ? ` · ${senderReadiness.unboundActiveAccountCount} unbound historical record${senderReadiness.unboundActiveAccountCount === 1 ? '' : 's'} ignored` : ''}`
     : senderReadiness?.issueMessage ?? 'Sender readiness unavailable';
 
-  return (
+  return (<><PageFeedback error={query.error} notice={query.notice} loadError={loadError} />{(
     <div className="space-y-5">
       <header className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
         <div>
@@ -260,5 +261,5 @@ export default async function AutomationSettingsPage({ searchParams }: { searchP
         <Link href="/automation/readiness" className="btn-secondary shrink-0 !py-2 text-xs">View rollout guide <ArrowRight size={12} /></Link>
       </div>
     </div>
-  );
+  )}</>);
 }

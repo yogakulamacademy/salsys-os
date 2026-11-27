@@ -1,4 +1,5 @@
 "use client";
+import { useFeedbackMessages } from '@/components/use-feedback-messages';
 
 import Link from "next/link";
 import { useState, type ChangeEvent } from "react";
@@ -28,6 +29,11 @@ export function LeadsImportClient({ enabled }: { enabled: boolean }) {
   const [progress, setProgress] = useState(0);
   const [completed, setCompleted] = useState(false);
   const [requestError, setRequestError] = useState("");
+
+  const created = results.filter(item => item.status === "created").length;
+  const skipped = results.filter(item => item.status === "skipped").length;
+  const failed = results.filter(item => item.status === "failed").length;
+  useFeedbackMessages(parseError || requestError, completed && !failed ? `Import complete. ${created} created; ${skipped} skipped.` : null, completed && failed ? `Import finished with ${failed} failed rows. Review the results before retrying.` : null);
 
   async function chooseFile(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -104,9 +110,6 @@ export function LeadsImportClient({ enabled }: { enabled: boolean }) {
     }
   }
 
-  const created = results.filter(item => item.status === "created").length;
-  const skipped = results.filter(item => item.status === "skipped").length;
-  const failed = results.filter(item => item.status === "failed").length;
 
   return (
     <div className="mx-auto w-full max-w-[1000px] space-y-5 pb-10">

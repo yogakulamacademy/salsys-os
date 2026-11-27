@@ -1,3 +1,4 @@
+import { PageFeedback } from '@/components/page-feedback';
 import { PlatformAdminFrame } from '@/components/platform-admin-frame';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
@@ -15,7 +16,7 @@ export default async function CommercialPlansPage({searchParams}:{searchParams:P
   let state:PlanReviewState;
   try { state=await readPlanReviewState(); } catch { notFound(); }
   const result=(await searchParams).result;
-  return <PlatformAdminFrame section="plans"><main className="min-w-0 space-y-6">
+  return (<><PageFeedback error={result === 'error' ? 'Operation not completed. Check permissions and approval, then retry.' : null} notice={result === 'created' ? 'Draft proposal saved.' : result === 'review_saved' ? 'Review decision saved.' : result === 'published' ? 'Initial catalog plan published. Customer subscriptions are unchanged.' : null} />{<PlatformAdminFrame section="plans"><main className="min-w-0 space-y-6">
     <header><p className="text-xs font-bold uppercase tracking-wider text-brand-700">Commercial management</p><h1 className="mt-1 text-[28px] font-bold tracking-tight">Commercial plan proposals</h1>
     <p className="mt-2 text-sm">Internal plan administration. Initial publication requires separate approval and authorization. No customer subscription change or charge is possible here.</p></header>
     {result==='error'?<p role="alert" className="rounded border border-line p-3 text-sm">Operation not completed. Check permissions, approval, and catalog version, then retry.</p>:['created','review_saved','published'].includes(result??'')?<p role="status" className="rounded border border-line p-3 text-sm">{result==='published'?'Initial catalog plan published. Customer subscriptions remain unchanged.':result==='created'?'Draft proposal saved.':'Review decision saved.'}</p>:null}
@@ -69,5 +70,5 @@ export default async function CommercialPlansPage({searchParams}:{searchParams:P
           </form>}
       </article>)}
     </section>
-  </main></PlatformAdminFrame>;
+  </main></PlatformAdminFrame>}</>);
 }

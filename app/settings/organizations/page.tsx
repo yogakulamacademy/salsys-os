@@ -1,3 +1,4 @@
+import { PageFeedback } from '@/components/page-feedback';
 import {
   Building2,
   ChevronDown,
@@ -91,7 +92,7 @@ export default async function OrganizationsPage({
     (onboardingResult.data as OnboardingRow[]).map(row => [row.organization_id, row]),
   );
 
-  return (
+  return (<><PageFeedback error={query.error} notice={query.notice} />{(
     <PlatformAdminFrame section="customers">
     <div className="space-y-4">
       <PageHeader
@@ -287,5 +288,5 @@ export default async function OrganizationsPage({
       </section>
     </div>
     </PlatformAdminFrame>
-  );
+  )}</>);
 }

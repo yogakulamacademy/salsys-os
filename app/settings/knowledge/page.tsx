@@ -1,3 +1,4 @@
+import { PageFeedback } from '@/components/page-feedback';
 import {
   Archive, BookOpen, BrainCircuit, CheckCircle2, Clock3, Database,
   FileText, Layers3, Link2, Plus, Search, ShieldAlert, ShieldCheck,
@@ -252,7 +253,7 @@ export default async function KnowledgeSettingsPage({
       : partial
         ? 'The loaded view is limited. Check retrieval and older records before assessing readiness.'
         : 'Add currently valid, source-backed, approved knowledge to support Co-Pilot retrieval.';
-  return (
+  return (<><PageFeedback error={query.error} notice={query.notice} loadError={loadError} />{(
     <div className="kn space-y-5" aria-label="Organization Knowledge workspace">
       <PageHeader eyebrow="AI Intelligence" title="Organization Knowledge"
         description={'Create and manage approved policies, FAQs, processes and sales guidance for ' + organizationName + '. The Co-Pilot can use only approved, currently valid knowledge with eligible retrieval evidence.'}
@@ -443,7 +444,7 @@ export default async function KnowledgeSettingsPage({
       </div>
       <p className="kn-governance-note">Only organization-approved, currently eligible source-backed records should inform Co-Pilot responses. Live CRM data remains authoritative for current prices, dates and availability.</p>
     </div>
-  );
+  )}</>);
 }
 
 function Metric({ icon, value, title, hint }: {

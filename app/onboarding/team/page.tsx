@@ -1,3 +1,4 @@
+import { PageFeedback } from '@/components/page-feedback';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import {
@@ -125,7 +126,7 @@ function Rail({
 export default async function OnboardingTeamPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<{ notice?: string; error?: string }>;
 }) {
   const query = await searchParams;
   const supabase = await createClient();
@@ -190,7 +191,7 @@ export default async function OnboardingTeamPage({
     return membership.active && profile?.active === true;
   });
 
-  return (
+  return (<><PageFeedback error={query.error} notice={query.notice} />{(
     <main className="min-h-screen bg-[#f5f8f6] text-[#173d32] lg:flex">
       <Rail organizationName={organizationName} completedSteps={completedSteps} />
 
@@ -316,5 +317,5 @@ export default async function OnboardingTeamPage({
         </div>
       </section>
     </main>
-  );
+  )}</>);
 }

@@ -1,3 +1,4 @@
+import { PageFeedback } from '@/components/page-feedback';
 import { completeDashboardFollowUpInline, snoozeDashboardFollowUpInline } from "@/app/dashboard/inline-actions";
 import { ToastForm } from "@/components/toast-form";
 import Link from "next/link";
@@ -176,7 +177,7 @@ export default async function DashboardPage({
     );
   }
 
-  return <><SignupPlanBanner /><AdminDashboardPage /></>;
+  return (<><PageFeedback error={query.error} notice={query.notice} />{<><SignupPlanBanner /><AdminDashboardPage /></>}</>);
 }
 
 async function EmployeeDashboard({

@@ -1,4 +1,5 @@
 "use client";
+import { useFeedbackMessages } from '@/components/use-feedback-messages';
 
 import Link from "next/link";
 import { createPortal } from "react-dom";
@@ -247,6 +248,9 @@ export function LeadInspector({
   const [actionLoading, setActionLoading] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionSuccess, setActionSuccess] = useState<string | null>(null);
+  useFeedbackMessages(error);
+  useFeedbackMessages(actionError);
+  useFeedbackMessages(null, actionSuccess);
   const readGuard = useRef(createLatestReadGuard());
   const refreshSequence = useRef(0);
   const selection = useRef({ id: leadId, version: 0 });

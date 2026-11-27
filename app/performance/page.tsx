@@ -1,3 +1,4 @@
+import { PageFeedback } from '@/components/page-feedback';
 import Link from "next/link";
 import { Activity, MessageSquareText, UsersRound } from "lucide-react";
 
@@ -34,7 +35,7 @@ export default async function PerformancePage({ searchParams }: { searchParams: 
     error: query.error,
   });
 
-  return (
+  return (<><PageFeedback error={query.error} notice={query.notice} />{(
     <div className="space-y-5">
       <PerformanceNavigation active={view} />
 
@@ -46,7 +47,7 @@ export default async function PerformancePage({ searchParams }: { searchParams: 
         <TeamPerformancePage searchParams={teamSearchParams} />
       )}
     </div>
-  );
+  )}</>);
 }
 
 function PerformanceNavigation({ active }: { active: PerformanceView }) {

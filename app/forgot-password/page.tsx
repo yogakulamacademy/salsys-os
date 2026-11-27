@@ -1,3 +1,4 @@
+import { PageFeedback } from '@/components/page-feedback';
 import { BrandMark } from "@/components/brand";
 import Link from 'next/link';
 import { Mail, ShieldCheck } from 'lucide-react';
@@ -11,7 +12,7 @@ export default async function ForgotPasswordPage({
 }) {
   const query = await searchParams;
 
-  return (
+  return (<><PageFeedback error={query.error} notice={query.notice} />{(
     <div className="grid min-h-screen place-items-center bg-mist px-4 py-10">
       <div className="w-full max-w-md rounded-[20px] border border-line bg-surface p-7 shadow-panel sm:p-9">
         <div className="mb-7 flex items-center gap-3">
@@ -52,5 +53,5 @@ export default async function ForgotPasswordPage({
         <Link className="mt-5 block text-center text-[13px] font-semibold text-brand-700 hover:underline" href="/login">Back to sign in</Link>
       </div>
     </div>
-  );
+  )}</>);
 }

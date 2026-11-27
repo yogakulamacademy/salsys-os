@@ -1,4 +1,6 @@
 "use client";
+import { toast } from '@/lib/toast';
+import { useFeedbackMessages } from '@/components/use-feedback-messages';
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
@@ -173,6 +175,7 @@ export function AILeadInsightPanel({
   const [working, setWorking] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  useFeedbackMessages(error);
   const [rating, setRating] = useState<InsightFeedbackRating | "">("");
   const [issue, setIssue] = useState<InsightFeedbackIssue | "">("");
   const [feedbackSaved, setFeedbackSaved] = useState(false);
@@ -231,7 +234,7 @@ export function AILeadInsightPanel({
       });
       if (requestId.current !== current) return;
       if (!response.ok) throw new Error(response.error);
-      setFeedbackSaved(true);
+      setFeedbackSaved(true); toast.success('Insight feedback saved.');
     } catch (reason) {
       if (requestId.current !== current) return;
       setError(reason instanceof Error ? reason.message : "Unable to save review.");

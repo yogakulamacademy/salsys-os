@@ -1,4 +1,5 @@
 'use client';
+import { useOutcomeToast } from '@/components/use-feedback-messages';
 
 import { useState } from 'react';
 
@@ -24,6 +25,7 @@ export function InstagramHistorySyncControl({
   const [summary, setSummary] = useState<HistorySummary | null>(null);
   const [echoStatus, setEchoStatus] = useState<{ subscribed: boolean; fields: string[] } | null>(null);
 
+  useOutcomeToast(summary?.error ? { tone: 'error', text: summary.error } : summary?.ok ? { tone: 'success', text: summary.dryRun ? 'History preview loaded. Nothing was imported.' : `History sync complete. ${summary.messagesImported ?? 0} messages imported.` } : null);
   async function sync(apply: boolean, echoCheck = false) {
     if (busy) return;
     setBusy(true);

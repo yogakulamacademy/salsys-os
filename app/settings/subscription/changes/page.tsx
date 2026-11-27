@@ -1,3 +1,4 @@
+import { PageFeedback } from '@/components/page-feedback';
 import { randomUUID } from 'node:crypto';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
@@ -16,7 +17,7 @@ export default async function PlanChangesPage({searchParams}:{searchParams:Promi
   try{state=await loadChangeOptions();}catch{notFound();}
   const result=(await searchParams).result;
   const pending=state.requests.some(r=>r.status==='requested');
-  return <main className="space-y-5">
+  return (<><PageFeedback error={result === 'error' ? 'Operation not completed. Check permissions and approval, then retry.' : null} notice={result === 'requested' ? 'Request recorded. Your subscription is unchanged.' : result === 'withdrawn' ? 'Request withdrawn.' : null} />{<main className="space-y-5">
     <header><h1 className="text-2xl font-semibold">Plan change requests</h1><p className="mt-2 text-sm">Review published offers. Requesting a change does not charge you, renew your subscription or change your access.</p></header>
     {result==='error'?<p role="alert">Request not completed. Refresh and verify current terms.</p>:result==='requested'?<p role="status">Request recorded. Your subscription is unchanged.</p>:result==='withdrawn'?<p role="status">Request withdrawn.</p>:null}
     {process.env.SALSYS_CONTRACT_QUOTES_ENABLED==='true'&&<Link href="/settings/subscription/changes/quotes" className="text-sm underline">Review subscription quotes</Link>}
@@ -39,5 +40,5 @@ export default async function PlanChangesPage({searchParams}:{searchParams:Promi
         {r.status==='requested'&&<form action={withdrawChangeAction}><input type="hidden" name="id" value={r.id}/><button className="rounded border border-line px-3 py-2" type="submit">Withdraw request</button></form>}
       </article>)}
     </section>
-  </main>;
+  </main>}</>);
 }

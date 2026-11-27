@@ -1,4 +1,6 @@
 "use client";
+import { toast } from '@/lib/toast';
+import { useFeedbackMessages } from '@/components/use-feedback-messages';
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
@@ -204,6 +206,7 @@ function RecommendationCard({
   const [pendingAction, setPendingAction] =
     useState<RecommendationFeedbackEvent | null>(null);
   const [feedbackError, setFeedbackError] = useState<string | null>(null);
+  useFeedbackMessages(feedbackError);
   const [confirmation, setConfirmation] =
     useState<ConfirmationState | null>(null);
   const [note, setNote] = useState("");
@@ -263,6 +266,7 @@ function RecommendationCard({
         );
       }
 
+      toast.success('Recommendation decision saved.');
       setConfirmation(null);
       setNote("");
     } catch (error) {

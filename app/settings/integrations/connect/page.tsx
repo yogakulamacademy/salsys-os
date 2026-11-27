@@ -1,3 +1,4 @@
+import { PageFeedback } from '@/components/page-feedback';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { ArrowLeft, ArrowRight, CheckCircle2, CircleDashed, Layers3, Link2, Settings2, ShieldCheck } from 'lucide-react';
@@ -60,7 +61,7 @@ export default async function ConnectAccountPage({
   providers.forEach(provider=>{statusByProvider[provider]=available?activeProviderConnection(connections,provider)?.status||null:null;});
   const stepHref=(next:Step)=>'/settings/integrations/connect?provider='+selected+'&step='+next;
 
-  return <section className="aiu aiu-connect-page space-y-5" aria-label="Connect an account">
+  return (<><PageFeedback error={query.error} notice={query.notice} />{<section className="aiu aiu-connect-page space-y-5" aria-label="Connect an account">
     <nav className="aiu-breadcrumb" aria-label="Account integrations breadcrumb">
       <Link href="/settings/overview">Settings</Link><ArrowRight size={13}/>
       <Link href="/settings/integrations">Account Integrations</Link>
@@ -124,5 +125,5 @@ export default async function ConnectAccountPage({
           <Link href="/settings/integrations" className="aiu-primary">Go to Integrations <ArrowRight size={15}/></Link>
         </div>
       </section>}
-  </section>;
+  </section>}</>);
 }

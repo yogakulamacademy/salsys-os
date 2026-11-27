@@ -1,4 +1,6 @@
 'use client';
+import { toast } from '@/lib/toast';
+import { useFeedbackMessages } from '@/components/use-feedback-messages';
 
 import { useMemo, useState } from 'react';
 
@@ -73,6 +75,7 @@ export function TrackingSourceCreator() {
   const [privacyNoticeVersion, setPrivacyNoticeVersion] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  useFeedbackMessages(error);
   const [created, setCreated] = useState<CreatedSource | null>(null);
 
   const selected = PLATFORM_OPTIONS.find((item) => item.value === platform) ?? PLATFORM_OPTIONS[0];
@@ -106,7 +109,7 @@ export function TrackingSourceCreator() {
         throw new Error(typeof body.error === 'string' ? body.error : 'Unable to create tracking source.');
       }
 
-      setCreated(body as CreatedSource);
+      setCreated(body as CreatedSource); toast.success('Tracking source created.');
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Unable to create tracking source.');
     } finally {

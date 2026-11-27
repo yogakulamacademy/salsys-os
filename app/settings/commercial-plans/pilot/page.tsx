@@ -1,3 +1,4 @@
+import { PageFeedback } from '@/components/page-feedback';
 import { PlatformAdminFrame } from '@/components/platform-admin-frame';
 import {randomUUID} from 'node:crypto';
 import {notFound} from 'next/navigation';
@@ -16,7 +17,7 @@ export default async function ManualPilotPage({searchParams}:{searchParams:Promi
   if(activationEnabled){try{assignments=await loadManualAssignments();}catch{/* Keep approval queue usable, but never guess available plans. */}}
   let readiness:ManualLaunchReadiness|null=null;
   try{readiness=await loadManualLaunchReadiness();}catch{/* Never infer release readiness from missing evidence. */}
-  return <PlatformAdminFrame section="pilot"><main className="space-y-4">
+  return (<><PageFeedback error={result === 'error' ? 'Operation not completed. Check permissions and approval, then retry.' : null} notice={result === 'approved' ? 'Manual approval recorded. Access has not changed.' : result === 'activated' ? 'Subscription activated. No automatic charge.' : result === 'enrolled' ? 'Plan requests enabled. Current access is unchanged.' : null} />{<PlatformAdminFrame section="pilot"><main className="space-y-4">
     <Link href="/settings/commercial-plans" className="text-sm underline">Commercial plans</Link>
     <header><p className="text-xs font-bold uppercase tracking-wider text-brand-700">Commercial operations</p><h1 className="mt-1 text-[28px] font-bold tracking-tight">Manual subscription approvals</h1></header>
     <section className="rounded-xl border border-line bg-surface p-5 shadow-sm">
@@ -72,5 +73,5 @@ export default async function ManualPilotPage({searchParams}:{searchParams:Promi
         <button type="submit" className="rounded border border-line p-2 font-semibold">{activationEnabled?'Approve and activate':'Record manual approval'}</button>
       </form>}
     </article>)}
-  </main></PlatformAdminFrame>;
+  </main></PlatformAdminFrame>}</>);
 }

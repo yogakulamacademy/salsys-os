@@ -1,3 +1,4 @@
+import { PageFeedback } from '@/components/page-feedback';
 import { KeyRound, LockKeyhole, ShieldCheck } from 'lucide-react';
 import { redirect } from 'next/navigation';
 
@@ -22,7 +23,7 @@ export default async function OnboardingSecurityPage({
     redirect('/onboarding');
   }
 
-  return (
+  return (<><PageFeedback error={query.error} />{(
     <main className="min-h-screen bg-[#f5f8f6] px-4 py-8 text-[#173d32] sm:px-6 sm:py-12">
       <div className="mx-auto grid w-full max-w-[1080px] overflow-hidden rounded-[28px] border border-[#dce8e1] bg-white shadow-[0_22px_70px_rgba(20,63,50,0.10)] lg:grid-cols-[0.9fr_1.1fr]">
         <section className="bg-[#123f33] px-6 py-8 text-white sm:px-9 sm:py-10 lg:min-h-[680px] lg:px-10 lg:py-12">
@@ -150,5 +151,5 @@ export default async function OnboardingSecurityPage({
         </section>
       </div>
     </main>
-  );
+  )}</>);
 }

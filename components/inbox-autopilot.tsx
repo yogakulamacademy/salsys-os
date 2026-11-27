@@ -1,4 +1,6 @@
 "use client";
+import { toast } from '@/lib/toast';
+import { useFeedbackMessages } from '@/components/use-feedback-messages';
 
 import { useState, useTransition } from "react";
 import { Bot, Copy, ExternalLink, Hand, MessageSquareReply, Check } from "lucide-react";
@@ -10,10 +12,11 @@ import type { InboxAutopilotState, InboxFollowupDraft } from "@/lib/autopilot-in
 export function InboxAutopilotBar({ leadId, state, canHandToAi }: { leadId: string; state: InboxAutopilotState; canHandToAi: boolean }) {
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  useFeedbackMessages(error);
   const act = (action: "take_over" | "hand_to_ai" | "acknowledge") => start(async () => {
     setError(null);
     const result = await setAutopilotStateAction(leadId, action);
-    if (!result.ok) setError(result.error);
+    if (!result.ok) setError(result.error); else toast.success('Lead handling preference updated.');
   });
 
   if (state.status === "off" && !canHandToAi) return null;
@@ -53,6 +56,7 @@ export function InboxAutopilotBar({ leadId, state, canHandToAi }: { leadId: stri
 export function InboxAutopilotHeaderButton({ leadId, state, canHandToAi }: { leadId: string; state: InboxAutopilotState; canHandToAi: boolean }) {
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  useFeedbackMessages(error);
   if (!canHandToAi || state.status === "active" || state.status === "handed_over") return null;
   return (
     <button type="button" disabled={pending} title={error ?? "Let AI Autopilot reply to this lead when it is confident"}
@@ -60,7 +64,7 @@ export function InboxAutopilotHeaderButton({ leadId, state, canHandToAi }: { lea
       onClick={() => start(async () => {
         setError(null);
         const result = await setAutopilotStateAction(leadId, "hand_to_ai");
-        if (!result.ok) setError(result.error);
+        if (!result.ok) setError(result.error); else toast.success('Lead handling preference updated.');
       })}>
       <Bot size={14} aria-hidden /> {pending ? "Handing…" : error ? "Try again" : "Hand to AI"}
     </button>
@@ -73,10 +77,11 @@ export function InboxFollowupDraftCard({ followup }: { followup: InboxFollowupDr
   const [copied, setCopied] = useState(false);
   const [done, setDone] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  useFeedbackMessages(error);
   if (done) return null;
   const useInReply = () => window.dispatchEvent(new CustomEvent("crm:copilot-draft", { detail: { channel: "instagram", body: followup.draft, source: "ai_followup" } }));
   const copy = async () => { try { await navigator.clipboard.writeText(followup.draft); setCopied(true); } catch { setError("Couldn't copy. Select the text instead."); } };
-  const markDone = () => start(async () => { const r = await completeFollowupTaskAction(followup.taskId); if (r.ok) setDone(true); else setError(r.error); });
+  const markDone = () => start(async () => { const r = await completeFollowupTaskAction(followup.taskId); if (r.ok) { setDone(true); toast.success('Follow-up marked sent.'); } else setError(r.error); });
   return (
     <section className="ibx-followup-draft border-t border-line bg-amber-50 px-4 py-3 text-[12px] text-amber-950" aria-label="Follow-up due">
       <div className="flex items-center gap-2 font-semibold"><MessageSquareReply size={14} aria-hidden /> Follow-up due: {followup.title}</div>

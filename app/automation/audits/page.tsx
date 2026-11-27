@@ -1,3 +1,4 @@
+import { PageFeedback } from '@/components/page-feedback';
 import Link from 'next/link';
 import {
   AlertTriangle,
@@ -91,7 +92,7 @@ export default async function AutomationAuditsPage({ searchParams }: { searchPar
   const selectedLead = selected ? leadMap.get(selected.lead_id) || selected.lead_id.slice(0,8) : null;
   const selectedWorkflow = selected?.workflow_id ? workflowMap.get(selected.workflow_id) || selected.workflow_id.slice(0,8) : '—';
 
-  return (
+  return (<><PageFeedback loadError={loadError} />{(
     <div className="space-y-5">
       <header className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between"><div><div className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-400">Automation · Provider Health</div><h1 className="mt-1 text-3xl font-bold tracking-tight text-slate-950">Provider Audit Explorer</h1><p className="mt-1.5 text-sm text-slate-500">Trace provider decisions for {organizationName} from preparation through delivery.</p></div><Link href="/automation/runs" className="btn-secondary">Execution monitor <ArrowRight size={13}/></Link></header>
       {loadError ? <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-800">Provider audit data is temporarily unavailable.</div> : null}
@@ -120,5 +121,5 @@ export default async function AutomationAuditsPage({ searchParams }: { searchPar
 
       <div className="flex items-start gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3.5"><MessageSquareText size={16} className="mt-0.5 shrink-0 text-slate-400"/><div className="text-xs leading-5 text-slate-600">Provider acceptance and customer delivery are separate states. Use the trace to distinguish preparation, send, delivery and read evidence.</div></div>
     </div>
-  );
+  )}</>);
 }

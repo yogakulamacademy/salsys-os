@@ -1,4 +1,5 @@
 'use server';
+import { redirectWithNotice } from '@/lib/redirect-with-notice';
 
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
@@ -73,5 +74,5 @@ export async function completeOnboardingWithOptionalSetupAction() {
   revalidatePath('/onboarding/finish');
   revalidatePath('/home');
   revalidatePath('/dashboard');
-  redirect('/onboarding/finish?completed=1');
+  await redirectWithNotice('/onboarding/finish?completed=1', 'Setup changes saved.');
 }

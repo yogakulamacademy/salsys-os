@@ -1,3 +1,4 @@
+import { PageFeedback } from '@/components/page-feedback';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import {
@@ -160,7 +161,7 @@ function ReadinessCard({
 export default async function OnboardingFinishPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; completed?: string }>;
+  searchParams: Promise<{ notice?: string; error?: string; completed?: string }>;
 }) {
   const query = await searchParams;
   const supabase = await createClient();
@@ -289,7 +290,7 @@ export default async function OnboardingFinishPage({
     },
   ];
 
-  return (
+  return (<><PageFeedback error={query.error} notice={query.notice} />{(
     <main className="min-h-screen bg-[#f5f8f6] text-[#173d32] lg:flex">
       <Rail organizationName={organizationName} completedSteps={completedSteps} />
 
@@ -383,5 +384,5 @@ export default async function OnboardingFinishPage({
         </div>
       </section>
     </main>
-  );
+  )}</>);
 }

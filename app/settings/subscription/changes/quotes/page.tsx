@@ -1,3 +1,4 @@
+import { PageFeedback } from '@/components/page-feedback';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { requireAdminWorkspaceAccess } from '@/lib/route-access';
@@ -13,7 +14,7 @@ export default async function CustomerQuotesPage({searchParams}:{searchParams:Pr
   let rows:CustomerQuote[];
   try{rows=await loadCustomerQuotes();}catch{notFound();}
   const result=(await searchParams).result;
-  return <main className="space-y-4">
+  return (<><PageFeedback error={result === 'error' ? 'Operation not completed. Check permissions and approval, then retry.' : null} notice={result === 'accepted' ? 'Quote acceptance recorded.' : null} />{<main className="space-y-4">
     <Link href="/settings/subscription/changes" className="text-sm underline">Plan change requests</Link>
     <h1 className="text-2xl font-semibold">Your subscription quotes</h1>
     <p className="text-sm">Review the exact first-period amount. Accepting a quote is non-binding, does not initiate a payment, and does not change your plan or authorize automatic renewal.</p>
@@ -30,5 +31,5 @@ export default async function CustomerQuotesPage({searchParams}:{searchParams:Pr
         <button type="submit" className="rounded border border-line p-2 font-semibold">Accept quote for review</button>
       </form>}
     </article>)}
-  </main>;
+  </main>}</>);
 }

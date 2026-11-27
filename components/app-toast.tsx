@@ -1,19 +1,20 @@
 "use client";
 
-import { CheckCircle2, Info, X, XCircle } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Info, X, XCircle } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
-import { TOAST_EVENT, type ToastDetail } from "@/lib/toast";
+import { registerToastHost, toast, TOAST_EVENT, type ToastDetail } from "@/lib/toast";
 
 type Item = ToastDetail & { id: number; leaving: boolean };
 
-const ICON = { success: CheckCircle2, info: Info, error: XCircle } as const;
+const ICON = { success: CheckCircle2, info: Info, warning: AlertTriangle, error: XCircle } as const;
 
 /** Mounted once in the root layout. Shows toasts sent with lib/toast. */
 export function AppToastHost() {
   const [items, setItems] = useState<Item[]>([]);
   const timers = useRef(new Map<number, number>());
   const nextId = useRef(1);
+  const recent = useRef(new Map<string, number>());
 
   const close = (id: number) => {
     window.clearTimeout(timers.current.get(id));
@@ -24,7 +25,7 @@ export function AppToastHost() {
   const schedule = (item: Item) => {
     const sticky = item.tone === "error" && item.onRetry;
     if (sticky) return;
-    const ms = item.duration ?? (item.tone === "error" ? 4000 : 2000);
+    const ms = item.duration ?? (item.tone === "error" || item.tone === "warning" ? 6000 : 2000);
     timers.current.set(item.id, window.setTimeout(() => close(item.id), ms));
   };
 
@@ -32,12 +33,18 @@ export function AppToastHost() {
     const onToast = (event: Event) => {
       const detail = (event as CustomEvent<ToastDetail>).detail;
       if (!detail?.title) return;
+      const key = `${detail.tone}:${detail.title}:${detail.description ?? ''}`;
+      const now = Date.now();
+      if (now - (recent.current.get(key) ?? 0) < 1200) return;
+      recent.current.set(key, now);
+      for (const [entry, time] of recent.current) if (now - time > 10000) recent.current.delete(entry);
       const item: Item = { ...detail, id: nextId.current++, leaving: false };
       setItems((list) => [...list.slice(-3), item]);
       schedule(item);
     };
     window.addEventListener(TOAST_EVENT, onToast);
-    return () => window.removeEventListener(TOAST_EVENT, onToast);
+    const unregister = registerToastHost();
+    return () => { unregister(); window.removeEventListener(TOAST_EVENT, onToast); timers.current.forEach(window.clearTimeout); timers.current.clear(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -47,7 +54,7 @@ export function AppToastHost() {
       {items.map((item) => {
         const Icon = ICON[item.tone];
         return (
-          <div key={item.id} role={item.tone === "error" ? "alert" : "status"}
+          <div key={item.id} role={item.tone === "error" || item.tone === "warning" ? "alert" : "status"}
             className={`app-toast is-${item.tone} ${item.leaving ? "is-leaving" : ""}`}
             onMouseEnter={() => { window.clearTimeout(timers.current.get(item.id)); }}
             onMouseLeave={() => schedule(item)}>
@@ -79,15 +86,14 @@ export function AppToastHost() {
 export function ToastOnLoad({ message, error, description }: { message?: string | null; error?: string | null; description?: string | null }) {
   useEffect(() => {
     if (!message && !error) return;
-    window.dispatchEvent(new CustomEvent<ToastDetail>(TOAST_EVENT, {
-      detail: error
-        ? { tone: "error", title: "Something went wrong", description: error }
-        : { tone: "success", title: message as string, description: description ?? undefined },
-    }));
+    if (error) toast.error('Something went wrong', { description: error });
+    else toast.success(message as string, { description: description ?? undefined });
     const url = new URL(window.location.href);
-    if (url.searchParams.has("notice") || url.searchParams.has("error")) {
+    if (['notice', 'error', 'error_description', 'error_message'].some(key => url.searchParams.has(key))) {
       url.searchParams.delete("notice");
       url.searchParams.delete("error");
+      url.searchParams.delete('error_description');
+      url.searchParams.delete('error_message');
       window.history.replaceState(null, "", url.pathname + url.search + url.hash);
     }
   }, [message, error, description]);
