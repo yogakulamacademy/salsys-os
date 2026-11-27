@@ -115,12 +115,17 @@ export function createKnowledgeWorkerReadGrantResolverReview(
 /** Server-only composition for an explicitly invoked worker. The injected grant resolver
  * and Storage signer belong to the issuer, outside the restricted worker database login. */
 export function runKnowledgeVersionedWorkerRuntimeReview(
- o:Omit<Parameters<typeof runKnowledgeSignedWorkerRuntimeReview>[0],'issueReadUrl'> & {issuer:ReadIssuerOptions}
+ o:Omit<Parameters<typeof runKnowledgeSignedWorkerRuntimeReview>[0],'issueReadUrl'> & {issuer: Omit<ReadIssuerOptions,'resolveGrant'> & (
+  {resolveGrant:ReadIssuerOptions['resolveGrant']} | {openIssuerConnection:()=>Promise<Connection>}
+ )}
 ){
  const {issuer,...worker}=o;
  const now=issuer.now??Date.now;
+ const resolveGrant='resolveGrant' in issuer
+  ? issuer.resolveGrant
+  : createKnowledgeWorkerReadGrantResolverReview(worker.expectedLogin,issuer.openIssuerConnection);
  const issueReadUrl:IssueReadUrl=async(scope,expected)=>{
-  const grant=await issuer.resolveGrant(scope);
+  const grant=await resolveGrant(scope);
   const path=knowledgeImportObjectPath(scope.organizationId,scope.jobId);
   if(!grant||!path||grant.identity.objectPath!==path||!same(grant.identity,expected)||
     !Number.isSafeInteger(grant.expiresAtMs))throw Error('source read grant denied');
