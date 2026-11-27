@@ -32,3 +32,19 @@ export function projectKnowledgeImportHistory(rows:unknown):ImportSummary[]|null
   }
   return out;
 }
+
+/** Revalidate projected HTTP summaries before rendering; ignore unknown fields.
+ * Reconstruct database-shaped rows so the existing view and invariants remain shared. */
+export function decodeKnowledgeHistoryPage(value:unknown):{rows:Record<string,unknown>[];active:boolean}|null{
+ if(!value||typeof value!=='object'||!('jobs' in value)||!Array.isArray(value.jobs)||value.jobs.length>25)return null;
+ const rows:Record<string,unknown>[]=[];
+ for(const j of value.jobs){
+  if(!j||typeof j!=='object'||!j.counts||typeof j.counts!=='object'||Array.isArray(j.counts))return null;
+  const row:Record<string,unknown>={job_id:j.id,job_status:j.status,created_at:j.createdAt,file_bytes:j.bytes,total_entries:j.total};
+  for(const key of keys)row[key]=j.counts[key];
+  rows.push(row);
+ }
+ const jobs=projectKnowledgeImportHistory(rows);
+ if(!jobs)return null;
+ return {rows,active:jobs.some(j=>['awaiting_upload','queued','processing'].includes(j.status))};
+}
