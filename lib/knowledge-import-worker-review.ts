@@ -30,10 +30,10 @@ export function classifyConfirmedKnowledgeRollback(sqlstate:string):FailureCode|
   if(['22023','22001'].includes(sqlstate))return 'invalid_payload';
   return null;
 }
-export async function runKnowledgeImportBatchReview(scope:Scope,a:Adapters,limit=5):Promise<Report>{
+export async function runKnowledgeImportBatchReview(scope:Scope,a:Adapters,limit=5,maxBatches=1):Promise<Report>{
   const r:Report={claimed:0,created:0,recovered:0,retried:0,failed:0,stop:'batch_complete',mayExecute:false};
   const finish=(stop:Report['stop'])=>({...r,stop});
-  if(!uuid.test(scope.organizationId)||!uuid.test(scope.jobId)||!Number.isInteger(limit)||limit<1||limit>10)return finish('invalid_claim');
+  if(!uuid.test(scope.organizationId)||!uuid.test(scope.jobId)||!Number.isInteger(limit)||limit<1||limit>10||!Number.isInteger(maxBatches)||maxBatches<1||maxBatches>5)return finish('invalid_claim');
   try{
     const identity=await a.readIdentity(scope);
     if(identity.objectPath!==scope.organizationId+'/'+scope.jobId+'/source.json'||!identity.objectVersion||identity.objectVersion.length>256||
@@ -49,10 +49,12 @@ export async function runKnowledgeImportBatchReview(scope:Scope,a:Adapters,limit
       payloads.set(e.index,e.payload);
     }
     if(payloads.size!==source.manifest.filter(m=>m.status==='pending').length||!await a.verifyManifest(scope,source))return finish('source_rejected');
+    // Reuse the same verified source only within this bounded invocation; no persistent cache.
+    for(let batch=0;batch<maxBatches;batch++){
     const claims=await a.claim(scope,limit);
     if(!Array.isArray(claims)||claims.length>limit)return finish('invalid_claim');
-    r.claimed=claims.length;
-    if(!claims.length)return finish('no_due_entries');
+    r.claimed+=claims.length;
+    if(!claims.length)return finish(r.claimed?'batch_complete':'no_due_entries');
     if(new Set(claims.map(c=>c.entry_index)).size!==claims.length||
       claims.some(c=>!Number.isInteger(c.entry_index)||!payloads.has(c.entry_index)||!uuid.test(c.lease_token)||!Number.isInteger(c.attempts)||c.attempts<1||c.attempts>5))return finish('invalid_claim');
     for(const claim of claims){
@@ -76,6 +78,8 @@ export async function runKnowledgeImportBatchReview(scope:Scope,a:Adapters,limit
       if(settled==='pending')r.retried++;
       else if(settled==='failed')r.failed++;
       else return finish('authorization_or_adapter_error');
+    }
+    if(claims.length<limit)break;
     }
     return finish('batch_complete');
   }catch{return finish('authorization_or_adapter_error');}

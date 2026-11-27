@@ -46,3 +46,11 @@ test('duplicate or out-of-scope claims fail before processing',async()=>{
   const {a,calls}=fixture({claim:async()=>rows});assert.equal((await api.runKnowledgeImportBatchReview(scope,a)).stop,'invalid_claim');assert.equal(calls.includes('finalize'),false);
  }
 });
+
+test('one verified source supports bounded sequential batches without re-reading',async()=>{
+ let reads=0,claims=0;
+ const {a}=fixture({prepareVerifiedSource:async()=>{reads++;return prepared;},claim:async()=>++claims===1?[claim]:[]});
+ const r=await api.runKnowledgeImportBatchReview(scope,a,1,5);
+ assert.equal(r.created,1);assert.equal(r.claimed,1);assert.equal(r.stop,'batch_complete');assert.equal(reads,1);assert.equal(claims,2);
+ assert.equal((await api.runKnowledgeImportBatchReview(scope,a,1,6)).stop,'invalid_claim');
+});

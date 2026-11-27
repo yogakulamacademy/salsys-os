@@ -39,13 +39,15 @@ async function prepareBytes(source:Source,pin:Pin,expectedBytes:number,digestPay
     if(!plan.ok)return reject(plan.reason);
     const manifest:Manifest[]=plan.issues.map(i=>({index:i.index,status:i.reason==='duplicate_in_file'?'duplicate':'invalid'}));
     const batches:{index:number;payload:Payload}[][]=[];
-    let batch:{index:number;payload:Payload}[]=[];
+    let batch:{index:number;payload:Payload}[]=[], batchBytes=2;
     for(const entries of plan.batches)for(const entry of entries){
       const d=entry.draft;
       const mapped={index:entry.index,payload:{title:(d.review_flag?'⚠ ':'')+d.title,category:d.category,content:d.content,
         source_name:d.source_name+(d.review_flag?' · Review: '+d.review_flag:''),source_type:d.source_type,source_uri:d.source_uri}};
-      if(batch.length&&(batch.length>=50||encoder.encode(JSON.stringify([...batch,mapped])).byteLength>BULK_IMPORT_BATCH_BYTES)){batches.push(batch);batch=[];}
-      if(encoder.encode(JSON.stringify([mapped])).byteLength>BULK_IMPORT_BATCH_BYTES)return reject('batch_too_large');
+      const size=encoder.encode(JSON.stringify(mapped)).byteLength;
+      if(size+2>BULK_IMPORT_BATCH_BYTES)return reject('batch_too_large');
+      if(batch.length&&(batch.length>=50||batchBytes+1+size>BULK_IMPORT_BATCH_BYTES)){batches.push(batch);batch=[];batchBytes=2;}
+      batchBytes+=size+(batch.length?1:0);
       batch.push(mapped);
     }
     if(batch.length)batches.push(batch);

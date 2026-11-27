@@ -358,9 +358,10 @@ returns table(entry_index integer,lease_token uuid,attempts integer)
 language plpgsql security definer set search_path=pg_catalog,public,pg_temp as $$
 declare j public.knowledge_import_jobs_v1%rowtype; expiry timestamptz; t timestamptz;
 begin
-  if not knowledge_import_review.worker_allowed(p_org,p_job) then raise exception 'worker access denied' using errcode='42501'; end if;
+  if not knowledge_import_review.worker_authorized(p_org,p_job,true) then raise exception 'worker access denied' using errcode='42501'; end if;
   select * into j from public.knowledge_import_jobs_v1 where organization_id=p_org and id=p_job;
   select expires_at into expiry from knowledge_import_review.worker_delegations where organization_id=p_org and job_id=p_job;
+  if j.status='completed' then return; end if; -- authorized empty result; never claim completed entries
   t:=clock_timestamp();
   if p_limit is null or p_limit not between 1 and 50 then raise exception 'invalid batch size'; end if;
   if t>=least(expiry,j.retention_expires_at) then raise exception 'worker access denied' using errcode='42501'; end if;
@@ -502,6 +503,21 @@ returns table(entry_index bigint,payload_sha256 text) language plpgsql security 
 begin
   if not knowledge_import_review.worker_allowed(p_org,p_job) then raise exception 'worker access denied' using errcode='42501'; end if;
   return query select d.entry_index,d.payload_sha256 from knowledge_import_review.digest_payloads(p_payloads) d;
+end $$;
+-- Register storage version and verified manifest in one transaction, using the original session.
+-- Caller must independently verify immutable provider identity; no storage I/O or application grants.
+create function knowledge_import_review.register_verified_source(p_org uuid,p_job uuid,p_version text,p_bytes bigint,p_sha text,p_manifest jsonb)
+returns text language plpgsql security invoker set search_path=pg_catalog,public,pg_temp as $$
+declare j public.knowledge_import_jobs_v1%rowtype; result text;
+begin
+  j:=knowledge_import_review.lock_job(p_org,p_job);
+  if p_version is null or length(p_version) not between 1 and 256 then raise exception 'invalid object version'; end if;
+  if j.object_version is not null and j.object_version is distinct from p_version then raise exception 'object version conflict'; end if;
+  if j.object_version is null and j.manifest_sha256 is not null then raise exception 'unversioned manifest already registered'; end if;
+  result:=knowledge_import_review.enqueue(p_org,p_job,p_bytes,p_sha,p_manifest);
+  update public.knowledge_import_jobs_v1 set object_version=p_version
+    where organization_id=p_org and id=p_job and object_version is null;
+  return result;
 end $$;
 revoke all on all functions in schema knowledge_import_review from public,anon,authenticated,service_role;
 commit;

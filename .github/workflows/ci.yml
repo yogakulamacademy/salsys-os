@@ -321,6 +321,10 @@ jobs:
       - name: Verify knowledge grounding and financial input boundaries
         run: npm run test:readiness
 
+      - name: Measure large Knowledge source preparation capacity
+        run: node --test tests/performance/knowledge-import-capacity.test.cjs
+        timeout-minutes: 3
+
       - name: Build
         shell: bash
         run: |

@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { randomUUID } from 'node:crypto';
+import { randomUUID, createHash } from 'node:crypto';
+import { createRequire } from 'node:module';
 import { readFileSync } from 'node:fs';
 import pg from 'pg';
 const org='10000000-0000-4000-8000-000000000001', other='10000000-0000-4000-8000-000000000002', actor='20000000-0000-4000-8000-000000000001', session='30000000-0000-4000-8000-000000000001', job='40000000-0000-4000-8000-000000000001';
@@ -270,7 +271,7 @@ test('disposable PG: exact Knowledge RPC, competing claims, rollback, retry, rev
     assert.equal((await workerResult(recoveryJob,rec)).rows[0].id,null);
     assert.equal((await workerResult(recoveryJob,{...rec2,lease_token:randomUUID()})).rows[0].id,null);
     await assert.rejects(workerResult(recoveryJob,rec2,other),e=>e.code==='42501');
-    await assert.rejects(wclaim(worker,recoveryJob),e=>e.code==='42501');
+    assert.equal((await wclaim(worker,recoveryJob)).rowCount,0); // completed job: no new claims
     await a.query('update organization_members set active=false where organization_id=$1 and user_id=$2',[org,actor]);
     await assert.rejects(workerResult(recoveryJob,rec2),e=>e.code==='42501');
     await a.query('update organization_members set active=true where organization_id=$1 and user_id=$2',[org,actor]);
@@ -286,6 +287,68 @@ test('disposable PG: exact Knowledge RPC, competing claims, rollback, retry, rev
     }
     assert.equal((await a.query('select status from knowledge_import_jobs_v1 where id=$1',[exhaustionJob])).rows[0].status,'completed');
     assert.equal((await a.query('select status from knowledge_import_entries_v1 where job_id=$1',[exhaustionJob])).rows[0].status,'failed');
+
+    // Connected review flow: actual reservation, source preparation, canonical SQL, worker and rendered history.
+    // Only Storage HTTP and Auth foundation are synthetic. Never contacts a hosted project.
+    const require=createRequire(import.meta.url), {load}=require('../readiness/helpers.cjs');
+    const uploadLib=load('lib/knowledge-import-upload-contract.ts');
+    const prep=load('lib/knowledge-import-source-preparation.ts',{'server-only':{},'node:crypto':require('node:crypto'),'./knowledge-bulk-import-preflight':load('lib/knowledge-bulk-import-preflight.ts'),'./knowledge-import-upload-contract':uploadLib});
+    const adapters=load('lib/knowledge-import-worker-adapters-review.ts',{'server-only':{},'./knowledge-import-source-preparation':prep,'./knowledge-import-upload-contract':uploadLib});
+    const runner=load('lib/knowledge-import-worker-review.ts',{'server-only':{}});
+    const historyLib=load('lib/knowledge-import-history-review.ts');
+    const integrationJob=randomUUID(), scope={organizationId:org,jobId:integrationJob}, objectPath=org+'/'+integrationJob+'/source.json';
+    const baseRow={title:'Integrated fixture',content:'Synthetic connected flow content',source_name:'Fixture',category:'faq',source_type:'manual'};
+    const raw=Buffer.from(JSON.stringify({version:1,drafts:[baseRow,{...baseRow,title:'Second fixture'},{...baseRow,title:'Third fixture'},baseRow,null]}));
+    const sourceHash=createHash('sha256').update(raw).digest('hex'), version='synthetic-immutable-integration';
+    const uploadEnd=new Date(Date.now()+3600000), retentionEnd=new Date(Date.now()+7200000);
+    await a.query('update knowledge_import_review.quotas set max_active_jobs=100,max_reserved_bytes=10485760 where organization_id=$1',[org]);
+    assert.equal((await reserve(a,integrationJob,raw.length,uploadEnd,retentionEnd)).rows[0].id,integrationJob);
+    const p=await prep.prepareKnowledgeImportSource({organizationId:org,actorId:actor,sessionId:session,active:true,canManage:true},
+      {...scope,actorId:actor,sessionId:session,objectPath,declaredBytes:raw.length,expiresAtMs:uploadEnd.getTime()},
+      {version,sha256:sourceHash},{bucket:'knowledge-import-private-v1',objectPath,version,contentType:'application/json',chunks:(async function*(){yield raw;})()},
+      async payloads=>(await a.query('select * from knowledge_import_review.digest_payloads($1::jsonb)',[JSON.stringify(payloads)])).rows.map(x=>x.payload_sha256),Date.now);
+    assert.equal(p.ok,true);
+    const register=(v)=>a.query('select knowledge_import_review.register_verified_source($1,$2,$3,$4,$5,$6::jsonb) as status',[org,integrationJob,v,raw.length,sourceHash,JSON.stringify(p.manifest)]);
+    assert.equal((await register(version)).rows[0].status,'queued');
+    assert.equal((await register(version)).rows[0].status,'queued');
+    await assert.rejects(register('changed-version'),/object version conflict/);
+    assert.equal((await a.query('select knowledge_import_review.delegate_worker($1,$2,$3,$4) as ok',[org,integrationJob,workerName,new Date(Date.now()+600000)])).rows[0].ok,true);
+    // Demonstrate processing after the upload window is closed.
+    await a.query("update knowledge_import_jobs_v1 set created_at=now()-interval '2 hours',upload_expires_at=now()-interval '1 hour' where id=$1",[integrationJob]);
+    let downloads=0, finalizeCalls=0;
+    const origin='https://fixture.supabase.co', signed=origin+'/storage/v1/object/sign/knowledge-import-private-v1/'+objectPath+'?token=synthetic';
+    const realQuery=async(statement,params)=>{
+      const result=await worker.query(statement,params);
+      if(statement.includes('worker_finalize')&&++finalizeCalls===1)throw Error('synthetic lost response after commit');
+      return result;
+    };
+    const adapter=adapters.createKnowledgeWorkerReviewAdapters(realQuery,origin,async()=>signed,async()=>{
+      downloads++;return new Response(raw,{headers:{'content-type':'application/json','content-length':String(raw.length)}});
+    });
+    const report=await runner.runKnowledgeImportBatchReview(scope,adapter,1,4);
+    assert.deepEqual([report.created,report.recovered,report.claimed,report.stop,downloads,finalizeCalls],[2,1,3,'batch_complete',1,3]);
+    const actual=(await a.query("select h.*,h.created_at::text as created_at from knowledge_import_review.history($1,25) h",[org])).rows;
+    const normalized=historyLib.projectKnowledgeImportHistory(actual);
+    assert.ok(normalized);
+    const summary=normalized.find(x=>x.id===integrationJob);
+    assert.deepEqual([summary.status,summary.total,summary.percent,summary.counts.created,summary.counts.duplicate,summary.counts.invalid],['completed',5,100,3,1,1]);
+    assert.equal((await a.query("select count(*)::int as n from knowledge_documents where metadata->>'import_job_id'=$1 and status='draft' and created_by=$2",[integrationJob,actor])).rows[0].n,3);
+    // Render actual React component using authorized fixture rows. No browser or hosted route.
+    const ts=require('typescript'), React=require('react'), {renderToStaticMarkup}=require('react-dom/server');
+    const componentCode=ts.transpileModule(readFileSync('components/knowledge-import-centre-review.tsx','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.ReactJSX}}).outputText;
+    const componentExports={};
+    new Function('require','exports',componentCode)(name=>{
+      if(name==='react/jsx-runtime')return require(name);
+      if(name==='@/lib/knowledge-import-history-review')return historyLib;
+      if(name.endsWith('.module.css'))return {__esModule:true,default:{}};
+      throw Error('unexpected component dependency');
+    },componentExports);
+    const html=renderToStaticMarkup(React.createElement(componentExports.KnowledgeImportCentreReview,{rows:actual}));
+    assert.match(html,/Knowledge Import Centre/);assert.match(html,/5 of 5 processed/);assert.match(html,/disabled/);
+    assert.ok(!html.includes(objectPath)&&!html.includes('token=synthetic')&&!html.includes(baseRow.content));
+    await a.query('update organization_members set active=false where organization_id=$1 and user_id=$2',[org,actor]);
+    await assert.rejects(a.query('select * from knowledge_import_review.history($1,25)',[org]),e=>e.code==='42501');
+    await a.query('update organization_members set active=true where organization_id=$1 and user_id=$2',[org,actor]);
     const retryJob=await seedJob(1);
     for(let attempt=1;attempt<=5;attempt++){
       const c=await claimJob(a,retryJob);assert.equal(c.attempts,attempt);
