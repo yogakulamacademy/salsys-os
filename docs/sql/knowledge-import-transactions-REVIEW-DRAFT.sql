@@ -6,6 +6,10 @@ revoke all on schema knowledge_import_review from public, anon, authenticated, s
 alter table public.knowledge_import_entries_v1
   add column payload_sha256 text check (payload_sha256 ~ '^[0-9a-f]{64}$'),
   add column claimed_by_worker name,
+  add column completed_by_worker name,
+  add column completed_token_sha256 text check(completed_token_sha256 ~ '^[0-9a-f]{64}$'),
+  add check ((completed_by_worker is null)=(completed_token_sha256 is null)),
+  add check (completed_by_worker is null or status='created'),
   add check (claimed_by_worker is null or status='leased'),
   add foreign key (document_id,organization_id) references public.knowledge_documents(id,organization_id);
 -- Lock parent first in every transition. Strict user session only; no service role bypass.
@@ -319,12 +323,12 @@ begin
 end $$;
 -- Narrow metadata-only eligibility. Owner execution, fixed search path, actual login identity.
 -- This does not grant claim/finalize, raw file read or any other execution authority.
-create function knowledge_import_review.worker_allowed(p_org uuid,p_job uuid)
+create function knowledge_import_review.worker_authorized(p_org uuid,p_job uuid,p_allow_completed boolean)
 returns boolean language plpgsql security definer set search_path=pg_catalog,public,auth,pg_temp as $$
 declare j public.knowledge_import_jobs_v1%rowtype; d knowledge_import_review.worker_delegations%rowtype;
 begin
   select * into j from public.knowledge_import_jobs_v1 where organization_id=p_org and id=p_job for update;
-  if not found or j.status not in ('queued','processing') or clock_timestamp()>=j.retention_expires_at then return false; end if;
+  if not found or (j.status not in ('queued','processing') and not(coalesce(p_allow_completed,false) and j.status='completed')) or clock_timestamp()>=j.retention_expires_at then return false; end if;
   select * into d from knowledge_import_review.worker_delegations where organization_id=p_org and job_id=p_job for share;
   if not found or d.login_role<>session_user or d.revoked_at is not null or clock_timestamp()>=d.expires_at
     or d.actor_id<>j.requested_by or d.actor_session_id<>j.request_session_id
@@ -342,6 +346,11 @@ begin
       and m.active and m.role in ('owner','admin') and o.status='active' for share of s,b,m,o;
   return found and clock_timestamp()<d.expires_at and clock_timestamp()<j.retention_expires_at;
 end $$;
+-- The externally testable eligibility predicate never grants completed-job processing.
+create function knowledge_import_review.worker_allowed(p_org uuid,p_job uuid)
+returns boolean language sql security definer set search_path=pg_catalog,pg_temp as $$
+  select knowledge_import_review.worker_authorized(p_org,p_job,false);
+$$;
 -- Worker entry points: separate from user-session claim/finalize. Review owner only;
 -- test grants only in the disposable fixture. Never set or impersonate Auth claims.
 create function knowledge_import_review.worker_claim(p_org uuid,p_job uuid,p_limit integer)
@@ -402,12 +411,68 @@ begin
     values(p_org,src,title,category,content,'draft',j.requested_by,jsonb_build_object('entry_mode','knowledge_import_review','import_job_id',j.id,'import_entry_index',p_index)) returning id into doc;
   insert into public.knowledge_chunks(organization_id,document_id,chunk_index,content,metadata)
     values(p_org,doc,0,content,jsonb_build_object('source','knowledge_import_review'));
-  update public.knowledge_import_entries_v1 set status='created',document_id=doc,lease_token=null,lease_expires_at=null,claimed_by_worker=null,error_code=null
+  update public.knowledge_import_entries_v1 set status='created',document_id=doc,lease_token=null,lease_expires_at=null,claimed_by_worker=null,error_code=null,
+    completed_by_worker=session_user,completed_token_sha256=encode(sha256(convert_to(p_token::text,'UTF8')),'hex')
     where organization_id=p_org and job_id=p_job and entry_index=p_index;
   perform knowledge_import_review.rollup(p_org,p_job);
   return doc;
 end $$;
--- Deliberately no worker regrant/renew, broad read, or arbitrary failure settlement.
--- Authorized original administrator can inspect committed results after unknown outcome.
+-- Only the original authorized administrator may renew a still-active delegation.
+-- No renewal after expiry or revocation, no worker self-renewal or reassignment.
+create function knowledge_import_review.renew_worker(p_org uuid,p_job uuid,p_until timestamptz)
+returns boolean language plpgsql security invoker set search_path=pg_catalog,public,auth,pg_temp as $$
+declare j public.knowledge_import_jobs_v1%rowtype; d knowledge_import_review.worker_delegations%rowtype; t timestamptz;
+begin
+  j:=knowledge_import_review.lock_job(p_org,p_job);
+  select * into d from knowledge_import_review.worker_delegations where organization_id=p_org and job_id=p_job for update;
+  if not found or j.status not in ('queued','processing') or d.revoked_at is not null or d.actor_id<>j.requested_by
+    or d.actor_session_id<>j.request_session_id or d.source_sha256 is distinct from j.sha256
+    or d.manifest_sha256 is distinct from j.manifest_sha256 or d.object_version is distinct from j.object_version then return false; end if;
+  perform 1 from knowledge_import_review.worker_principals p join pg_roles r on r.rolname=p.login_role
+    where p.login_role=d.login_role and p.enabled and r.rolcanlogin and not r.rolsuper and not r.rolbypassrls
+      and not r.rolcreaterole and not r.rolcreatedb and not r.rolreplication
+      and not pg_has_role(r.oid,'service_role','MEMBER') and not pg_has_role(r.oid,'authenticated','MEMBER') for share of p;
+  if not found then return false; end if;
+  t:=clock_timestamp();
+  if t>=d.expires_at or p_until is null or p_until<=d.expires_at or p_until>least(j.retention_expires_at,t+interval '15 minutes') then return false; end if;
+  update knowledge_import_review.worker_delegations set expires_at=p_until where organization_id=p_org and job_id=p_job;
+  return true;
+end $$;
+-- Worker failure settlement verifies the exact live lease. Database owns retry delay.
+create function knowledge_import_review.worker_settle_failure(p_org uuid,p_job uuid,p_index integer,p_token uuid,p_attempt integer,p_error_code text)
+returns text language plpgsql security definer set search_path=pg_catalog,public,pg_temp as $$
+declare j public.knowledge_import_jobs_v1%rowtype; e public.knowledge_import_entries_v1%rowtype; expiry timestamptz; t timestamptz; next_status text;
+begin
+  if not knowledge_import_review.worker_allowed(p_org,p_job) then raise exception 'worker access denied' using errcode='42501'; end if;
+  select * into j from public.knowledge_import_jobs_v1 where organization_id=p_org and id=p_job;
+  select expires_at into expiry from knowledge_import_review.worker_delegations where organization_id=p_org and job_id=p_job;
+  select * into e from public.knowledge_import_entries_v1 where organization_id=p_org and job_id=p_job and entry_index=p_index for update;
+  t:=clock_timestamp();
+  if not found or t>=least(expiry,j.retention_expires_at) or e.status<>'leased' or e.claimed_by_worker is distinct from session_user
+    or p_token is null or e.lease_token is distinct from p_token or e.attempts is distinct from p_attempt
+    or e.lease_expires_at is null or t>=e.lease_expires_at then raise exception 'stale worker claim'; end if;
+  if p_error_code is null or p_error_code not in ('db_transient','storage_transient','invalid_payload','permanent_failure') then raise exception 'unsupported failure code'; end if;
+  next_status:=case when p_error_code in ('db_transient','storage_transient') and e.attempts<5 then 'pending' else 'failed' end;
+  update public.knowledge_import_entries_v1 set status=next_status,lease_token=null,lease_expires_at=null,claimed_by_worker=null,
+    available_at=case when next_status='pending' then t+make_interval(secs=>30*power(2,e.attempts-1)::integer) else available_at end,
+    error_code=p_error_code where organization_id=p_org and job_id=p_job and entry_index=p_index;
+  perform knowledge_import_review.rollup(p_org,p_job);
+  return next_status;
+end $$;
+-- Recovery is read-only: exact successful attempt/token/worker match, even after the last entry completes.
+-- No payload access and no new draft creation. Null means no matching committed receipt.
+create function knowledge_import_review.worker_result(p_org uuid,p_job uuid,p_index integer,p_token uuid,p_attempt integer)
+returns uuid language plpgsql security definer set search_path=pg_catalog,public,pg_temp as $$
+declare result uuid;
+begin
+  if not knowledge_import_review.worker_authorized(p_org,p_job,true) then raise exception 'worker access denied' using errcode='42501'; end if;
+  if p_token is null or p_attempt is null then return null; end if;
+  select e.document_id into result from public.knowledge_import_entries_v1 e
+    where e.organization_id=p_org and e.job_id=p_job and e.entry_index=p_index and e.status='created'
+      and e.attempts=p_attempt and e.completed_by_worker=session_user
+      and e.completed_token_sha256=encode(sha256(convert_to(p_token::text,'UTF8')),'hex');
+  return result;
+end $$;
+-- No broad read or arbitrary failure settlement. Actual worker error classification remains separate.
 revoke all on all functions in schema knowledge_import_review from public,anon,authenticated,service_role;
 commit;

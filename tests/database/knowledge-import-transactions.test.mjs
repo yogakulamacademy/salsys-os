@@ -215,6 +215,50 @@ test('disposable PG: exact Knowledge RPC, competing claims, rollback, retry, rev
     await assert.rejects(worker.query('select * from public.knowledge_import_entries_v1'),e=>e.code==='42501');
     await assert.rejects(worker.query('select knowledge_import_review.cancel($1,$2)',[org,wjob]),e=>e.code==='42501');
     assert.equal((await a.query('select count(*)::int as n from knowledge_approvals')).rows[0].n,0);
+
+    const recoveryJob=await seedJob(1);
+    await a.query("update knowledge_import_jobs_v1 set object_version='fixture-recovery',manifest_sha256=repeat('c',64) where id=$1",[recoveryJob]);
+    const grantUntil=new Date(Date.now()+300000);
+    assert.equal((await a.query('select knowledge_import_review.delegate_worker($1,$2,$3,$4) as ok',[org,recoveryJob,workerName,grantUntil])).rows[0].ok,true);
+    const renew=(db,j,until)=>db.query('select knowledge_import_review.renew_worker($1,$2,$3) as ok',[org,j,until]);
+    const workerFail=(j,c,code)=>worker.query('select knowledge_import_review.worker_settle_failure($1,$2,$3,$4,$5,$6) as status',[org,j,c.entry_index,c.lease_token,c.attempts,code]);
+    const workerResult=(j,c,o=org)=>worker.query('select knowledge_import_review.worker_result($1,$2,$3,$4,$5) as id',[o,j,c.entry_index,c.lease_token,c.attempts]);
+    await assert.rejects(renew(worker,recoveryJob,new Date(Date.now()+600000)),e=>e.code==='42501');
+    assert.equal((await renew(a,recoveryJob,new Date(Date.now()+3600000))).rows[0].ok,false);
+    assert.equal((await renew(a,recoveryJob,new Date(Date.now()+600000))).rows[0].ok,true);
+    assert.equal((await renew(a,wjob,new Date(Date.now()+800000))).rows[0].ok,false); // revoked
+    await a.query('grant execute on function knowledge_import_review.worker_settle_failure(uuid,uuid,integer,uuid,integer,text),knowledge_import_review.worker_result(uuid,uuid,integer,uuid,integer) to '+workerName);
+    let rec=(await wclaim(worker,recoveryJob)).rows[0];
+    assert.equal((await workerResult(recoveryJob,rec)).rows[0].id,null);
+    await assert.rejects(workerFail(recoveryJob,{...rec,lease_token:randomUUID()},'db_transient'),/stale worker claim/);
+    await assert.rejects(workerFail(recoveryJob,rec,'unreviewed'),/unsupported failure code/);
+    assert.equal((await workerFail(recoveryJob,rec,'db_transient')).rows[0].status,'pending');
+    assert.equal((await wclaim(worker,recoveryJob)).rowCount,0);
+    await a.query("update knowledge_import_entries_v1 set available_at=now()-interval '1 second' where job_id=$1",[recoveryJob]);
+    const rec2=(await wclaim(worker,recoveryJob)).rows[0];assert.equal(rec2.attempts,2);
+    await assert.rejects(workerFail(recoveryJob,rec,'db_transient'),/stale worker claim/);
+    const committed=(await worker.query('select knowledge_import_review.worker_finalize($1,$2,$3,$4,$5,$6::jsonb) as id',[org,recoveryJob,rec2.entry_index,rec2.lease_token,rec2.attempts,JSON.stringify(payload)])).rows[0].id;
+    assert.equal((await a.query('select status from knowledge_import_jobs_v1 where id=$1',[recoveryJob])).rows[0].status,'completed');
+    assert.equal((await workerResult(recoveryJob,rec2)).rows[0].id,committed);
+    assert.equal((await workerResult(recoveryJob,rec)).rows[0].id,null);
+    assert.equal((await workerResult(recoveryJob,{...rec2,lease_token:randomUUID()})).rows[0].id,null);
+    await assert.rejects(workerResult(recoveryJob,rec2,other),e=>e.code==='42501');
+    await assert.rejects(wclaim(worker,recoveryJob),e=>e.code==='42501');
+    await a.query('update organization_members set active=false where organization_id=$1 and user_id=$2',[org,actor]);
+    await assert.rejects(workerResult(recoveryJob,rec2),e=>e.code==='42501');
+    await a.query('update organization_members set active=true where organization_id=$1 and user_id=$2',[org,actor]);
+    await a.query("update knowledge_import_review.worker_delegations set expires_at=now()-interval '1 second' where job_id=$1",[recoveryJob]);
+    await assert.rejects(workerResult(recoveryJob,rec2),e=>e.code==='42501');
+    const exhaustionJob=await seedJob(1);
+    await a.query("update knowledge_import_jobs_v1 set object_version='fixture-exhaustion',manifest_sha256=repeat('d',64) where id=$1",[exhaustionJob]);
+    assert.equal((await a.query('select knowledge_import_review.delegate_worker($1,$2,$3,$4) as ok',[org,exhaustionJob,workerName,new Date(Date.now()+600000)])).rows[0].ok,true);
+    for(let attempt=1;attempt<=5;attempt++){
+      const c=(await wclaim(worker,exhaustionJob)).rows[0];assert.equal(c.attempts,attempt);
+      assert.equal((await workerFail(exhaustionJob,c,'storage_transient')).rows[0].status,attempt<5?'pending':'failed');
+      if(attempt<5)await a.query("update knowledge_import_entries_v1 set available_at=now()-interval '1 second' where job_id=$1",[exhaustionJob]);
+    }
+    assert.equal((await a.query('select status from knowledge_import_jobs_v1 where id=$1',[exhaustionJob])).rows[0].status,'completed');
+    assert.equal((await a.query('select status from knowledge_import_entries_v1 where job_id=$1',[exhaustionJob])).rows[0].status,'failed');
     const retryJob=await seedJob(1);
     for(let attempt=1;attempt<=5;attempt++){
       const c=await claimJob(a,retryJob);assert.equal(c.attempts,attempt);
