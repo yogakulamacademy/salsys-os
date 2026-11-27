@@ -125,6 +125,43 @@ test('disposable PG: exact Knowledge RPC, competing claims, rollback, retry, rev
 
     assert.equal((await a.query('select count(*)::int as n from knowledge_import_entries_v1 where job_id=$1',[reserved])).rows[0].n,3);
     await assert.rejects(enqueue(b,reserved,100,'c'.repeat(64),manifest),/manifest conflict/);
+
+    // Dedicated synthetic login, not SET ROLE or forged administrator JWT.
+    const workerName='salsys_kb_worker_'+randomUUID().replaceAll('-','').slice(0,16);
+    const password=randomUUID();
+    await admin.query("create role "+workerName+" login noinherit nosuperuser nocreatedb nocreaterole noreplication nobypassrls password '"+password+"'");
+    roles.push(workerName);
+    await a.query('insert into knowledge_import_review.worker_principals values($1,true)',[workerName]);
+    const until=new Date(Date.now()+600000);
+    const delegate=()=>a.query('select knowledge_import_review.delegate_worker($1,$2,$3,$4) as ok',[org,reserved,workerName,until]);
+    assert.equal((await delegate()).rows[0].ok,false); // no verified object version
+    await a.query("update knowledge_import_jobs_v1 set object_version='synthetic-immutable-version' where id=$1",[reserved]);
+    assert.equal((await delegate()).rows[0].ok,true);
+    assert.equal((await delegate()).rows[0].ok,false);
+    assert.equal((await a.query('select knowledge_import_review.worker_allowed($1,$2) as ok',[org,reserved])).rows[0].ok,false); // postgres != worker
+    const workerUrl=new URL(target);workerUrl.username=workerName;workerUrl.password=password;
+    const worker=new pg.Client({connectionString:workerUrl.href});clients.push(worker);await worker.connect();
+    const allowed=()=>worker.query('select knowledge_import_review.worker_allowed($1,$2) as ok',[org,reserved]);
+    await assert.rejects(allowed(),e=>e.code==='42501');
+    // Only this disposable database grants usage of the review predicate to the exact test login.
+    await a.query('grant usage on schema knowledge_import_review to '+workerName);
+    await a.query('grant execute on function knowledge_import_review.worker_allowed(uuid,uuid) to '+workerName);
+    assert.equal((await allowed()).rows[0].ok,true);
+    assert.equal((await worker.query('select knowledge_import_review.worker_allowed($1,$2) as ok',[other,reserved])).rows[0].ok,false);
+    await assert.rejects(worker.query('select * from knowledge_import_review.claim($1,$2,1)',[org,reserved]),e=>e.code==='42501');
+    await assert.rejects(worker.query('select * from public.knowledge_documents'),e=>e.code==='42501');
+    await a.query('update organization_members set active=false where organization_id=$1 and user_id=$2',[org,actor]);
+    assert.equal((await allowed()).rows[0].ok,false);
+    await a.query('update organization_members set active=true where organization_id=$1 and user_id=$2',[org,actor]);
+    await a.query("update knowledge_import_jobs_v1 set object_version='replacement' where id=$1",[reserved]);
+    assert.equal((await allowed()).rows[0].ok,false);
+    await a.query("update knowledge_import_jobs_v1 set object_version='synthetic-immutable-version' where id=$1",[reserved]);
+    assert.equal((await allowed()).rows[0].ok,true);
+    await a.query('update knowledge_import_review.worker_principals set enabled=false where login_role=$1',[workerName]);
+    assert.equal((await allowed()).rows[0].ok,false);
+    await a.query('update knowledge_import_review.worker_principals set enabled=true where login_role=$1',[workerName]);
+    assert.equal((await a.query('select knowledge_import_review.revoke_worker($1,$2) as ok',[org,reserved])).rows[0].ok,true);
+    assert.equal((await allowed()).rows[0].ok,false);
     assert.equal((await a.query('select knowledge_import_review.cancel($1,$2) as ok',[org,reserved])).rows[0].ok,true);
     // Old terminal jobs still consume retained byte budget; one active slot available.
     const contenders=await Promise.allSettled([reserve(a,randomUUID(),100,upload,retain),reserve(b,randomUUID(),100,upload,retain)]);

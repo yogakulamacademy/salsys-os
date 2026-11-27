@@ -265,5 +265,80 @@ begin
     from public.knowledge_import_entries_v1 e where e.organization_id=j.organization_id and e.job_id=j.id) a
   order by j.created_at desc,j.id desc;
 end $$;
+-- REVIEW ONLY: dedicated principal registry, no login or application role provisioned here.
+-- session_user is the actual connection identity; JWT claims cannot substitute for it.
+create table knowledge_import_review.worker_principals (
+  login_role name primary key,
+  enabled boolean not null default false
+);
+create table knowledge_import_review.worker_delegations (
+  organization_id uuid not null,
+  job_id uuid not null,
+  login_role name not null references knowledge_import_review.worker_principals(login_role),
+  actor_id uuid not null,
+  actor_session_id uuid not null,
+  source_sha256 text not null check(source_sha256 ~ '^[0-9a-f]{64}$'),
+  manifest_sha256 text not null check(manifest_sha256 ~ '^[0-9a-f]{64}$'),
+  object_version text not null check(length(object_version) between 1 and 256),
+  expires_at timestamptz not null,
+  revoked_at timestamptz,
+  primary key(organization_id,job_id),
+  foreign key(organization_id,job_id) references public.knowledge_import_jobs_v1(organization_id,id) on delete cascade
+);
+alter table knowledge_import_review.worker_principals enable row level security;
+alter table knowledge_import_review.worker_delegations enable row level security;
+revoke all on knowledge_import_review.worker_principals,knowledge_import_review.worker_delegations from public,anon,authenticated,service_role;
+-- Storage version must come from an independently verified immutable-object adapter.
+alter table public.knowledge_import_jobs_v1 add column object_version text check(length(object_version) between 1 and 256);
+create function knowledge_import_review.delegate_worker(p_org uuid,p_job uuid,p_login name,p_until timestamptz)
+returns boolean language plpgsql security invoker set search_path=pg_catalog,public,auth,pg_temp as $$
+declare j public.knowledge_import_jobs_v1%rowtype; t timestamptz;
+begin
+  j:=knowledge_import_review.lock_job(p_org,p_job);t:=clock_timestamp();
+  if j.status not in ('queued','processing') or j.sha256 is null or j.manifest_sha256 is null or j.object_version is null
+     or p_until is null or p_until<=t or p_until>least(j.retention_expires_at,t+interval '15 minutes') then return false; end if;
+  if not exists(select 1 from knowledge_import_review.worker_principals p join pg_roles r on r.rolname=p.login_role
+    where p.login_role=p_login and p.enabled and r.rolcanlogin and not r.rolsuper and not r.rolbypassrls
+      and not r.rolcreaterole and not r.rolcreatedb and not r.rolreplication
+      and not pg_has_role(r.oid,'service_role','MEMBER') and not pg_has_role(r.oid,'authenticated','MEMBER')) then return false; end if;
+  -- No replacement or extension until a separately reviewed renewal operation exists.
+  insert into knowledge_import_review.worker_delegations(organization_id,job_id,login_role,actor_id,actor_session_id,source_sha256,manifest_sha256,object_version,expires_at)
+    values(p_org,p_job,p_login,j.requested_by,j.request_session_id,j.sha256,j.manifest_sha256,j.object_version,p_until)
+    on conflict(organization_id,job_id) do nothing;
+  return found;
+end $$;
+create function knowledge_import_review.revoke_worker(p_org uuid,p_job uuid)
+returns boolean language plpgsql security invoker set search_path=pg_catalog,public,auth,pg_temp as $$
+begin
+  perform knowledge_import_review.lock_job(p_org,p_job);
+  update knowledge_import_review.worker_delegations set revoked_at=clock_timestamp()
+    where organization_id=p_org and job_id=p_job and revoked_at is null;
+  return found;
+end $$;
+-- Narrow metadata-only eligibility. Owner execution, fixed search path, actual login identity.
+-- This does not grant claim/finalize, raw file read or any other execution authority.
+create function knowledge_import_review.worker_allowed(p_org uuid,p_job uuid)
+returns boolean language plpgsql security definer set search_path=pg_catalog,public,auth,pg_temp as $$
+declare j public.knowledge_import_jobs_v1%rowtype; d knowledge_import_review.worker_delegations%rowtype;
+begin
+  select * into j from public.knowledge_import_jobs_v1 where organization_id=p_org and id=p_job for update;
+  if not found or j.status not in ('queued','processing') or clock_timestamp()>=j.retention_expires_at then return false; end if;
+  select * into d from knowledge_import_review.worker_delegations where organization_id=p_org and job_id=p_job for share;
+  if not found or d.login_role<>session_user or d.revoked_at is not null or clock_timestamp()>=d.expires_at
+    or d.actor_id<>j.requested_by or d.actor_session_id<>j.request_session_id
+    or d.source_sha256 is distinct from j.sha256 or d.manifest_sha256 is distinct from j.manifest_sha256
+    or d.object_version is distinct from j.object_version then return false; end if;
+  perform 1 from knowledge_import_review.worker_principals p join pg_roles r on r.rolname=p.login_role
+    where p.login_role=session_user and p.enabled and r.rolcanlogin and not r.rolsuper and not r.rolbypassrls
+      and not r.rolcreaterole and not r.rolcreatedb and not r.rolreplication
+      and not pg_has_role(r.oid,'service_role','MEMBER') and not pg_has_role(r.oid,'authenticated','MEMBER') for share of p;
+  if not found then return false; end if;
+  perform 1 from auth.sessions s join public.tenant_session_bindings b on b.session_id=s.id and b.user_id=s.user_id
+    join public.organization_members m on m.user_id=s.user_id and m.organization_id=b.organization_id
+    join public.organizations o on o.id=m.organization_id
+    where s.id=d.actor_session_id and s.user_id=d.actor_id and b.organization_id=p_org
+      and m.active and m.role in ('owner','admin') and o.status='active' for share of s,b,m,o;
+  return found and clock_timestamp()<d.expires_at and clock_timestamp()<j.retention_expires_at;
+end $$;
 revoke all on all functions in schema knowledge_import_review from public,anon,authenticated,service_role;
 commit;
