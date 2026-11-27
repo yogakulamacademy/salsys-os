@@ -236,6 +236,27 @@ test('disposable PG: exact Knowledge RPC, competing claims, rollback, retry, rev
     assert.equal((await wclaim(worker,recoveryJob)).rowCount,0);
     await a.query("update knowledge_import_entries_v1 set available_at=now()-interval '1 second' where job_id=$1",[recoveryJob]);
     const rec2=(await wclaim(worker,recoveryJob)).rows[0];assert.equal(rec2.attempts,2);
+    // Worker metadata/manifest checks use a canonical fixture manifest registered before delegation.
+    const verifyJob=await seedJob(1);
+    const verifyManifest=[{index:0,status:'pending',payload_sha256:pd}];
+    await a.query("update knowledge_import_jobs_v1 set object_version='fixture-verified',manifest_sha256=encode(sha256(convert_to(($2::jsonb)::text,'UTF8')),'hex') where id=$1",[verifyJob,JSON.stringify(verifyManifest)]);
+    assert.equal((await a.query('select knowledge_import_review.delegate_worker($1,$2,$3,$4) as ok',[org,verifyJob,workerName,new Date(Date.now()+600000)])).rows[0].ok,true);
+    const sourceIdentity=(o=org)=>worker.query('select * from knowledge_import_review.worker_source_identity($1,$2)',[o,verifyJob]);
+    const verify=(version='fixture-verified',bytes=100,digest='a'.repeat(64),manifest=verifyManifest)=>worker.query('select knowledge_import_review.worker_verify_manifest($1,$2,$3,$4,$5,$6::jsonb) as ok',[org,verifyJob,version,bytes,digest,JSON.stringify(manifest)]);
+    await assert.rejects(sourceIdentity(),e=>e.code==='42501');
+    await a.query('grant execute on function knowledge_import_review.worker_source_identity(uuid,uuid),knowledge_import_review.worker_verify_manifest(uuid,uuid,text,bigint,text,jsonb) to '+workerName);
+    const sourceRow=(await sourceIdentity()).rows[0];
+    assert.deepEqual(Object.keys(sourceRow).sort(),['object_path','object_version','byte_length','source_sha256','manifest_sha256'].sort());
+    assert.equal(sourceRow.object_version,'fixture-verified');assert.equal(sourceRow.byte_length,'100');
+    assert.equal((await verify()).rows[0].ok,true);
+    assert.equal((await verify('replacement')).rows[0].ok,false);
+    assert.equal((await verify('fixture-verified',101)).rows[0].ok,false);
+    assert.equal((await verify('fixture-verified',100,'f'.repeat(64))).rows[0].ok,false);
+    assert.equal((await verify('fixture-verified',100,'a'.repeat(64),[{index:0,status:'invalid'}])).rows[0].ok,false);
+    await assert.rejects(sourceIdentity(other),e=>e.code==='42501');
+    await a.query('select knowledge_import_review.revoke_worker($1,$2)',[org,verifyJob]);
+    await assert.rejects(sourceIdentity(),e=>e.code==='42501');
+
     await assert.rejects(workerFail(recoveryJob,rec,'db_transient'),/stale worker claim/);
     const committed=(await worker.query('select knowledge_import_review.worker_finalize($1,$2,$3,$4,$5,$6::jsonb) as id',[org,recoveryJob,rec2.entry_index,rec2.lease_token,rec2.attempts,JSON.stringify(payload)])).rows[0].id;
     assert.equal((await a.query('select status from knowledge_import_jobs_v1 where id=$1',[recoveryJob])).rows[0].status,'completed');

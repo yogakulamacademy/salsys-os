@@ -474,5 +474,27 @@ begin
   return result;
 end $$;
 -- No broad read or arbitrary failure settlement. Actual worker error classification remains separate.
+-- Worker receives only its assigned source identity, not a storage token or raw data.
+create function knowledge_import_review.worker_source_identity(p_org uuid,p_job uuid)
+returns table(object_path text,object_version text,byte_length bigint,source_sha256 text,manifest_sha256 text)
+language plpgsql security definer set search_path=pg_catalog,public,pg_temp as $$
+begin
+  if not knowledge_import_review.worker_allowed(p_org,p_job) then raise exception 'worker access denied' using errcode='42501'; end if;
+  return query select j.object_path,j.object_version,j.verified_bytes,j.sha256,j.manifest_sha256
+    from public.knowledge_import_jobs_v1 j where j.organization_id=p_org and j.id=p_job;
+end $$;
+-- Adapter must independently read/hash the actual immutable object. This verifies
+-- its proposed source/manifest identity against the registered database record.
+create function knowledge_import_review.worker_verify_manifest(p_org uuid,p_job uuid,p_version text,p_bytes bigint,p_sha text,p_manifest jsonb)
+returns boolean language plpgsql security definer set search_path=pg_catalog,public,pg_temp as $$
+declare j public.knowledge_import_jobs_v1%rowtype;
+begin
+  if not knowledge_import_review.worker_allowed(p_org,p_job) then raise exception 'worker access denied' using errcode='42501'; end if;
+  select * into j from public.knowledge_import_jobs_v1 where organization_id=p_org and id=p_job;
+  if p_manifest is null or jsonb_typeof(p_manifest)<>'array' then return false; end if;
+  if jsonb_array_length(p_manifest) is distinct from j.total_entries or octet_length(p_manifest::text)>2097152 then return false; end if;
+  return coalesce(p_version=j.object_version and p_bytes=j.verified_bytes and p_sha=j.sha256
+    and encode(sha256(convert_to(p_manifest::text,'UTF8')),'hex')=j.manifest_sha256,false);
+end $$;
 revoke all on all functions in schema knowledge_import_review from public,anon,authenticated,service_role;
 commit;
