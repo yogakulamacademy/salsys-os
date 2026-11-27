@@ -14,7 +14,7 @@ The enrollment summary no longer loads the full recording catalog on every conve
 - The summary fixture reads no catalog for a lead without enrollments. The existing-record fixture requests only referenced IDs and preserves old course/batch labels and exact paid/pending amounts.
 - Catalog endpoint fixtures verify invalid ID, unauthenticated, unauthorized and unavailable results (400/401/403/503), private no-store responses, tenant filters and owner/admin access. No service client is used for enrollment reads.
 - Browser checks of the actual enrollment component with local simulated reads confirmed zero requests on mount, one on opening, loading/disabled save, existing error toast, keyboard Retry, successful retry, and cancellation. At 390px viewport, document width was 380px with no horizontal overflow. No enrollment/payment submit was performed.
-- Fourteen crawler/enrollment behavior tests pass; all 641 readiness tests pass after incorporating released PR #913. Typecheck, 5 UI unit tests, 25 journey tests and the frozen Deno 2.5.6 check pass on the combined source. The Next production build and GitHub check results are recorded in the PR.
+- Fifteen crawler/enrollment behavior tests pass; all 642 readiness tests pass after incorporating released PR #913 and the crawler entity-decoding regression test. Typecheck, 5 UI unit tests, 25 journey tests and the Next production build passed on the unchanged application source. The frozen Deno 2.5.6 check passes on the final crawler source. Exact-head GitHub checks and code-scanning findings must both pass before merge; a successful scan workflow alone does not establish a passing findings check.
 
 No new production latency or cost percentage is claimed. The previous 1.4s figure was a cumulative mean for the broad batch query; this change removes that query from ordinary refreshes and runs it only when form choices are needed. It does not prove the query itself became faster.
 
@@ -29,6 +29,8 @@ npm exec --yes --package=deno@2.5.6 -- deno check --frozen --config supabase/fun
 ```
 
 Production unique-index metadata confirmed the existing `(organization_id,site_id,normalized_url)` page conflict key and `(crawl_run_id,normalized_url)` frontier conflict key. No schema change or new index is required. The shared discovery timestamp and stable destination ordering apply within one page's discovered targets; no global data/permission cache was added.
+
+The tracked crawler baseline also exposed a CodeQL double-unescaping finding in text extraction. Entity decoding now uses a single replacement pass; nested encodings remain encoded by one level in titles, readable text and anchor labels. An entrypoint regression fixture fails on the original decoder and passes on the fix. This extractor is not an HTML sanitizer; existing text rendering boundaries remain unchanged.
 
 ## Review and rollout
 

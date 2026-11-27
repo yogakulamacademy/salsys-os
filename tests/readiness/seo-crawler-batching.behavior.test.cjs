@@ -81,8 +81,7 @@ test('write failures and incomplete returned IDs fail explicitly; partial writes
   assert.equal(missing.frontier.size, 0);
 });
 
-test('actual crawler entrypoint retains distinct anchors/rel, scope guards and failure state', async () => {
-  async function run({ denied = false, failTargets = false, html = '<a href="/one">First</a><a href="/one" rel="nofollow">Second</a><a href="/image.png">Image</a><a href="https://external.test/x">External</a>' } = {}) {
+async function runCrawler({ denied = false, failTargets = false, html = '<a href="/one">First</a><a href="/one" rel="nofollow">Second</a><a href="/image.png">Image</a><a href="https://external.test/x">External</a>' } = {}) {
     let handler; const events = [], pageRows = new Map(); let storedLinks = [];
     const service = { from: table => {
       const q = { table, mode: 'read', value: null, filters: [] };
@@ -118,13 +117,25 @@ test('actual crawler entrypoint retains distinct anchors/rel, scope guards and f
     const response = await handler(new Request('https://crawler.test', { method: 'POST', headers: { authorization: 'Bearer synthetic-fixture', 'content-type': 'application/json' }, body: JSON.stringify({ action: 'resume', runId: 'run-a', pageBudget: 1 }) }));
     return { response, events, storedLinks };
   }
-  const ok = await run(); assert.equal(ok.response.status, 200); assert.equal(ok.storedLinks.length, 4);
+test('actual crawler entrypoint retains distinct anchors/rel, scope guards and failure state', async () => {
+  const ok = await runCrawler(); assert.equal(ok.response.status, 200); assert.equal(ok.storedLinks.length, 4);
   assert.deepEqual(ok.storedLinks.slice(0, 2).map(l => l.anchor_text), ['First', 'Second']);
   assert.equal(ok.storedLinks[0].target_page_id, ok.storedLinks[1].target_page_id);
   assert.equal(ok.storedLinks[1].is_nofollow, true); assert.equal(ok.storedLinks[3].target_page_id, null);
   const queue = ok.events.find(e => e.table === 'seo_crawl_frontier' && e.mode === 'upsert'); assert.equal(queue.value.length, 1);
-  const denied = await run({ denied: true }); assert.equal(denied.response.status, 403); assert.ok(denied.events.every(e => e.mode === 'read'));
-  const failed = await run({ failTargets: true }); assert.equal(failed.storedLinks.length, 0);
+  const denied = await runCrawler({ denied: true }); assert.equal(denied.response.status, 403); assert.ok(denied.events.every(e => e.mode === 'read'));
+  const failed = await runCrawler({ failTargets: true }); assert.equal(failed.storedLinks.length, 0);
   assert.ok(failed.events.some(e => e.table === 'seo_crawl_frontier' && e.mode === 'update' && e.value.status === 'failed'));
   assert.ok(!failed.events.some(e => e.table === 'seo_crawl_frontier' && e.mode === 'update' && e.value.status === 'done'));
+});
+
+test('crawler text decodes entities once and preserves nested encodings in titles, text and anchors', async () => {
+  const nested = 'A &amp;lt; B &amp;amp; C &AMP;gt; D &amp;#39;';
+  const result = await runCrawler({ html: `<title>${nested}</title><p>&nbsp;&lt;tag&gt; &quot;ok&quot; &#39;yes&#39; &AMP; &unknown;</p><a href="/one">${nested}</a><script>hidden()</script><style>.hidden{}</style>` });
+  assert.equal(result.response.status, 200);
+  const snapshot = result.events.find(e => e.table === 'seo_page_snapshots' && e.mode === 'upsert').value;
+  const decodedOnce = 'A &lt; B &amp; C &gt; D &#39;';
+  assert.equal(snapshot.title, decodedOnce);
+  assert.equal(result.storedLinks[0].anchor_text, decodedOnce);
+  assert.equal(snapshot.readable_text, `${decodedOnce} <tag> "ok" 'yes' & &unknown; ${decodedOnce}`);
 });

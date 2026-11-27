@@ -44,7 +44,9 @@ function normalizeUrl(raw: string) {
   return u.toString();
 }
 function stripTags(html: string) {
-  return html.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi," ").replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi," ").replace(/<noscript\b[^>]*>[\s\S]*?<\/noscript>/gi," ").replace(/<[^>]+>/g," ").replace(/&nbsp;/gi," ").replace(/&amp;/gi,"&").replace(/&lt;/gi,"<").replace(/&gt;/gi,">").replace(/&quot;/gi,'"').replace(/&#39;/gi,"'").replace(/\s+/g," ").trim();
+  const entities: Record<string, string> = { nbsp: " ", amp: "&", lt: "<", gt: ">", quot: '"', '#39': "'" };
+  // Decode once: replacement text must not be interpreted as another entity.
+  return html.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi," ").replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi," ").replace(/<noscript\b[^>]*>[\s\S]*?<\/noscript>/gi," ").replace(/<[^>]+>/g," ").replace(/&(nbsp|amp|lt|gt|quot|#39);/gi, (_match, name: string) => entities[name.toLowerCase()]).replace(/\s+/g," ").trim();
 }
 function attr(tag:string,name:string){ const re=new RegExp(`${name}\\s*=\\s*(?:"([^"]*)"|'([^']*)'|([^\\s>]+))`,'i'); const m=tag.match(re); return m?(m[1]??m[2]??m[3]??''):null; }
 function firstTagContent(html:string,tag:string){ const m=html.match(new RegExp(`<${tag}\\b[^>]*>([\\s\\S]*?)<\\/${tag}>`,'i')); return m?stripTags(m[1]):null; }
