@@ -9,19 +9,42 @@ type Scope=Readonly<{organizationId:string;jobId:string}>;
 type Context=Parameters<typeof prepareKnowledgeImportSource>[0];
 type Reservation=Parameters<typeof prepareKnowledgeImportSource>[1];
 type Prepared=Extract<Awaited<ReturnType<typeof prepareKnowledgeImportSource>>,{ok:true}>;
+// Existing bounded-buffer adapters remain compatible. New provider adapters should stream
+// actual bytes and throw if the observed provider identity changes during the read.
+export type KnowledgePublicationObservation={version:string;bytes:Uint8Array;chunks?:never}|{version:string;chunks:AsyncIterable<Uint8Array>;bytes?:never};
 type Adapters={
   // Server-owned verified current session; lock_job rechecks actual authority.
   reservation(scope:Scope):Promise<{context:Context;reservation:Reservation}>;
   // Exact server-authorized path, create-only, bounded transport. Never expose provider credentials.
   put(path:string,bytes:Uint8Array):Promise<void>;
   // Read actual object bytes and observed provider version, not caller-supplied metadata.
-  inspect(path:string):Promise<{version:string;bytes:Uint8Array}>;
+  inspect(path:string):Promise<KnowledgePublicationObservation>;
   digests:Parameters<typeof prepareKnowledgeImportSource>[4];
   // Recheck original authority, reservation state/expiry and register atomically.
   register(scope:Scope,prepared:Prepared):Promise<string>;
 };
 type Result={state:'registered';status:'queued'|'completed'}|{state:'rejected'}|{state:'reconciliation_required'};
 const hash=(bytes:Uint8Array)=>createHash('sha256').update(bytes).digest('hex');
+/** Hash actual bounded bytes without constructing a second complete downloaded buffer.
+ * A failing or interrupted stream is never retried or treated as a successful publication. */
+export async function verifyKnowledgePublicationObservation(observed:KnowledgePublicationObservation,expectedBytes:number,expectedSha:string):Promise<boolean>{
+ if(!observed||typeof observed.version!=='string'||!observed.version||observed.version.length>256||
+   !Number.isSafeInteger(expectedBytes)||expectedBytes<1||expectedBytes>50*1024*1024||
+   !/^[a-f0-9]{64}$/.test(expectedSha))return false;
+ if(observed.bytes!==undefined){
+  return observed.chunks===undefined&&observed.bytes instanceof Uint8Array&&observed.bytes.byteLength===expectedBytes&&hash(observed.bytes)===expectedSha;
+ }
+ if(!observed.chunks||typeof observed.chunks[Symbol.asyncIterator]!=='function')return false;
+ const h=createHash('sha256');let n=0;
+ try{
+  for await(const chunk of observed.chunks){
+   if(!(chunk instanceof Uint8Array))return false;
+   n+=chunk.byteLength;if(n>expectedBytes)return false;
+   h.update(chunk);
+  }
+  return n===expectedBytes&&h.digest('hex')===expectedSha;
+ }catch{return false;}
+}
 /** Accepts a completed bounded source from a trusted gateway transport. An uncertain provider write
  * or registration never triggers automatic re-upload/delete. Private orphan objects require reconciliation.
  * Only database registration makes a source eligible for worker processing. */
@@ -46,8 +69,7 @@ export async function publishKnowledgeGatewayReview(scope:Scope,input:Uint8Array
     attemptedWrite=true;
     await a.put(path,bytes);
     const observed=await a.inspect(path);
-    if(!(observed.bytes instanceof Uint8Array)||observed.bytes.byteLength!==bytes.byteLength||hash(observed.bytes)!==digest||
-      typeof observed.version!=='string'||!observed.version||observed.version.length>256)return {state:'reconciliation_required'};
+    if(!await verifyKnowledgePublicationObservation(observed,bytes.byteLength,digest))return {state:'reconciliation_required'};
     // The canonical manifest was generated from identical verified bytes before publication.
     const status=await a.register(scope,{...prepared,objectVersion:observed.version});
     return status==='queued'||status==='completed'?{state:'registered',status}:{state:'reconciliation_required'};

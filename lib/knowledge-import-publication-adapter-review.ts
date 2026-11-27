@@ -1,6 +1,6 @@
 import 'server-only';
 import {knowledgeImportObjectPath,KNOWLEDGE_IMPORT_BUCKET} from './knowledge-import-upload-contract';
-import type {publishKnowledgeGatewayReview} from './knowledge-import-gateway-review';
+import type {publishKnowledgeGatewayReview,KnowledgePublicationObservation} from './knowledge-import-gateway-review';
 type Publication=Parameters<typeof publishKnowledgeGatewayReview>[2];
 type Scope=Parameters<Publication['reservation']>[0];
 type Query=(statement:string,params:unknown[])=>Promise<{rows:Record<string,unknown>[]}>;
@@ -8,7 +8,7 @@ type ObjectScope={bucket:typeof KNOWLEDGE_IMPORT_BUCKET;path:string;byteLength:n
 type Provider={
  // A separate trusted provider must enforce create-only writes and immutable version reads.
  createOnly:(scope:ObjectScope,bytes:Uint8Array)=>Promise<void>;
- inspectExact:(scope:ObjectScope)=>Promise<{version:string;bytes:Uint8Array}>;
+ inspectExact:(scope:ObjectScope)=>Promise<KnowledgePublicationObservation>;
 };
 const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const sha=/^[a-f0-9]{64}$/;
@@ -42,7 +42,11 @@ export function createKnowledgePublicationAdapterReview(query:Query,provider:Pro
   },
   async inspect(requestedPath){
    const object=await objectScope(requestedPath),result=await provider.inspectExact(object);
-   if(!result||typeof result.version!=='string'||!result.version||result.version.length>256||!(result.bytes instanceof Uint8Array)||result.bytes.byteLength!==object.byteLength)throw Error('invalid provider response');
+   if(!result||typeof result.version!=='string'||!result.version||result.version.length>256)throw Error('invalid provider response');
+   if(result.bytes!==undefined){
+    if(result.chunks!==undefined||!(result.bytes instanceof Uint8Array)||result.bytes.byteLength!==object.byteLength)throw Error('invalid provider response');
+   }else if(!result.chunks||typeof result.chunks[Symbol.asyncIterator]!=='function')throw Error('invalid provider response');
+   // The gateway hashes and checks the complete stream before registration.
    return result;
   },
   async digests(payloads){

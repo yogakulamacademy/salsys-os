@@ -155,6 +155,31 @@ test('actual disposable Supabase Storage authorization and lifecycle',{timeout:6
     const upload=load('lib/knowledge-import-upload-contract.ts');
     const prep=load('lib/knowledge-import-source-preparation.ts',{'server-only':{},'node:crypto':require('node:crypto'),'./knowledge-bulk-import-preflight':load('lib/knowledge-bulk-import-preflight.ts'),'./knowledge-import-upload-contract':upload});
     const gateway=load('lib/knowledge-import-gateway-review.ts',{'server-only':{},'node:crypto':require('node:crypto'),'./knowledge-import-source-preparation':prep,'./knowledge-import-upload-contract':upload});
+    // Local-only streaming observation: read the actual object over a guarded, exact-path
+    // signed GET, independently observe version before/after, and never send admin credentials.
+    // This does not establish immutable-version semantics for a hosted provider.
+    const observeStream=async(job,path)=>{
+      assert.equal(path,job.path);
+      const current=async()=> (await db.query('select version from storage.objects where bucket_id=$1 and name=$2',[bucket,path])).rows[0]?.version;
+      const version=await current();if(!version)throw Error('object absent');
+      const chunks=(async function*(){
+        const signed=await admin.storage.from(bucket).createSignedUrl(path,30);
+        if(signed.error)throw Error('signed read unavailable');
+        const url=fixtureApiUrl(signed.data.signedUrl);
+        assert.equal(url.pathname,'/storage/v1/object/sign/'+bucket+'/'+path);
+        assert.deepEqual([...url.searchParams.keys()],['token']);assert.ok(url.searchParams.get('token'));
+        const response=await fixtureFetch(url,{method:'GET',redirect:'error',cache:'no-store',signal:AbortSignal.timeout(60000)});
+        if(response.status!==200||!response.body||response.headers.get('content-type')?.split(';')[0]!=='application/json'){
+          await response.body?.cancel().catch(()=>{});throw Error('source response rejected');
+        }
+        const reader=response.body.getReader();let n=0;
+        try{
+          while(true){const item=await reader.read();if(item.done)break;n+=item.value.byteLength;if(n>job.length)throw Error('source too large');yield item.value;}
+          if(n!==job.length||await current()!==version)throw Error('source identity changed');
+        }finally{await reader.cancel().catch(()=>{});reader.releaseLock();}
+      })();
+      return {version,chunks};
+    };
     const makeAdapter=(job,afterPut=async()=>{},writer=null)=>({
       async reservation(scope){
         const result=await db.query("select j.organization_id,j.id,j.requested_by,j.request_session_id,j.object_path,j.declared_bytes,j.upload_expires_at,j.status from knowledge_import_review.lock_job($1,$2) j",[scope.organizationId,scope.jobId]);
@@ -166,11 +191,7 @@ test('actual disposable Supabase Storage authorization and lifecycle',{timeout:6
         if(result.error)throw Error('provider write not confirmed');
         await afterPut();
       },
-      async inspect(path){
-        const result=await db.query('select version from storage.objects where bucket_id=$1 and name=$2',[bucket,path]);
-        const saved=await read(job);if(!saved||!result.rows[0]?.version)throw Error('object absent');
-        return {version:result.rows[0].version,bytes:saved};
-      },
+      async inspect(path){return observeStream(job,path);},
       async digests(payloads){return (await db.query('select * from knowledge_import_review.digest_payloads($1::jsonb)',[JSON.stringify(payloads)])).rows.map(r=>r.payload_sha256);},
       async register(scope,p){return writer?(await db.query('select knowledge_import_review.gateway_register($1,$2,$3,$4,$5,$6,$7,$8::jsonb) as status',[scope.organizationId,scope.jobId,writer,1,p.objectVersion,p.byteLength,p.sha256,JSON.stringify(p.manifest)])).rows[0].status:(await db.query('select knowledge_import_review.register_verified_source($1,$2,$3,$4,$5,$6::jsonb) as status',[scope.organizationId,scope.jobId,p.objectVersion,p.byteLength,p.sha256,JSON.stringify(p.manifest)])).rows[0].status;}
     });
@@ -467,7 +488,11 @@ test('actual disposable Supabase Storage authorization and lifecycle',{timeout:6
       assert.equal(staged.length,max);assert.equal(digest(staged),expectedDigest);memory('staged');
       const result=await gateway.publishKnowledgeGatewayReview(scope,staged,makeAdapter(j,async()=>{},writer),Date.now);
       assert.deepEqual(result,{state:'registered',status:'queued'});
-      const saved=await read(j);assert.equal(saved.length,max);assert.equal(digest(saved),expectedDigest);memory('storage_verified');
+      // Gateway has already independently hashed the actual Storage stream. Repeat the
+      // observation without allocating a second full download for the capacity assertion.
+      const saved=await observeStream(j,j.path);let verifiedBytes=0;const verifiedHash=createHash('sha256');
+      for await(const chunk of saved.chunks){verifiedBytes+=chunk.byteLength;verifiedHash.update(chunk);}
+      assert.equal(verifiedBytes,max);assert.equal(verifiedHash.digest('hex'),expectedDigest);memory('storage_verified');
       const ledger=(await db.query("select count(*)::int as total,count(*) filter(where status='pending')::int as pending from knowledge_import_entries_v1 where organization_id=$1 and job_id=$2",[org,j.id])).rows[0];
       assert.deepEqual(ledger,{total:10000,pending:10000});
       assert.equal((await db.query('select count(*)::int as n from knowledge_import_review.gateway_chunks where job_id=$1',[j.id])).rows[0].n,0);
