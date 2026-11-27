@@ -43,6 +43,12 @@ export async function readSignedKnowledgeSource(scope:Scope,identity:Identity,pr
  * No shared service-role connection or SET ROLE/JWT. All finalize transport errors remain uncertain.
  * A later transaction-aware adapter may classify a confirmed rollback. */
 export function createKnowledgeWorkerReviewAdapters(query:Query,projectOrigin:string,issueReadUrl:IssueReadUrl,fetcher:Fetcher=fetch):Adapters{
+  return createKnowledgeWorkerSourceAdaptersReview(query,(scope,identity)=>readSignedKnowledgeSource(scope,identity,projectOrigin,issueReadUrl,fetcher));
+}
+/** A trusted source reader must independently authorize and pin the exact object, enforce bounded
+ * reads, and return bytes for the existing hash/manifest verification. This seam is also used
+ * by disposable provider tests without weakening the production signed URL origin checks. */
+export function createKnowledgeWorkerSourceAdaptersReview(query:Query,readSource:(scope:Scope,identity:Identity)=>Promise<Parameters<typeof prepareKnowledgeWorkerSource>[2]>):Adapters{
   const args=(scope:Scope)=>[scope.organizationId,scope.jobId];
   const digest=async(scope:Scope,payloads:readonly unknown[]):Promise<string[]>=>{
     // Split bounded canonical batches conservatively; database checks its own byte limit.
@@ -60,7 +66,7 @@ export function createKnowledgeWorkerReviewAdapters(query:Query,projectOrigin:st
       const byteLength=Number(row.byte_length);if(!Number.isSafeInteger(byteLength))throw Error('invalid identity');
       return {objectPath:row.object_path,objectVersion:row.object_version,byteLength,sha256:row.source_sha256,manifestSha256:row.manifest_sha256};
     },
-    async prepareVerifiedSource(scope,identity){const source=await readSignedKnowledgeSource(scope,identity,projectOrigin,issueReadUrl,fetcher);
+    async prepareVerifiedSource(scope,identity){const source=await readSource(scope,identity);
       const p=await prepareKnowledgeWorkerSource(scope,identity,source,rows=>digest(scope,rows));return p.ok?p:null;},
     async verifyManifest(scope,p){return one((await query('select knowledge_import_review.worker_verify_manifest($1,$2,$3,$4,$5,$6::jsonb) as ok',[...args(scope),p.objectVersion,p.byteLength,p.sha256,JSON.stringify(p.manifest)])).rows).ok===true;},
     async claim(scope,limit){return (await query('select * from knowledge_import_review.worker_claim($1,$2,$3)',[...args(scope),limit])).rows.map(row=>{

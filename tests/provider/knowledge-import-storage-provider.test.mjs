@@ -290,6 +290,67 @@ test('actual disposable Supabase Storage authorization and lifecycle',{timeout:2
       await assert.rejects(transport(owner.claims)('select knowledge_import_review.broker_current_scope()',[]),e=>e.code==='42501');
 
     });
+    await t.test('delegated scheduler processes real private Storage source with restricted worker login',async()=>{
+      const j=await createJob(),scope={organizationId:org,jobId:j.id},writer=randomUUID();
+      await db.query("select set_config('request.jwt.claims',$1,false)",[JSON.stringify(owner.claims)]);
+      await db.query('select * from knowledge_import_review.gateway_acquire($1,$2,$3)',[org,j.id,writer]);
+      await db.query('select knowledge_import_review.gateway_append($1,$2,$3,$4,$5,$6)',[org,j.id,writer,1,0,bytes]);
+      const staged=(await db.query('select knowledge_import_review.gateway_begin_publication($1,$2,$3,$4) as bytes',[org,j.id,writer,1])).rows[0].bytes;
+      assert.deepEqual(await gateway.publishKnowledgeGatewayReview(scope,staged,makeAdapter(j,async()=>{},writer),Date.now),{state:'registered',status:'queued'});
+      const login='kb_worker_'+randomUUID().replaceAll('-',''),password=randomUUID().replaceAll('-','');
+      await db.query("create role "+login+" login password '"+password+"' nosuperuser nocreatedb nocreaterole noreplication nobypassrls noinherit");
+      await db.query('insert into knowledge_import_review.worker_principals values($1,true)',[login]);
+      await db.query('grant usage on schema knowledge_import_review to '+login);
+      await db.query('grant execute on function knowledge_import_review.worker_due_jobs(integer),knowledge_import_review.worker_source_identity(uuid,uuid),knowledge_import_review.worker_verify_manifest(uuid,uuid,text,bigint,text,jsonb),knowledge_import_review.worker_digest_payloads(uuid,uuid,jsonb),knowledge_import_review.worker_claim(uuid,uuid,integer),knowledge_import_review.worker_finalize(uuid,uuid,integer,uuid,integer,jsonb),knowledge_import_review.worker_result(uuid,uuid,integer,uuid,integer),knowledge_import_review.worker_settle_failure(uuid,uuid,integer,uuid,integer,text) to '+login);
+      const workerUrl=new URL(dbUrl.href);workerUrl.username=login;workerUrl.password=password;
+      const worker=new pg.Client({connectionString:workerUrl.href,connectionTimeoutMillis:5000});await worker.connect();
+      try{
+        await worker.query("set statement_timeout='15s'");
+        const query=(sql,params)=>worker.query(sql,params);
+        assert.equal((await query('select * from knowledge_import_review.worker_due_jobs($1)',[1])).rowCount,0);
+        await assert.rejects(query('select * from public.knowledge_documents',[]),e=>e.code==='42501');
+        await assert.rejects(query('select * from knowledge_import_review.gateway_chunks',[]),e=>e.code==='42501');
+        await assert.rejects(query('select knowledge_import_review.broker_current_scope()',[]),e=>e.code==='42501');
+        assert.equal((await db.query('select knowledge_import_review.delegate_worker($1,$2,$3,$4) as ok',[org,j.id,login,new Date(Date.now()+600000)])).rows[0].ok,true);
+        const adapters=load('lib/knowledge-import-worker-adapters-review.ts',{'server-only':{},'./knowledge-import-source-preparation':prep,'./knowledge-import-upload-contract':upload});
+        const runner=load('lib/knowledge-import-worker-review.ts',{'server-only':{}});
+        const scheduler=load('lib/knowledge-import-scheduler-review.ts',{'server-only':{},'./knowledge-import-worker-review':runner});
+        // Fixture-only privileged issuer, NOT a credential available to the worker.
+        // Check actual delegated identity at issuance, and observed Storage version before/after read.
+        const version=async()=> (await db.query('select version from storage.objects where bucket_id=$1 and name=$2',[bucket,j.path])).rows[0]?.version;
+        let issued=0,downloads=0;
+        const readSource=async(requested,identity)=>{
+          assert.deepEqual(requested,scope);assert.equal(identity.objectPath,j.path);
+          const authorized=(await query('select * from knowledge_import_review.worker_source_identity($1,$2)',[requested.organizationId,requested.jobId])).rows[0];
+          assert.equal(authorized.object_version,identity.objectVersion);assert.equal(authorized.source_sha256,identity.sha256);assert.equal(authorized.byte_length,String(identity.byteLength));
+          assert.equal(await version(),identity.objectVersion);
+          const signed=await admin.storage.from(bucket).createSignedUrl(j.path,30);
+          assert.equal(Boolean(signed.error),false);issued++;
+          const url=fixtureApiUrl(signed.data.signedUrl);
+          assert.equal(url.pathname,'/storage/v1/object/sign/'+bucket+'/'+j.path);
+          assert.equal(url.searchParams.getAll('token').length,1);assert.ok(url.searchParams.get('token'));assert.deepEqual([...url.searchParams.keys()],['token']);
+          // Only the short-lived read capability is used here, no admin Authorization header.
+          const response=await fixtureFetch(url,{method:'GET',redirect:'error',cache:'no-store',signal:AbortSignal.timeout(20000)});
+          assert.equal(response.status,200);assert.equal(response.headers.get('content-type')?.split(';')[0],'application/json');
+          assert.ok(response.body);downloads++;
+          const stream=response.body;
+          const chunks=(async function*(){const reader=stream.getReader();let total=0;
+            try{while(true){const item=await reader.read();if(item.done)break;total+=item.value.byteLength;if(total>identity.byteLength)throw Error('source too large');yield item.value;}
+              assert.equal(total,identity.byteLength);assert.equal(await version(),identity.objectVersion);
+            }finally{await reader.cancel().catch(()=>{});reader.releaseLock();}
+          })();
+          return {bucket,objectPath:j.path,version:identity.objectVersion,contentType:'application/json',chunks};
+        };
+        const workerAdapters=adapters.createKnowledgeWorkerSourceAdaptersReview(query,readSource);
+        const tick=await scheduler.runKnowledgeImportSchedulerReview(query,workerAdapters,{jobs:1,batchSize:1,batches:2});
+        assert.equal(tick.stop,'complete');assert.equal(tick.reports.length,1);assert.equal(tick.reports[0].report.created,1);assert.equal(issued,1);assert.equal(downloads,1);
+        const docs=(await db.query("select status,created_by from public.knowledge_documents where metadata->>'import_job_id'=$1",[j.id])).rows;
+        assert.deepEqual(docs,[{status:'draft',created_by:owner.actor}]);
+        assert.equal((await db.query('select status from knowledge_import_jobs_v1 where id=$1',[j.id])).rows[0].status,'completed');
+        assert.equal((await query('select * from knowledge_import_review.worker_due_jobs($1)',[1])).rowCount,0);
+        await assert.rejects(query('select * from knowledge_import_review.worker_source_identity($1,$2)',[other,j.id]),e=>e.code==='42501');
+      }finally{await worker.end();}
+    });
     await t.test('cancel after provider write prevents manifest publication and preserves quota',async()=>{
       const j=await createJob(),scope={organizationId:org,jobId:j.id};
       const result=await gateway.publishKnowledgeGatewayReview(scope,bytes,makeAdapter(j,async()=>{

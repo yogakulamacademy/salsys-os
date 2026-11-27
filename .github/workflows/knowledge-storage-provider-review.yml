@@ -10,7 +10,7 @@ permissions:
   contents: read
 concurrency:
   group: knowledge-storage-provider-review-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 jobs:
   disposable-storage:
     runs-on: ubuntu-24.04
