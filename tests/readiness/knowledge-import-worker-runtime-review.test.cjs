@@ -72,3 +72,43 @@ test('versioned runtime signs only a matching, unexpired source grant',async()=>
  await assert.rejects(run(),/source read grant denied/);
  assert.equal(signingCalls.length,2);
 });
+
+test('versioned runtime resolves the grant through a separate restricted database session',async()=>{
+ const scope={organizationId:'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',jobId:'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'};
+ const path=upload.knowledgeImportObjectPath(scope.organizationId,scope.jobId);
+ const identity={objectPath:path,objectVersion:'v1',byteLength:4,sha256:'a'.repeat(64),manifestSha256:'b'.repeat(64)};
+ const f=fixture(async(_query,adapter)=>adapter.read(scope,identity),{
+  adapters:(_query,read)=>({readIdentity:async()=>identity,read}),
+  readSigned:async(s,id,_origin,issue)=>{assert.equal(await issue(s,id),'signed-source');return {chunks:[]};},
+ });
+ let restricted=true, destroyed=0, lookups=0, signed=0;
+ const {readSource,...options}=f.options;
+ const run=()=>f.api.runKnowledgeVersionedWorkerRuntimeReview({
+  ...options,projectOrigin:'https://example.supabase.co',
+  issuer:{
+   now:()=>1000,
+   openIssuerConnection:async()=>({
+    query:async(statement,params)=>{
+     if(statement.startsWith('select session_user'))return {rows:[{login,restricted}]};
+     if(statement==="set statement_timeout='5s'")return {rows:[]};
+     assert.equal(statement,'select * from knowledge_import_review.worker_source_identity($1,$2)');
+     assert.deepEqual(params,[scope.organizationId,scope.jobId]);
+     lookups++;
+     return {rows:[{object_path:path,object_version:'v1',byte_length:'4',
+      source_sha256:identity.sha256,manifest_sha256:identity.manifestSha256,read_expires_at_ms:'6500'}]};
+    },
+    destroy:async()=>{destroyed++;},
+   }),
+   storage:{from:bucket=>({createSignedUrl:async(...args)=>{
+    assert.deepEqual([bucket,...args],[upload.KNOWLEDGE_IMPORT_BUCKET,path,5,{versionId:'v1'}]);
+    assert.equal(destroyed,1);
+    signed++;
+    return {data:{signedUrl:'signed-source'},error:null};
+   }})},
+  },
+ });
+ await run();
+ restricted=false;
+ await assert.rejects(run(),/issuer login denied/);
+ assert.deepEqual([lookups,signed,destroyed],[1,1,2]);
+});
