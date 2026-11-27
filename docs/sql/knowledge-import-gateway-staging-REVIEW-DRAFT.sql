@@ -106,5 +106,36 @@ begin
  update knowledge_import_review.gateway_uploads set phase='registered' where organization_id=p_org and job_id=p_job;
  return result;
 end $$;
+-- Only terminal receiving uploads may purge chunks without external publication reconciliation.
+-- No quota release here: absence of any provider object/old upload still requires evidence.
+create function knowledge_import_review.gateway_purge_receiving(p_org uuid,p_job uuid)
+returns bigint language plpgsql security invoker set search_path=pg_catalog,public,pg_temp as $$
+declare j public.knowledge_import_jobs_v1%rowtype; g knowledge_import_review.gateway_uploads%rowtype; removed bigint;
+begin
+ select * into j from public.knowledge_import_jobs_v1 where organization_id=p_org and id=p_job for update;
+ if not found or j.status not in ('cancelled','expired','failed') or clock_timestamp()<j.retention_expires_at then
+   raise exception 'gateway purge not eligible'; end if;
+ select * into g from knowledge_import_review.gateway_uploads where organization_id=p_org and job_id=p_job for update;
+ if not found then return 0; end if;
+ if g.phase<>'receiving' then raise exception 'gateway publication reconciliation required'; end if;
+ select coalesce(sum(octet_length(bytes)),0) into removed from knowledge_import_review.gateway_chunks where organization_id=p_org and job_id=p_job;
+ delete from knowledge_import_review.gateway_chunks where organization_id=p_org and job_id=p_job;
+ delete from knowledge_import_review.gateway_uploads where organization_id=p_org and job_id=p_job;
+ return removed;
+end $$;
+-- Guard every quota release, including the earlier cleanup RPC. Parent job already locked by UPDATE.
+-- Does not replace external evidence checks, and cannot prove deletion from WAL/backups.
+create function knowledge_import_review.gateway_quota_guard()
+returns trigger language plpgsql security invoker set search_path=pg_catalog,public,pg_temp as $$
+begin
+ if old.storage_released_at is null and new.storage_released_at is not null and (
+   exists(select 1 from knowledge_import_review.gateway_uploads g where g.organization_id=new.organization_id and g.job_id=new.id and g.phase<>'registered')
+   or exists(select 1 from knowledge_import_review.gateway_chunks c where c.organization_id=new.organization_id and c.job_id=new.id)) then
+   raise exception 'gateway cleanup incomplete'; end if;
+ return new;
+end $$;
+create trigger knowledge_import_gateway_quota_guard before update of storage_released_at on public.knowledge_import_jobs_v1
+ for each row execute function knowledge_import_review.gateway_quota_guard();
+revoke all on function knowledge_import_review.gateway_purge_receiving(uuid,uuid),knowledge_import_review.gateway_quota_guard() from public,anon,authenticated,service_role;
 revoke all on function knowledge_import_review.gateway_acquire(uuid,uuid,uuid),knowledge_import_review.gateway_lock(uuid,uuid,uuid,bigint,text),knowledge_import_review.gateway_append(uuid,uuid,uuid,bigint,bigint,bytea),knowledge_import_review.gateway_begin_publication(uuid,uuid,uuid,bigint),knowledge_import_review.gateway_register(uuid,uuid,uuid,bigint,text,bigint,text,jsonb) from public,anon,authenticated,service_role;
 commit;

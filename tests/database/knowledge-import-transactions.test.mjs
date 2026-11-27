@@ -492,6 +492,26 @@ test('disposable PG: exact Knowledge RPC, competing claims, rollback, retry, rev
     assert.equal((await a.query('select count(*)::int as n from knowledge_import_review.gateway_chunks where job_id=$1',[publishJob])).rows[0].n,0);
     assert.equal((await a.query('select phase from knowledge_import_review.gateway_uploads where job_id=$1',[publishJob])).rows[0].phase,'registered');
     await assert.rejects(worker.query('select * from knowledge_import_review.gateway_chunks'),e=>e.code==='42501');
+    // Purge never releases quota or deletes publishing/registered source records.
+    const purge=(conn,j,o=org)=>conn.query('select knowledge_import_review.gateway_purge_receiving($1,$2) as n',[o,j]);
+    const abandoned=randomUUID(), abandonToken=randomUUID();
+    await reserve(a,abandoned,chunkBytes,uploadEnd,retentionEnd);
+    await acquire(a,abandoned,abandonToken);
+    await append(a,abandoned,abandonToken,1,0,firstChunk);
+    await assert.rejects(purge(a,abandoned),/purge not eligible/);
+    await assert.rejects(purge(worker,abandoned),e=>e.code==='42501');
+    await assert.rejects(purge(a,abandoned,other),/purge not eligible/);
+    assert.equal((await a.query('select knowledge_import_review.cancel($1,$2) as ok',[org,abandoned])).rows[0].ok,true);
+    await assert.rejects(purge(a,abandoned),/purge not eligible/);
+    await a.query("update knowledge_import_jobs_v1 set created_at=now()-interval '3 hours',upload_expires_at=now()-interval '2 hours',retention_expires_at=now()-interval '1 hour' where id in ($1,$2)",[abandoned,chunkJob]);
+    await assert.rejects(a.query('update knowledge_import_jobs_v1 set storage_released_at=now() where id=$1',[abandoned]),/gateway cleanup incomplete/);
+    await assert.rejects(purge(a,chunkJob),/publication reconciliation required/);
+    await assert.rejects(a.query('update knowledge_import_jobs_v1 set storage_released_at=now() where id=$1',[chunkJob]),/gateway cleanup incomplete/);
+    assert.equal((await purge(a,abandoned)).rows[0].n,'1048576');
+    assert.equal((await purge(b,abandoned)).rows[0].n,'0');
+    assert.equal((await a.query('select storage_released_at from knowledge_import_jobs_v1 where id=$1',[abandoned])).rows[0].storage_released_at,null);
+    assert.equal((await a.query('select count(*)::int as n from knowledge_import_review.gateway_chunks where job_id=$1',[abandoned])).rows[0].n,0);
+
     const retryJob=await seedJob(1);
     for(let attempt=1;attempt<=5;attempt++){
       const c=await claimJob(a,retryJob);assert.equal(c.attempts,attempt);
