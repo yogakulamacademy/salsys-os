@@ -407,8 +407,15 @@ test('actual disposable Supabase Storage authorization and lifecycle: '+reviewMo
           })();
           return {bucket,objectPath:j.path,version:identity.objectVersion,contentType:'application/json',chunks};
         };
-        const workerAdapters=adapters.createKnowledgeWorkerSourceAdaptersReview(query,readSource);
-        const tick=await scheduler.runKnowledgeImportSchedulerReview(query,workerAdapters,{jobs:1,batchSize:1,batches:2});
+        const runtime=load('lib/knowledge-import-worker-runtime-review.ts',{'server-only':{},'./knowledge-import-worker-adapters-review':adapters,'./knowledge-import-scheduler-review':scheduler});
+        let runtimeOpened=0,runtimeClosed=0;
+        const tick=await runtime.runKnowledgeWorkerRuntimeReview({expectedLogin:login,windowBatches:2,budgetMs:90000,readSource,
+          openDedicatedWorker:async()=>{
+            const conn=new pg.Client({connectionString:workerUrl.href,connectionTimeoutMillis:5000});await conn.connect();runtimeOpened++;
+            return {query:(statement,params)=>conn.query(statement,params),destroy:async()=>{await conn.end();runtimeClosed++;}};
+          }
+        });
+        assert.equal(runtimeOpened,1);assert.equal(runtimeClosed,1);
         assert.equal(tick.stop,'complete');assert.equal(tick.reports.length,1);assert.equal(tick.reports[0].report.created,1);assert.equal(issued,1);assert.equal(downloads,1);
         const docs=(await db.query("select status,created_by from public.knowledge_documents where metadata->>'import_job_id'=$1",[j.id])).rows;
         assert.deepEqual(docs,[{status:'draft',created_by:owner.actor}]);
