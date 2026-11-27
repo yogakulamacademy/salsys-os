@@ -1,6 +1,6 @@
 const {test}=require('node:test');const assert=require('node:assert/strict');const crypto=require('node:crypto');const {load}=require('./helpers.cjs');
 const upload=load('lib/knowledge-import-upload-contract.ts');
-const api=load('lib/knowledge-import-gateway-review.ts',{'server-only':{},'node:crypto':crypto,'./knowledge-import-source-preparation':{prepareKnowledgeImportSource:async()=>({ok:true,manifest:[],batches:[]})},'./knowledge-import-upload-contract':upload});
+const api=load('lib/knowledge-import-gateway-review.ts',{'server-only':{},'node:crypto':crypto,'./knowledge-import-source-preparation':{prepareKnowledgeImportManifest:async()=>({ok:true,manifest:[]})},'./knowledge-import-upload-contract':upload});
 const raw=Buffer.from('abc'),sha=crypto.createHash('sha256').update(raw).digest('hex');
 const stream=(parts,fail=false,onClose=()=>{})=>(async function*(){try{for(const part of parts)yield part;if(fail)throw Error('stream identity changed');}finally{onClose();}})();
 test('streamed and buffered observations require exact bytes, digest and version',async()=>{

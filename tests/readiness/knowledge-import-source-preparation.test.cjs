@@ -35,3 +35,16 @@ test('bad digest adapter and expired reservation fail closed',async()=>{
  assert.equal((await run(source(),{version:'synthetic-v1'},reservation,context,async()=>[])).reason,'invalid_payload_digest');
  let t=0;assert.equal((await run(source(),{version:'synthetic-v1'},reservation,context,digests,()=>++t===3?5000:1000)).reason,'reservation_no_longer_valid');
 });
+
+test('manifest-only publication matches full source preparation without retaining mapped payloads',async()=>{
+ const many=Buffer.from(JSON.stringify({version:1,drafts:[...Array.from({length:101},(_,i)=>({...row,title:'Policy '+i})),row,row,null]}));
+ const res={...reservation,declaredBytes:many.length};
+ const full=await run(source(many),{version:'synthetic-v1'},res);
+ const counts=[];
+ const reduced=await api.prepareKnowledgeImportManifest(context,res,{version:'synthetic-v1'},source(many),async rows=>{counts.push(rows.length);return digests(rows);},()=>1000);
+ assert.equal(full.ok,true);assert.equal(reduced.ok,true);assert.equal(Object.hasOwn(reduced,'batches'),false);
+ const {batches,...metadata}=full;assert.deepEqual(reduced,metadata);
+ assert.equal(counts.reduce((a,b)=>a+b,0),102);assert.ok(counts.every(n=>n<=50));assert.equal(counts.length,3);
+ const bad=await api.prepareKnowledgeImportManifest(context,res,{version:'synthetic-v1'},source(many),async()=>[],()=>1000);
+ assert.equal(bad.ok,false);assert.equal(bad.reason,'invalid_payload_digest');
+});

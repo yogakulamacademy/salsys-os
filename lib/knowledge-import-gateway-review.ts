@@ -1,14 +1,14 @@
 import 'server-only';
 import {createHash} from 'node:crypto';
-import {prepareKnowledgeImportSource} from './knowledge-import-source-preparation';
+import {prepareKnowledgeImportManifest} from './knowledge-import-source-preparation';
 import {knowledgeImportObjectPath, KNOWLEDGE_IMPORT_BUCKET} from './knowledge-import-upload-contract';
 
 /** Review-only publication boundary. Not a browser route, chunk receiver, credential issuer or scheduler. */
 export const KNOWLEDGE_IMPORT_GATEWAY_RUNTIME_WIRED=false as const;
 type Scope=Readonly<{organizationId:string;jobId:string}>;
-type Context=Parameters<typeof prepareKnowledgeImportSource>[0];
-type Reservation=Parameters<typeof prepareKnowledgeImportSource>[1];
-type Prepared=Extract<Awaited<ReturnType<typeof prepareKnowledgeImportSource>>,{ok:true}>;
+type Context=Parameters<typeof prepareKnowledgeImportManifest>[0];
+type Reservation=Parameters<typeof prepareKnowledgeImportManifest>[1];
+type Prepared=Extract<Awaited<ReturnType<typeof prepareKnowledgeImportManifest>>,{ok:true}>;
 // Existing bounded-buffer adapters remain compatible. New provider adapters should stream
 // actual bytes and throw if the observed provider identity changes during the read.
 export type KnowledgePublicationObservation={version:string;bytes:Uint8Array;chunks?:never}|{version:string;chunks:AsyncIterable<Uint8Array>;bytes?:never};
@@ -19,7 +19,7 @@ type Adapters={
   put(path:string,bytes:Uint8Array):Promise<void>;
   // Read actual object bytes and observed provider version, not caller-supplied metadata.
   inspect(path:string):Promise<KnowledgePublicationObservation>;
-  digests:Parameters<typeof prepareKnowledgeImportSource>[4];
+  digests:Parameters<typeof prepareKnowledgeImportManifest>[4];
   // Recheck original authority, reservation state/expiry and register atomically.
   register(scope:Scope,prepared:Prepared):Promise<string>;
 };
@@ -58,7 +58,7 @@ export async function publishKnowledgeGatewayReview(scope:Scope,input:Uint8Array
     if(reservation.organizationId!==scope.organizationId||reservation.jobId!==scope.jobId||reservation.objectPath!==path||reservation.declaredBytes!==bytes.byteLength)return {state:'rejected'};
     // Validate content before any provider write; the provisional version is never registered.
     const source=(version:string,data:Uint8Array)=>({bucket:KNOWLEDGE_IMPORT_BUCKET,objectPath:path,version,contentType:'application/json',chunks:(async function*(){yield data;})()});
-    const prepared=await prepareKnowledgeImportSource(context,reservation,{version:'prepublication',sha256:digest},source('prepublication',bytes),a.digests,now);
+    const prepared=await prepareKnowledgeImportManifest(context,reservation,{version:'prepublication',sha256:digest},source('prepublication',bytes),a.digests,now);
     if(!prepared.ok)return {state:'rejected'};
     // Fresh authority immediately before provider I/O. Revocation may still race the external write.
     const current=await a.reservation(scope);
