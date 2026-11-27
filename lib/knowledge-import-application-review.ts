@@ -10,7 +10,7 @@ type Options={origin:string;issuer:string;accessToken:(request:Request)=>Promise
  // Must verify this exact token with trusted Auth (not merely decode or getSession).
  verifyUser:(token:string)=>Promise<{id:string;is_anonymous?:boolean}|null>;
  // Trusted broker must bind claims per statement/transaction; never reuse mutable pooled claims.
- connect:(claims:Claims)=>Promise<{query:Query;publication:Authenticated['publication'];close:()=>Promise<void>}>;
+ connect:(claims:Claims)=>Promise<{query:Query;publicationFor:(scope:{organizationId:string;jobId:string})=>Authenticated['publication'];close:()=>Promise<void>}>;
  uploadSeconds:number;retentionSeconds:number;now?:()=>number};
 const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const json=(status:number,value:unknown)=>new Response(JSON.stringify(value),{status,headers:{'content-type':'application/json','cache-control':'no-store','x-content-type-options':'nosniff'}});
@@ -46,7 +46,7 @@ export function createKnowledgeApplicationReview(o:Options){
    conn=await o.connect(claims);
    const {rows}=await conn.query('select knowledge_import_review.current_scope() as organization_id',[]);
    if(rows.length!==1||typeof rows[0].organization_id!=='string'||!uuid.test(rows[0].organization_id))return json(403,{error:'request_denied'});
-   const context={organizationId:rows[0].organization_id,query:conn.query,publication:conn.publication};
+   const context={organizationId:rows[0].organization_id,query:conn.query};
    if(history)return await createKnowledgeHistoryHttpReview({origin:o.origin,authenticate:async()=>context})(request);
    if(op==='reserve'||op==='cancel'){
     if(request.body!==null||(request.headers.get('content-length')??'0')!=='0')return json(400,{error:'unexpected_body'});
@@ -60,7 +60,10 @@ export function createKnowledgeApplicationReview(o:Options){
     const result=await conn.query('select knowledge_import_review.cancel_current($1) as ok',[job]);
     return result.rows.length===1&&result.rows[0].ok===true?json(200,{status:'cancelled'}):json(409,{error:'cancellation_not_confirmed'});
    }
-   return await createKnowledgeGatewayHttpReview({origin:o.origin,authenticate:async()=>context,now:o.now})(request,job,op as 'acquire'|'append'|'publish'|'receipt');
+   // Publication dependencies are derived from the verified DB tenant and this job,
+   // not from a client tenant header or a shared adapter from another request.
+   const scoped=conn.publicationFor({organizationId:context.organizationId,jobId:job});
+   return await createKnowledgeGatewayHttpReview({origin:o.origin,authenticate:async()=>({...context,publication:scoped}),now:o.now})(request,job,op as 'acquire'|'append'|'publish'|'receipt');
   }catch{return json(403,{error:'request_denied'});}
   finally{try{await conn?.close();}catch{/* broker must discard failed connection */}}
  };

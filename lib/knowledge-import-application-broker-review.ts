@@ -25,3 +25,30 @@ export function createKnowledgeBrokerQueryReview(transport:Query):Query{
   return transport(op.sql,params);
  };
 }
+
+/** A dedicated application connection is acquired per transaction and never reused
+ * after an uncertain statement, rollback or commit. Driver must enforce network and
+ * connect deadlines and implement destroy (not return to a shared mutable session). */
+type DedicatedConnection={query:Query;destroy:()=>Promise<void>};
+type VerifiedClaims={sub:string;session_id:string;role:'authenticated';is_anonymous:false;exp:number};
+export function createKnowledgeBrokerTransactionReview(claims:VerifiedClaims,open:()=>Promise<DedicatedConnection>,now:()=>number=Date.now):Query{
+ const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+ if(!claims||!uuid.test(claims.sub)||!uuid.test(claims.session_id)||claims.role!=='authenticated'||claims.is_anonymous!==false||!Number.isSafeInteger(claims.exp))throw Error('invalid verified claims');
+ const bound=JSON.stringify({sub:claims.sub,session_id:claims.session_id,role:claims.role,is_anonymous:false,exp:claims.exp});
+ const expires=claims.exp;
+ return createKnowledgeBrokerQueryReview(async(statement,params)=>{
+  if(expires<=Math.floor(now()/1000))throw Error('application session expired');
+  const conn=await open();
+  try{
+   await conn.query('begin isolation level read committed',[]);
+   await conn.query("set local statement_timeout='15s'",[]);
+   await conn.query("set local lock_timeout='5s'",[]);
+   await conn.query("set local idle_in_transaction_session_timeout='15s'",[]);
+   await conn.query("select set_config('request.jwt.claims',$1,true)",[bound]);
+   const result=await conn.query(statement,params);
+   await conn.query('commit',[]);
+   return result;
+  }catch(error){try{await conn.query('rollback',[]);}catch{/* connection is discarded */}throw error;}
+  finally{await conn.destroy();}
+ });
+}

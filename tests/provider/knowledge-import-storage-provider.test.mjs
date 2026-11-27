@@ -296,20 +296,25 @@ test('actual disposable Supabase Storage authorization and lifecycle: '+reviewMo
       await assert.rejects(transport({...owner.claims,exp:1})('select knowledge_import_review.broker_current_scope()',[]),e=>e.code==='42501');
       const scopeQuery=broker.createKnowledgeBrokerQueryReview(transport(owner.claims));
       await assert.rejects(scopeQuery('select * from auth.sessions',[]),/operation denied/);
-      const routeBoundary=load('lib/knowledge-import-route-boundary-review.ts',{'server-only':{},'./knowledge-import-application-review':application});
       const publicationAdapter=load('lib/knowledge-import-publication-adapter-review.ts',{'server-only':{},'./knowledge-import-upload-contract':upload});
-      const handle=routeBoundary.createKnowledgeRouteBoundaryReview({mode:'isolated_fixture',options:{origin:httpOrigin,issuer:owner.claims.iss,uploadSeconds:600,retentionSeconds:1200,
+      const runtime=load('lib/knowledge-import-runtime-composition-review.ts',{'server-only':{},'./knowledge-import-application-review':application,'./knowledge-import-application-broker-review':broker,'./knowledge-import-publication-adapter-review':publicationAdapter});
+      const secondId=randomUUID(),second={id:secondId,path:org+'/'+secondId+'/source.json',length:bytes.length};
+      const jobs=new Map([[j.id,j],[second.id,second]]);
+      const handle=runtime.createKnowledgeRuntimeCompositionReview({origin:httpOrigin,issuer:owner.claims.iss,uploadSeconds:600,retentionSeconds:1200,
         accessToken:async req=>req.headers.get('authorization')?.replace(/^Bearer /,'')??null,
         verifyUser:async token=>{const verified=await admin.auth.getUser(token);return verified.error?null:verified.data.user;},
-        connect:async claims=>{
-          const query=broker.createKnowledgeBrokerQueryReview(transport(claims)),fixture=makeAdapter(j);
-          const publication=publicationAdapter.createKnowledgePublicationAdapterReview(query,{
-            async createOnly(object,body){assert.equal(object.path,j.path);await fixture.put(object.path,body);},
-            async inspectExact(object){assert.equal(object.path,j.path);return fixture.inspect(object.path);}
-          },{organizationId:org,jobId:id});
-          return {query,publication,close:async()=>{}};
+        openDedicatedApplication:async()=>{
+          const conn=new pg.Client({connectionString:loginUrl.href,connectionTimeoutMillis:5000});await conn.connect();
+          return {query:(statement,params)=>conn.query(statement,params),destroy:()=>conn.end()};
+        },
+        providerFor:scope=>{
+          const selected=scope.organizationId===org?jobs.get(scope.jobId):null;
+          return {
+            async createOnly(object,body){assert.ok(selected);assert.equal(object.path,selected.path);await makeAdapter(selected).put(object.path,body);},
+            async inspectExact(object){assert.ok(selected);assert.equal(object.path,selected.path);return observeStream(selected,object.path);}
+          };
         }
-      }});
+      });
       // Only fixture Storage put/inspect uses the privileged local provider adapter.
       // All application database calls use the restricted login and fixed broker wrappers.
       await db.query("select set_config('request.jwt.claims',$1,false)",[JSON.stringify(owner.claims)]);
@@ -320,7 +325,11 @@ test('actual disposable Supabase Storage authorization and lifecycle: '+reviewMo
       assert.equal((await call(id+'/reserve','invalid','POST',{'x-knowledge-file-bytes':'10'})).status,403);
       const run=browser.createKnowledgeBrowserUploadReview({origin:httpOrigin,jobId:id,file:new File([bytes],'fixture.json',{type:'application/json'}),fetcher:async(url,opts)=>handle(new Request(url,{method:'POST',headers:{...opts.headers,origin:httpOrigin,authorization:'Bearer '+owner.token},body:opts.body}))});
       assert.deepEqual(await run(),{state:'registered',status:'queued'});
-      const history=await call('history',owner.token,'GET');assert.equal(history.status,200);assert.equal((await history.json()).jobs.find(x=>x.id===id).status,'queued');
+      assert.equal((await call(secondId+'/reserve',owner.token,'POST',{'x-knowledge-file-bytes':String(bytes.length)})).status,200);
+      const secondRun=browser.createKnowledgeBrowserUploadReview({origin:httpOrigin,jobId:secondId,file:new File([bytes],'fixture.json',{type:'application/json'}),fetcher:async(url,opts)=>handle(new Request(url,{method:'POST',headers:{...opts.headers,origin:httpOrigin,authorization:'Bearer '+owner.token},body:opts.body}))});
+      assert.deepEqual(await secondRun(),{state:'registered',status:'queued'});
+      assert.equal(digest(await read(j)),digest(bytes));assert.equal(digest(await read(second)),digest(bytes));
+      const history=await call('history',owner.token,'GET');assert.equal(history.status,200);const historyJobs=(await history.json()).jobs;assert.equal(historyJobs.find(x=>x.id===id).status,'queued');assert.equal(historyJobs.find(x=>x.id===secondId).status,'queued');
       const outside=await call('history',outsider.token,'GET');assert.equal(outside.status,200);assert.equal((await outside.json()).jobs.some(x=>x.id===id),false);
       assert.equal((await call(id+'/cancel')).status,200);
       await db.query('update public.organization_members set active=false where organization_id=$1 and user_id=$2',[org,owner.actor]);
