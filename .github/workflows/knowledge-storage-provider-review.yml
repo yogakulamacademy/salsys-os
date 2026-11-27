@@ -1,7 +1,7 @@
 name: Knowledge Storage provider review
 on:
   pull_request:
-    branches: [main, feat/knowledge-import-upload-job-contract-20261127]
+    branches: [main, feat/knowledge-import-upload-job-contract-20261127, fix/knowledge-provider-loopback-guard-20261127]
     paths:
       - 'docs/sql/knowledge-import-**'
       - 'tests/provider/knowledge-import-**'

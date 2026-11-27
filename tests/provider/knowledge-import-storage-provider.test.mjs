@@ -148,6 +148,7 @@ test('actual disposable Supabase Storage authorization and lifecycle',{timeout:2
     // Direct TUS stays a failing acceptance probe. Test the alternative gateway independently.
     await db.query(readFileSync('docs/sql/knowledge-import-gateway-only-REVIEW-DRAFT.sql','utf8'));
     await db.query(readFileSync('docs/sql/knowledge-import-gateway-staging-REVIEW-DRAFT.sql','utf8'));
+    await db.query(readFileSync('docs/sql/knowledge-import-application-boundary-REVIEW-DRAFT.sql','utf8'));
     const require=createRequire(import.meta.url),{load}=require('../readiness/helpers.cjs');
     const upload=load('lib/knowledge-import-upload-contract.ts');
     const prep=load('lib/knowledge-import-source-preparation.ts',{'server-only':{},'node:crypto':require('node:crypto'),'./knowledge-bulk-import-preflight':load('lib/knowledge-bulk-import-preflight.ts'),'./knowledge-import-upload-contract':upload});
@@ -223,6 +224,39 @@ test('actual disposable Supabase Storage authorization and lifecycle',{timeout:2
       const history=historyHttp.createKnowledgeHistoryHttpReview({origin:httpOrigin,authenticate:async()=>({query:async(statement,params)=>db.query(statement,params)})});
       const response=await history(new Request(httpOrigin+'/history'));assert.equal(response.status,200);
       const page=await response.json();assert.equal(page.jobs.find(x=>x.id===j.id).status,'queued');
+    });
+    await t.test('single application boundary reserves, uploads, reads history and cancels using verified local Auth',async()=>{
+      const httpOrigin='https://fixture.example', id=randomUUID(), j={id,path:org+'/'+id+'/source.json',length:bytes.length};
+      const http=load('lib/knowledge-import-gateway-http-review.ts',{'server-only':{},'node:crypto':require('node:crypto'),'./knowledge-import-gateway-review':gateway});
+      const historyHttp=load('lib/knowledge-import-history-http-review.ts',{'server-only':{},'./knowledge-import-history-review':load('lib/knowledge-import-history-review.ts')});
+      const application=load('lib/knowledge-import-application-review.ts',{'server-only':{},'./knowledge-import-gateway-http-review':http,'./knowledge-import-history-http-review':historyHttp});
+      const browser=load('lib/knowledge-import-browser-review.ts');
+      const handle=application.createKnowledgeApplicationReview({origin:httpOrigin,issuer:owner.claims.iss,uploadSeconds:600,retentionSeconds:1200,
+        accessToken:async req=>req.headers.get('authorization')?.replace(/^Bearer /,'')??null,
+        verifyUser:async token=>{const verified=await admin.auth.getUser(token);return verified.error?null:verified.data.user;},
+        connect:async claims=>({query:async(statement,params)=>{
+          // Dedicated local fixture connection per statement; claims bound transaction-locally.
+          const conn=new pg.Client({connectionString:dbUrl.href});await conn.connect();
+          try{await conn.query('begin');await conn.query("select set_config('request.jwt.claims',$1,true)",[JSON.stringify(claims)]);
+            const result=await conn.query(statement,params);await conn.query('commit');return result;
+          }catch(e){await conn.query('rollback');throw e;}finally{await conn.end();}
+        },publication:makeAdapter(j),close:async()=>{}})
+      });
+      // Fixture publication adapter uses the existing owner connection; its verified source
+      // registration is overridden by the fenced per-statement application query.
+      await db.query("select set_config('request.jwt.claims',$1,false)",[JSON.stringify(owner.claims)]);
+      const base=httpOrigin+'/api/knowledge-import-review/',call=(suffix,token=owner.token,method='POST',headers={})=>handle(new Request(base+suffix,{method,headers:{origin:httpOrigin,authorization:'Bearer '+token,...headers}}));
+      assert.equal((await call(id+'/reserve',owner.token,'POST',{'x-knowledge-file-bytes':String(bytes.length),'x-organization-id':other})).status,200);
+      assert.equal((await call(id+'/reserve',owner.token,'POST',{'x-knowledge-file-bytes':String(bytes.length)})).status,200);
+      assert.equal((await call(id+'/cancel',outsider.token)).status,403);
+      assert.equal((await call(id+'/reserve','invalid','POST',{'x-knowledge-file-bytes':'10'})).status,403);
+      const run=browser.createKnowledgeBrowserUploadReview({origin:httpOrigin,jobId:id,file:new File([bytes],'fixture.json',{type:'application/json'}),fetcher:async(url,opts)=>handle(new Request(url,{method:'POST',headers:{...opts.headers,origin:httpOrigin,authorization:'Bearer '+owner.token},body:opts.body}))});
+      assert.deepEqual(await run(),{state:'registered',status:'queued'});
+      const history=await call('history',owner.token,'GET');assert.equal(history.status,200);assert.equal((await history.json()).jobs.find(x=>x.id===id).status,'queued');
+      const outside=await call('history',outsider.token,'GET');assert.equal(outside.status,200);assert.equal((await outside.json()).jobs.some(x=>x.id===id),false);
+      assert.equal((await call(id+'/cancel')).status,200);
+      await db.query('update public.organization_members set active=false where organization_id=$1 and user_id=$2',[org,owner.actor]);
+      try{assert.equal((await call('history',owner.token,'GET')).status,403);}finally{await db.query('update public.organization_members set active=true where organization_id=$1 and user_id=$2',[org,owner.actor]);}
     });
     await t.test('cancel after provider write prevents manifest publication and preserves quota',async()=>{
       const j=await createJob(),scope={organizationId:org,jobId:j.id};
