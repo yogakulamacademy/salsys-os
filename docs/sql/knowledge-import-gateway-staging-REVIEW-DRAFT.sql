@@ -108,6 +108,18 @@ begin
 end $$;
 -- Only terminal receiving uploads may purge chunks without external publication reconciliation.
 -- No quota release here: absence of any provider object/old upload still requires evidence.
+-- Durable logical database purge receipt; not provider deletion, WAL/backups erasure,
+-- or quota-release evidence. No authenticated, application or worker grants.
+create table knowledge_import_review.gateway_receiving_purges(
+ organization_id uuid not null,job_id uuid not null,
+ generation bigint not null check(generation>0),
+ removed_bytes bigint not null check(removed_bytes between 0 and 52428800),
+ purged_at timestamptz not null default clock_timestamp(),
+ primary key(organization_id,job_id),
+ foreign key(organization_id,job_id) references public.knowledge_import_jobs_v1(organization_id,id)
+);
+alter table knowledge_import_review.gateway_receiving_purges enable row level security;
+revoke all on knowledge_import_review.gateway_receiving_purges from public,anon,authenticated,service_role;
 create function knowledge_import_review.gateway_purge_receiving(p_org uuid,p_job uuid)
 returns bigint language plpgsql security invoker set search_path=pg_catalog,public,pg_temp as $$
 declare j public.knowledge_import_jobs_v1%rowtype; g knowledge_import_review.gateway_uploads%rowtype; removed bigint;
@@ -118,7 +130,16 @@ begin
  select * into g from knowledge_import_review.gateway_uploads where organization_id=p_org and job_id=p_job for update;
  if not found then return 0; end if;
  if g.phase<>'receiving' then raise exception 'gateway publication reconciliation required'; end if;
+ if j.storage_released_at is not null or j.object_version is not null or j.sha256 is not null or j.manifest_sha256 is not null
+   or g.source_sha256 is not null or exists(select 1 from public.knowledge_import_entries_v1 e
+     where e.organization_id=p_org and e.job_id=p_job)
+   then raise exception 'gateway purge identity conflict'; end if;
  select coalesce(sum(octet_length(bytes)),0) into removed from knowledge_import_review.gateway_chunks where organization_id=p_org and job_id=p_job;
+ if removed is distinct from g.received_bytes or removed>j.declared_bytes then raise exception 'gateway staged byte count conflict'; end if;
+ -- Parent job and stage locks serialize purge with upload/cancellation. Receipt
+ -- and row removal commit together; failed transactions leave both untouched.
+ insert into knowledge_import_review.gateway_receiving_purges(organization_id,job_id,generation,removed_bytes)
+ values(p_org,p_job,g.generation,removed);
  delete from knowledge_import_review.gateway_chunks where organization_id=p_org and job_id=p_job;
  delete from knowledge_import_review.gateway_uploads where organization_id=p_org and job_id=p_job;
  return removed;

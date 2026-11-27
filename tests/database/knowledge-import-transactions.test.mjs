@@ -532,8 +532,24 @@ test('disposable PG: exact Knowledge RPC, competing claims, rollback, retry, rev
     await assert.rejects(a.query('update knowledge_import_jobs_v1 set storage_released_at=now() where id=$1',[abandoned]),/gateway cleanup incomplete/);
     await assert.rejects(purge(a,chunkJob),/publication reconciliation required/);
     await assert.rejects(a.query('update knowledge_import_jobs_v1 set storage_released_at=now() where id=$1',[chunkJob]),/gateway cleanup incomplete/);
+    // Fail closed on inconsistent staged byte accounting. Fixture-only corruption.
+    await a.query('update knowledge_import_review.gateway_uploads set received_bytes=received_bytes-1 where job_id=$1',[abandoned]);
+    await assert.rejects(purge(a,abandoned),/staged byte count conflict/);
+    await a.query('update knowledge_import_review.gateway_uploads set received_bytes=received_bytes+1 where job_id=$1',[abandoned]);
+    const receipt=()=>a.query('select generation,removed_bytes,purged_at from knowledge_import_review.gateway_receiving_purges where organization_id=$1 and job_id=$2',[org,abandoned]);
+    assert.equal((await receipt()).rowCount,0);
+    await a.query('begin');
     assert.equal((await purge(a,abandoned)).rows[0].n,'1048576');
+    assert.equal((await receipt()).rowCount,1);
+    await a.query('rollback');
+    assert.equal((await receipt()).rowCount,0);
+    assert.equal((await a.query('select count(*)::int as n from knowledge_import_review.gateway_chunks where job_id=$1',[abandoned])).rows[0].n,1);
+    assert.equal((await purge(a,abandoned)).rows[0].n,'1048576');
+    const recorded=(await receipt()).rows[0];
+    assert.equal(recorded.generation,'1');assert.equal(recorded.removed_bytes,'1048576');assert.ok(recorded.purged_at instanceof Date);
     assert.equal((await purge(b,abandoned)).rows[0].n,'0');
+    assert.deepEqual((await receipt()).rows,[recorded]);
+    await assert.rejects(worker.query('select * from knowledge_import_review.gateway_receiving_purges'),e=>e.code==='42501');
     assert.equal((await a.query('select storage_released_at from knowledge_import_jobs_v1 where id=$1',[abandoned])).rows[0].storage_released_at,null);
     assert.equal((await a.query('select count(*)::int as n from knowledge_import_review.gateway_chunks where job_id=$1',[abandoned])).rows[0].n,0);
 
