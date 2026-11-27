@@ -206,5 +206,16 @@ begin
     where organization_id=p_org and id=p_job returning status into st;
   return st;
 end $$;
+-- Canonical payload digests for a trusted review adapter; no application grants.
+create function knowledge_import_review.digest_payloads(p_payloads jsonb)
+returns table(entry_index bigint,payload_sha256 text) language plpgsql security invoker
+set search_path=pg_catalog,pg_temp as $$
+begin
+  if p_payloads is null or jsonb_typeof(p_payloads)<>'array' then raise exception 'invalid digest batch'; end if;
+  if jsonb_array_length(p_payloads) not between 1 and 50 or octet_length(p_payloads::text)>524288 then raise exception 'invalid digest batch'; end if;
+  if exists(select 1 from jsonb_array_elements(p_payloads) as v where jsonb_typeof(v)<>'object') then raise exception 'invalid digest payload'; end if;
+  return query select ord-1,encode(sha256(convert_to(v::text,'UTF8')),'hex')
+    from jsonb_array_elements(p_payloads) with ordinality as a(v,ord) order by ord;
+end $$;
 revoke all on all functions in schema knowledge_import_review from public,anon,authenticated,service_role;
 commit;

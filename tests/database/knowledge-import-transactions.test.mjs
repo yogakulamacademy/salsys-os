@@ -77,6 +77,12 @@ test('disposable PG: exact Knowledge RPC, competing claims, rollback, retry, rev
     await assert.rejects(reserve(b,randomUUID(),1,upload,retain),/quota exceeded/);
     const pd=(await a.query("select encode(sha256(convert_to(($1::jsonb)::text,'UTF8')),'hex') as h",[JSON.stringify(payload)])).rows[0].h;
     const manifest=[{index:0,status:'pending',payload_sha256:pd},{index:1,status:'invalid'},{index:2,status:'duplicate'}];
+    const canonical=(await a.query('select * from knowledge_import_review.digest_payloads($1::jsonb)',[JSON.stringify([payload,{...payload,content:'日本語 synthetic'}])])).rows;
+    assert.equal(canonical.length,2);assert.equal(canonical[0].entry_index,'0');assert.equal(canonical[0].payload_sha256,pd);
+    assert.notEqual(canonical[1].payload_sha256,pd);
+    await assert.rejects(a.query('select * from knowledge_import_review.digest_payloads($1::jsonb)',[JSON.stringify([null])]),/invalid digest payload/);
+    await assert.rejects(a.query('select * from knowledge_import_review.digest_payloads($1::jsonb)',[JSON.stringify(Array(51).fill(payload))]),/invalid digest batch/);
+
     await assert.rejects(enqueue(a,reserved,99,'b'.repeat(64),manifest),/invalid manifest/);
     await assert.rejects(enqueue(a,reserved,100,'b'.repeat(64),[{...manifest[0],index:1},manifest[1]]),/invalid manifest entry/);
     await assert.rejects(enqueue(a,reserved,100,'b'.repeat(64),[{...manifest[0],p_approve:true}]),/invalid manifest entry/);
