@@ -1,0 +1,14 @@
+const { test } = require('node:test');
+const assert = require('node:assert/strict');
+const { load } = require('./helpers.cjs');
+const api = load('lib/knowledge-import-upload-contract.ts');
+const org='10000000-0000-4000-8000-000000000001', other='10000000-0000-4000-8000-000000000002', actor='20000000-0000-4000-8000-000000000001', session='30000000-0000-4000-8000-000000000001', job='40000000-0000-4000-8000-000000000001';
+const path=api.knowledgeImportObjectPath(org,job);
+const context={organizationId:org,actorId:actor,sessionId:session,active:true,canManage:true};
+const reservation={organizationId:org,actorId:actor,sessionId:session,jobId:job,objectPath:path,declaredBytes:50*1024*1024,expiresAtMs:2000};
+const receipt={bucket:api.KNOWLEDGE_IMPORT_BUCKET,objectPath:path,byteLength:reservation.declaredBytes,sha256:'a'.repeat(64),contentType:'application/json'};
+const check=(c=context,r=reservation,o=receipt,n=1000)=>api.inspectKnowledgeImportReceipt(c,r,o,n);
+test('exact 50 MiB verified receipt remains non-executable',()=>{const r=check();assert.equal(r.ok,true);assert.equal(r.mayExecute,false);assert.equal(api.KNOWLEDGE_IMPORT_UPLOAD_RUNTIME_WIRED,false);});
+test('tenant, actor, session and revoked permission mismatches deny',()=>{for(const patch of [{organizationId:other},{actorId:other},{sessionId:other},{active:false},{canManage:false}])assert.equal(check({...context,...patch}).reason,'access_denied');});
+test('expired reservation and path manipulation deny',()=>{assert.equal(check(context,reservation,receipt,2000).reason,'expired');assert.equal(api.knowledgeImportObjectPath('../other',job),null);assert.equal(check(context,{...reservation,objectPath:'../other'}).reason,'invalid_reservation');assert.equal(check(context,reservation,{...receipt,objectPath:api.knowledgeImportObjectPath(other,job)}).reason,'object_mismatch');assert.equal(check(context,reservation,{...receipt,bucket:'public'}).reason,'object_mismatch');});
+test('wrong size, MIME and missing digest deny',()=>{for(const patch of [{byteLength:receipt.byteLength+1},{byteLength:0},{byteLength:1},{sha256:''},{contentType:'text/html'}])assert.equal(check(context,reservation,{...receipt,...patch}).reason,'invalid_object');});
