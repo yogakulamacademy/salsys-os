@@ -619,5 +619,29 @@ begin
         ((e.status='pending' and e.available_at<=clock_timestamp()) or (e.status='leased' and e.lease_expires_at<=clock_timestamp())))
     order by j.created_at,j.id limit p_limit;
 end $$;
+-- Narrow history entry point derives tenant from the current Auth session.
+-- No caller-supplied org, raw content, credentials, or generic table access.
+-- Review only: no application grants, no exposed API schema.
+create function knowledge_import_review.current_history(p_limit integer,p_before timestamptz default null,p_before_id uuid default null)
+returns table(job_id uuid,job_status text,created_at text,file_bytes bigint,total_entries integer,
+  pending integer,leased integer,created integer,invalid integer,duplicate integer,failed integer,cancelled integer)
+language plpgsql security definer set search_path=pg_catalog,public,auth,pg_temp as $$
+declare v_org uuid;
+begin
+  if auth.uid() is null or auth.jwt()->>'role' is distinct from 'authenticated'
+    or coalesce(auth.jwt()->>'is_anonymous','false')<>'false' then
+    raise exception 'import access denied' using errcode='42501'; end if;
+  select b.organization_id into v_org from auth.sessions s
+    join public.tenant_session_bindings b on b.session_id=s.id and b.user_id=s.user_id
+    join public.organization_members m on m.user_id=s.user_id and m.organization_id=b.organization_id
+    join public.organizations o on o.id=m.organization_id
+    where s.id::text=auth.jwt()->>'session_id' and s.user_id=auth.uid()
+      and m.active and m.role in ('owner','admin') and o.status='active';
+  if not found then raise exception 'import access denied' using errcode='42501'; end if;
+  return query select h.job_id,h.job_status,to_char(h.created_at at time zone 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"'),
+    h.file_bytes,h.total_entries,h.pending,h.leased,h.created,h.invalid,h.duplicate,h.failed,h.cancelled
+    from knowledge_import_review.history(v_org,p_limit,p_before,p_before_id) h
+    order by h.created_at desc,h.job_id desc;
+end $$;
 revoke all on all functions in schema knowledge_import_review from public,anon,authenticated,service_role;
 commit;

@@ -11,10 +11,13 @@ begin
   -- Never accept client-provided tenant IDs, user_metadata, or arbitrary path parsing.
   select * into j from public.knowledge_import_jobs_v1 where object_path=p_path;
   if not found then return false; end if;
-  -- Fail closed on missing provider metadata. TUS initiation may not provide it:
-  -- provider compatibility and actual byte enforcement are release blockers.
-  size_text:=p_metadata->>'size';
-  if size_text is null or size_text !~ '^[1-9][0-9]{0,7}$'
+  -- Upstream TUS permission probe supplies contentLength (Upload-Length or stored size),
+  -- not the final object size field. No fallback to client-defined metadata.
+  -- This is declared length at the permission check, not independently verified bytes.
+  size_text:=p_metadata->>'contentLength';
+  if jsonb_typeof(p_metadata->'contentLength') is distinct from 'number'
+    or size_text is null or size_text !~ '^[1-9][0-9]{0,7}$'
+    or (p_metadata ? 'size' and p_metadata->>'size' is distinct from size_text)
     or p_metadata->>'mimetype' is distinct from 'application/json' then return false; end if;
   return knowledge_import_review.upload_allowed(j.organization_id,j.id,p_bucket,p_path,size_text::bigint);
 end $$;

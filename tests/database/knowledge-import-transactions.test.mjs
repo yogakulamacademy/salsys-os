@@ -79,12 +79,17 @@ test('disposable PG: exact Knowledge RPC, competing claims, rollback, retry, rev
     await a.query("create schema storage; create table storage.objects(bucket_id text not null,name text not null,metadata jsonb,primary key(bucket_id,name)); alter table storage.objects enable row level security; grant usage on schema storage to authenticated,anon; grant select,insert,update,delete on storage.objects to authenticated,anon; create policy fixture_broad on storage.objects for all to authenticated,anon using(true) with check(true)");
     await a.query(readFileSync('docs/sql/knowledge-import-storage-policies-REVIEW-DRAFT.sql','utf8'));
     await a.query('grant usage on schema knowledge_import_review to authenticated; grant execute on function knowledge_import_review.storage_insert_allowed(text,text,jsonb) to authenticated');
-    const storageBucket='knowledge-import-private-v1',storagePath=org+'/'+reserved+'/source.json',storageMeta={size:100,mimetype:'application/json'};
+    const storageBucket='knowledge-import-private-v1',storagePath=org+'/'+reserved+'/source.json',storageMeta={contentLength:100,mimetype:'application/json'};
     const insertStorage=(db,bucket,path,meta)=>db.query('insert into storage.objects values($1,$2,$3::jsonb)',[bucket,path,JSON.stringify(meta)]);
     await b.query('set role authenticated');
     await assert.rejects(insertStorage(b,storageBucket,other+'/'+reserved+'/source.json',storageMeta),e=>e.code==='42501');
-    await assert.rejects(insertStorage(b,storageBucket,storagePath,{...storageMeta,size:101}),e=>e.code==='42501');
+    await assert.rejects(insertStorage(b,storageBucket,storagePath,{...storageMeta,contentLength:101}),e=>e.code==='42501');
     await assert.rejects(insertStorage(b,storageBucket,storagePath,{}),e=>e.code==='42501');
+    await assert.rejects(insertStorage(b,storageBucket,storagePath,{size:100,mimetype:'application/json'}),e=>e.code==='42501');
+    await assert.rejects(insertStorage(b,storageBucket,storagePath,{...storageMeta,contentLength:'100'}),e=>e.code==='42501');
+    await assert.rejects(insertStorage(b,storageBucket,storagePath,{...storageMeta,size:101}),e=>e.code==='42501');
+    await assert.rejects(insertStorage(b,storageBucket,storagePath,{...storageMeta,mimetype:'text/html'}),e=>e.code==='42501');
+
     await b.query("select set_config('request.jwt.claims',$1,false)",[JSON.stringify({...JSON.parse(claims),is_anonymous:true})]);
     await assert.rejects(insertStorage(b,storageBucket,storagePath,storageMeta),e=>e.code==='42501');
     await b.query("select set_config('request.jwt.claims',$1,false)",[claims]);
@@ -126,6 +131,30 @@ test('disposable PG: exact Knowledge RPC, competing claims, rollback, retry, rev
     const cursor=(await a.query('select created_at::text as ts from knowledge_import_jobs_v1 where id=$1',[reserved])).rows[0].ts;
     const older=await history(b,1,cursor,reserved);assert.equal(older[0].job_id,job);
     await assert.rejects(history(a,26),/invalid history cursor/);
+    // Only a narrow fixture grant: no direct tables or org-selectable history.
+    await b.query('set role authenticated');
+    await assert.rejects(b.query('select * from knowledge_import_review.current_history(1)'),e=>e.code==='42501');
+    await b.query('reset role');
+    await a.query('grant execute on function knowledge_import_review.current_history(integer,timestamptz,uuid) to authenticated');
+    const currentHistory=(db,limit=1,ts=null,id=null)=>db.query('select * from knowledge_import_review.current_history($1,$2,$3)',[limit,ts,id]);
+    await b.query('set role authenticated');
+    const currentPage=(await currentHistory(b)).rows;
+    assert.equal(currentPage[0].job_id,reserved);
+    assert.match(currentPage[0].created_at,/\.\d{6}Z$/);
+    assert.deepEqual(Object.keys(currentPage[0]).sort(),Object.keys(historyPage[0]).sort());
+    assert.equal((await currentHistory(b,1,currentPage[0].created_at,reserved)).rows[0].job_id,job);
+    await assert.rejects(b.query('select * from knowledge_import_review.history($1,1)',[org]),e=>e.code==='42501');
+    await assert.rejects(b.query('select * from public.knowledge_import_entries_v1'),e=>e.code==='42501');
+    await b.query("select set_config('request.jwt.claims',$1,false)",[JSON.stringify({...JSON.parse(claims),is_anonymous:true})]);
+    await assert.rejects(currentHistory(b),e=>e.code==='42501');
+    await b.query("select set_config('request.jwt.claims',$1,false)",[JSON.stringify({...JSON.parse(claims),session_id:randomUUID()})]);
+    await assert.rejects(currentHistory(b),e=>e.code==='42501');
+    await b.query("select set_config('request.jwt.claims',$1,false)",[claims]);
+    await a.query('update organization_members set active=false where organization_id=$1 and user_id=$2',[org,actor]);
+    await assert.rejects(currentHistory(b),e=>e.code==='42501');
+    await a.query('update organization_members set active=true where organization_id=$1 and user_id=$2',[org,actor]);
+    await b.query('reset role');
+
 
     assert.equal((await reserve(b,reserved,100,upload,retain)).rows[0].id,reserved);
     await assert.rejects(reserve(b,reserved,101,upload,retain),/reservation conflict/);
