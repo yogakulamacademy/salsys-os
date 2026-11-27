@@ -1,5 +1,6 @@
-import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { createClient } from "jsr:@supabase/supabase-js@2";
+import "jsr:@supabase/functions-js@2.119.2/edge-runtime.d.ts";
+import { createClient } from "jsr:@supabase/supabase-js@2.119.2";
+import { persistDiscoveredTargets } from "./target-writes.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
@@ -88,22 +89,25 @@ Deno.serve(async(req)=>{
       const text=html?stripTags(html):''; const schema=html?extractSchema(html):{docs:[],types:[]}; const h1s=html?allTagContent(html,'h1'):[]; const h2s=html?allTagContent(html,'h2'):[]; const h3s=html?allTagContent(html,'h3'):[]; const title=html?firstTagContent(html,'title'):null; const desc=html?metaContent(html,t=>(attr(t,'name')??'').toLowerCase()==='description'):null; const langMatch=html.match(/<html\b[^>]*\blang\s*=\s*["']?([^\s"'>]+)/i); const language=langMatch?.[1]??null;
       const {data:page,error:pageError}=await service.from('seo_pages').upsert({organization_id:run.organization_id,site_id:site.id,normalized_url:finalNorm,canonical_url:canonical,url_path:finalUrl.pathname+finalUrl.search,lifecycle_status:res.status===404?'missing':'active',last_seen_at:new Date().toISOString(),last_crawled_at:new Date().toISOString()},{onConflict:'organization_id,site_id,normalized_url'}).select('*').single(); if(pageError)throw pageError;
       const {error:snapshotError}=await service.from('seo_page_snapshots').upsert({organization_id:run.organization_id,site_id:site.id,page_id:page.id,crawl_run_id:run.id,fetched_url:item.url,final_url:finalUrl.toString(),fetched_at:new Date().toISOString(),http_status:res.status,response_time_ms:elapsed,content_type:ct,language,title,meta_description:desc,canonical_url:canonical,robots_meta:robots,x_robots_tag:xRobots,h1s,h2s,h3s,word_count:text?text.split(/\s+/).filter(Boolean).length:0,readable_text:text.slice(0,500000),text_hash:text?await sha256(text):null,html_hash:html?await sha256(html):null,content_fingerprint:html?await sha256(`${title??''}|${desc??''}|${h1s.join('|')}|${text.slice(0,20000)}`):null,schema_types:schema.types,structured_data:schema.docs,technical_flags:{has_title:!!title,has_meta_description:!!desc,h1_count:h1s.length,has_canonical:!!canonicalHref,has_json_ld:/application\/ld\+json/i.test(html)},is_indexable:indexable,indexability_reason:indexable?null:(noindex?'noindex':res.status>=300?`http_${res.status}`:!ct.includes('html')?'non_html':'not_indexable')},{onConflict:'page_id,crawl_run_id'}); if(snapshotError)throw snapshotError;
-      await service.from('seo_page_links').delete().eq('crawl_run_id',run.id).eq('source_page_id',page.id);
+
       const links=html?extractLinks(html,finalUrl,site.hostname):[]; const unique=new Map<string,any>(); for(const l of links)if(!unique.has(`${l.normalized}|${l.anchor}|${l.rel.join(',')}`))unique.set(`${l.normalized}|${l.anchor}|${l.rel.join(',')}`,l); const rows:any[]=[];
-      for(const l of [...unique.values()].slice(0,3000)){
-        let targetPageId:null|string=null;
-        if(l.scope==='internal'){
-          const tu=new URL(l.normalized); const {data:tp}=await service.from('seo_pages').upsert({organization_id:run.organization_id,site_id:site.id,normalized_url:l.normalized,url_path:tu.pathname+tu.search,last_seen_at:new Date().toISOString()},{onConflict:'organization_id,site_id,normalized_url'}).select('id').single(); targetPageId=tp?.id??null;
-          if(item.depth+1<=10&&res.status<400&&!ASSET.test(tu.pathname))await service.from('seo_crawl_frontier').upsert({organization_id:run.organization_id,site_id:site.id,crawl_run_id:run.id,url:l.url,normalized_url:l.normalized,depth:item.depth+1,source_page_id:page.id},{onConflict:'crawl_run_id,normalized_url',ignoreDuplicates:true});
-        }
+      const evidenceLinks=[...unique.values()].slice(0,3000);
+      const targetIds=await persistDiscoveredTargets(service,evidenceLinks,{
+        organizationId:run.organization_id,siteId:site.id,runId:run.id,sourcePageId:page.id,
+        depth:item.depth,httpStatus:res.status,seenAt:new Date().toISOString(),
+      },path=>ASSET.test(path));
+      for(const l of evidenceLinks){
+        const targetPageId=l.scope==='internal' ? targetIds.get(l.normalized) ?? null : null;
         rows.push({organization_id:run.organization_id,site_id:site.id,crawl_run_id:run.id,source_page_id:page.id,target_page_id:targetPageId,target_url:l.url,normalized_target_url:l.normalized,link_scope:l.scope,anchor_text:l.anchor,rel_values:l.rel,is_nofollow:l.nofollow,is_sponsored:l.sponsored,is_ugc:l.ugc,is_image_link:l.image});
       }
+      const {error:deleteError}=await service.from('seo_page_links').delete().eq('crawl_run_id',run.id).eq('source_page_id',page.id);
+      if(deleteError)throw deleteError;
       if(rows.length){const {error:linkError}=await service.from('seo_page_links').insert(rows); if(linkError)throw linkError;}
       await service.from('seo_crawl_frontier').update({status:'done',completed_at:new Date().toISOString()}).eq('id',item.id);
     }catch(e){ await service.from('seo_crawl_frontier').update({status:'failed',last_error:String((e as Error)?.message??e).slice(0,2000),completed_at:new Date().toISOString()}).eq('id',item.id); }
   }
   const {count:discovered}=await service.from('seo_crawl_frontier').select('*',{count:'exact',head:true}).eq('crawl_run_id',run.id); const {count:fetched}=await service.from('seo_crawl_frontier').select('*',{count:'exact',head:true}).eq('crawl_run_id',run.id).eq('status','done'); const {count:failed}=await service.from('seo_crawl_frontier').select('*',{count:'exact',head:true}).eq('crawl_run_id',run.id).eq('status','failed'); const {count:queued}=await service.from('seo_crawl_frontier').select('*',{count:'exact',head:true}).eq('crawl_run_id',run.id).eq('status','queued'); const {count:indexable}=await service.from('seo_page_snapshots').select('*',{count:'exact',head:true}).eq('crawl_run_id',run.id).eq('is_indexable',true);
   const done=(queued??0)===0||(fetched??0)>=run.max_pages; const status=done?((failed??0)>0?'partial':'completed'):'running'; await service.from('seo_crawl_runs').update({status,pages_discovered:discovered??0,pages_fetched:fetched??0,pages_failed:failed??0,pages_indexable:indexable??0,completed_at:done?new Date().toISOString():null}).eq('id',run.id);
-  return json({runId:run.id,status,processedThisInvocation:processed,pagesDiscovered:discovered??0,pagesFetched:fetched??0,pagesFailed:failed??0,pagesIndexable:indexable??0,pagesQueued:queued??0,version:'1.3'});
+  return json({runId:run.id,status,processedThisInvocation:processed,pagesDiscovered:discovered??0,pagesFetched:fetched??0,pagesFailed:failed??0,pagesIndexable:indexable??0,pagesQueued:queued??0,version:'1.4'});
 });
 
