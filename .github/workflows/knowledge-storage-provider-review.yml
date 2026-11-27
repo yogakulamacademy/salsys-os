@@ -24,6 +24,8 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci --ignore-scripts
+      - name: Typecheck cumulative application candidate
+        run: npm run typecheck
       - name: Verify loopback transport guard without network
         run: node --test tests/provider/knowledge-import-provider-transport.test.mjs
       - name: Install checksum-pinned local Supabase CLI

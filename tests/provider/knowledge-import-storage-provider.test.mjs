@@ -149,6 +149,7 @@ test('actual disposable Supabase Storage authorization and lifecycle',{timeout:2
     await db.query(readFileSync('docs/sql/knowledge-import-gateway-only-REVIEW-DRAFT.sql','utf8'));
     await db.query(readFileSync('docs/sql/knowledge-import-gateway-staging-REVIEW-DRAFT.sql','utf8'));
     await db.query(readFileSync('docs/sql/knowledge-import-application-boundary-REVIEW-DRAFT.sql','utf8'));
+    await db.query(readFileSync('docs/sql/knowledge-import-application-broker-REVIEW-DRAFT.sql','utf8'));
     const require=createRequire(import.meta.url),{load}=require('../readiness/helpers.cjs');
     const upload=load('lib/knowledge-import-upload-contract.ts');
     const prep=load('lib/knowledge-import-source-preparation.ts',{'server-only':{},'node:crypto':require('node:crypto'),'./knowledge-bulk-import-preflight':load('lib/knowledge-bulk-import-preflight.ts'),'./knowledge-import-upload-contract':upload});
@@ -231,19 +232,48 @@ test('actual disposable Supabase Storage authorization and lifecycle',{timeout:2
       const historyHttp=load('lib/knowledge-import-history-http-review.ts',{'server-only':{},'./knowledge-import-history-review':load('lib/knowledge-import-history-review.ts')});
       const application=load('lib/knowledge-import-application-review.ts',{'server-only':{},'./knowledge-import-gateway-http-review':http,'./knowledge-import-history-http-review':historyHttp});
       const browser=load('lib/knowledge-import-browser-review.ts');
+      const broker=load('lib/knowledge-import-application-broker-review.ts',{'server-only':{}});
+      const login='kb_app_'+randomUUID().replaceAll('-',''),password=randomUUID().replaceAll('-','');
+      await db.query("create role "+login+" login password '"+password+"' nosuperuser nocreatedb nocreaterole noreplication nobypassrls noinherit");
+      await db.query('insert into knowledge_import_review.application_principals values($1,true)',[login]);
+      await db.query('grant usage on schema knowledge_import_review to '+login);
+      await db.query('grant execute on function knowledge_import_review.broker_current_scope(),knowledge_import_review.broker_reserve_current(uuid,bigint,integer,integer),knowledge_import_review.broker_cancel_current(uuid),knowledge_import_review.broker_gateway_acquire(uuid,uuid,uuid),knowledge_import_review.broker_gateway_append(uuid,uuid,uuid,bigint,bigint,bytea),knowledge_import_review.broker_gateway_begin_publication(uuid,uuid,uuid,bigint),knowledge_import_review.broker_gateway_lock(uuid,uuid,uuid,bigint),knowledge_import_review.broker_gateway_register(uuid,uuid,uuid,bigint,text,bigint,text,jsonb),knowledge_import_review.broker_gateway_publication_receipt(uuid,uuid,uuid,bigint),knowledge_import_review.broker_current_history(integer,timestamptz,uuid),knowledge_import_review.broker_reservation(uuid,uuid),knowledge_import_review.broker_digests(jsonb) to '+login);
+      const loginUrl=new URL(dbUrl.href);loginUrl.username=login;loginUrl.password=password;
+      const restricted=new pg.Client({connectionString:loginUrl.href});await restricted.connect();
+      try{
+        await assert.rejects(restricted.query('select * from public.knowledge_import_jobs_v1'),e=>e.code==='42501');
+        await assert.rejects(restricted.query('select * from knowledge_import_review.gateway_chunks'),e=>e.code==='42501');
+        await assert.rejects(restricted.query('select * from knowledge_import_review.worker_due_jobs(1)'),e=>e.code==='42501');
+        await assert.rejects(restricted.query('select knowledge_import_review.gateway_purge_receiving($1,$2)',[org,id]),e=>e.code==='42501');
+        await assert.rejects(restricted.query('select knowledge_import_review.broker_current_scope()'),e=>e.code==='42501');
+      }finally{await restricted.end();}
+      const transport=claims=>async(statement,params)=>{
+        const conn=new pg.Client({connectionString:loginUrl.href,connectionTimeoutMillis:5000});await conn.connect();
+        try{await conn.query('begin');await conn.query("set local statement_timeout='15s'");await conn.query("select set_config('request.jwt.claims',$1,true)",[JSON.stringify(claims)]);
+          const result=await conn.query(statement,params);await conn.query('commit');return result;
+        }catch(e){await conn.query('rollback');throw e;}finally{await conn.end();}
+      };
+      await assert.rejects(transport({...owner.claims,exp:1})('select knowledge_import_review.broker_current_scope()',[]),e=>e.code==='42501');
+      const scopeQuery=broker.createKnowledgeBrokerQueryReview(transport(owner.claims));
+      await assert.rejects(scopeQuery('select * from auth.sessions',[]),/operation denied/);
       const handle=application.createKnowledgeApplicationReview({origin:httpOrigin,issuer:owner.claims.iss,uploadSeconds:600,retentionSeconds:1200,
         accessToken:async req=>req.headers.get('authorization')?.replace(/^Bearer /,'')??null,
         verifyUser:async token=>{const verified=await admin.auth.getUser(token);return verified.error?null:verified.data.user;},
-        connect:async claims=>({query:async(statement,params)=>{
-          // Dedicated local fixture connection per statement; claims bound transaction-locally.
-          const conn=new pg.Client({connectionString:dbUrl.href});await conn.connect();
-          try{await conn.query('begin');await conn.query("select set_config('request.jwt.claims',$1,true)",[JSON.stringify(claims)]);
-            const result=await conn.query(statement,params);await conn.query('commit');return result;
-          }catch(e){await conn.query('rollback');throw e;}finally{await conn.end();}
-        },publication:makeAdapter(j),close:async()=>{}})
+        connect:async claims=>{
+          const query=broker.createKnowledgeBrokerQueryReview(transport(claims)),fixture=makeAdapter(j);
+          return {query,publication:{...fixture,
+            async reservation(scope){
+              const result=await query('select j.organization_id,j.id,j.requested_by,j.request_session_id,j.object_path,j.declared_bytes,j.upload_expires_at,j.status from knowledge_import_review.lock_job($1,$2) j',[scope.organizationId,scope.jobId]);
+              const row=result.rows[0];if(!row||row.status!=='awaiting_upload')throw Error('reservation unavailable');
+              return {context:{organizationId:row.organization_id,actorId:row.requested_by,sessionId:row.request_session_id,active:true,canManage:true},reservation:{organizationId:row.organization_id,actorId:row.requested_by,sessionId:row.request_session_id,jobId:row.id,objectPath:row.object_path,declaredBytes:Number(row.declared_bytes),expiresAtMs:row.upload_expires_at.getTime()}};
+            },
+            async digests(payloads){return (await query('select * from knowledge_import_review.digest_payloads($1::jsonb)',[JSON.stringify(payloads)])).rows.map(x=>x.payload_sha256);},
+            async register(){throw Error('fenced registration required');}
+          },close:async()=>{}};
+        }
       });
-      // Fixture publication adapter uses the existing owner connection; its verified source
-      // registration is overridden by the fenced per-statement application query.
+      // Only fixture Storage put/inspect uses the privileged local provider adapter.
+      // All application database calls use the restricted login and fixed broker wrappers.
       await db.query("select set_config('request.jwt.claims',$1,false)",[JSON.stringify(owner.claims)]);
       const base=httpOrigin+'/api/knowledge-import-review/',call=(suffix,token=owner.token,method='POST',headers={})=>handle(new Request(base+suffix,{method,headers:{origin:httpOrigin,authorization:'Bearer '+token,...headers}}));
       assert.equal((await call(id+'/reserve',owner.token,'POST',{'x-knowledge-file-bytes':String(bytes.length),'x-organization-id':other})).status,200);
@@ -257,6 +287,10 @@ test('actual disposable Supabase Storage authorization and lifecycle',{timeout:2
       assert.equal((await call(id+'/cancel')).status,200);
       await db.query('update public.organization_members set active=false where organization_id=$1 and user_id=$2',[org,owner.actor]);
       try{assert.equal((await call('history',owner.token,'GET')).status,403);}finally{await db.query('update public.organization_members set active=true where organization_id=$1 and user_id=$2',[org,owner.actor]);}
+      await db.query('update knowledge_import_review.application_principals set enabled=false where login_role=$1',[login]);
+      assert.equal((await call('history',owner.token,'GET')).status,403);
+      await assert.rejects(transport(owner.claims)('select knowledge_import_review.broker_current_scope()',[]),e=>e.code==='42501');
+
     });
     await t.test('cancel after provider write prevents manifest publication and preserves quota',async()=>{
       const j=await createJob(),scope={organizationId:org,jobId:j.id};

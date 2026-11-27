@@ -5,7 +5,7 @@ export const KNOWLEDGE_APPLICATION_RUNTIME_WIRED=false as const;
 type AuthOptions=Parameters<typeof createKnowledgeGatewayHttpReview>[0];
 type Authenticated=NonNullable<Awaited<ReturnType<AuthOptions['authenticate']>>>;
 type Query=Authenticated['query'];
-type Claims={sub:string;session_id:string;role:'authenticated';is_anonymous:false};
+type Claims={sub:string;session_id:string;role:'authenticated';is_anonymous:false;exp:number};
 type Options={origin:string;issuer:string;accessToken:(request:Request)=>Promise<string|null>;
  // Must verify this exact token with trusted Auth (not merely decode or getSession).
  verifyUser:(token:string)=>Promise<{id:string;is_anonymous?:boolean}|null>;
@@ -19,7 +19,7 @@ function readClaims(token:string,issuer:string,actor:string,now:number):Claims|n
   if(token.length>16384)return null;const parts=token.split('.');if(parts.length!==3||parts.some(x=>!x))return null;
   const c=JSON.parse(Buffer.from(parts[1],'base64url').toString('utf8'));
   if(c.iss!==issuer||c.sub!==actor||!uuid.test(c.sub)||typeof c.session_id!=='string'||!uuid.test(c.session_id)||c.role!=='authenticated'||c.is_anonymous===true||!Number.isSafeInteger(c.exp)||c.exp<=Math.floor(now/1000))return null;
-  return {sub:c.sub,session_id:c.session_id,role:'authenticated',is_anonymous:false};
+  return {sub:c.sub,session_id:c.session_id,role:'authenticated',is_anonymous:false,exp:c.exp};
  }catch{return null;}
 }
 /** Single dispatch boundary for isolated integration. No live route or credentials.
