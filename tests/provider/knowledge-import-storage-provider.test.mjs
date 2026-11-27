@@ -384,6 +384,66 @@ test('actual disposable Supabase Storage authorization and lifecycle',{timeout:6
       assert.equal((await db.query('select storage_released_at from knowledge_import_jobs_v1 where id=$1',[j.id])).rows[0].storage_released_at,null);
       assert.ok(await read(j));
     });
+    await t.test('exact-version cleanup protects replacement and retains quota on uncertain deletion',async()=>{
+      // These are exclusively newly generated, synthetic objects in the fresh local test
+      // bucket. No path-only deletion, no production credentials, no quota release.
+      const prepareTerminal=async()=>{
+        const j=await createJob(),scope={organizationId:org,jobId:j.id},writer=randomUUID();
+        await db.query('select * from knowledge_import_review.gateway_acquire($1,$2,$3)',[org,j.id,writer]);
+        await db.query('select knowledge_import_review.gateway_append($1,$2,$3,$4,$5,$6)',[org,j.id,writer,1,0,bytes]);
+        const staged=(await db.query('select knowledge_import_review.gateway_begin_publication($1,$2,$3,$4) as bytes',[org,j.id,writer,1])).rows[0].bytes;
+        assert.deepEqual(await gateway.publishKnowledgeGatewayReview(scope,staged,makeAdapter(j,async()=>{},writer),Date.now),{state:'registered',status:'queued'});
+        assert.equal((await db.query('select knowledge_import_review.cancel($1,$2) as ok',[org,j.id])).rows[0].ok,true);
+        await assert.rejects(db.query('select knowledge_import_review.begin_storage_cleanup($1,$2)',[org,j.id]),/cleanup not eligible/);
+        await db.query("update knowledge_import_jobs_v1 set created_at=now()-interval '3 hours',upload_expires_at=now()-interval '2 hours',retention_expires_at=now()-interval '1 hour' where id=$1",[j.id]);
+        const cleanup=(await db.query('select knowledge_import_review.begin_storage_cleanup($1,$2) as id',[org,j.id])).rows[0].id;
+        assert.equal((await db.query('select knowledge_import_review.begin_storage_cleanup($1,$2) as id',[org,j.id])).rows[0].id,cleanup);
+        const row=(await db.query('select object_version,sha256 from knowledge_import_jobs_v1 where organization_id=$1 and id=$2',[org,j.id])).rows[0];
+        assert.equal(row.sha256,digest(bytes));assert.match(row.object_version,/^[0-9a-f-]{36}$/i);
+        return {j,scope,cleanup,version:row.object_version};
+      };
+      const removeVersion=async(j,version,user=null)=>{
+        assert.equal(j.path,org+'/'+j.id+'/source.json');assert.match(version,/^[0-9a-f-]{36}$/i);
+        const u=new URL('/storage/v1/object/'+bucket+'/'+j.path,api.origin);u.searchParams.set('versionId',version);
+        return fixtureFetch(u,{method:'DELETE',redirect:'error',signal:AbortSignal.timeout(20000),headers:{apikey:user?anon:service,Authorization:'Bearer '+(user?user.token:service)}});
+      };
+      const current=async(j)=> (await db.query('select version from storage.objects where bucket_id=$1 and name=$2',[bucket,j.path])).rows[0]?.version??null;
+      const quotaRetained=async(x)=>{
+        const row=(await db.query('select j.storage_released_at,c.completed_at,c.evidence_sha256 from public.knowledge_import_jobs_v1 j join knowledge_import_review.storage_cleanup c on c.organization_id=j.organization_id and c.job_id=j.id where j.organization_id=$1 and j.id=$2 and c.cleanup_id=$3',[org,x.j.id,x.cleanup])).rows[0];
+        assert.deepEqual(row,{storage_released_at:null,completed_at:null,evidence_sha256:null});
+      };
+      const first=await prepareTerminal();
+      for(const user of [owner,outsider]){
+        denied(await removeVersion(first.j,first.version,user));
+        assert.equal(await current(first.j),first.version);assert.equal(digest(await read(first.j)),digest(bytes));
+      }
+      const wrong=await removeVersion(first.j,randomUUID());
+      assert.ok(wrong.ok||[400,404,409,422].includes(wrong.status),'unexpected stale-version response '+wrong.status);
+      assert.equal(await current(first.j),first.version);assert.equal(digest(await read(first.j)),digest(bytes));
+      // Simulate a lost acknowledgement AFTER an actual exact-version provider call.
+      const exact=await removeVersion(first.j,first.version);
+      assert.equal(exact.status,200);await exact.body?.cancel();
+      assert.equal(await current(first.j),null);assert.equal(await read(first.j),null);
+      const reconcile=load('lib/knowledge-import-reconciliation-review.ts',{'server-only':{},'node:crypto':require('node:crypto'),'./knowledge-import-upload-contract':upload});
+      const observed=await reconcile.inspectKnowledgeStorageReconciliationReview(first.scope,{
+        snapshot:async()=> (await db.query('select * from knowledge_import_review.reconciliation_snapshot($1,$2)',[org,first.j.id])).rows[0]??null,
+        observe:async(b,p)=>{assert.equal(b,bucket);assert.equal(p,first.j.path);assert.equal(await current(first.j),null);assert.equal(await read(first.j),null);return {kind:'absent_observed'};}
+      });
+      assert.equal(observed.state,'absent_unproven');assert.equal(observed.mayReleaseQuota,false);await quotaRetained(first);
+      const second=await prepareTerminal();
+      // Test-only service-role overwrite models a provider-side replacement after cleanup
+      // receipt creation. The application's real publication adapter forbids upsert.
+      const replacement=Buffer.from(bytes.toString('utf8').replace('Fixture','Replace'));
+      assert.equal(replacement.length,bytes.length);assert.notEqual(digest(replacement),digest(bytes));
+      const changed=await admin.storage.from(bucket).upload(second.j.path,replacement,{contentType:'application/json',upsert:true,cacheControl:'0'});
+      assert.equal(Boolean(changed.error),false);
+      const newVersion=await current(second.j);assert.ok(newVersion);assert.notEqual(newVersion,second.version);
+      const stale=await removeVersion(second.j,second.version);
+      assert.ok(stale.ok||[400,404,409,422].includes(stale.status),'unexpected stale-version response '+stale.status);
+      assert.equal(await current(second.j),newVersion);assert.equal(digest(await read(second.j)),digest(replacement));
+      await quotaRetained(second);
+      t.diagnostic(JSON.stringify({exactVersionDeleteStatus:exact.status,unknownAck:'absence_unproven',wrongVersionStatus:wrong.status,oldVersionAfterReplacementStatus:stale.status,replacementPreserved:true,quotaReleased:false}));
+    });
     await t.test('50 MiB transport, 10000 ledger entries and 10000 actual restricted-worker draft writes',async()=>{
       const start=Date.now(),max=50*1024*1024;
       const memory=(phase)=>{const m=process.memoryUsage();t.diagnostic(JSON.stringify({capacityPhase:phase,rssBytes:m.rss,heapUsedBytes:m.heapUsed,externalBytes:m.external,arrayBufferBytes:m.arrayBuffers,maxRssKiB:process.resourceUsage().maxRSS}));};
