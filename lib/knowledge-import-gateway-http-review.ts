@@ -12,7 +12,7 @@ type Publication=Parameters<typeof publishKnowledgeGatewayReview>[2];
 // and supply a dedicated scoped autocommit query context. Never trust an HTTP tenant/actor header.
 type Authenticated={organizationId:string;query:Query;publication:Publication};
 type Options={origin:string;authenticate:(request:Request)=>Promise<Authenticated|null>;now?:()=>number};
-type Operation='acquire'|'append'|'publish';
+type Operation='acquire'|'append'|'publish'|'receipt';
 function json(status:number,body:Record<string,unknown>){return new Response(JSON.stringify(body),{status,headers:{'content-type':'application/json','cache-control':'no-store','x-content-type-options':'nosniff'}});}
 function integer(s:unknown,min:number,max:number){if(typeof s!=='string'||!/^(0|[1-9][0-9]*)$/.test(s))return null;const n=Number(s);return Number.isSafeInteger(n)&&n>=min&&n<=max?n:null;}
 function one(rows:Record<string,unknown>[]){if(rows.length!==1)throw Error('unexpected response');return rows[0];}
@@ -30,7 +30,7 @@ export function createKnowledgeGatewayHttpReview(options:Options){
  const origin=new URL(options.origin);
  if(origin.origin!==options.origin||!['https:','http:'].includes(origin.protocol)||(origin.protocol==='http:'&&!['localhost','127.0.0.1'].includes(origin.hostname)))throw Error('invalid gateway origin');
  return async function handle(request:Request,jobId:string,operation:Operation):Promise<Response>{
-  if(request.method!=='POST'||!['acquire','append','publish'].includes(operation))return json(405,{error:'method_not_allowed'});
+  if(request.method!=='POST'||!['acquire','append','publish','receipt'].includes(operation))return json(405,{error:'method_not_allowed'});
   if(request.headers.get('origin')!==origin.origin||!uuid.test(jobId))return json(403,{error:'request_denied'});
   let auth:Authenticated|null;
   try{auth=await options.authenticate(request);}catch{return json(403,{error:'request_denied'});}
@@ -62,6 +62,13 @@ export function createKnowledgeGatewayHttpReview(options:Options){
     const received=integer(String(row.n),offset+length,MAX);if(received===null)throw Error('invalid receipt');
     return json(200,{receivedBytes:received});
    }catch{return json(409,{error:'chunk_not_confirmed'});}
+  }
+  if(operation==='receipt'){
+   try{
+    const row=one((await query('select * from knowledge_import_review.gateway_publication_receipt($1,$2,$3,$4)',fence)).rows);
+    if(!['registered','reconciliation_required'].includes(String(row.state))||!['awaiting_upload','queued','processing','completed','failed','cancelled','expired'].includes(String(row.job_status)))throw Error('invalid receipt');
+    return json(200,{state:row.state,jobStatus:row.job_status});
+   }catch{return json(409,{state:'reconciliation_required'});}
   }
   // Once begin_publication is attempted, even a lost response requires reconciliation.
   try{

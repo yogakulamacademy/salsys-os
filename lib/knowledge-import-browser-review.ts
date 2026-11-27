@@ -11,7 +11,7 @@ type Options={jobId:string;file:File;origin:string;fetcher?:Transport;onProgress
 export function createKnowledgeBrowserUploadReview(options:Options){
  const {file,jobId}=options;const origin=new URL(options.origin);
  if(origin.origin!==options.origin||!['https:','http:'].includes(origin.protocol)||(origin.protocol==='http:'&&!['localhost','127.0.0.1'].includes(origin.hostname)))throw Error('invalid origin');
- let writer:string|undefined,confirmed=0,busy=false,publishing=false,terminal:Outcome|undefined;
+ let writer:string|undefined,publicationGeneration:number|undefined,confirmed=0,busy=false,publishing=false,terminal:Outcome|undefined;
  const fetcher=options.fetcher??fetch;
  const send=async(op:string,headers:Record<string,string>,body?:Blob)=>{
   const response=await fetcher(origin.origin+'/api/knowledge-import-review/'+jobId+'/'+op,{method:'POST',credentials:'same-origin',redirect:'error',cache:'no-store',headers,body,signal:options.signal});
@@ -19,7 +19,7 @@ export function createKnowledgeBrowserUploadReview(options:Options){
   if(response.headers.get('content-type')?.split(';')[0]!=='application/json')throw Error('invalid receipt');
   return await response.json();
  };
- return async function run():Promise<Outcome>{
+ async function run():Promise<Outcome>{
   if(terminal)return terminal;
   if(busy)return {state:'interrupted',confirmedBytes:confirmed};
   if(publishing)return {state:'reconciliation_required'};
@@ -41,7 +41,7 @@ export function createKnowledgeBrowserUploadReview(options:Options){
     if(!Number.isSafeInteger(ack.receivedBytes)||ack.receivedBytes<end||ack.receivedBytes>file.size||(ack.receivedBytes!==file.size&&ack.receivedBytes%CHUNK!==0))throw Error('invalid chunk receipt');
     confirmed=end;options.onProgress?.(confirmed,file.size);
    }
-   publishing=true;
+   publicationGeneration=start.generation;publishing=true;
    const result=await send('publish',headers);
    if(result.state!=='registered'||!['queued','completed'].includes(result.status))throw Error('unknown publication');
    terminal={state:'registered',status:result.status};return terminal;
@@ -49,5 +49,15 @@ export function createKnowledgeBrowserUploadReview(options:Options){
    if(publishing){terminal={state:'reconciliation_required'};return terminal;}
    return {state:'interrupted',confirmedBytes:confirmed};
   }finally{busy=false;}
- };
+ }
+ async function checkPublication():Promise<{state:'registered'|'reconciliation_required';jobStatus?:string}>{
+  if(busy||!publishing||!writer||publicationGeneration===undefined)return {state:'reconciliation_required'};
+  try{
+   const receipt=await send('receipt',{'x-knowledge-writer':writer,'x-knowledge-generation':String(publicationGeneration)});
+   if(receipt.state==='registered'&&['queued','processing','completed','failed','cancelled','expired'].includes(receipt.jobStatus))
+     return {state:'registered',jobStatus:receipt.jobStatus};
+   return {state:'reconciliation_required'};
+  }catch{return {state:'reconciliation_required'};}
+ }
+ return Object.assign(run,{checkPublication});
 }

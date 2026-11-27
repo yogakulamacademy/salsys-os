@@ -392,7 +392,10 @@ test('disposable PG: exact Knowledge RPC, competing claims, rollback, retry, rev
     const adapter=adapters.createKnowledgeWorkerReviewAdapters(realQuery,origin,async()=>signed,async()=>{
       downloads++;return new Response(raw,{headers:{'content-type':'application/json','content-length':String(raw.length)}});
     });
-    const report=await runner.runKnowledgeImportBatchReview(scope,adapter,1,4);
+    const scheduler=load('lib/knowledge-import-scheduler-review.ts',{'server-only':{},'./knowledge-import-worker-review':runner});
+    const tick=await scheduler.runKnowledgeImportSchedulerReview(realQuery,adapter,{jobs:1,batchSize:1,batches:4});
+    assert.equal(tick.stop,'complete');assert.equal(tick.reports.length,1);assert.deepEqual(tick.reports[0].scope,scope);
+    const report=tick.reports[0].report;
     assert.deepEqual([report.created,report.recovered,report.claimed,report.stop,downloads,finalizeCalls],[2,1,3,'batch_complete',1,3]);
     const actual=(await a.query("select h.*,h.created_at::text as created_at from knowledge_import_review.history($1,25) h",[org])).rows;
     const normalized=historyLib.projectKnowledgeImportHistory(actual);
@@ -491,6 +494,19 @@ test('disposable PG: exact Knowledge RPC, competing claims, rollback, retry, rev
     assert.equal((await stagedRegister(sourceHash)).rows[0].status,'queued');
     assert.equal((await a.query('select count(*)::int as n from knowledge_import_review.gateway_chunks where job_id=$1',[publishJob])).rows[0].n,0);
     assert.equal((await a.query('select phase from knowledge_import_review.gateway_uploads where job_id=$1',[publishJob])).rows[0].phase,'registered');
+    const publicationReceipt=(conn,j=publishJob,token=publishToken,g=1,o=org)=>conn.query('select * from knowledge_import_review.gateway_publication_receipt($1,$2,$3,$4)',[o,j,token,g]);
+    assert.deepEqual((await publicationReceipt(b)).rows,[{state:'registered',job_status:'queued'}]);
+    await assert.rejects(publicationReceipt(b,publishJob,randomUUID()),e=>e.code==='42501');
+    await assert.rejects(publicationReceipt(b,publishJob,publishToken,2),e=>e.code==='42501');
+    await assert.rejects(publicationReceipt(b,publishJob,publishToken,1,other),e=>e.code==='42501');
+    await assert.rejects(publicationReceipt(worker),e=>e.code==='42501');
+    assert.deepEqual((await publicationReceipt(b,chunkJob,secondToken,2)).rows,[{state:'reconciliation_required',job_status:'cancelled'}]);
+    await a.query("update knowledge_import_review.gateway_uploads set writer_until=now()-interval '1 second' where job_id=$1",[publishJob]);
+    assert.equal((await publicationReceipt(b)).rows[0].state,'registered');
+    await a.query('update organization_members set active=false where organization_id=$1 and user_id=$2',[org,actor]);
+    await assert.rejects(publicationReceipt(b),e=>e.code==='42501');
+    await a.query('update organization_members set active=true where organization_id=$1 and user_id=$2',[org,actor]);
+
     await assert.rejects(worker.query('select * from knowledge_import_review.gateway_chunks'),e=>e.code==='42501');
     // Purge never releases quota or deletes publishing/registered source records.
     const purge=(conn,j,o=org)=>conn.query('select knowledge_import_review.gateway_purge_receiving($1,$2) as n',[o,j]);

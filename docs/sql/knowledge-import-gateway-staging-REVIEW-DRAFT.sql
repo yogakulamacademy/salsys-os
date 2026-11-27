@@ -137,5 +137,21 @@ end $$;
 create trigger knowledge_import_gateway_quota_guard before update of storage_released_at on public.knowledge_import_jobs_v1
  for each row execute function knowledge_import_review.gateway_quota_guard();
 revoke all on function knowledge_import_review.gateway_purge_receiving(uuid,uuid),knowledge_import_review.gateway_quota_guard() from public,anon,authenticated,service_role;
+-- Read-only publication receipt: original session and exact writer fence, even after lease
+-- or upload deadline. No new publication, external access or quota release.
+create function knowledge_import_review.gateway_publication_receipt(p_org uuid,p_job uuid,p_token uuid,p_generation bigint)
+returns table(state text,job_status text) language plpgsql security invoker set search_path=pg_catalog,public,auth,pg_temp as $$
+declare j public.knowledge_import_jobs_v1%rowtype; g knowledge_import_review.gateway_uploads%rowtype;
+begin
+ j:=knowledge_import_review.lock_job(p_org,p_job);
+ select * into g from knowledge_import_review.gateway_uploads where organization_id=p_org and job_id=p_job for share;
+ if not found or p_token is null or g.generation is distinct from p_generation or coalesce(auth.jwt()->>'is_anonymous','false')<>'false'
+   or g.writer_sha256 is distinct from encode(sha256(convert_to(p_token::text,'UTF8')),'hex') then
+   raise exception 'publication receipt denied' using errcode='42501'; end if;
+ return query select case when g.phase='registered' and j.object_version is not null and j.manifest_sha256 is not null
+   and j.sha256=g.source_sha256 and j.verified_bytes=g.received_bytes and j.status<>'awaiting_upload'
+   then 'registered'::text else 'reconciliation_required'::text end,j.status;
+end $$;
+revoke all on function knowledge_import_review.gateway_publication_receipt(uuid,uuid,uuid,bigint) from public,anon,authenticated,service_role;
 revoke all on function knowledge_import_review.gateway_acquire(uuid,uuid,uuid),knowledge_import_review.gateway_lock(uuid,uuid,uuid,bigint,text),knowledge_import_review.gateway_append(uuid,uuid,uuid,bigint,bigint,bytea),knowledge_import_review.gateway_begin_publication(uuid,uuid,uuid,bigint),knowledge_import_review.gateway_register(uuid,uuid,uuid,bigint,text,bigint,text,jsonb) from public,anon,authenticated,service_role;
 commit;

@@ -21,9 +21,10 @@ test('unknown publication response is terminal for browser instance',async()=>{
  const run=browser.createKnowledgeBrowserUploadReview({file,jobId:job,origin,fetcher:async(u,o)=>{
   if(u.endsWith('/acquire'))return json({writer:o.headers['x-knowledge-writer'],generation:1,receivedBytes:0});
   if(u.endsWith('/append'))return json({receivedBytes:3});
+  if(u.endsWith('/receipt'))return json({state:'registered',jobStatus:'processing'});
   count++;throw Error('lost publish');
  }});
- assert.equal((await run()).state,'reconciliation_required');assert.equal((await run()).state,'reconciliation_required');assert.equal(count,1);
+ assert.equal((await run()).state,'reconciliation_required');assert.equal((await run()).state,'reconciliation_required');assert.deepEqual(await run.checkPublication(),{state:'registered',jobStatus:'processing'});assert.equal(count,1);
 });
 test('history HTTP derives tenant in SQL, strips private fields and preserves microsecond cursor',async()=>{
  const calls=[];const ts='2026-11-27T12:00:00.123456Z';
