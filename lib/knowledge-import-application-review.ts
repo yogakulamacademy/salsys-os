@@ -1,4 +1,5 @@
 import 'server-only';
+import {createHash} from 'node:crypto';
 import {createKnowledgeGatewayHttpReview} from './knowledge-import-gateway-http-review';
 import {createKnowledgeHistoryHttpReview} from './knowledge-import-history-http-review';
 export const KNOWLEDGE_APPLICATION_RUNTIME_WIRED=false as const;
@@ -13,6 +14,12 @@ type Options={origin:string;issuer:string;accessToken:(request:Request)=>Promise
  connect:(claims:Claims)=>Promise<{query:Query;publicationFor:(scope:{organizationId:string;jobId:string})=>Authenticated['publication'];close:()=>Promise<void>}>;
  uploadSeconds:number;retentionSeconds:number;now?:()=>number};
 const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+/** Equality marker only, never authorization. Server-rendered scope must use verified session
+ * and DB-bound workspace, not arbitrary client fields. No JWT, raw session ID or secret in UI. */
+export function knowledgeImportScopeKeyReview(actor:string,session:string,organization:string){
+ if(![actor,session,organization].every(x=>uuid.test(x)))throw Error('invalid scope');
+ return createHash('sha256').update([actor,session,organization].map(x=>x.toLowerCase()).join('/')).digest('hex');
+}
 const json=(status:number,value:unknown)=>new Response(JSON.stringify(value),{status,headers:{'content-type':'application/json','cache-control':'no-store','x-content-type-options':'nosniff'}});
 function readClaims(token:string,issuer:string,actor:string,now:number):Claims|null{
  try{
@@ -47,6 +54,7 @@ export function createKnowledgeApplicationReview(o:Options){
    const {rows}=await conn.query('select knowledge_import_review.current_scope() as organization_id',[]);
    if(rows.length!==1||typeof rows[0].organization_id!=='string'||!uuid.test(rows[0].organization_id))return json(403,{error:'request_denied'});
    const context={organizationId:rows[0].organization_id,query:conn.query};
+   if(request.headers.get('x-knowledge-scope')!==knowledgeImportScopeKeyReview(claims.sub,claims.session_id,context.organizationId))return json(403,{error:'request_denied'});
    if(history)return await createKnowledgeHistoryHttpReview({origin:o.origin,authenticate:async()=>context})(request);
    if(op==='reserve'||op==='cancel'){
     if(request.body!==null||(request.headers.get('content-length')??'0')!=='0')return json(400,{error:'unexpected_body'});

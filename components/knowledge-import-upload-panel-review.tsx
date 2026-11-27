@@ -4,10 +4,10 @@ import {createKnowledgeUploadFlowReview,validKnowledgeImportFile,type KnowledgeU
 type Flow=ReturnType<typeof createKnowledgeUploadFlowReview>;
 /** Isolated, unmounted upload panel. A verified server scope key must remount it on
  * session/workspace change. No active production page imports this component. */
-export function KnowledgeImportUploadPanelReview({scopeKey}:{scopeKey:string}){
- return <UploadPanel key={scopeKey}/>;
+export function KnowledgeImportUploadPanelReview({scopeKey,onChanged}:{scopeKey:string;onChanged?:()=>void}){
+ return <UploadPanel key={scopeKey} scopeKey={scopeKey} onChanged={onChanged}/>;
 }
-function UploadPanel(){
+function UploadPanel({scopeKey,onChanged}:{scopeKey:string;onChanged?:()=>void}){
  const flow=useRef<Flow|null>(null),running=useRef(false);
  const [file,setFile]=useState<File|null>(null),[state,setState]=useState<ReturnType<Flow['snapshot']>|null>(null),[busy,setBusy]=useState(false);
  useEffect(()=>()=>{flow.current?.stop();flow.current=null;},[]);
@@ -17,10 +17,10 @@ function UploadPanel(){
   if(running.current)return;
   if(!flow.current){
    if(op!=='start'||!file||!validKnowledgeImportFile(file))return;
-   flow.current=createKnowledgeUploadFlowReview({origin:window.location.origin,file,jobId:crypto.randomUUID(),emit:setState});
+   flow.current=createKnowledgeUploadFlowReview({origin:window.location.origin,file,jobId:crypto.randomUUID(),scopeKey,emit:setState});
   }
   running.current=true;setBusy(true);
-  try{await flow.current[op]();}finally{running.current=false;setBusy(false);}
+  try{await flow.current[op]();}finally{running.current=false;setBusy(false);onChanged?.();}
  };
  return <section aria-label="Isolated Knowledge file upload">
   <h3>Import Knowledge JSON</h3><p>Isolated integration only. Up to 50 MiB; imported entries are drafts.</p>

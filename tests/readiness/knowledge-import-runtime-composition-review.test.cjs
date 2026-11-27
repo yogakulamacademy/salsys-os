@@ -17,3 +17,11 @@ test('broker never retries uncertain commit; rollback and destruction remain man
  const expired=api.createKnowledgeBrokerTransactionReview({...claims,exp:1},async()=>{throw Error('must not open');},()=>1000);
  await assert.rejects(expired(scope,[]),/expired/);
 });
+
+test('expected workspace is bound transaction-locally before broker operations',async()=>{
+ const calls=[];
+ const query=api.createKnowledgeBrokerTransactionReview(claims,async()=>({query:async(s,p)=>{calls.push([s,p]);return {rows:[]};},destroy:async()=>{}}),()=>1000,()=>claims.sub);
+ await query(scope,[]);
+ assert.deepEqual(calls[5],["select set_config('knowledge_import.expected_organization',$1,true)",[claims.sub]]);
+ assert.equal(calls[6][0],'select knowledge_import_review.broker_current_scope() as organization_id');
+});

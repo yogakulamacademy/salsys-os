@@ -8,10 +8,17 @@ export function validKnowledgeImportFile(file:File):boolean{
 }
 /** One user-selected file, one job, in memory only. Retry reservation with the same ID;
  * never re-publish after an uncertain write. Cancellation is explicit, not an unmount effect. */
-export function createKnowledgeUploadFlowReview(o:{origin:string;file:File;jobId:string;fetcher?:typeof fetch;emit:(state:State)=>void}){
+export function createKnowledgeUploadFlowReview(o:{origin:string;file:File;jobId:string;scopeKey?:string;fetcher?:typeof fetch;emit:(state:State)=>void}){
  const origin=new URL(o.origin);
  if(origin.origin!==o.origin||!['http:','https:'].includes(origin.protocol)||(origin.protocol==='http:'&&!['localhost','127.0.0.1'].includes(origin.hostname))||!uuid.test(o.jobId))throw Error('invalid import context');
- const fetcher=o.fetcher??fetch,abort=new AbortController();
+ const transport=o.fetcher??fetch,abort=new AbortController();
+ if(o.scopeKey!==undefined&&!/^[a-f0-9]{64}$/.test(o.scopeKey))throw Error('invalid scope marker');
+ const fetcher:typeof fetch=(input,init)=>{
+  const headers=new Headers(init?.headers);
+  if(o.scopeKey!==undefined)headers.set('x-knowledge-scope',o.scopeKey);
+  // Preserve plain header objects for existing fixture transport bridges.
+  return transport(input,{...init,headers:Object.fromEntries(headers)});
+ };
  let current:State={state:validKnowledgeImportFile(o.file)?'ready':'rejected',confirmedBytes:0,totalBytes:o.file.size};
  let reserved=false,busy=false,stopped=false,attemptedReservation=false;
  const update=(state:KnowledgeUploadFlowState,bytes=current.confirmedBytes,jobStatus?:string)=>{

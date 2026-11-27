@@ -270,7 +270,7 @@ test('actual disposable Supabase Storage authorization and lifecycle: '+reviewMo
       const httpOrigin='https://fixture.example', id=randomUUID(), j={id,path:org+'/'+id+'/source.json',length:bytes.length};
       const http=load('lib/knowledge-import-gateway-http-review.ts',{'server-only':{},'node:crypto':require('node:crypto'),'./knowledge-import-gateway-review':gateway});
       const historyHttp=load('lib/knowledge-import-history-http-review.ts',{'server-only':{},'./knowledge-import-history-review':load('lib/knowledge-import-history-review.ts')});
-      const application=load('lib/knowledge-import-application-review.ts',{'server-only':{},'./knowledge-import-gateway-http-review':http,'./knowledge-import-history-http-review':historyHttp});
+      const application=load('lib/knowledge-import-application-review.ts',{'server-only':{},'node:crypto':require('node:crypto'),'./knowledge-import-gateway-http-review':http,'./knowledge-import-history-http-review':historyHttp});
       const browser=load('lib/knowledge-import-browser-review.ts');
       const broker=load('lib/knowledge-import-application-broker-review.ts',{'server-only':{}});
       const login='kb_app_'+randomUUID().replaceAll('-',''),password=randomUUID().replaceAll('-','');
@@ -318,20 +318,36 @@ test('actual disposable Supabase Storage authorization and lifecycle: '+reviewMo
       // Only fixture Storage put/inspect uses the privileged local provider adapter.
       // All application database calls use the restricted login and fixed broker wrappers.
       await db.query("select set_config('request.jwt.claims',$1,false)",[JSON.stringify(owner.claims)]);
-      const base=httpOrigin+'/api/knowledge-import-review/',call=(suffix,token=owner.token,method='POST',headers={})=>handle(new Request(base+suffix,{method,headers:{origin:httpOrigin,authorization:'Bearer '+token,...headers}}));
+      const ownerScope=application.knowledgeImportScopeKeyReview(owner.actor,owner.claims.session_id,org),outsideScope=application.knowledgeImportScopeKeyReview(outsider.actor,outsider.claims.session_id,other);
+      const base=httpOrigin+'/api/knowledge-import-review/',call=(suffix,token=owner.token,method='POST',headers={})=>handle(new Request(base+suffix,{method,headers:{origin:httpOrigin,authorization:'Bearer '+token,'x-knowledge-scope':token===outsider.token?outsideScope:ownerScope,...headers}}));
       assert.equal((await call(id+'/reserve',owner.token,'POST',{'x-knowledge-file-bytes':String(bytes.length),'x-organization-id':other})).status,200);
       assert.equal((await call(id+'/reserve',owner.token,'POST',{'x-knowledge-file-bytes':String(bytes.length)})).status,200);
       assert.equal((await call(id+'/cancel',outsider.token)).status,403);
       assert.equal((await call(id+'/reserve','invalid','POST',{'x-knowledge-file-bytes':'10'})).status,403);
-      const run=browser.createKnowledgeBrowserUploadReview({origin:httpOrigin,jobId:id,file:new File([bytes],'fixture.json',{type:'application/json'}),fetcher:async(url,opts)=>handle(new Request(url,{method:'POST',headers:{...opts.headers,origin:httpOrigin,authorization:'Bearer '+owner.token},body:opts.body}))});
+      const run=browser.createKnowledgeBrowserUploadReview({origin:httpOrigin,jobId:id,file:new File([bytes],'fixture.json',{type:'application/json'}),fetcher:async(url,opts)=>handle(new Request(url,{method:'POST',headers:{...opts.headers,origin:httpOrigin,authorization:'Bearer '+owner.token,'x-knowledge-scope':ownerScope},body:opts.body}))});
       assert.deepEqual(await run(),{state:'registered',status:'queued'});
       const flow=load('lib/knowledge-import-upload-flow-review.ts',{'./knowledge-import-browser-review':browser});
       const progress=[];
-      const secondRun=flow.createKnowledgeUploadFlowReview({origin:httpOrigin,jobId:secondId,file:new File([bytes],'fixture.json',{type:'application/json'}),emit:s=>progress.push(s.state),fetcher:async(url,opts)=>handle(new Request(url,{method:'POST',headers:{...opts.headers,origin:httpOrigin,authorization:'Bearer '+owner.token},body:opts.body}))});
+      const secondRun=flow.createKnowledgeUploadFlowReview({origin:httpOrigin,jobId:secondId,scopeKey:ownerScope,file:new File([bytes],'fixture.json',{type:'application/json'}),emit:s=>progress.push(s.state),fetcher:async(url,opts)=>handle(new Request(url,{method:'POST',headers:{...opts.headers,origin:httpOrigin,authorization:'Bearer '+owner.token},body:opts.body}))});
       await secondRun.start();assert.equal(secondRun.snapshot().state,'registered');assert.ok(progress.includes('reserving'));assert.ok(progress.includes('uploading'));
       assert.equal(digest(await read(j)),digest(bytes));assert.equal(digest(await read(second)),digest(bytes));
       const history=await call('history',owner.token,'GET');assert.equal(history.status,200);const historyJobs=(await history.json()).jobs;assert.equal(historyJobs.find(x=>x.id===id).status,'queued');assert.equal(historyJobs.find(x=>x.id===secondId).status,'queued');
       const outside=await call('history',outsider.token,'GET');assert.equal(outside.status,200);assert.equal((await outside.json()).jobs.some(x=>x.id===id),false);
+      assert.equal((await call('history',owner.token,'GET',{'x-knowledge-scope':outsideScope})).status,403);
+      await db.query("insert into public.organization_members values($1,$2,true,'admin')",[other,owner.actor]);
+      await db.query('update public.tenant_session_bindings set organization_id=$1 where session_id=$2',[other,owner.claims.session_id]);
+      try{
+        assert.equal((await call('history',owner.token,'GET')).status,403);
+        assert.equal((await call(randomUUID()+'/reserve',owner.token,'POST',{'x-knowledge-file-bytes':'3'})).status,403);
+        const stale=broker.createKnowledgeBrokerTransactionReview({...owner.claims,is_anonymous:false},async()=>{
+          const conn=new pg.Client({connectionString:loginUrl.href,connectionTimeoutMillis:5000});await conn.connect();
+          return {query:(statement,params)=>conn.query(statement,params),destroy:()=>conn.end()};
+        },Date.now,()=>org);
+        await assert.rejects(stale('select knowledge_import_review.current_scope() as organization_id',[]),e=>e.code==='42501');
+      }finally{
+        await db.query('update public.tenant_session_bindings set organization_id=$1 where session_id=$2',[org,owner.claims.session_id]);
+        await db.query('delete from public.organization_members where organization_id=$1 and user_id=$2',[other,owner.actor]);
+      }
       assert.equal((await call(id+'/cancel')).status,200);
       await db.query('update public.organization_members set active=false where organization_id=$1 and user_id=$2',[org,owner.actor]);
       try{assert.equal((await call('history',owner.token,'GET')).status,403);}finally{await db.query('update public.organization_members set active=true where organization_id=$1 and user_id=$2',[org,owner.actor]);}

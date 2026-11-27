@@ -8,7 +8,7 @@ alter table knowledge_import_review.application_principals enable row level secu
 revoke all on knowledge_import_review.application_principals from public,anon,authenticated,service_role;
 create function knowledge_import_review.broker_assert()
 returns void language plpgsql security invoker set search_path=pg_catalog,public,auth,pg_temp as $$
-declare v_exp text;
+declare v_exp text; v_expected text; v_bound uuid;
 begin
  if not exists(select 1 from knowledge_import_review.application_principals p join pg_roles r on r.rolname=p.login_role
    where p.login_role=session_user and p.enabled and r.rolcanlogin and not r.rolsuper and not r.rolbypassrls and not r.rolcreaterole and not r.rolcreatedb and not r.rolreplication
@@ -18,7 +18,17 @@ begin
  v_exp:=auth.jwt()->>'exp';
  if v_exp is null or v_exp !~ '^[0-9]{1,12}$' or v_exp::numeric<=extract(epoch from clock_timestamp()) then
    raise exception 'application session expired' using errcode='42501'; end if;
- perform knowledge_import_review.current_scope();
+ -- Hold the actual session binding for the transaction. A concurrent workspace
+ -- change must serialize with this operation rather than silently change its tenant.
+ select b.organization_id into v_bound from public.tenant_session_bindings b
+ where b.session_id::text=auth.jwt()->>'session_id' and b.user_id=auth.uid()
+ for share;
+ if not found then raise exception 'application scope denied' using errcode='42501'; end if;
+ v_expected:=nullif(current_setting('knowledge_import.expected_organization',true),'');
+ if v_expected is not null and v_bound::text is distinct from v_expected then
+   raise exception 'application scope denied' using errcode='42501'; end if;
+ if knowledge_import_review.current_scope() is distinct from v_bound then
+   raise exception 'application scope denied' using errcode='42501'; end if;
 end $$;
 create function knowledge_import_review.broker_current_scope()
 returns uuid language plpgsql security definer set search_path=pg_catalog,public,auth,pg_temp as $$
