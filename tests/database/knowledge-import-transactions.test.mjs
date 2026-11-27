@@ -349,6 +349,40 @@ test('disposable PG: exact Knowledge RPC, competing claims, rollback, retry, rev
     await a.query('update organization_members set active=false where organization_id=$1 and user_id=$2',[org,actor]);
     await assert.rejects(a.query('select * from knowledge_import_review.history($1,25)',[org]),e=>e.code==='42501');
     await a.query('update organization_members set active=true where organization_id=$1 and user_id=$2',[org,actor]);
+
+    // Cleanup remains privileged review-only; external receipt is synthetic, not actual deletion.
+    const beginCleanup=(db,j,o=org)=>db.query('select knowledge_import_review.begin_storage_cleanup($1,$2) as id',[o,j]);
+    const completeCleanup=(db,id,ver=version,evidence='e'.repeat(64),o=org)=>db.query('select knowledge_import_review.complete_storage_cleanup($1,$2,$3,$4,$5,$6,$7) as ok',[o,integrationJob,id,objectPath,ver,sourceHash,evidence]);
+    await assert.rejects(beginCleanup(worker,integrationJob),e=>e.code==='42501');
+    await assert.rejects(beginCleanup(a,integrationJob),/cleanup not eligible/);
+    await assert.rejects(beginCleanup(a,expJob),/cleanup not eligible/); // unversioned reservation stays charged
+    await a.query("update knowledge_import_jobs_v1 set created_at=now()-interval '3 hours',upload_expires_at=now()-interval '2 hours',retention_expires_at=now()-interval '1 hour' where id=$1",[integrationJob]);
+    await assert.rejects(beginCleanup(a,integrationJob,other),/cleanup not eligible/);
+    const cleanupId=(await beginCleanup(a,integrationJob)).rows[0].id;
+    assert.equal((await beginCleanup(b,integrationJob)).rows[0].id,cleanupId);
+    const charged=Number((await a.query('select sum(declared_bytes) filter(where storage_released_at is null) as n from knowledge_import_jobs_v1 where organization_id=$1',[org])).rows[0].n);
+    await a.query('update knowledge_import_review.quotas set max_reserved_bytes=$2 where organization_id=$1',[org,charged]);
+    await assert.rejects(reserve(a,randomUUID(),1,uploadEnd,retentionEnd),/quota exceeded/);
+    await assert.rejects(completeCleanup(worker,cleanupId),e=>e.code==='42501');
+    await assert.rejects(completeCleanup(a,randomUUID()),/cleanup evidence mismatch/);
+    await assert.rejects(completeCleanup(a,cleanupId,'different-version'),/cleanup evidence mismatch/);
+    await assert.rejects(completeCleanup(a,cleanupId,version,'bad'),/cleanup evidence mismatch/);
+    assert.equal((await a.query('select storage_released_at from knowledge_import_jobs_v1 where id=$1',[integrationJob])).rows[0].storage_released_at,null);
+    // Inject a failure after receipt write: quota release and receipt must roll back together.
+    await a.query("create function fixture_cleanup_abort() returns trigger language plpgsql as $$ begin if new.storage_released_at is not null then raise exception 'fixture cleanup abort';end if;return new;end $$;create trigger fixture_cleanup_abort before update on knowledge_import_jobs_v1 for each row execute function fixture_cleanup_abort()");
+    await assert.rejects(completeCleanup(a,cleanupId),/fixture cleanup abort/);
+    assert.equal((await a.query('select completed_at from knowledge_import_review.storage_cleanup where job_id=$1',[integrationJob])).rows[0].completed_at,null);
+    await a.query('drop trigger fixture_cleanup_abort on knowledge_import_jobs_v1');
+    const clean=await Promise.all([completeCleanup(a,cleanupId),completeCleanup(b,cleanupId)]);
+    assert.deepEqual(clean.map(x=>x.rows[0].ok),[true,true]);
+    await assert.rejects(completeCleanup(a,cleanupId,version,'f'.repeat(64)),/cleanup receipt conflict/);
+    assert.equal(Number((await a.query('select sum(declared_bytes) filter(where storage_released_at is null) as n from knowledge_import_jobs_v1 where organization_id=$1',[org])).rows[0].n),charged-raw.length);
+    const newJob=randomUUID();
+    assert.equal((await reserve(a,newJob,raw.length,uploadEnd,retentionEnd)).rows[0].id,newJob);
+    await assert.rejects(reserve(b,randomUUID(),1,uploadEnd,retentionEnd),/quota exceeded/);
+    assert.equal((await a.query("select count(*)::int as n from knowledge_documents where metadata->>'import_job_id'=$1 and status='draft'",[integrationJob])).rows[0].n,3);
+    assert.equal((await a.query('select count(*)::int as n from knowledge_import_entries_v1 where job_id=$1',[integrationJob])).rows[0].n,5);
+    await a.query('update knowledge_import_review.quotas set max_reserved_bytes=10485760 where organization_id=$1',[org]);
     const retryJob=await seedJob(1);
     for(let attempt=1;attempt<=5;attempt++){
       const c=await claimJob(a,retryJob);assert.equal(c.attempts,attempt);

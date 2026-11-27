@@ -138,7 +138,9 @@ create table knowledge_import_review.quotas (
 );
 alter table knowledge_import_review.quotas enable row level security;
 revoke all on knowledge_import_review.quotas from public,anon,authenticated,service_role;
-alter table public.knowledge_import_jobs_v1 add column manifest_sha256 text check (manifest_sha256 ~ '^[0-9a-f]{64}$');
+alter table public.knowledge_import_jobs_v1 add column manifest_sha256 text check (manifest_sha256 ~ '^[0-9a-f]{64}$'),
+  add column storage_released_at timestamptz,
+  add check (storage_released_at is null or status in ('completed','failed','cancelled','expired'));
 -- Owner-only review reservation. Session identity comes from the server-owned Auth context.
 -- Expiry inputs require a separately approved policy; no storage permission is issued.
 create function knowledge_import_review.reserve(p_org uuid,p_job uuid,p_bytes bigint,p_upload_until timestamptz,p_retain_until timestamptz)
@@ -167,9 +169,9 @@ begin
         and j.declared_bytes=p_bytes and j.upload_expires_at=p_upload_until and j.retention_expires_at=p_retain_until then return j.id; end if;
     raise exception 'reservation conflict';
   end if;
-  select count(*) filter(where status in ('awaiting_upload','queued','processing')),coalesce(sum(declared_bytes),0) into n,b
+  select count(*) filter(where status in ('awaiting_upload','queued','processing')),coalesce(sum(declared_bytes) filter(where storage_released_at is null),0) into n,b
     from public.knowledge_import_jobs_v1 where organization_id=p_org;
-  -- Retained bytes count all jobs until separately authorized deletion/reconciliation.
+  -- Retained bytes count all jobs until a separately authorized cleanup receipt is committed.
   if n>=q.max_active_jobs or b+p_bytes>q.max_reserved_bytes then raise exception 'import quota exceeded'; end if;
   insert into public.knowledge_import_jobs_v1(id,organization_id,requested_by,request_session_id,object_path,declared_bytes,upload_expires_at,retention_expires_at,created_at)
     values(p_job,p_org,v_actor,v_session,p_org::text||'/'||p_job::text||'/source.json',p_bytes,p_upload_until,p_retain_until,t);
@@ -518,6 +520,75 @@ begin
   update public.knowledge_import_jobs_v1 set object_version=p_version
     where organization_id=p_org and id=p_job and object_version is null;
   return result;
+end $$;
+-- Owner-only cleanup ledger. No external Storage delete or proof verification happens in SQL.
+-- Never grant this review boundary to an application user or import worker.
+create table knowledge_import_review.storage_cleanup (
+  organization_id uuid not null,
+  job_id uuid not null,
+  cleanup_id uuid not null unique default gen_random_uuid(),
+  object_path text not null,
+  object_version text not null,
+  source_sha256 text not null check(source_sha256 ~ '^[0-9a-f]{64}$'),
+  requested_at timestamptz not null default clock_timestamp(),
+  completed_at timestamptz,
+  evidence_sha256 text check(evidence_sha256 ~ '^[0-9a-f]{64}$'),
+  primary key(organization_id,job_id),
+  foreign key(organization_id,job_id) references public.knowledge_import_jobs_v1(organization_id,id),
+  check ((completed_at is null)=(evidence_sha256 is null))
+);
+alter table knowledge_import_review.storage_cleanup enable row level security;
+revoke all on knowledge_import_review.storage_cleanup from public,anon,authenticated,service_role;
+-- Use a stable cleanup ID across lost responses; job must be terminal and past retention.
+-- Unversioned/abandoned reservations deliberately remain accounted until a separate absence protocol exists.
+create function knowledge_import_review.begin_storage_cleanup(p_org uuid,p_job uuid)
+returns uuid language plpgsql security invoker set search_path=pg_catalog,public,pg_temp as $$
+declare j public.knowledge_import_jobs_v1%rowtype; c knowledge_import_review.storage_cleanup%rowtype;
+begin
+  select * into j from public.knowledge_import_jobs_v1 where organization_id=p_org and id=p_job for update;
+  if not found or j.status not in ('completed','failed','cancelled','expired')
+    or clock_timestamp()<j.retention_expires_at or j.object_version is null or j.sha256 is null
+    or exists(select 1 from public.knowledge_import_entries_v1 e where e.organization_id=p_org and e.job_id=p_job and e.status in ('pending','leased'))
+    then raise exception 'cleanup not eligible'; end if;
+  select * into c from knowledge_import_review.storage_cleanup where organization_id=p_org and job_id=p_job for update;
+  if found then
+    if c.object_path is distinct from j.object_path or c.object_version is distinct from j.object_version or c.source_sha256 is distinct from j.sha256 then
+      raise exception 'cleanup identity conflict'; end if;
+    return c.cleanup_id;
+  end if;
+  if j.storage_released_at is not null then raise exception 'cleanup receipt missing'; end if;
+  insert into knowledge_import_review.storage_cleanup(organization_id,job_id,object_path,object_version,source_sha256)
+    values(p_org,p_job,j.object_path,j.object_version,j.sha256) returning cleanup_id into c.cleanup_id;
+  return c.cleanup_id;
+end $$;
+-- Evidence digest is an attestation by a future separately authorized cleanup broker.
+-- It MUST bind provider deletion/absence, exact object identity and no unfinished/replayable upload.
+-- This function validates the ledger binding, not the truth of the external evidence.
+create function knowledge_import_review.complete_storage_cleanup(p_org uuid,p_job uuid,p_cleanup uuid,p_path text,p_version text,p_source_sha text,p_evidence_sha text)
+returns boolean language plpgsql security invoker set search_path=pg_catalog,public,pg_temp as $$
+declare j public.knowledge_import_jobs_v1%rowtype; c knowledge_import_review.storage_cleanup%rowtype; t timestamptz;
+begin
+  -- Quota lock first: serialize release with new reservations; no Auth/actor locks in cleanup.
+  perform 1 from knowledge_import_review.quotas where organization_id=p_org for update;
+  if not found then raise exception 'import quota not configured'; end if;
+  select * into j from public.knowledge_import_jobs_v1 where organization_id=p_org and id=p_job for update;
+  if not found or j.status not in ('completed','failed','cancelled','expired') or clock_timestamp()<j.retention_expires_at
+    or exists(select 1 from public.knowledge_import_entries_v1 e where e.organization_id=p_org and e.job_id=p_job and e.status in ('pending','leased')) then
+    raise exception 'cleanup not eligible'; end if;
+  select * into c from knowledge_import_review.storage_cleanup where organization_id=p_org and job_id=p_job for update;
+  if not found or p_cleanup is null or p_cleanup is distinct from c.cleanup_id
+    or p_path is distinct from c.object_path or p_version is distinct from c.object_version or p_source_sha is distinct from c.source_sha256
+    or c.object_path is distinct from j.object_path or c.object_version is distinct from j.object_version or c.source_sha256 is distinct from j.sha256
+    or p_evidence_sha is null or p_evidence_sha !~ '^[0-9a-f]{64}$' then raise exception 'cleanup evidence mismatch'; end if;
+  if c.completed_at is not null then
+    if c.evidence_sha256 is distinct from p_evidence_sha or j.storage_released_at is distinct from c.completed_at then raise exception 'cleanup receipt conflict'; end if;
+    return true;
+  end if;
+  if j.storage_released_at is not null then raise exception 'cleanup receipt conflict'; end if;
+  t:=clock_timestamp();
+  update knowledge_import_review.storage_cleanup set completed_at=t,evidence_sha256=p_evidence_sha where organization_id=p_org and job_id=p_job;
+  update public.knowledge_import_jobs_v1 set storage_released_at=t where organization_id=p_org and id=p_job;
+  return true;
 end $$;
 revoke all on all functions in schema knowledge_import_review from public,anon,authenticated,service_role;
 commit;
