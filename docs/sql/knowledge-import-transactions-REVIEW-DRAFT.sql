@@ -484,12 +484,15 @@ end $$;
 -- No broad read or arbitrary failure settlement. Actual worker error classification remains separate.
 -- Worker receives only its assigned source identity, not a storage token or raw data.
 create function knowledge_import_review.worker_source_identity(p_org uuid,p_job uuid)
-returns table(object_path text,object_version text,byte_length bigint,source_sha256 text,manifest_sha256 text)
+returns table(object_path text,object_version text,byte_length bigint,source_sha256 text,manifest_sha256 text,read_expires_at_ms bigint)
 language plpgsql security definer set search_path=pg_catalog,public,pg_temp as $$
 begin
   if not knowledge_import_review.worker_allowed(p_org,p_job) then raise exception 'worker access denied' using errcode='42501'; end if;
-  return query select j.object_path,j.object_version,j.verified_bytes,j.sha256,j.manifest_sha256
-    from public.knowledge_import_jobs_v1 j where j.organization_id=p_org and j.id=p_job;
+  return query select j.object_path,j.object_version,j.verified_bytes,j.sha256,j.manifest_sha256,
+    floor(extract(epoch from least(d.expires_at,j.retention_expires_at))*1000)::bigint
+    from public.knowledge_import_jobs_v1 j
+    join knowledge_import_review.worker_delegations d on d.organization_id=j.organization_id and d.job_id=j.id
+    where j.organization_id=p_org and j.id=p_job;
 end $$;
 -- Adapter must independently read/hash the actual immutable object. This verifies
 -- its proposed source/manifest identity against the registered database record.
