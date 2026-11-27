@@ -83,6 +83,35 @@ type ReadIssuerOptions={
  now?:()=>number;
 };
 
+/** Resolve grants over an issuer-owned connection bound to the delegated worker login.
+ * The database procedure checks the actual login, delegation, job and originating session. */
+export function createKnowledgeWorkerReadGrantResolverReview(
+ expectedLogin:string,openIssuerConnection:()=>Promise<Connection>,
+):ReadIssuerOptions['resolveGrant']{
+ if(!/^[a-z][a-z0-9_]{0,62}$/.test(expectedLogin))throw Error('invalid issuer login');
+ return async scope=>{
+  const connection=await openIssuerConnection();
+  try{
+   const check=await connection.query(loginCheck,[]);
+   if(check.rows.length!==1||check.rows[0].login!==expectedLogin||check.rows[0].restricted!==true)
+    throw Error('issuer login denied');
+   await connection.query("set statement_timeout='5s'",[]);
+   const {rows}=await connection.query(
+    'select * from knowledge_import_review.worker_source_identity($1,$2)',
+    [scope.organizationId,scope.jobId],
+   );
+   if(rows.length!==1)return null;
+   const row=rows[0];
+   const byteLength=Number(row.byte_length),expiresAtMs=Number(row.read_expires_at_ms);
+   if(typeof row.object_path!=='string'||typeof row.object_version!=='string'||!row.object_version||
+    typeof row.source_sha256!=='string'||typeof row.manifest_sha256!=='string'||
+    !Number.isSafeInteger(byteLength)||byteLength<1||!Number.isSafeInteger(expiresAtMs)||expiresAtMs<1)return null;
+   return {identity:{objectPath:row.object_path,objectVersion:row.object_version,byteLength,
+    sha256:row.source_sha256,manifestSha256:row.manifest_sha256},expiresAtMs};
+  }finally{await connection.destroy();}
+ };
+}
+
 /** Server-only composition for an explicitly invoked worker. The injected grant resolver
  * and Storage signer belong to the issuer, outside the restricted worker database login. */
 export function runKnowledgeVersionedWorkerRuntimeReview(
