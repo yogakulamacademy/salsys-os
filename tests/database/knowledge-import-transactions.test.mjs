@@ -72,6 +72,29 @@ test('disposable PG: exact Knowledge RPC, competing claims, rollback, retry, rev
     await a.query('insert into knowledge_import_review.quotas values($1,1,300)',[org]);
     await assert.rejects(reserve(a,reserved,100,upload,retain,other),e=>e.code==='42501');
     assert.equal((await reserve(a,reserved,100,upload,retain)).rows[0].id,reserved);
+    const uploadCheck=(db,o=org,j=reserved,bucket='knowledge-import-private-v1',path=org+'/'+reserved+'/source.json',bytes=100)=>db.query('select knowledge_import_review.upload_allowed($1,$2,$3,$4,$5) as ok',[o,j,bucket,path,bytes]);
+    assert.equal((await uploadCheck(a)).rows[0].ok,true);
+    assert.equal((await uploadCheck(a,other)).rows[0].ok,false);
+    assert.equal((await uploadCheck(a,org,reserved,'public')).rows[0].ok,false);
+    assert.equal((await uploadCheck(a,org,reserved,'knowledge-import-private-v1','../other/source.json')).rows[0].ok,false);
+    assert.equal((await uploadCheck(a,org,reserved,'knowledge-import-private-v1',org+'/'+reserved+'/source.json',101)).rows[0].ok,false);
+    await a.query('update organization_members set active=false where organization_id=$1 and user_id=$2',[org,actor]);
+    assert.equal((await uploadCheck(b)).rows[0].ok,false);
+    await assert.rejects(b.query('select * from knowledge_import_review.history($1,25)',[org]),e=>e.code==='42501');
+    await a.query('update organization_members set active=true where organization_id=$1 and user_id=$2',[org,actor]);
+    await assert.rejects(b.query('select * from knowledge_import_review.history($1,25)',[other]),e=>e.code==='42501');
+    await b.query("select set_config('request.jwt.claims',$1,false)",[JSON.stringify({...JSON.parse(claims),session_id:randomUUID()})]);
+    assert.equal((await uploadCheck(b)).rows[0].ok,false);
+    await assert.rejects(b.query('select * from knowledge_import_review.history($1,25)',[org]),e=>e.code==='42501');
+    await b.query("select set_config('request.jwt.claims',$1,false)",[claims]);
+    const history=async(db,limit,before=null,beforeId=null)=>(await db.query('select * from knowledge_import_review.history($1,$2,$3,$4)',[org,limit,before,beforeId])).rows;
+    const historyPage=await history(a,1);assert.equal(historyPage.length,1);assert.equal(historyPage[0].job_id,reserved);
+    assert.deepEqual(Object.keys(historyPage[0]).sort(),['job_id','job_status','created_at','file_bytes','total_entries','pending','leased','created','invalid','duplicate','failed','cancelled'].sort());
+    // Preserve database timestamp precision using text cursor rather than JS Date milliseconds.
+    const cursor=(await a.query('select created_at::text as ts from knowledge_import_jobs_v1 where id=$1',[reserved])).rows[0].ts;
+    const older=await history(b,1,cursor,reserved);assert.equal(older[0].job_id,job);
+    await assert.rejects(history(a,26),/invalid history cursor/);
+
     assert.equal((await reserve(b,reserved,100,upload,retain)).rows[0].id,reserved);
     await assert.rejects(reserve(b,reserved,101,upload,retain),/reservation conflict/);
     await assert.rejects(reserve(b,randomUUID(),1,upload,retain),/quota exceeded/);
@@ -95,6 +118,11 @@ test('disposable PG: exact Knowledge RPC, competing claims, rollback, retry, rev
     await a.query('drop trigger fixture_enqueue_abort on knowledge_import_entries_v1');
     const pair=await Promise.all([enqueue(a,reserved,100,'b'.repeat(64),manifest),enqueue(b,reserved,100,'b'.repeat(64),manifest)]);
     assert.deepEqual(pair.map(x=>x.rows[0].status),['queued','queued']);
+    assert.equal((await uploadCheck(b)).rows[0].ok,false);
+    const queuedSummary=(await history(b,25)).find(row=>row.job_id===reserved);
+    assert.equal(queuedSummary.total_entries,3);
+    assert.deepEqual([queuedSummary.pending,queuedSummary.invalid,queuedSummary.duplicate],[1,1,1]);
+
     assert.equal((await a.query('select count(*)::int as n from knowledge_import_entries_v1 where job_id=$1',[reserved])).rows[0].n,3);
     await assert.rejects(enqueue(b,reserved,100,'c'.repeat(64),manifest),/manifest conflict/);
     assert.equal((await a.query('select knowledge_import_review.cancel($1,$2) as ok',[org,reserved])).rows[0].ok,true);

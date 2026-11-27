@@ -217,5 +217,53 @@ begin
   return query select ord-1,encode(sha256(convert_to(v::text,'UTF8')),'hex')
     from jsonb_array_elements(p_payloads) with ordinality as a(v,ord) order by ord;
 end $$;
+-- Review-only permission predicate. Not an installed storage RLS policy or upload grant.
+create function knowledge_import_review.upload_allowed(p_org uuid,p_job uuid,p_bucket text,p_path text,p_bytes bigint)
+returns boolean language sql security invoker set search_path=pg_catalog,public,auth,pg_temp as $$
+  select coalesce(p_bucket='knowledge-import-private-v1' and auth.role()='authenticated' and exists(
+    select 1 from public.knowledge_import_jobs_v1 j
+    join auth.sessions s on s.id=j.request_session_id and s.user_id=j.requested_by
+    join public.tenant_session_bindings b on b.session_id=s.id and b.user_id=s.user_id and b.organization_id=j.organization_id
+    join public.organization_members m on m.user_id=s.user_id and m.organization_id=j.organization_id
+    join public.organizations o on o.id=j.organization_id
+    where j.organization_id=p_org and j.id=p_job and j.requested_by=auth.uid()
+      and s.id::text=auth.jwt()->>'session_id' and m.active and m.role in ('owner','admin') and o.status='active'
+      and j.status='awaiting_upload' and clock_timestamp()<j.upload_expires_at
+      and j.object_path=p_path and j.declared_bytes=p_bytes),false);
+$$;
+-- History is scoped to the current active administrator session, not arbitrary org claims.
+-- Deliberately omit raw paths, digests, session identities, lease tokens and document text.
+create function knowledge_import_review.history(p_org uuid,p_limit integer,p_before timestamptz default null,p_before_id uuid default null)
+returns table(job_id uuid,job_status text,created_at timestamptz,file_bytes bigint,total_entries integer,
+  pending integer,leased integer,created integer,invalid integer,duplicate integer,failed integer,cancelled integer)
+language plpgsql security invoker set search_path=pg_catalog,public,auth,pg_temp as $$
+begin
+  if auth.role() is distinct from 'authenticated' or auth.uid() is null or not exists(
+    select 1 from auth.sessions s join public.tenant_session_bindings b on b.session_id=s.id and b.user_id=s.user_id
+    join public.organization_members m on m.user_id=s.user_id and m.organization_id=b.organization_id
+    join public.organizations o on o.id=m.organization_id
+    where s.id::text=auth.jwt()->>'session_id' and s.user_id=auth.uid() and b.organization_id=p_org
+      and m.active and m.role in ('owner','admin') and o.status='active') then
+    raise exception 'import access denied' using errcode='42501';
+  end if;
+  if p_limit is null or p_limit not between 1 and 25 or (p_before is null)<>(p_before_id is null) then
+    raise exception 'invalid history cursor';
+  end if;
+  return query select j.id,j.status,j.created_at,j.declared_bytes,j.total_entries,
+    a.pending,a.leased,a.created,a.invalid,a.duplicate,a.failed,a.cancelled
+  from (select q.* from public.knowledge_import_jobs_v1 q where q.organization_id=p_org
+    and (p_before is null or (q.created_at,q.id)<(p_before,p_before_id))
+    order by q.created_at desc,q.id desc limit p_limit) j
+  cross join lateral (select
+    count(*) filter(where e.status='pending')::integer as pending,
+    count(*) filter(where e.status='leased')::integer as leased,
+    count(*) filter(where e.status='created')::integer as created,
+    count(*) filter(where e.status='invalid')::integer as invalid,
+    count(*) filter(where e.status='duplicate')::integer as duplicate,
+    count(*) filter(where e.status='failed')::integer as failed,
+    count(*) filter(where e.status='cancelled')::integer as cancelled
+    from public.knowledge_import_entries_v1 e where e.organization_id=j.organization_id and e.job_id=j.id) a
+  order by j.created_at desc,j.id desc;
+end $$;
 revoke all on all functions in schema knowledge_import_review from public,anon,authenticated,service_role;
 commit;
