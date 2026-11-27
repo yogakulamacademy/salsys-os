@@ -256,22 +256,20 @@ test('actual disposable Supabase Storage authorization and lifecycle',{timeout:2
       await assert.rejects(transport({...owner.claims,exp:1})('select knowledge_import_review.broker_current_scope()',[]),e=>e.code==='42501');
       const scopeQuery=broker.createKnowledgeBrokerQueryReview(transport(owner.claims));
       await assert.rejects(scopeQuery('select * from auth.sessions',[]),/operation denied/);
-      const handle=application.createKnowledgeApplicationReview({origin:httpOrigin,issuer:owner.claims.iss,uploadSeconds:600,retentionSeconds:1200,
+      const routeBoundary=load('lib/knowledge-import-route-boundary-review.ts',{'server-only':{},'./knowledge-import-application-review':application});
+      const publicationAdapter=load('lib/knowledge-import-publication-adapter-review.ts',{'server-only':{},'./knowledge-import-upload-contract':upload});
+      const handle=routeBoundary.createKnowledgeRouteBoundaryReview({mode:'isolated_fixture',options:{origin:httpOrigin,issuer:owner.claims.iss,uploadSeconds:600,retentionSeconds:1200,
         accessToken:async req=>req.headers.get('authorization')?.replace(/^Bearer /,'')??null,
         verifyUser:async token=>{const verified=await admin.auth.getUser(token);return verified.error?null:verified.data.user;},
         connect:async claims=>{
           const query=broker.createKnowledgeBrokerQueryReview(transport(claims)),fixture=makeAdapter(j);
-          return {query,publication:{...fixture,
-            async reservation(scope){
-              const result=await query('select j.organization_id,j.id,j.requested_by,j.request_session_id,j.object_path,j.declared_bytes,j.upload_expires_at,j.status from knowledge_import_review.lock_job($1,$2) j',[scope.organizationId,scope.jobId]);
-              const row=result.rows[0];if(!row||row.status!=='awaiting_upload')throw Error('reservation unavailable');
-              return {context:{organizationId:row.organization_id,actorId:row.requested_by,sessionId:row.request_session_id,active:true,canManage:true},reservation:{organizationId:row.organization_id,actorId:row.requested_by,sessionId:row.request_session_id,jobId:row.id,objectPath:row.object_path,declaredBytes:Number(row.declared_bytes),expiresAtMs:row.upload_expires_at.getTime()}};
-            },
-            async digests(payloads){return (await query('select * from knowledge_import_review.digest_payloads($1::jsonb)',[JSON.stringify(payloads)])).rows.map(x=>x.payload_sha256);},
-            async register(){throw Error('fenced registration required');}
-          },close:async()=>{}};
+          const publication=publicationAdapter.createKnowledgePublicationAdapterReview(query,{
+            async createOnly(object,body){assert.equal(object.path,j.path);await fixture.put(object.path,body);},
+            async inspectExact(object){assert.equal(object.path,j.path);return fixture.inspect(object.path);}
+          },{organizationId:org,jobId:id});
+          return {query,publication,close:async()=>{}};
         }
-      });
+      }});
       // Only fixture Storage put/inspect uses the privileged local provider adapter.
       // All application database calls use the restricted login and fixed broker wrappers.
       await db.query("select set_config('request.jwt.claims',$1,false)",[JSON.stringify(owner.claims)]);
