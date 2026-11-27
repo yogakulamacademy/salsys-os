@@ -54,3 +54,26 @@ test('mixed Unicode capacity and JSON escaping preserve exact preflight limits',
  assert.equal(api.planKnowledgeDraftImport(base+' '.repeat(padding)).ok,true);
  assert.equal(api.planKnowledgeDraftImport(base+' '.repeat(padding+1)).reason,'file_too_large');
 });
+
+test('content-keyed duplicate index preserves all normalized fields and exact Unicode identity',()=>{
+ const b={title:'Policy',content:'Synthetic text 😀 é \\ " quoted',source_name:'Handbook'};
+ const variants=[b,{...b,title:' Policy ',content:' '+b.content+' '},{...b,title:'Other'},
+  {...b,category:'policy'},{...b,source_type:'manual'},{...b,source_name:'Other'},
+  {...b,source_uri:'https://fixture.example/doc'},{...b,review_flag:'Review'},
+  {...b,content:b.content.replace('é','e\u0301')},{...b,content:b.content+'!'},
+  {...b,category:'general',source_type:'other',source_uri:'',review_flag:''}];
+ const r=plan(variants);assert.equal(r.ok,true);assert.equal(r.accepted,9);
+ assert.deepEqual(r.issues.map(x=>[x.index,x.reason]),[[1,'duplicate_in_file'],[10,'duplicate_in_file']]);
+ assert.deepEqual(r.batches.flat().map(e=>e.index),[0,2,3,4,5,6,7,8,9]);
+});
+test('exact duplicates agree with full normalized JSON equality for varied content and metadata',()=>{
+ const rows=Array.from({length:1000},(_,i)=>({title:'Title '+(i%13),content:'Content value '+(i%17)+' 😀',source_name:'Source '+(i%3),category:i%2?'general':'policy',source_type:'other',source_uri:'',review_flag:i%5?'':'Check'}));
+ rows.push(...rows.slice(0,100).map(r=>({...r,title:' '+r.title+' ',content:' '+r.content+' '})));
+ const expected=new Set(),accepted=[],duplicate=[];
+ for(const [i,row] of rows.entries()){
+  const key=JSON.stringify({...row,title:row.title.trim(),content:row.content.trim(),source_uri:null});
+  if(expected.has(key))duplicate.push(i);else{expected.add(key);accepted.push(i);}
+ }
+ const r=plan(rows);assert.equal(r.ok,true);assert.deepEqual(r.batches.flat().map(e=>e.index),accepted);
+ assert.deepEqual(r.issues.map(e=>e.index),duplicate);assert.ok(r.issues.every(e=>e.reason==='duplicate_in_file'));
+});

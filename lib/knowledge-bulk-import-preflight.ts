@@ -54,13 +54,17 @@ export function planKnowledgeDraftImport(raw: unknown): Plan {
   try { parsed = JSON.parse(raw); } catch { return {ok:false, reason:'invalid_json'}; }
   if (!record(parsed) || parsed.version !== 1 || !Array.isArray(parsed.drafts) || Object.keys(parsed).some(k => k !== 'version' && k !== 'drafts') || parsed.drafts.length === 0) return {ok:false, reason:'invalid_format'};
   if (parsed.drafts.length > BULK_IMPORT_MAX_ENTRIES) return {ok:false, reason:'too_many_entries'};
-  const seen = new Set<string>(), issues: Issue[] = [], batches: Entry[][] = [];
+  // Index existing normalized content strings directly, rather than retaining a second
+  // serialized copy of every complete draft. The metadata tuple includes every other
+  // normalized field; Map/Set string equality is exact (no lossy fingerprints).
+  const seen = new Map<string,Set<string>>(), issues: Issue[] = [], batches: Entry[][] = [];
   let batch: Entry[] = [], batchBytes = 2, accepted = 0;
   for (const [index, item] of parsed.drafts.entries()) {
     const draft = normalized(item);
     if (!draft) { issues.push({index, reason:'invalid_entry'}); continue; }
-    const key = JSON.stringify(draft);
-    if (seen.has(key)) { issues.push({index, reason:'duplicate_in_file'}); continue; }
+    const key = JSON.stringify([draft.title,draft.category,draft.source_type,draft.source_name,draft.source_uri,draft.review_flag]);
+    const existing = seen.get(draft.content);
+    if (existing?.has(key)) { issues.push({index, reason:'duplicate_in_file'}); continue; }
     const entry = {index, draft};
     const size = bytes(JSON.stringify(entry));
     if (size + 2 > BULK_IMPORT_BATCH_BYTES) { issues.push({index, reason:'invalid_entry'}); continue; }
@@ -68,7 +72,9 @@ export function planKnowledgeDraftImport(raw: unknown): Plan {
       batches.push(batch); batch = []; batchBytes = 2;
     }
     batchBytes += size + (batch.length ? 1 : 0);
-    batch.push(entry); seen.add(key); accepted++;
+    batch.push(entry);
+    if(existing)existing.add(key);else seen.set(draft.content,new Set([key]));
+    accepted++;
   }
   if (batch.length) batches.push(batch);
   return {ok:true, total:parsed.drafts.length, accepted, issues, batches};
