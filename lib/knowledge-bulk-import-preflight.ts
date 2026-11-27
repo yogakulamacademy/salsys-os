@@ -5,8 +5,23 @@ export const BULK_IMPORT_BATCH_ENTRIES = 50;
 export const BULK_IMPORT_BATCH_BYTES = 512 * 1024;
 const types = new Set(['manual','website','pdf','drive','faq','policy','course','crm_reply','other']);
 const keys = new Set(['title','category','content','source_type','source_name','source_uri','review_flag']);
-const encoder = new TextEncoder();
-const bytes = (value: string) => encoder.encode(value).byteLength;
+/** Exact TextEncoder-compatible UTF-8 length, without allocating the encoded bytes.
+ * Unpaired UTF-16 surrogates count as the three-byte replacement character. */
+export function knowledgeImportUtf8Length(value: string): number {
+  let n=0;
+  for(let i=0;i<value.length;i++){
+    const c=value.charCodeAt(i);
+    if(c<=0x7f)n++;
+    else if(c<=0x7ff)n+=2;
+    else if(c>=0xd800&&c<=0xdbff&&i+1<value.length){
+      const next=value.charCodeAt(i+1);
+      if(next>=0xdc00&&next<=0xdfff){n+=4;i++;}
+      else n+=3;
+    }else n+=3;
+  }
+  return n;
+}
+const bytes=knowledgeImportUtf8Length;
 type Draft = { title: string; category: string; content: string; source_type: string; source_name: string; source_uri: string | null; review_flag: string };
 type Entry = { index: number; draft: Draft };
 type Issue = { index: number; reason: 'invalid_entry' | 'duplicate_in_file' };

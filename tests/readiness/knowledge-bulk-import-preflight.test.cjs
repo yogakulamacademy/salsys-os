@@ -33,3 +33,24 @@ test('byte limit also applies to large multi-byte entries', () => {
   assert.equal(r.accepted,60); assert.ok(r.batches.length>2);
   for(const b of r.batches) assert.ok(Buffer.byteLength(JSON.stringify(b))<=api.BULK_IMPORT_BATCH_BYTES);
 });
+
+test('allocation-free UTF-8 count matches native encoding for all code units and mixed surrogate sequences',()=>{
+ const values=['','ASCII','é','हिन्दी','日本語','😀','\u0000','\ud800','\udfff','\ud800A','\ud800\ud800\udc00','\udc00\ud800','\udbff\udfff'];
+ for(const v of values)assert.equal(api.knowledgeImportUtf8Length(v),Buffer.byteLength(v));
+ // Exhaustively cover all individual UTF-16 units, including isolated surrogates.
+ for(let i=0;i<65536;i++){const v=String.fromCharCode(i);assert.equal(api.knowledgeImportUtf8Length(v),Buffer.byteLength(v));}
+ let seed=0x12345678;
+ for(let i=0;i<512;i++){
+  let v='';for(let j=0;j<128;j++){seed=(Math.imul(seed,1664525)+1013904223)>>>0;v+=String.fromCharCode(seed>>>16);}
+  assert.equal(api.knowledgeImportUtf8Length(v),Buffer.byteLength(v));
+ }
+ assert.equal(api.knowledgeImportUtf8Length('😀'.repeat(16384)+'\ud800'),65539);
+});
+test('mixed Unicode capacity and JSON escaping preserve exact preflight limits',()=>{
+ const v={...draft(),content:'😀é界"\\\n'.repeat(100)};
+ const r=plan([v,{...v,title:' Policy 0 '}]);assert.equal(r.ok,true);assert.equal(r.accepted,1);assert.equal(r.issues[0].reason,'duplicate_in_file');
+ const base=JSON.stringify({version:1,drafts:[v]}),padding=api.BULK_IMPORT_MAX_BYTES-Buffer.byteLength(base);
+ assert.ok(padding>0);
+ assert.equal(api.planKnowledgeDraftImport(base+' '.repeat(padding)).ok,true);
+ assert.equal(api.planKnowledgeDraftImport(base+' '.repeat(padding+1)).reason,'file_too_large');
+});

@@ -1,6 +1,6 @@
 import 'server-only';
 import { createHash } from 'node:crypto';
-import { planKnowledgeDraftImport, BULK_IMPORT_MAX_BYTES, BULK_IMPORT_BATCH_BYTES } from './knowledge-bulk-import-preflight';
+import { planKnowledgeDraftImport, knowledgeImportUtf8Length, BULK_IMPORT_MAX_BYTES, BULK_IMPORT_BATCH_BYTES } from './knowledge-bulk-import-preflight';
 import { inspectKnowledgeImportReceipt, knowledgeImportObjectPath, KNOWLEDGE_IMPORT_BUCKET } from './knowledge-import-upload-contract';
 
 /** Review-only bridge: adapters must authenticate and pin immutable storage reads independently. */
@@ -14,7 +14,6 @@ type Pin = Readonly<{version:string;sha256?:string}>;
 type Result = {ok:false;reason:string;mayExecute:false} | {ok:true;objectVersion:string;sha256:string;byteLength:number;manifest:Manifest[];batches:{index:number;payload:Payload}[][];mayExecute:false};
 const reject=(reason:string):Result=>({ok:false,reason,mayExecute:false});
 const sha=/^[a-f0-9]{64}$/;
-const encoder=new TextEncoder();
 type DigestPayloads = (payloads:readonly Payload[])=>Promise<readonly string[]>;
 /** Shared byte verifier, never an authorization boundary. */
 async function prepareBytes(source:Source,pin:Pin,expectedBytes:number,digestPayloads:DigestPayloads,check:(bytes:number,digest:string,stage:'initial'|'read'|'final')=>string|null):Promise<Result>{
@@ -36,6 +35,9 @@ async function prepareBytes(source:Source,pin:Pin,expectedBytes:number,digestPay
     const checked=check(length,digest,'read');if(checked)return reject(checked);
     if(pin.sha256!==undefined&&pin.sha256!==digest)return reject('source_digest_mismatch');
     const plan=planKnowledgeDraftImport(parts.join(''));
+    // Do not retain the decoded input chunks throughout asynchronous digest preparation.
+    // Parsed strings may still reference source memory; GC timing is not guaranteed.
+    parts.length=0;
     if(!plan.ok)return reject(plan.reason);
     const manifest:Manifest[]=plan.issues.map(i=>({index:i.index,status:i.reason==='duplicate_in_file'?'duplicate':'invalid'}));
     const batches:{index:number;payload:Payload}[][]=[];
@@ -44,7 +46,7 @@ async function prepareBytes(source:Source,pin:Pin,expectedBytes:number,digestPay
       const d=entry.draft;
       const mapped={index:entry.index,payload:{title:(d.review_flag?'⚠ ':'')+d.title,category:d.category,content:d.content,
         source_name:d.source_name+(d.review_flag?' · Review: '+d.review_flag:''),source_type:d.source_type,source_uri:d.source_uri}};
-      const size=encoder.encode(JSON.stringify(mapped)).byteLength;
+      const size=knowledgeImportUtf8Length(JSON.stringify(mapped));
       if(size+2>BULK_IMPORT_BATCH_BYTES)return reject('batch_too_large');
       if(batch.length&&(batch.length>=50||batchBytes+1+size>BULK_IMPORT_BATCH_BYTES)){batches.push(batch);batch=[];batchBytes=2;}
       batchBytes+=size+(batch.length?1:0);
@@ -58,7 +60,7 @@ async function prepareBytes(source:Source,pin:Pin,expectedBytes:number,digestPay
     }
     manifest.sort((a,b)=>a.index-b.index);
     if(manifest.length!==plan.total||manifest.some((e,i)=>e.index!==i))return reject('manifest_partition_mismatch');
-    if(encoder.encode(JSON.stringify(manifest)).byteLength>2*1024*1024)return reject('manifest_too_large');
+    if(knowledgeImportUtf8Length(JSON.stringify(manifest))>2*1024*1024)return reject('manifest_too_large');
     const last=check(length,digest,'final');if(last)return reject(last);
     return {ok:true,objectVersion:pin.version,sha256:digest,byteLength:length,manifest,batches,mayExecute:false};
   }catch{return reject('source_preparation_failed');}
