@@ -8,6 +8,7 @@ import { AppShell } from '@/components/app-shell';
 import { CanonicalRouteBridge } from '@/components/canonical-route-bridge';
 import { DesktopHoverSidebarV3 } from '@/components/desktop-hover-sidebar-v3';
 import { ProductCapabilityNavigationGate } from '@/components/product-capability-navigation-gate';
+import { WorkspaceRequestProvider } from '@/components/workspace-request-provider';
 
 const MarketingWorkspaceFrame = dynamic(() =>
   import('@/components/marketing/marketing-workspace-frame').then(
@@ -112,14 +113,16 @@ export function RootShell({ children, platformAdminEnabled = false }: { children
   );
 
   return (
-    <ProductCapabilityNavigationGate>
-      <div className="salsys-meta-sidebar-shell">
-        <CanonicalRouteBridge />
-        <DesktopHoverSidebarV3 />
-        <div className="legacy-shell-host">
-          <AppShell>{content}</AppShell>
+    <WorkspaceRequestProvider>
+      <ProductCapabilityNavigationGate>
+        <div className="salsys-meta-sidebar-shell">
+          <CanonicalRouteBridge />
+          <DesktopHoverSidebarV3 />
+          <div className="legacy-shell-host">
+            <AppShell>{content}</AppShell>
+          </div>
         </div>
-      </div>
-    </ProductCapabilityNavigationGate>
+      </ProductCapabilityNavigationGate>
+    </WorkspaceRequestProvider>
   );
 }

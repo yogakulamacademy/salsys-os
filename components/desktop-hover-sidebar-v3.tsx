@@ -28,6 +28,7 @@ import {
   type NavSectionId,
 } from "@/lib/navigation";
 import { createClient as createBrowserClient } from "@/lib/supabase/browser";
+import { useWorkspaceRequest } from '@/components/workspace-request-provider';
 
 type IconType = ComponentType<{
   size?: number | string;
@@ -67,6 +68,7 @@ function askSalsys() {
 }
 
 export function DesktopHoverSidebarV3() {
+  const requestWorkspace = useWorkspaceRequest();
   const pathname = usePathname();
   const primaryRef = useRef<HTMLElement | null>(null);
   const [open, setOpen] = useState(false);
@@ -93,7 +95,7 @@ export function DesktopHoverSidebarV3() {
       }
 
       try {
-        const response = await fetch("/api/workspace", { cache: "no-store" });
+        const response = await requestWorkspace();
         if (response.ok) {
           const workspace = (await response.json()) as WorkspaceContext;
           if (!cancelled) {
@@ -125,7 +127,7 @@ export function DesktopHoverSidebarV3() {
     return () => {
       cancelled = true;
     };
-  }, [mock]);
+  }, [mock, requestWorkspace]);
 
   useEffect(() => {
     setOpen(false);

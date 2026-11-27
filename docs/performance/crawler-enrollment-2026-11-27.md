@@ -14,7 +14,7 @@ The enrollment summary no longer loads the full recording catalog on every conve
 - The summary fixture reads no catalog for a lead without enrollments. The existing-record fixture requests only referenced IDs and preserves old course/batch labels and exact paid/pending amounts.
 - Catalog endpoint fixtures verify invalid ID, unauthenticated, unauthorized and unavailable results (400/401/403/503), private no-store responses, tenant filters and owner/admin access. No service client is used for enrollment reads.
 - Browser checks of the actual enrollment component with local simulated reads confirmed zero requests on mount, one on opening, loading/disabled save, existing error toast, keyboard Retry, successful retry, and cancellation. At 390px viewport, document width was 380px with no horizontal overflow. No enrollment/payment submit was performed.
-- Fourteen new behavior tests pass; all 632 readiness tests pass. Deno 2.5.6 checks the actual crawler entrypoint with a frozen dependency lock. The Next production build result is recorded in the PR when complete.
+- Fourteen crawler/enrollment behavior tests pass; all 641 readiness tests pass after incorporating released PR #913. Typecheck, 5 UI unit tests, 25 journey tests and the frozen Deno 2.5.6 check pass on the combined source. The Next production build and GitHub check results are recorded in the PR.
 
 No new production latency or cost percentage is claimed. The previous 1.4s figure was a cumulative mean for the broad batch query; this change removes that query from ordinary refreshes and runs it only when form choices are needed. It does not prove the query itself became faster.
 
@@ -32,7 +32,7 @@ Production unique-index metadata confirmed the existing `(organization_id,site_i
 
 ## Review and rollout
 
-This branch is based directly on CRM main `9b644ab`, independently of PR #913. It has not been merged or deployed. Production data, provider sends, registration gates, schedules and function settings are unchanged. The temporary local sample page and shell exception were removed before the production build.
+This branch includes CRM main `4ce8210`, which contains the released PR #913 request reductions. PR #914 has not been merged or deployed. Production data, provider sends, registration gates, schedules and function settings are unchanged. The temporary local sample page and shell exception were removed before the production build.
 
 After production approval, release the Next application for the enrollment endpoint/UI and deploy **only** the `seo-crawler` Edge Function with `index.ts`, `target-writes.ts`, `deno.json` and `deno.lock`. Preserve `verify_jwt: true` and the existing function secrets/settings. Neither release depends on a database migration or the other release. Re-read the current function version/hash before replacing it to detect intervening changes.
 
