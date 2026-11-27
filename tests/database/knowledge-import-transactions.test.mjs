@@ -249,6 +249,12 @@ test('disposable PG: exact Knowledge RPC, competing claims, rollback, retry, rev
     assert.deepEqual(Object.keys(sourceRow).sort(),['object_path','object_version','byte_length','source_sha256','manifest_sha256'].sort());
     assert.equal(sourceRow.object_version,'fixture-verified');assert.equal(sourceRow.byte_length,'100');
     assert.equal((await verify()).rows[0].ok,true);
+    const workerDigest=(o=org)=>worker.query('select * from knowledge_import_review.worker_digest_payloads($1,$2,$3::jsonb)',[o,verifyJob,JSON.stringify([payload])]);
+    await assert.rejects(workerDigest(),e=>e.code==='42501');
+    await a.query('grant execute on function knowledge_import_review.worker_digest_payloads(uuid,uuid,jsonb) to '+workerName);
+    assert.equal((await workerDigest()).rows[0].payload_sha256,pd);
+    await assert.rejects(workerDigest(other),e=>e.code==='42501');
+
     assert.equal((await verify('replacement')).rows[0].ok,false);
     assert.equal((await verify('fixture-verified',101)).rows[0].ok,false);
     assert.equal((await verify('fixture-verified',100,'f'.repeat(64))).rows[0].ok,false);

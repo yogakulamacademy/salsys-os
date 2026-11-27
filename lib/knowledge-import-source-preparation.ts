@@ -1,7 +1,7 @@
 import 'server-only';
 import { createHash } from 'node:crypto';
 import { planKnowledgeDraftImport, BULK_IMPORT_MAX_BYTES, BULK_IMPORT_BATCH_BYTES } from './knowledge-bulk-import-preflight';
-import { inspectKnowledgeImportReceipt } from './knowledge-import-upload-contract';
+import { inspectKnowledgeImportReceipt, knowledgeImportObjectPath, KNOWLEDGE_IMPORT_BUCKET } from './knowledge-import-upload-contract';
 
 /** Review-only bridge: adapters must authenticate and pin immutable storage reads independently. */
 export const KNOWLEDGE_IMPORT_SOURCE_RUNTIME_WIRED = false as const;
@@ -15,29 +15,25 @@ type Result = {ok:false;reason:string;mayExecute:false} | {ok:true;objectVersion
 const reject=(reason:string):Result=>({ok:false,reason,mayExecute:false});
 const sha=/^[a-f0-9]{64}$/;
 const encoder=new TextEncoder();
-/** Digest callback must use PostgreSQL jsonb text canonicalization, never client-supplied hashes. */
-export async function prepareKnowledgeImportSource(context:Context,reservation:Reservation,pin:Pin,source:Source,
-    digestPayloads:(payloads:readonly Payload[])=>Promise<readonly string[]>, now:()=>number):Promise<Result>{
-  try {
+type DigestPayloads = (payloads:readonly Payload[])=>Promise<readonly string[]>;
+/** Shared byte verifier, never an authorization boundary. */
+async function prepareBytes(source:Source,pin:Pin,expectedBytes:number,digestPayloads:DigestPayloads,check:(bytes:number,digest:string,stage:'initial'|'read'|'final')=>string|null):Promise<Result>{
+  try{
     if(typeof pin.version!=='string'||!pin.version||pin.version.length>256||source.version!==pin.version||
-      (pin.sha256!==undefined&&!sha.test(pin.sha256))) return reject('object_version_mismatch');
-    // Preflight identity and path before reading any bytes. Dummy digest is only a shape placeholder.
-    const receipt={bucket:source.bucket,objectPath:source.objectPath,byteLength:reservation.declaredBytes,sha256:'0'.repeat(64),contentType:source.contentType};
-    const initial=inspectKnowledgeImportReceipt(context,reservation,receipt,now());
-    if(!initial.ok)return reject(initial.reason);
+      (pin.sha256!==undefined&&!sha.test(pin.sha256)))return reject('object_version_mismatch');
+    const initial=check(expectedBytes,'0'.repeat(64),'initial');if(initial)return reject(initial);
     const hash=createHash('sha256'), decoder=new TextDecoder('utf-8',{fatal:true,ignoreBOM:true});
     let length=0; const parts:string[]=[];
     for await(const chunk of source.chunks){
       if(!(chunk instanceof Uint8Array))return reject('invalid_chunk');
       if(chunk.byteLength===0)continue;
       length+=chunk.byteLength;
-      if(length>BULK_IMPORT_MAX_BYTES||length>reservation.declaredBytes)return reject('file_too_large');
+      if(length>BULK_IMPORT_MAX_BYTES||length>expectedBytes)return reject('file_too_large');
       hash.update(chunk); parts.push(decoder.decode(chunk,{stream:true}));
     }
     parts.push(decoder.decode());
     const digest=hash.digest('hex');
-    const checked=inspectKnowledgeImportReceipt(context,reservation,{...receipt,byteLength:length,sha256:digest},now());
-    if(!checked.ok)return reject(checked.reason);
+    const checked=check(length,digest,'read');if(checked)return reject(checked);
     if(pin.sha256!==undefined&&pin.sha256!==digest)return reject('source_digest_mismatch');
     const plan=planKnowledgeDraftImport(parts.join(''));
     if(!plan.ok)return reject(plan.reason);
@@ -61,8 +57,21 @@ export async function prepareKnowledgeImportSource(context:Context,reservation:R
     manifest.sort((a,b)=>a.index-b.index);
     if(manifest.length!==plan.total||manifest.some((e,i)=>e.index!==i))return reject('manifest_partition_mismatch');
     if(encoder.encode(JSON.stringify(manifest)).byteLength>2*1024*1024)return reject('manifest_too_large');
-    // Expiry is checked again after hashing; actual enqueue must re-read current authority transactionally.
-    if(!inspectKnowledgeImportReceipt(context,reservation,{...receipt,byteLength:length,sha256:digest},now()).ok)return reject('reservation_no_longer_valid');
+    const last=check(length,digest,'final');if(last)return reject(last);
     return {ok:true,objectVersion:pin.version,sha256:digest,byteLength:length,manifest,batches,mayExecute:false};
   }catch{return reject('source_preparation_failed');}
+}
+export async function prepareKnowledgeImportSource(context:Context,reservation:Reservation,pin:Pin,source:Source,digestPayloads:DigestPayloads,now:()=>number):Promise<Result>{
+  return prepareBytes(source,pin,reservation.declaredBytes,digestPayloads,(bytes,digest,stage)=>{
+    const result=inspectKnowledgeImportReceipt(context,reservation,{bucket:source.bucket,objectPath:source.objectPath,byteLength:bytes,sha256:digest,contentType:source.contentType},now());
+    return result.ok?null:stage==='final'?'reservation_no_longer_valid':result.reason;
+  });
+}
+/** Worker input must come from the restricted DB identity function. No upload-expiry or fabricated user context.
+ * Byte/hash verification is not permission; actual claim/finalize recheck delegation transactionally. */
+export async function prepareKnowledgeWorkerSource(scope:{organizationId:string;jobId:string},identity:{objectPath:string;objectVersion:string;byteLength:number;sha256:string},source:Source,digestPayloads:DigestPayloads):Promise<Result>{
+  const path=knowledgeImportObjectPath(scope.organizationId,scope.jobId);
+  if(!path||identity.objectPath!==path||source.objectPath!==path||source.bucket!==KNOWLEDGE_IMPORT_BUCKET||source.contentType!=='application/json')return reject('object_mismatch');
+  if(!Number.isSafeInteger(identity.byteLength)||identity.byteLength<1||identity.byteLength>BULK_IMPORT_MAX_BYTES||!sha.test(identity.sha256))return reject('invalid_object');
+  return prepareBytes(source,{version:identity.objectVersion,sha256:identity.sha256},identity.byteLength,digestPayloads,(bytes)=>bytes===identity.byteLength?null:'invalid_object');
 }

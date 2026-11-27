@@ -496,5 +496,12 @@ begin
   return coalesce(p_version=j.object_version and p_bytes=j.verified_bytes and p_sha=j.sha256
     and encode(sha256(convert_to(p_manifest::text,'UTF8')),'hex')=j.manifest_sha256,false);
 end $$;
+-- Scoped canonical digest operation for the dedicated worker adapter; no raw document reads.
+create function knowledge_import_review.worker_digest_payloads(p_org uuid,p_job uuid,p_payloads jsonb)
+returns table(entry_index bigint,payload_sha256 text) language plpgsql security definer set search_path=pg_catalog,pg_temp as $$
+begin
+  if not knowledge_import_review.worker_allowed(p_org,p_job) then raise exception 'worker access denied' using errcode='42501'; end if;
+  return query select d.entry_index,d.payload_sha256 from knowledge_import_review.digest_payloads(p_payloads) d;
+end $$;
 revoke all on all functions in schema knowledge_import_review from public,anon,authenticated,service_role;
 commit;
