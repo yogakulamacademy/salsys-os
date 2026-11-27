@@ -17,3 +17,11 @@ test('scheduler budget is checked before processing and options are capped',asyn
  const a=fixture();let time=0;assert.equal((await a.api.runKnowledgeImportSchedulerReview(a.query,{},{jobs:2,budgetMs:1000,now:()=>time+=1000})).stop,'budget');assert.equal(a.calls.length,0);
  assert.equal((await a.api.runKnowledgeImportSchedulerReview(a.query,{},{jobs:4})).stop,'invalid_options');
 });
+
+test('window is explicitly single-job, bounded and reports budget separately',async()=>{
+ const calls=[],api=load('lib/knowledge-import-scheduler-review.ts',{'server-only':{},'./knowledge-import-worker-review':{runKnowledgeImportBatchReview:async()=>{throw Error('wrong runner');},runKnowledgeImportWindowReview:async(s,a,o)=>{calls.push([s,o]);return {stop:'budget'};}}});
+ const query=async(sql,params)=>{assert.deepEqual(params,[1]);return {rows:[rows[0]]};};
+ const result=await api.runKnowledgeImportSchedulerReview(query,{},{jobs:1,windowBatches:200,now:()=>0});
+ assert.equal(result.stop,'budget');assert.equal(result.reports.length,1);assert.equal(calls[0][1].maxBatches,200);
+ for(const options of [{jobs:2,windowBatches:100},{windowBatches:201},{windowBatches:100,batches:5}])assert.equal((await api.runKnowledgeImportSchedulerReview(query,{},options)).stop,'invalid_options');
+});

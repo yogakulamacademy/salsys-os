@@ -1,5 +1,5 @@
 import 'server-only';
-import {runKnowledgeImportBatchReview} from './knowledge-import-worker-review';
+import {runKnowledgeImportBatchReview,runKnowledgeImportWindowReview} from './knowledge-import-worker-review';
 export const KNOWLEDGE_IMPORT_SCHEDULER_RUNTIME_WIRED=false as const;
 type Query=(sql:string,params:unknown[])=>Promise<{rows:Record<string,unknown>[]}>;
 type Adapters=Parameters<typeof runKnowledgeImportBatchReview>[1];
@@ -9,11 +9,13 @@ const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]
 /** Executes one bounded scheduler tick using the SAME restricted worker login for discovery and
  * processing. Not a cron endpoint, queue consumer, delegation issuer or credential provider.
  * Deadline is checked between jobs; transports must enforce their own statement/network deadlines. */
-export async function runKnowledgeImportSchedulerReview(query:Query,adapters:Adapters,options:{jobs?:number;batchSize?:number;batches?:number;budgetMs?:number;now?:()=>number}={}){
+export async function runKnowledgeImportSchedulerReview(query:Query,adapters:Adapters,options:{jobs?:number;batchSize?:number;batches?:number;windowBatches?:number;budgetMs?:number;now?:()=>number}={}){
  const jobs=options.jobs??1,batchSize=options.batchSize??10,batches=options.batches??5,budget=options.budgetMs??90000,now=options.now??Date.now;
  const reports:{scope:Scope;report:Report}[]=[];
  const finish=(stop:'complete'|'budget'|'blocked'|'invalid_options')=>({stop,reports,mayExecute:false as const});
  if(!Number.isInteger(jobs)||jobs<1||jobs>3||!Number.isInteger(batchSize)||batchSize<1||batchSize>10||!Number.isInteger(batches)||batches<1||batches>5||!Number.isInteger(budget)||budget<1000||budget>120000)return finish('invalid_options');
+ const window=options.windowBatches;
+ if(window!==undefined&&(!Number.isInteger(window)||window<1||window>200||jobs!==1||options.batches!==undefined))return finish('invalid_options');
  const started=now();
  try{
   const {rows}=await query('select * from knowledge_import_review.worker_due_jobs($1)',[jobs]);
@@ -26,8 +28,12 @@ export async function runKnowledgeImportSchedulerReview(query:Query,adapters:Ada
   }
   for(const scope of scopes){
    if(now()-started>=budget)return finish('budget');
-   const report=await runKnowledgeImportBatchReview(scope,adapters,batchSize,batches);
+   const remaining=budget-(now()-started);
+   if(window!==undefined&&remaining<1000)return finish('budget');
+   const report=window===undefined?await runKnowledgeImportBatchReview(scope,adapters,batchSize,batches):
+     await runKnowledgeImportWindowReview(scope,adapters,{batchSize,maxBatches:window,budgetMs:remaining,now});
    reports.push({scope,report});
+   if(report.stop==='budget')return finish('budget');
    if(!['batch_complete','no_due_entries'].includes(report.stop))return finish('blocked');
   }
   return finish('complete');

@@ -532,24 +532,21 @@ test('actual disposable Supabase Storage authorization and lifecycle',{timeout:6
           })();
           return {bucket,objectPath:j.path,version:identity.objectVersion,contentType:'application/json',chunks};
         });
-        // Capacity fixture ONLY: keep one verified snapshot in process to measure actual DB writes
-        // independently of repeated 50 MiB reads. No runtime caching or limit changes.
-        const identity=await actual.readIdentity(scope),prepared=await actual.prepareVerifiedSource(scope,identity);
-        assert.ok(prepared?.ok);assert.equal(prepared.manifest.length,10000);assert.equal(prepared.batches.reduce((n,b)=>n+b.length,0),10000);assert.equal(sourceReads,1);memory('worker_source_prepared');
-        const measured={...actual,prepareVerifiedSource:async(requested,current)=>{
-          assert.deepEqual(requested,scope);assert.deepEqual(current,identity);return prepared;
-        }};
+        // Actual scheduler windows: every invocation independently re-reads and verifies
+        // Storage source bytes and the canonical manifest. No fixture snapshot override.
         let created=0,ticks=0;
-        for(;ticks<200;ticks++){
+        for(;ticks<20&&created<10000;ticks++){
           if(Date.now()-workerStart>480000)throw Error('capacity worker exceeded 8-minute test budget');
-          const tick=await scheduler.runKnowledgeImportSchedulerReview(query,measured,{jobs:1,batchSize:10,batches:5});
-          assert.equal(tick.stop,'complete');assert.equal(tick.reports.length,1);
+          const before=sourceReads;
+          const tick=await scheduler.runKnowledgeImportSchedulerReview(query,actual,{jobs:1,batchSize:10,windowBatches:200,budgetMs:90000});
+          assert.ok(['complete','budget'].includes(tick.stop));assert.equal(tick.reports.length,1);
           const report=tick.reports[0].report;
-          assert.equal(report.stop,'batch_complete');assert.equal(report.claimed,50);assert.equal(report.created,50);
-          assert.equal(report.recovered+report.retried+report.failed,0);created+=report.created;
-          if((ticks+1)%20===0)t.diagnostic(JSON.stringify({capacityCreated:created,ticks:ticks+1,elapsedMs:Date.now()-workerStart}));
+          assert.ok(['batch_complete','budget'].includes(report.stop));assert.ok(report.created>0&&report.created<=2000);
+          assert.equal(report.claimed,report.created);assert.equal(report.recovered+report.retried+report.failed,0);
+          assert.equal(sourceReads,before+1);created+=report.created;
+          t.diagnostic(JSON.stringify({capacityCreated:created,ticks:ticks+1,sourceReads,elapsedMs:Date.now()-workerStart}));memory('worker_window_completed');
         }
-        assert.equal(created,10000);assert.equal(ticks,200);assert.equal(sourceReads,1);
+        assert.equal(created,10000);assert.equal(sourceReads,ticks);assert.ok(ticks>=5&&ticks<=20);
         const reconciled=(await db.query("select count(*)::int as total,count(distinct e.document_id)::int as unique_documents,count(*) filter(where e.status='created' and d.status='draft' and d.created_by=$3 and d.organization_id=$1 and d.metadata->>'import_job_id'=($2::uuid)::text)::int as verified_drafts from public.knowledge_import_entries_v1 e join public.knowledge_documents d on d.id=e.document_id and d.organization_id=e.organization_id where e.organization_id=$1 and e.job_id=$2",[org,j.id,owner.actor])).rows[0];
         assert.deepEqual(reconciled,{total:10000,unique_documents:10000,verified_drafts:10000});
         const chunks=(await db.query("select count(*)::int as n from public.knowledge_import_entries_v1 e join public.knowledge_chunks c on c.document_id=e.document_id and c.organization_id=e.organization_id where e.organization_id=$1 and e.job_id=$2",[org,j.id])).rows[0].n;
@@ -557,7 +554,7 @@ test('actual disposable Supabase Storage authorization and lifecycle',{timeout:6
         assert.equal((await db.query('select status from knowledge_import_jobs_v1 where id=$1',[j.id])).rows[0].status,'completed');
         assert.equal((await query('select * from knowledge_import_review.worker_due_jobs($1)',[1])).rowCount,0);
         memory('worker_reconciled');
-        t.diagnostic(JSON.stringify({capacityDrafts:created,sourceReads,ticks,workerElapsedMs:Date.now()-workerStart,totalElapsedMs:Date.now()-start,maxRssKiB:process.resourceUsage().maxRSS,scope:'actual restricted SQL draft writes; verified in-memory snapshot reused only by capacity fixture'}));
+        t.diagnostic(JSON.stringify({capacityDrafts:created,sourceReads,ticks,workerElapsedMs:Date.now()-workerStart,totalElapsedMs:Date.now()-start,maxRssKiB:process.resourceUsage().maxRSS,scope:'actual restricted SQL draft writes with fresh signed Storage source and manifest per bounded scheduler window'}));
       }finally{await worker.end();}
     });
   }finally{await db.end();}

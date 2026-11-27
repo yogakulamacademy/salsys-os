@@ -20,7 +20,7 @@ type Adapters = {
   result(scope:Scope,claim:Claim):Promise<string|null>;
   settleFailure(scope:Scope,claim:Claim,code:FailureCode):Promise<'pending'|'failed'>;
 };
-type Report = {claimed:number;created:number;recovered:number;retried:number;failed:number;stop:'batch_complete'|'no_due_entries'|'source_rejected'|'authorization_or_adapter_error'|'invalid_claim'|'uncertain_outcome'|'unclassified_failure';mayExecute:false};
+type Report = {claimed:number;created:number;recovered:number;retried:number;failed:number;stop:'batch_complete'|'budget'|'no_due_entries'|'source_rejected'|'authorization_or_adapter_error'|'invalid_claim'|'uncertain_outcome'|'unclassified_failure';mayExecute:false};
 const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const sha=/^[a-f0-9]{64}$/;
 /** Only a trusted transactional adapter can assert confirmed rollback.
@@ -31,14 +31,28 @@ export function classifyConfirmedKnowledgeRollback(sqlstate:string):FailureCode|
   return null;
 }
 export async function runKnowledgeImportBatchReview(scope:Scope,a:Adapters,limit=5,maxBatches=1):Promise<Report>{
+  return run(scope,a,limit,maxBatches,5,()=>false);
+}
+/** Opt-in single-job processing window. One verified source, no persistent cache.
+ * Budget is soft: checked before preparation and each new claim, never abandon an
+ * already claimed batch solely on elapsed time. Transport deadlines remain mandatory. */
+export async function runKnowledgeImportWindowReview(scope:Scope,a:Adapters,options:{batchSize?:number;maxBatches?:number;budgetMs?:number;now?:()=>number}={}):Promise<Report>{
+  const limit=options.batchSize??10,maxBatches=options.maxBatches??200,budget=options.budgetMs??90000,now=options.now??Date.now;
+  if(!Number.isInteger(budget)||budget<1000||budget>120000)return run(scope,a,0,maxBatches,200,()=>true);
+  const started=now();
+  return run(scope,a,limit,maxBatches,200,()=>now()-started>=budget);
+}
+async function run(scope:Scope,a:Adapters,limit:number,maxBatches:number,cap:number,outOfTime:()=>boolean):Promise<Report>{
   const r:Report={claimed:0,created:0,recovered:0,retried:0,failed:0,stop:'batch_complete',mayExecute:false};
   const finish=(stop:Report['stop'])=>({...r,stop});
-  if(!uuid.test(scope.organizationId)||!uuid.test(scope.jobId)||!Number.isInteger(limit)||limit<1||limit>10||!Number.isInteger(maxBatches)||maxBatches<1||maxBatches>5)return finish('invalid_claim');
+  if(!uuid.test(scope.organizationId)||!uuid.test(scope.jobId)||!Number.isInteger(limit)||limit<1||limit>10||!Number.isInteger(maxBatches)||maxBatches<1||maxBatches>cap)return finish('invalid_claim');
   try{
+    if(outOfTime())return finish('budget');
     const identity=await a.readIdentity(scope);
     if(identity.objectPath!==scope.organizationId+'/'+scope.jobId+'/source.json'||!identity.objectVersion||identity.objectVersion.length>256||
       !Number.isSafeInteger(identity.byteLength)||identity.byteLength<1||identity.byteLength>50*1024*1024||
       !sha.test(identity.sha256)||!sha.test(identity.manifestSha256))return finish('source_rejected');
+    if(outOfTime())return finish('budget');
     const source=await a.prepareVerifiedSource(scope,identity);
     if(!source?.ok||source.objectVersion!==identity.objectVersion||source.sha256!==identity.sha256||source.byteLength!==identity.byteLength||
       !Array.isArray(source.manifest)||source.manifest.length<1||source.manifest.length>10000||
@@ -51,6 +65,7 @@ export async function runKnowledgeImportBatchReview(scope:Scope,a:Adapters,limit
     if(payloads.size!==source.manifest.filter(m=>m.status==='pending').length||!await a.verifyManifest(scope,source))return finish('source_rejected');
     // Reuse the same verified source only within this bounded invocation; no persistent cache.
     for(let batch=0;batch<maxBatches;batch++){
+    if(outOfTime())return finish('budget');
     const claims=await a.claim(scope,limit);
     if(!Array.isArray(claims)||claims.length>limit)return finish('invalid_claim');
     r.claimed+=claims.length;

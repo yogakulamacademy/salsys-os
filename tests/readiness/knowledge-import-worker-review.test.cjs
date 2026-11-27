@@ -54,3 +54,27 @@ test('one verified source supports bounded sequential batches without re-reading
  assert.equal(r.created,1);assert.equal(r.claimed,1);assert.equal(r.stop,'batch_complete');assert.equal(reads,1);assert.equal(claims,2);
  assert.equal((await api.runKnowledgeImportBatchReview(scope,a,1,6)).stop,'invalid_claim');
 });
+
+test('opt-in window processes more than five batches with a single verified read',async()=>{
+ let reads=0,claims=0,checks=0;
+ const {a}=fixture({prepareVerifiedSource:async()=>{reads++;return prepared;},verifyManifest:async()=>{checks++;return true;},claim:async()=>++claims<=7?[claim]:[]});
+ const result=await api.runKnowledgeImportWindowReview(scope,a,{batchSize:1,maxBatches:8,now:()=>0});
+ assert.equal(result.created,7);assert.equal(result.stop,'batch_complete');assert.equal(reads,1);assert.equal(checks,1);
+ assert.equal((await api.runKnowledgeImportWindowReview(scope,a,{maxBatches:201})).stop,'invalid_claim');
+ assert.equal((await api.runKnowledgeImportWindowReview(scope,a,{budgetMs:999})).stop,'invalid_claim');
+});
+test('window budget prevents new claims but settles already claimed work',async()=>{
+ let time=0,reads=0,claims=0,finals=0;
+ const {a}=fixture({prepareVerifiedSource:async()=>{reads++;return prepared;},claim:async()=>{claims++;return [claim];},finalize:async()=>{finals++;time=1000;return {kind:'committed',documentId:doc};}});
+ const result=await api.runKnowledgeImportWindowReview(scope,a,{batchSize:1,budgetMs:1000,now:()=>time});
+ assert.equal(result.stop,'budget');assert.equal(result.created,1);assert.equal(reads,1);assert.equal(claims,1);assert.equal(finals,1);
+ time=0;
+ const delayed=fixture({prepareVerifiedSource:async()=>{time=1000;return prepared;}});
+ assert.equal((await api.runKnowledgeImportWindowReview(scope,delayed.a,{budgetMs:1000,now:()=>time})).stop,'budget');assert.deepEqual(delayed.calls,[]);
+});
+test('window stops on uncertain outcome and re-verifies fresh source on another invocation',async()=>{
+ let reads=0,claims=0;
+ const {a}=fixture({prepareVerifiedSource:async()=>{reads++;return prepared;},claim:async()=>{claims++;return [claim];},finalize:async()=>({kind:'unknown'})});
+ for(let i=0;i<2;i++)assert.equal((await api.runKnowledgeImportWindowReview(scope,a,{batchSize:1})).stop,'uncertain_outcome');
+ assert.equal(reads,2);assert.equal(claims,2);
+});
