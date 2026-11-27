@@ -22,8 +22,10 @@ create function public.set_updated_at() returns trigger language plpgsql as $$ b
 `;
 const digest=b=>createHash('sha256').update(b).digest('hex');
 const denied=r=>assert.ok([400,401,403,404,409,410,413,422,423].includes(r.status),'expected denial, got '+r.status);
-test('actual disposable Supabase Storage authorization and lifecycle',{timeout:600000},async t=>{
+const reviewMode=process.env.SALSYS_STORAGE_REVIEW_MODE;
+test('actual disposable Supabase Storage authorization and lifecycle: '+reviewMode,{timeout:600000},async t=>{
   assert.equal(process.env.SALSYS_ALLOW_DISPOSABLE_STORAGE_TEST,'1');
+  assert.ok(['gateway-only','rejected-direct-tus'].includes(reviewMode),'explicit disposable architecture mode required');
   const status=JSON.parse(readFileSync(process.env.SALSYS_LOCAL_STORAGE_STATUS_FILE,'utf8'));
   const dbUrl=validateFixtureStatus(status);
   const api=new URL(FIXTURE_API_ORIGIN);
@@ -40,7 +42,16 @@ test('actual disposable Supabase Storage authorization and lifecycle',{timeout:6
     for(const file of ['supabase/migrations/20261016171500_organization_knowledge_v1.sql','supabase/migrations/20261103190000_ai_knowledge_provenance_readiness_v2.sql','docs/sql/knowledge-import-ledger-v1-REVIEW-DRAFT.sql','docs/sql/knowledge-import-transactions-REVIEW-DRAFT.sql','docs/sql/knowledge-import-storage-policies-REVIEW-DRAFT.sql']){
       await db.query(readFileSync(file,'utf8'));
     }
-    await db.query('grant usage on schema knowledge_import_review to authenticated;grant execute on function knowledge_import_review.storage_insert_allowed(text,text,jsonb) to authenticated');
+    if(reviewMode==='rejected-direct-tus'){
+      await db.query('grant usage on schema knowledge_import_review to authenticated;grant execute on function knowledge_import_review.storage_insert_allowed(text,text,jsonb) to authenticated');
+    }else{
+      // Install the deny policy before the fresh bucket exists; never create any
+      // direct-TUS upload session or grant the permissive predicate in this mode.
+      await db.query(readFileSync('docs/sql/knowledge-import-gateway-only-REVIEW-DRAFT.sql','utf8'));
+      assert.equal((await db.query("select has_function_privilege('authenticated','knowledge_import_review.storage_insert_allowed(text,text,jsonb)','EXECUTE') as allowed")).rows[0].allowed,false);
+      assert.equal((await db.query("select count(*)::int as n from pg_policies where schemaname='storage' and tablename='objects' and policyname in ('kb_import_review_insert','kb_import_review_insert_guard')")).rows[0].n,0);
+      assert.equal((await db.query("select count(*)::int as n from pg_policies where schemaname='storage' and tablename='objects' and policyname='kb_import_review_gateway_insert_guard'")).rows[0].n,1);
+    }
     const made=await admin.storage.createBucket(bucket,{public:false,fileSizeLimit:50*1024*1024,allowedMimeTypes:['application/json']});
     assert.equal(Boolean(made.error),false,'local bucket creation failed');
     const org=randomUUID(), other=randomUUID();
@@ -87,6 +98,9 @@ test('actual disposable Supabase Storage authorization and lifecycle',{timeout:6
       const r=await admin.storage.from(bucket).download(job.path);
       return r.error?null:Buffer.from(await r.data.arrayBuffer());
     };
+    if(reviewMode==='rejected-direct-tus'){
+    // Preserve all original direct-TUS assertions, including the known failing
+    // cross-tenant HEAD denial. This mode never runs gateway acceptance.
     await t.test('real JWT: reserved upload, content identity and private read denial',async()=>{
       const j=await createJob();
       denied(await start(j,outsider));denied(await start(j,owner,j.length+1));
@@ -145,8 +159,11 @@ test('actual disposable Supabase Storage authorization and lifecycle',{timeout:6
       // Provider part-store absence is not established by object-table absence.
     });
 
-    // Direct TUS stays a failing acceptance probe. Test the alternative gateway independently.
-    await db.query(readFileSync('docs/sql/knowledge-import-gateway-only-REVIEW-DRAFT.sql','utf8'));
+    return;
+    }
+    // Independent gateway-only test. No rejected direct-TUS upload sessions exist.
+    assert.equal((await db.query('select count(*)::int as n from storage.objects where bucket_id=$1',[bucket])).rows[0].n,0);
+    assert.equal((await db.query('select count(*)::int as n from public.knowledge_import_jobs_v1')).rows[0].n,0);
     await db.query(readFileSync('docs/sql/knowledge-import-gateway-staging-REVIEW-DRAFT.sql','utf8'));
     await db.query(readFileSync('docs/sql/knowledge-import-application-boundary-REVIEW-DRAFT.sql','utf8'));
     await db.query(readFileSync('docs/sql/knowledge-import-application-broker-REVIEW-DRAFT.sql','utf8'));
@@ -196,7 +213,8 @@ test('actual disposable Supabase Storage authorization and lifecycle',{timeout:6
       async register(scope,p){return writer?(await db.query('select knowledge_import_review.gateway_register($1,$2,$3,$4,$5,$6,$7,$8::jsonb) as status',[scope.organizationId,scope.jobId,writer,1,p.objectVersion,p.byteLength,p.sha256,JSON.stringify(p.manifest)])).rows[0].status:(await db.query('select knowledge_import_review.register_verified_source($1,$2,$3,$4,$5,$6::jsonb) as status',[scope.organizationId,scope.jobId,p.objectVersion,p.byteLength,p.sha256,JSON.stringify(p.manifest)])).rows[0].status;}
     });
     await t.test('gateway-only policy denies new direct TUS and ordinary client upload',async()=>{
-      const j=await createJob();denied(await start(j));denied(await start(j,outsider));
+      const j=await createJob();denied(await start(j));denied(await start(j,outsider));denied(await start(j,null));
+      assert.equal((await db.query("select has_function_privilege('authenticated','knowledge_import_review.storage_insert_allowed(text,text,jsonb)','EXECUTE') as allowed")).rows[0].allowed,false);
       const direct=await fixtureFetch(api.origin+'/storage/v1/object/'+bucket+'/'+j.path,{method:'POST',headers:{apikey:anon,Authorization:'Bearer '+owner.token,'Content-Type':'application/json'},body:bytes,redirect:'error',signal:AbortSignal.timeout(20000)});
       denied(direct);assert.equal(await read(j),null);
     });
