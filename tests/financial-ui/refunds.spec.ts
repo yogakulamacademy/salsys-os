@@ -52,7 +52,11 @@ test('server rejection stays an error and uses one canonical refund command',asy
   await form.getByLabel('Reason and verification evidence').fill('Synthetic bank confirmation checked');
   page.on('dialog',dialog=>dialog.accept());
   await form.getByRole('button',{name:'Record refund',exact:true}).click();
-  await expect(page).toHaveURL(/error=Refund/);
+  const errorToast=page.locator('.app-toast.is-error');
+  await expect(errorToast).toBeVisible();
+  await expect(errorToast).toContainText('Refund exceeds the remaining refundable amount');
+  await expect(page).toHaveURL(new RegExp(`${lead}$`));
+  await expect(page.locator('.app-toast.is-success')).toHaveCount(0);
   const calls=await(await request.get(`${source}/__refund_calls`)).json();
   expect(calls).toHaveLength(1);expect(calls[0].p_original_payment_id).toBe(original);
   expect(calls[0].p_amount).toBe(100.25);expect(calls[0].p_request_id).toMatch(/^[a-f0-9-]{36}$/);
