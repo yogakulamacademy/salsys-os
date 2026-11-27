@@ -22,7 +22,7 @@ create function public.set_updated_at() returns trigger language plpgsql as $$ b
 `;
 const digest=b=>createHash('sha256').update(b).digest('hex');
 const denied=r=>assert.ok([400,401,403,404,409,410,413,422,423].includes(r.status),'expected denial, got '+r.status);
-test('actual disposable Supabase Storage authorization and lifecycle',{timeout:240000},async t=>{
+test('actual disposable Supabase Storage authorization and lifecycle',{timeout:600000},async t=>{
   assert.equal(process.env.SALSYS_ALLOW_DISPOSABLE_STORAGE_TEST,'1');
   const status=JSON.parse(readFileSync(process.env.SALSYS_LOCAL_STORAGE_STATUS_FILE,'utf8'));
   const dbUrl=validateFixtureStatus(status);
@@ -150,6 +150,7 @@ test('actual disposable Supabase Storage authorization and lifecycle',{timeout:2
     await db.query(readFileSync('docs/sql/knowledge-import-gateway-staging-REVIEW-DRAFT.sql','utf8'));
     await db.query(readFileSync('docs/sql/knowledge-import-application-boundary-REVIEW-DRAFT.sql','utf8'));
     await db.query(readFileSync('docs/sql/knowledge-import-application-broker-REVIEW-DRAFT.sql','utf8'));
+    await db.query(readFileSync('docs/sql/knowledge-import-reconciliation-REVIEW-DRAFT.sql','utf8'));
     const require=createRequire(import.meta.url),{load}=require('../readiness/helpers.cjs');
     const upload=load('lib/knowledge-import-upload-contract.ts');
     const prep=load('lib/knowledge-import-source-preparation.ts',{'server-only':{},'node:crypto':require('node:crypto'),'./knowledge-bulk-import-preflight':load('lib/knowledge-bulk-import-preflight.ts'),'./knowledge-import-upload-contract':upload});
@@ -353,15 +354,55 @@ test('actual disposable Supabase Storage authorization and lifecycle',{timeout:2
     });
     await t.test('cancel after provider write prevents manifest publication and preserves quota',async()=>{
       const j=await createJob(),scope={organizationId:org,jobId:j.id};
-      const result=await gateway.publishKnowledgeGatewayReview(scope,bytes,makeAdapter(j,async()=>{
+      const writer=randomUUID();
+      await db.query('select * from knowledge_import_review.gateway_acquire($1,$2,$3)',[org,j.id,writer]);
+      await db.query('select knowledge_import_review.gateway_append($1,$2,$3,$4,$5,$6)',[org,j.id,writer,1,0,bytes]);
+      const staged=(await db.query('select knowledge_import_review.gateway_begin_publication($1,$2,$3,$4) as bytes',[org,j.id,writer,1])).rows[0].bytes;
+      const result=await gateway.publishKnowledgeGatewayReview(scope,staged,makeAdapter(j,async()=>{
         assert.equal((await db.query('select knowledge_import_review.cancel($1,$2) as ok',[org,j.id])).rows[0].ok,true);
-      }),Date.now);
+      },writer),Date.now);
       assert.equal(result.state,'reconciliation_required');
       const row=(await db.query('select status,manifest_sha256,storage_released_at from knowledge_import_jobs_v1 where id=$1',[j.id])).rows[0];
       assert.deepEqual(row,{status:'cancelled',manifest_sha256:null,storage_released_at:null});
       assert.equal((await db.query('select count(*)::int as n from knowledge_import_entries_v1 where job_id=$1',[j.id])).rows[0].n,0);
       // A private unregistered object may remain. No worker access or quota release is implied.
       assert.ok(await read(j));
+      const reconcile=load('lib/knowledge-import-reconciliation-review.ts',{'server-only':{},'node:crypto':require('node:crypto'),'./knowledge-import-upload-contract':upload});
+      const snapshot=async()=> (await db.query('select * from knowledge_import_review.reconciliation_snapshot($1,$2)',[org,j.id])).rows[0]??null;
+      const observe=async(b,p)=>{
+        assert.equal(b,bucket);assert.equal(p,j.path);
+        const v=async()=> (await db.query('select version from storage.objects where bucket_id=$1 and name=$2',[b,p])).rows[0]?.version;
+        const before=await v(),saved=await read(j),after=await v();
+        if(!before||before!==after||!saved)return {kind:'unknown'};
+        return {kind:'present',version:before,chunks:(async function*(){yield saved;})()};
+      };
+      assert.equal((await reconcile.inspectKnowledgeStorageReconciliationReview(scope,{snapshot,observe})).state,'not_eligible');
+      await db.query("update knowledge_import_jobs_v1 set created_at=now()-interval '3 hours',upload_expires_at=now()-interval '2 hours',retention_expires_at=now()-interval '1 hour' where id=$1",[j.id]);
+      const inspected=await reconcile.inspectKnowledgeStorageReconciliationReview(scope,{snapshot,observe});
+      assert.equal(inspected.state,'matching_orphan');assert.equal(inspected.mayDelete,false);assert.equal(inspected.mayReleaseQuota,false);
+      await assert.rejects(db.query('select knowledge_import_review.gateway_purge_receiving($1,$2)',[org,j.id]),/publication reconciliation required/);
+      assert.equal((await db.query('select storage_released_at from knowledge_import_jobs_v1 where id=$1',[j.id])).rows[0].storage_released_at,null);
+      assert.ok(await read(j));
+    });
+    await t.test('50 MiB transport and 10000 actual ledger entries (not full draft throughput)',async()=>{
+      const start=Date.now(),max=50*1024*1024;
+      const json=JSON.stringify({version:1,drafts:Array.from({length:10000},(_,i)=>({title:'Capacity fixture '+i,content:'x'.repeat(5100),source_name:'Synthetic fixture'}))});
+      assert.ok(Buffer.byteLength(json)<=max);const raw=Buffer.alloc(max,32);raw.write(json,0,'utf8');
+      const j=await createJob(max),scope={organizationId:org,jobId:j.id},writer=randomUUID();
+      await db.query('select * from knowledge_import_review.gateway_acquire($1,$2,$3)',[org,j.id,writer]);
+      for(let offset=0;offset<max;offset+=1048576){
+        const count=(await db.query('select knowledge_import_review.gateway_append($1,$2,$3,$4,$5,$6) as n',[org,j.id,writer,1,offset,raw.subarray(offset,offset+1048576)])).rows[0].n;
+        assert.equal(Number(count),offset+1048576);
+      }
+      const staged=(await db.query('select knowledge_import_review.gateway_begin_publication($1,$2,$3,$4) as bytes',[org,j.id,writer,1])).rows[0].bytes;
+      assert.equal(staged.length,max);assert.equal(digest(staged),digest(raw));
+      const result=await gateway.publishKnowledgeGatewayReview(scope,staged,makeAdapter(j,async()=>{},writer),Date.now);
+      assert.deepEqual(result,{state:'registered',status:'queued'});
+      const saved=await read(j);assert.equal(saved.length,max);assert.equal(digest(saved),digest(raw));
+      const ledger=(await db.query("select count(*)::int as total,count(*) filter(where status='pending')::int as pending from knowledge_import_entries_v1 where organization_id=$1 and job_id=$2",[org,j.id])).rows[0];
+      assert.deepEqual(ledger,{total:10000,pending:10000});
+      assert.equal((await db.query('select count(*)::int as n from knowledge_import_review.gateway_chunks where job_id=$1',[j.id])).rows[0].n,0);
+      t.diagnostic(JSON.stringify({bytes:max,ledgerEntries:10000,elapsedMs:Date.now()-start,maxRssKiB:process.resourceUsage().maxRSS,scope:'actual local chunk staging, Storage publication and ledger registration; no 10k draft writes'}));
     });
   }finally{await db.end();}
 });

@@ -27,7 +27,7 @@ jobs:
       - name: Typecheck cumulative application candidate
         run: npm run typecheck
       - name: Verify application route and scoped publication adapter
-        run: node --test tests/readiness/knowledge-import-route-publication-review.test.cjs
+        run: node --test tests/readiness/knowledge-import-route-publication-review.test.cjs tests/readiness/knowledge-import-reconciliation-review.test.cjs
       - name: Verify loopback transport guard without network
         run: node --test tests/provider/knowledge-import-provider-transport.test.mjs
       - name: Install checksum-pinned local Supabase CLI
