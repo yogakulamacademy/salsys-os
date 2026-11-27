@@ -386,23 +386,34 @@ test('actual disposable Supabase Storage authorization and lifecycle',{timeout:6
     });
     await t.test('50 MiB transport, 10000 ledger entries and 10000 actual restricted-worker draft writes',async()=>{
       const start=Date.now(),max=50*1024*1024;
-      const json=JSON.stringify({version:1,drafts:Array.from({length:10000},(_,i)=>({title:'Capacity fixture '+i,content:'x'.repeat(5100),source_name:'Synthetic fixture'}))});
-      assert.ok(Buffer.byteLength(json)<=max);const raw=Buffer.alloc(max,32);raw.write(json,0,'utf8');
+      const memory=(phase)=>{const m=process.memoryUsage();t.diagnostic(JSON.stringify({capacityPhase:phase,rssBytes:m.rss,heapUsedBytes:m.heapUsed,externalBytes:m.external,arrayBufferBytes:m.arrayBuffers,maxRssKiB:process.resourceUsage().maxRSS}));};
+      memory('before_upload');
       const j=await createJob(max),scope={organizationId:org,jobId:j.id},writer=randomUUID();
+      // Keep raw, staged and downloaded upload buffers inside this function. The worker
+      // phase does not retain references to them. GC timing/RSS reclamation is not guaranteed.
+      const uploadAndVerify=async()=>{
+      const raw=(()=>{
+        const json=JSON.stringify({version:1,drafts:Array.from({length:10000},(_,i)=>({title:'Capacity fixture '+i,content:'x'.repeat(5100),source_name:'Synthetic fixture'}))});
+        assert.ok(Buffer.byteLength(json)<=max);const bytes=Buffer.alloc(max,32);bytes.write(json,0,'utf8');return bytes;
+      })();
+      const expectedDigest=digest(raw);
+      memory('source_generated');
       await db.query('select * from knowledge_import_review.gateway_acquire($1,$2,$3)',[org,j.id,writer]);
       for(let offset=0;offset<max;offset+=1048576){
         const count=(await db.query('select knowledge_import_review.gateway_append($1,$2,$3,$4,$5,$6) as n',[org,j.id,writer,1,offset,raw.subarray(offset,offset+1048576)])).rows[0].n;
         assert.equal(Number(count),offset+1048576);
       }
       const staged=(await db.query('select knowledge_import_review.gateway_begin_publication($1,$2,$3,$4) as bytes',[org,j.id,writer,1])).rows[0].bytes;
-      assert.equal(staged.length,max);assert.equal(digest(staged),digest(raw));
+      assert.equal(staged.length,max);assert.equal(digest(staged),expectedDigest);memory('staged');
       const result=await gateway.publishKnowledgeGatewayReview(scope,staged,makeAdapter(j,async()=>{},writer),Date.now);
       assert.deepEqual(result,{state:'registered',status:'queued'});
-      const saved=await read(j);assert.equal(saved.length,max);assert.equal(digest(saved),digest(raw));
+      const saved=await read(j);assert.equal(saved.length,max);assert.equal(digest(saved),expectedDigest);memory('storage_verified');
       const ledger=(await db.query("select count(*)::int as total,count(*) filter(where status='pending')::int as pending from knowledge_import_entries_v1 where organization_id=$1 and job_id=$2",[org,j.id])).rows[0];
       assert.deepEqual(ledger,{total:10000,pending:10000});
       assert.equal((await db.query('select count(*)::int as n from knowledge_import_review.gateway_chunks where job_id=$1',[j.id])).rows[0].n,0);
       t.diagnostic(JSON.stringify({bytes:max,ledgerEntries:10000,elapsedMs:Date.now()-start,maxRssKiB:process.resourceUsage().maxRSS,scope:'actual local chunk staging, Storage publication and ledger registration'}));
+      };
+      await uploadAndVerify();memory('upload_scope_released');
       const workerStart=Date.now(),login='kb_capacity_'+randomUUID().replaceAll('-',''),password=randomUUID().replaceAll('-','');
       await db.query("create role "+login+" login password '"+password+"' nosuperuser nocreatedb nocreaterole noreplication nobypassrls noinherit");
       await db.query('insert into knowledge_import_review.worker_principals values($1,true)',[login]);
@@ -439,7 +450,7 @@ test('actual disposable Supabase Storage authorization and lifecycle',{timeout:6
         // Capacity fixture ONLY: keep one verified snapshot in process to measure actual DB writes
         // independently of repeated 50 MiB reads. No runtime caching or limit changes.
         const identity=await actual.readIdentity(scope),prepared=await actual.prepareVerifiedSource(scope,identity);
-        assert.ok(prepared?.ok);assert.equal(prepared.manifest.length,10000);assert.equal(prepared.batches.flat().length,10000);assert.equal(sourceReads,1);
+        assert.ok(prepared?.ok);assert.equal(prepared.manifest.length,10000);assert.equal(prepared.batches.reduce((n,b)=>n+b.length,0),10000);assert.equal(sourceReads,1);memory('worker_source_prepared');
         const measured={...actual,prepareVerifiedSource:async(requested,current)=>{
           assert.deepEqual(requested,scope);assert.deepEqual(current,identity);return prepared;
         }};
@@ -454,12 +465,13 @@ test('actual disposable Supabase Storage authorization and lifecycle',{timeout:6
           if((ticks+1)%20===0)t.diagnostic(JSON.stringify({capacityCreated:created,ticks:ticks+1,elapsedMs:Date.now()-workerStart}));
         }
         assert.equal(created,10000);assert.equal(ticks,200);assert.equal(sourceReads,1);
-        const reconciled=(await db.query("select count(*)::int as total,count(distinct e.document_id)::int as unique_documents,count(*) filter(where e.status='created' and d.status='draft' and d.created_by=$3 and d.organization_id=$1 and d.metadata->>'import_job_id'=$2::text)::int as verified_drafts from public.knowledge_import_entries_v1 e join public.knowledge_documents d on d.id=e.document_id and d.organization_id=e.organization_id where e.organization_id=$1 and e.job_id=$2",[org,j.id,owner.actor])).rows[0];
+        const reconciled=(await db.query("select count(*)::int as total,count(distinct e.document_id)::int as unique_documents,count(*) filter(where e.status='created' and d.status='draft' and d.created_by=$3 and d.organization_id=$1 and d.metadata->>'import_job_id'=($2::uuid)::text)::int as verified_drafts from public.knowledge_import_entries_v1 e join public.knowledge_documents d on d.id=e.document_id and d.organization_id=e.organization_id where e.organization_id=$1 and e.job_id=$2",[org,j.id,owner.actor])).rows[0];
         assert.deepEqual(reconciled,{total:10000,unique_documents:10000,verified_drafts:10000});
         const chunks=(await db.query("select count(*)::int as n from public.knowledge_import_entries_v1 e join public.knowledge_chunks c on c.document_id=e.document_id and c.organization_id=e.organization_id where e.organization_id=$1 and e.job_id=$2",[org,j.id])).rows[0].n;
         assert.equal(chunks,10000);
         assert.equal((await db.query('select status from knowledge_import_jobs_v1 where id=$1',[j.id])).rows[0].status,'completed');
         assert.equal((await query('select * from knowledge_import_review.worker_due_jobs($1)',[1])).rowCount,0);
+        memory('worker_reconciled');
         t.diagnostic(JSON.stringify({capacityDrafts:created,sourceReads,ticks,workerElapsedMs:Date.now()-workerStart,totalElapsedMs:Date.now()-start,maxRssKiB:process.resourceUsage().maxRSS,scope:'actual restricted SQL draft writes; verified in-memory snapshot reused only by capacity fixture'}));
       }finally{await worker.end();}
     });
