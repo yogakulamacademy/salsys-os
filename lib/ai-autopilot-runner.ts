@@ -383,7 +383,6 @@ async function queueUnopenedLinks(ctx: Ctx) {
   const leadById = new Map((leads ?? []).map((l) => [String(l.id), l]));
   let created = 0;
   for (const link of links) {
-    if (!await commercialAdvancedAllowed(String(link.organization_id), 'ai_autopilot')) continue;
     if (created >= 10) break;
     const lead = leadById.get(String(link.lead_id));
     if (!lead) continue;
@@ -393,6 +392,9 @@ async function queueUnopenedLinks(ctx: Ctx) {
       leadClosed: CLOSED_STAGES.includes(String(lead.current_stage)), now: ctx.now,
     });
     if (!due) continue; // replied or closed: nothing to chase
+    // Do not query commercial eligibility for a known no-op. Keep the fresh
+    // authorization immediately before the task write; never cache this gate.
+    if (!await commercialAdvancedAllowed(String(link.organization_id), 'ai_autopilot')) continue;
     const course = Array.isArray(link.courses) ? link.courses[0] : link.courses;
     const courseName = (course as { name?: string } | null)?.name ?? "course";
     const { data: task, error: taskError } = await ctx.admin.from("tasks").insert({
@@ -429,10 +431,10 @@ async function followUpOpenedLinks(ctx: Ctx) {
   if (error) throw new Error(error.message);
   let done = 0;
   for (const link of links ?? []) {
-    if (!await commercialAdvancedAllowed(String(link.organization_id), 'ai_autopilot')) continue;
     if (done >= 5) break;
     // Instagram's scanner "opens" links seconds after sending: not the lead.
     if (openedByScanner(link.sent_at as string, link.first_opened_at as string)) continue;
+    if (!await commercialAdvancedAllowed(String(link.organization_id), 'ai_autopilot')) continue;
     const leadId = String(link.lead_id);
     const { data: lead } = await ctx.admin.from("leads").select("id, current_stage, timezone, owner_user_id, current_contact_channel").eq("id", leadId).maybeSingle();
     if (!lead || CLOSED_STAGES.includes(String(lead.current_stage)) || lead.current_contact_channel !== "instagram") continue;
