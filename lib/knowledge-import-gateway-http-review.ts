@@ -36,8 +36,9 @@ export function createKnowledgeGatewayHttpReview(options:Options){
   try{auth=await options.authenticate(request);}catch{return json(403,{error:'request_denied'});}
   if(!auth||!uuid.test(auth.organizationId))return json(403,{error:'request_denied'});
   const scope:Scope={organizationId:auth.organizationId,jobId},args=[scope.organizationId,scope.jobId],query=auth.query;
-  const length=integer(request.headers.get('content-length'),0,CHUNK),encoding=request.headers.get('content-encoding');
-  if(length===null||(encoding!==null&&encoding!=='identity'))return json(413,{error:'invalid_body'});
+  const declared=request.headers.get('content-length'),expected=request.headers.get('x-knowledge-chunk-length'),encoding=request.headers.get('content-encoding');
+  const length=integer(declared??(operation==='append'?expected:'0'),0,CHUNK);
+  if(length===null||(expected!==null&&(operation!=='append'||integer(expected,1,CHUNK)!==length))||(encoding!==null&&encoding!=='identity'))return json(413,{error:'invalid_body'});
   if(operation!=='append'&&(length!==0||request.body!==null))return json(400,{error:'unexpected_body'});
   const supplied=request.headers.get('x-knowledge-writer');
   if(operation==='acquire'){

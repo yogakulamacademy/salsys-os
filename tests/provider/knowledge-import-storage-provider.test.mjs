@@ -196,6 +196,38 @@ test('actual disposable Supabase Storage authorization and lifecycle',{timeout:2
       const replay=await gateway.publishKnowledgeGatewayReview(scope,bytes,makeAdapter(j),Date.now);
       assert.equal(replay.state,'rejected');assert.deepEqual(await read(j),before);
     });
+
+    await t.test('browser client and HTTP handler connect to real local Auth, staged SQL and Storage',async()=>{
+      const j=await createJob(), httpOrigin='https://fixture.example';
+      const http=load('lib/knowledge-import-gateway-http-review.ts',{'server-only':{},'node:crypto':require('node:crypto'),'./knowledge-import-gateway-review':gateway});
+      const browser=load('lib/knowledge-import-browser-review.ts');
+      const handle=http.createKnowledgeGatewayHttpReview({origin:httpOrigin,authenticate:async req=>{
+        const token=req.headers.get('authorization')?.replace(/^Bearer /,'');
+        if(!token)return null;
+        const verified=await admin.auth.getUser(token);
+        if(verified.error||verified.data.user?.id!==owner.actor||token!==owner.token)return null;
+        // Local fixture only: owner claims sourced from real verified JWT; no hosted grants.
+        await db.query("select set_config('request.jwt.claims',$1,false)",[JSON.stringify(owner.claims)]);
+        return {organizationId:org,query:async(statement,params)=>db.query(statement,params),publication:makeAdapter(j)};
+      }});
+      let calls=0;
+      const run=browser.createKnowledgeBrowserUploadReview({origin:httpOrigin,jobId:j.id,file:new File([bytes],'fixture.json',{type:'application/json'}),fetcher:async(url,opts)=>{
+        const op=url.split('/').at(-1);
+        const headers={...opts.headers,origin:httpOrigin,authorization:'Bearer '+owner.token};
+        const req=new Request(url,{method:'POST',headers,body:opts.body});
+        const res=await handle(req,j.id,op);
+        if(op==='append'&&++calls===1)throw Error('synthetic lost chunk ack');
+        return res;
+      }});
+      assert.equal((await run()).state,'interrupted');
+      assert.deepEqual(await run(),{state:'registered',status:'queued'});
+      assert.equal(digest(await read(j)),digest(bytes));
+      assert.equal((await db.query('select count(*)::int as n from knowledge_import_review.gateway_chunks where job_id=$1',[j.id])).rows[0].n,0);
+      const historyHttp=load('lib/knowledge-import-history-http-review.ts',{'server-only':{},'./knowledge-import-history-review':load('lib/knowledge-import-history-review.ts')});
+      const history=historyHttp.createKnowledgeHistoryHttpReview({origin:httpOrigin,authenticate:async()=>({query:async(statement,params)=>db.query(statement,params)})});
+      const response=await history(new Request(httpOrigin+'/history'));assert.equal(response.status,200);
+      const page=await response.json();assert.equal(page.jobs.find(x=>x.id===j.id).status,'queued');
+    });
     await t.test('cancel after provider write prevents manifest publication and preserves quota',async()=>{
       const j=await createJob(),scope={organizationId:org,jobId:j.id};
       const result=await gateway.publishKnowledgeGatewayReview(scope,bytes,makeAdapter(j,async()=>{
