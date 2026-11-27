@@ -590,5 +590,34 @@ begin
   update public.knowledge_import_jobs_v1 set storage_released_at=t where organization_id=p_org and id=p_job;
   return true;
 end $$;
+-- Discovery returns only assigned due job identifiers. It is advisory, never a lease.
+-- Each claim and finalize still requires the locked current authority check.
+create function knowledge_import_review.worker_due_jobs(p_limit integer)
+returns table(organization_id uuid,job_id uuid)
+language plpgsql security definer set search_path=pg_catalog,public,auth,pg_temp as $$
+begin
+  if p_limit is null or p_limit not between 1 and 25 then raise exception 'invalid discovery limit'; end if;
+  if not exists(select 1 from knowledge_import_review.worker_principals p join pg_roles r on r.rolname=p.login_role
+    where p.login_role=session_user and p.enabled and r.rolcanlogin and not r.rolsuper and not r.rolbypassrls
+      and not r.rolcreaterole and not r.rolcreatedb and not r.rolreplication
+      and not pg_has_role(r.oid,'service_role','MEMBER') and not pg_has_role(r.oid,'authenticated','MEMBER')) then
+    raise exception 'worker access denied' using errcode='42501'; end if;
+  return query select j.organization_id,j.id
+    from knowledge_import_review.worker_delegations d
+    join public.knowledge_import_jobs_v1 j on j.organization_id=d.organization_id and j.id=d.job_id
+    join auth.sessions s on s.id=d.actor_session_id and s.user_id=d.actor_id
+    join public.tenant_session_bindings b on b.session_id=s.id and b.user_id=s.user_id and b.organization_id=j.organization_id
+    join public.organization_members m on m.user_id=s.user_id and m.organization_id=j.organization_id
+    join public.organizations o on o.id=j.organization_id
+    where d.login_role=session_user and d.revoked_at is null and d.expires_at>clock_timestamp()
+      and j.status in ('queued','processing') and j.retention_expires_at>clock_timestamp()
+      and j.requested_by=d.actor_id and j.request_session_id=d.actor_session_id
+      and j.sha256=d.source_sha256 and j.manifest_sha256=d.manifest_sha256 and j.object_version=d.object_version
+      and m.active and m.role in ('owner','admin') and o.status='active'
+      and exists(select 1 from public.knowledge_import_entries_v1 e
+        where e.organization_id=j.organization_id and e.job_id=j.id and
+        ((e.status='pending' and e.available_at<=clock_timestamp()) or (e.status='leased' and e.lease_expires_at<=clock_timestamp())))
+    order by j.created_at,j.id limit p_limit;
+end $$;
 revoke all on all functions in schema knowledge_import_review from public,anon,authenticated,service_role;
 commit;

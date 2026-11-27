@@ -75,6 +75,37 @@ test('disposable PG: exact Knowledge RPC, competing claims, rollback, retry, rev
     assert.equal((await reserve(a,reserved,100,upload,retain)).rows[0].id,reserved);
     const uploadCheck=(db,o=org,j=reserved,bucket='knowledge-import-private-v1',path=org+'/'+reserved+'/source.json',bytes=100)=>db.query('select knowledge_import_review.upload_allowed($1,$2,$3,$4,$5) as ok',[o,j,bucket,path,bytes]);
     assert.equal((await uploadCheck(a)).rows[0].ok,true);
+    // Disposable Storage-shaped table: deliberately broad existing policies must not bypass guards.
+    await a.query("create schema storage; create table storage.objects(bucket_id text not null,name text not null,metadata jsonb,primary key(bucket_id,name)); alter table storage.objects enable row level security; grant usage on schema storage to authenticated,anon; grant select,insert,update,delete on storage.objects to authenticated,anon; create policy fixture_broad on storage.objects for all to authenticated,anon using(true) with check(true)");
+    await a.query(readFileSync('docs/sql/knowledge-import-storage-policies-REVIEW-DRAFT.sql','utf8'));
+    await a.query('grant usage on schema knowledge_import_review to authenticated; grant execute on function knowledge_import_review.storage_insert_allowed(text,text,jsonb) to authenticated');
+    const storageBucket='knowledge-import-private-v1',storagePath=org+'/'+reserved+'/source.json',storageMeta={size:100,mimetype:'application/json'};
+    const insertStorage=(db,bucket,path,meta)=>db.query('insert into storage.objects values($1,$2,$3::jsonb)',[bucket,path,JSON.stringify(meta)]);
+    await b.query('set role authenticated');
+    await assert.rejects(insertStorage(b,storageBucket,other+'/'+reserved+'/source.json',storageMeta),e=>e.code==='42501');
+    await assert.rejects(insertStorage(b,storageBucket,storagePath,{...storageMeta,size:101}),e=>e.code==='42501');
+    await assert.rejects(insertStorage(b,storageBucket,storagePath,{}),e=>e.code==='42501');
+    await b.query("select set_config('request.jwt.claims',$1,false)",[JSON.stringify({...JSON.parse(claims),is_anonymous:true})]);
+    await assert.rejects(insertStorage(b,storageBucket,storagePath,storageMeta),e=>e.code==='42501');
+    await b.query("select set_config('request.jwt.claims',$1,false)",[claims]);
+    await insertStorage(b,storageBucket,storagePath,storageMeta);
+    assert.equal((await b.query('select * from storage.objects where bucket_id=$1',[storageBucket])).rowCount,0);
+    assert.equal((await b.query('update storage.objects set metadata=$1::jsonb where bucket_id=$2',[JSON.stringify({size:1}),storageBucket])).rowCount,0);
+    assert.equal((await b.query('delete from storage.objects where bucket_id=$1',[storageBucket])).rowCount,0);
+    await insertStorage(b,'unrelated-fixture','existing.txt',{});
+    assert.equal((await b.query("select * from storage.objects where bucket_id='unrelated-fixture'")).rowCount,1);
+    await assert.rejects(b.query('select * from public.knowledge_import_jobs_v1'),e=>e.code==='42501');
+    await b.query('reset role');await b.query('set role anon');
+    await assert.rejects(insertStorage(b,storageBucket,storagePath,storageMeta),e=>e.code==='42501');
+    await b.query('reset role');
+    // Revocation is checked using current membership, not cached role claims.
+    await a.query('delete from storage.objects where bucket_id=$1',[storageBucket]);
+    await a.query('update organization_members set active=false where organization_id=$1 and user_id=$2',[org,actor]);
+    await b.query('set role authenticated');
+    await assert.rejects(insertStorage(b,storageBucket,storagePath,storageMeta),e=>e.code==='42501');
+    await b.query('reset role');
+    await a.query('update organization_members set active=true where organization_id=$1 and user_id=$2',[org,actor]);
+
     assert.equal((await uploadCheck(a,other)).rows[0].ok,false);
     assert.equal((await uploadCheck(a,org,reserved,'public')).rows[0].ok,false);
     assert.equal((await uploadCheck(a,org,reserved,'knowledge-import-private-v1','../other/source.json')).rows[0].ok,false);
@@ -149,6 +180,12 @@ test('disposable PG: exact Knowledge RPC, competing claims, rollback, retry, rev
     await a.query('grant execute on function knowledge_import_review.worker_allowed(uuid,uuid) to '+workerName);
     assert.equal((await allowed()).rows[0].ok,true);
     assert.equal((await worker.query('select knowledge_import_review.worker_allowed($1,$2) as ok',[other,reserved])).rows[0].ok,false);
+    const dueJobs=()=>worker.query('select * from knowledge_import_review.worker_due_jobs(25)');
+    await assert.rejects(dueJobs(),e=>e.code==='42501');
+    await a.query('grant execute on function knowledge_import_review.worker_due_jobs(integer) to '+workerName);
+    assert.deepEqual((await dueJobs()).rows,[{organization_id:org,job_id:reserved}]);
+    await assert.rejects(worker.query('select * from knowledge_import_review.worker_due_jobs(26)'),/invalid discovery limit/);
+
     await assert.rejects(worker.query('select * from knowledge_import_review.claim($1,$2,1)',[org,reserved]),e=>e.code==='42501');
     await assert.rejects(worker.query('select * from public.knowledge_documents'),e=>e.code==='42501');
     await a.query('update organization_members set active=false where organization_id=$1 and user_id=$2',[org,actor]);
@@ -163,6 +200,7 @@ test('disposable PG: exact Knowledge RPC, competing claims, rollback, retry, rev
     await a.query('update knowledge_import_review.worker_principals set enabled=true where login_role=$1',[workerName]);
     assert.equal((await a.query('select knowledge_import_review.revoke_worker($1,$2) as ok',[org,reserved])).rows[0].ok,true);
     assert.equal((await allowed()).rows[0].ok,false);
+    assert.equal((await dueJobs()).rowCount,0);
     assert.equal((await a.query('select knowledge_import_review.cancel($1,$2) as ok',[org,reserved])).rows[0].ok,true);
     // Old terminal jobs still consume retained byte budget; one active slot available.
     const contenders=await Promise.allSettled([reserve(a,randomUUID(),100,upload,retain),reserve(b,randomUUID(),100,upload,retain)]);
