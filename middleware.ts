@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { withScreenOnlyErrors } from '@/lib/error-feedback-middleware';
 
 const PUBLIC_EXACT_PATHS = new Set([
   "/",
@@ -333,6 +334,12 @@ function isCrmHost(host: string) {
 }
 
 export async function middleware(request: NextRequest) {
+  const host = (request.headers.get('host') || '').toLowerCase().split(':')[0];
+  if (host && !isCrmHost(host)) return authMiddleware(request);
+  return withScreenOnlyErrors(request, authMiddleware);
+}
+
+async function authMiddleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   const host = (request.headers.get("host") || "").toLowerCase().split(":")[0];

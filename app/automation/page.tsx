@@ -1,3 +1,4 @@
+import { PageFeedback } from '@/components/page-feedback';
 import Link from 'next/link';
 import {
   ArrowRight,
@@ -223,7 +224,7 @@ export default async function AutomationOverviewPage() {
     },
   ];
 
-  return (
+  return (<><PageFeedback loadError={loadError} />{(
     <div className="space-y-6">
       <header className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
         <div>
@@ -455,5 +456,5 @@ export default async function AutomationOverviewPage() {
         </span>
       </div>
     </div>
-  );
+  )}</>);
 }

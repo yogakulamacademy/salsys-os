@@ -1,4 +1,5 @@
 "use client";
+import { useFeedbackMessages } from '@/components/use-feedback-messages';
 
 import { Check, Copy, Link2 } from "lucide-react";
 import { useState, useTransition } from "react";
@@ -35,6 +36,7 @@ export function InboxCourseLink({ leadId, status }: { leadId: string; status: In
   const [pending, start] = useTransition();
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  useFeedbackMessages(error);
 
   const copy = () => start(async () => {
     setError(null);

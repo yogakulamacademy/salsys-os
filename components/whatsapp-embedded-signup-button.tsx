@@ -1,4 +1,5 @@
 'use client';
+import { useFeedbackMessages } from '@/components/use-feedback-messages';
 
 import {
   useCallback,
@@ -173,6 +174,7 @@ export function WhatsAppEmbeddedSignupButton({
   const [opening, setOpening] = useState(false);
   const [completing, setCompleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  useFeedbackMessages(error);
 
   const intentRef = useRef<string | null>(null);
   const codeRef = useRef<string | null>(null);

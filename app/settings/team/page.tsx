@@ -1,3 +1,4 @@
+import { PageFeedback } from '@/components/page-feedback';
 import { createEmployeeInline } from '@/app/settings/team/inline-actions';
 import { ToastForm } from '@/components/toast-form';
 import Link from 'next/link';
@@ -164,7 +165,7 @@ export default async function TeamAccessPage({
   const ownerCount = teamMembers.filter(member => member.organizationRole === 'owner').length;
   const adminCount = teamMembers.filter(member => member.organizationRole === 'admin').length;
 
-  return (
+  return (<><PageFeedback error={query.error} notice={query.notice} />{(
     <div className="tac space-y-5">
       <PageHeader
         eyebrow="Settings"
@@ -289,7 +290,7 @@ export default async function TeamAccessPage({
         </section>
       </div>
     </div>
-  );
+  )}</>);
 }
 
 function Stat({ icon, value, label, tone }: { icon: React.ReactNode; value: number; label: string; tone?: 'success' | 'neutral' }) {

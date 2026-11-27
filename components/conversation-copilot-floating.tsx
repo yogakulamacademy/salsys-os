@@ -1,4 +1,5 @@
 "use client";
+import { useFeedbackMessages } from '@/components/use-feedback-messages';
 
 import {
   Bot,
@@ -51,6 +52,7 @@ export function ConversationCopilotFloating() {
   const [result, setResult] = useState<SuccessfulCopilotReply | null>(null);
   const [draftText, setDraftText] = useState("");
   const [error, setError] = useState<string | null>(null);
+  useFeedbackMessages(error);
   const [copied, setCopied] = useState(false);
   const [showWhy, setShowWhy] = useState(false);
   const [isPending, startTransition] = useTransition();

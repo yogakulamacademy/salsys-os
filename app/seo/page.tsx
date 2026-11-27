@@ -1,3 +1,4 @@
+import { ToastForm } from "@/components/toast-form";
 import type { ReactNode } from "react";
 import Link from "next/link";
 
@@ -31,7 +32,7 @@ import {
   recordManualOptimizationState,
   reviewOptimizationAction,
   startExperimentWithBaseline,
-} from "./actions";
+} from "./inline-actions";
 
 type SeoOverviewRow = {
   range_start: string | null;
@@ -1550,7 +1551,7 @@ export default async function SeoPage() {
 
                   <div className="mt-4 flex flex-wrap gap-2 border-t border-slate-200 pt-3">
                     {row.status === "draft" && (
-                      <form action={approveExperiment}>
+                      <ToastForm action={approveExperiment}>
                         <input type="hidden" name="experiment_id" value={row.experiment_id} />
                         <button
                           type="submit"
@@ -1558,11 +1559,11 @@ export default async function SeoPage() {
                         >
                           Approve experiment
                         </button>
-                      </form>
+                      </ToastForm>
                     )}
 
                     {row.status === "approved" && (
-                      <form action={startExperimentWithBaseline}>
+                      <ToastForm action={startExperimentWithBaseline}>
                         <input type="hidden" name="experiment_id" value={row.experiment_id} />
                         <button
                           type="submit"
@@ -1570,7 +1571,7 @@ export default async function SeoPage() {
                         >
                           Start + capture 14d baseline
                         </button>
-                      </form>
+                      </ToastForm>
                     )}
 
                     {(row.status === "approved" || row.status === "running") &&
@@ -1580,7 +1581,7 @@ export default async function SeoPage() {
                           action.approval_status !== "rejected" &&
                           action.execution_status !== "rolled_back",
                       ) && (
-                        <form action={proposeOptimizationFromExperiment}>
+                        <ToastForm action={proposeOptimizationFromExperiment}>
                           <input type="hidden" name="experiment_id" value={row.experiment_id} />
                           <button
                             type="submit"
@@ -1588,7 +1589,7 @@ export default async function SeoPage() {
                           >
                             Propose controlled action
                           </button>
-                        </form>
+                        </ToastForm>
                       )}
                   </div>
                 </article>
@@ -1653,7 +1654,7 @@ export default async function SeoPage() {
                   </div>
 
                   <div className="mt-4 border-t border-slate-200 pt-3">
-                    <form action={createExperimentFromCandidate}>
+                    <ToastForm action={createExperimentFromCandidate}>
                       <input type="hidden" name="source_layer" value={row.source_layer} />
                       <input type="hidden" name="page_id" value={row.page_id} />
                       <input
@@ -1667,7 +1668,7 @@ export default async function SeoPage() {
                       >
                         Create controlled experiment
                       </button>
-                    </form>
+                    </ToastForm>
                   </div>
                 </article>
               ))}
@@ -1834,7 +1835,7 @@ export default async function SeoPage() {
                     <div className="mt-4 flex flex-wrap gap-2 border-t border-slate-200 pt-3">
                       {row.approval_status === "pending" && (
                         <>
-                          <form action={reviewOptimizationAction}>
+                          <ToastForm action={reviewOptimizationAction}>
                             <input type="hidden" name="action_id" value={row.id} />
                             <input type="hidden" name="decision" value="approved" />
                             <button
@@ -1843,9 +1844,9 @@ export default async function SeoPage() {
                             >
                               Approve action
                             </button>
-                          </form>
+                          </ToastForm>
 
-                          <form action={reviewOptimizationAction}>
+                          <ToastForm action={reviewOptimizationAction}>
                             <input type="hidden" name="action_id" value={row.id} />
                             <input type="hidden" name="decision" value="rejected" />
                             <button
@@ -1854,12 +1855,12 @@ export default async function SeoPage() {
                             >
                               Reject
                             </button>
-                          </form>
+                          </ToastForm>
                         </>
                       )}
 
                       {canRecordApply && (
-                        <form action={recordManualOptimizationState}>
+                        <ToastForm action={recordManualOptimizationState}>
                           <input type="hidden" name="action_id" value={row.id} />
                           <input type="hidden" name="new_status" value="applied" />
                           <button
@@ -1868,7 +1869,7 @@ export default async function SeoPage() {
                           >
                             Record manual change applied
                           </button>
-                        </form>
+                        </ToastForm>
                       )}
 
                       {row.approval_status === "approved" &&
@@ -1880,7 +1881,7 @@ export default async function SeoPage() {
                         )}
 
                       {row.execution_status === "applied" && row.reversible && (
-                        <form action={recordManualOptimizationState}>
+                        <ToastForm action={recordManualOptimizationState}>
                           <input type="hidden" name="action_id" value={row.id} />
                           <input type="hidden" name="new_status" value="rolled_back" />
                           <button
@@ -1889,7 +1890,7 @@ export default async function SeoPage() {
                           >
                             Record rollback
                           </button>
-                        </form>
+                        </ToastForm>
                       )}
                     </div>
 

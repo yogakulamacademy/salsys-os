@@ -1,3 +1,4 @@
+import { PageFeedback } from '@/components/page-feedback';
 import Link from 'next/link';
 import {
   ArrowLeft,
@@ -215,7 +216,7 @@ export default async function WhatsAppGrowthPage({
     variantsByCampaign.set(variant.campaign_id, list);
   }
 
-  return (
+  return (<><PageFeedback error={query.error} notice={query.notice} loadError={loadError} />{(
     <div className="space-y-6">
       <PageHeader
         eyebrow="WhatsApp growth operations"
@@ -418,7 +419,7 @@ export default async function WhatsAppGrowthPage({
         }) : <div className="card-pad text-sm text-slate-500">No WhatsApp campaigns yet.</div>}
       </section>
     </div>
-  );
+  )}</>);
 }
 
 function MetricCard({ icon, label, value, note }: { icon: React.ReactNode; label: string; value: number | string; note: string }) {

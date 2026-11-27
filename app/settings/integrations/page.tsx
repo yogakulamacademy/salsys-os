@@ -1,3 +1,4 @@
+import { PageFeedback } from '@/components/page-feedback';
 import { redirect } from 'next/navigation';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createClient } from '@/lib/supabase/server';
@@ -62,11 +63,11 @@ export default async function IntegrationsPage({
   const connections = usable ? (connectionsResult.data ?? []) as unknown as SafeIntegrationConnection[] : [];
   const assets = usable ? (assetsResult.data ?? []) as unknown as IntegrationAsset[] : [];
 
-  return <IntegrationsDashboard
+  return (<><PageFeedback error={query.error} notice={query.notice} loadError={loadError} />{<IntegrationsDashboard
     connections={connections} assets={assets}
     installed={!foundationMissing} error={loadError}
     encryptionConfigured={Boolean(process.env.INTEGRATION_ENCRYPTION_KEY)}
     instagramHistorySyncEnabled={process.env.INSTAGRAM_HISTORY_SYNC_ENABLED === 'true'}
     notice={query.notice} actionError={query.error}
-  />;
+  />}</>);
 }

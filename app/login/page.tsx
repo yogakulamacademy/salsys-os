@@ -1,3 +1,4 @@
+import { PageFeedback } from '@/components/page-feedback';
 import { ShieldCheck } from 'lucide-react';
 import { signInAction } from '@/app/actions/auth';
 import { AuthMessage, AuthShell, authStyles as styles } from '@/components/auth/auth-shell';
@@ -11,7 +12,7 @@ export default async function LoginPage({ searchParams }: {
 }) {
   const params = await searchParams;
   const signupAvailable = await isPublicSignupAvailable();
-  return (
+  return (<><PageFeedback error={params.error} notice={params.notice} />{(
     <AuthShell kind="login">
       <p className={styles.formKicker}>YOUR WORKSPACE AWAITS</p>
       <h1 className={styles.title}>Welcome back.</h1>
@@ -27,5 +28,5 @@ export default async function LoginPage({ searchParams }: {
       {signupAvailable && <p className={styles.switch}>New to SalsysOS? <a href="/signup">Create an account</a></p>}
       <p className={styles.secureNote}><ShieldCheck size={15} />Your account connects you to your organization.</p>
     </AuthShell>
-  );
+  )}</>);
 }

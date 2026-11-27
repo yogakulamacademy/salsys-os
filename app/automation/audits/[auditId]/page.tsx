@@ -1,3 +1,4 @@
+import { PageFeedback } from '@/components/page-feedback';
 import Link from 'next/link';
 import {
   ArrowLeft,
@@ -333,7 +334,7 @@ export default async function ProviderAuditDetailPage({
     );
   }
 
-  return (
+  return (<><PageFeedback loadError={loadError} />{(
     <div className="space-y-6">
       <Link href="/automation/audits" className="inline-flex items-center gap-2 text-sm font-bold text-violet-700 hover:text-violet-800">
         <ArrowLeft size={15} /> Back to Provider Audits
@@ -480,5 +481,5 @@ export default async function ProviderAuditDetailPage({
         </>
       ) : null}
     </div>
-  );
+  )}</>);
 }

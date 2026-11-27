@@ -1,4 +1,5 @@
 'use client';
+import { toast } from '@/lib/toast';
 
 import { useState } from 'react';
 
@@ -58,6 +59,7 @@ export function InstagramEchoVerification({ connections }: {
         [connectionId]: { state: 'observed', fields, checkedAt: new Date().toISOString() },
       }));
     } catch {
+      toast.error('Unable to load provider subscription status. Please retry.');
       setResults(previous => ({
         ...previous,
         [connectionId]: { state: 'unavailable', fields: [], checkedAt: null },

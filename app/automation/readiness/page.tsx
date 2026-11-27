@@ -1,3 +1,4 @@
+import { PageFeedback } from '@/components/page-feedback';
 import Link from 'next/link';
 import {
   AlertTriangle,
@@ -165,7 +166,7 @@ export default async function AutomationReadinessPage() {
   const readyFoundationCount = setupItems.filter((item) => item.state === 'ready').length;
   const foundationReady = readyFoundationCount === setupItems.length;
 
-  return (
+  return (<><PageFeedback loadError={loadError} />{(
     <div className="space-y-5">
       <header className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
         <div>
@@ -219,5 +220,5 @@ export default async function AutomationReadinessPage() {
         <strong>Recommended launch order:</strong> connect sender → sync approved template → create draft flow → validate and publish → review safety → enable runtime → enable messaging policy → configure one verified pilot → open provider execution only for the controlled test.
       </div>
     </div>
-  );
+  )}</>);
 }

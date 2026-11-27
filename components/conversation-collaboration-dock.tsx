@@ -1,4 +1,5 @@
 "use client";
+import { useFeedbackMessages } from '@/components/use-feedback-messages';
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
@@ -54,6 +55,8 @@ export function ConversationCollaborationDock() {
   const [mentionedIds, setMentionedIds] = useState<string[]>([]);
   const [savingNote, setSavingNote] = useState(false);
   const [noteSuccess, setNoteSuccess] = useState<string | null>(null);
+  useFeedbackMessages(error);
+  useFeedbackMessages(null, noteSuccess);
   const [warningMinutes, setWarningMinutes] = useState("60");
   const [breachMinutes, setBreachMinutes] = useState("240");
   const [savingSla, setSavingSla] = useState(false);

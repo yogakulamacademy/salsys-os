@@ -1,3 +1,4 @@
+import { PageFeedback } from '@/components/page-feedback';
 import {
   TemplateWorkspace,
   type TemplateSyncRunRow,
@@ -93,7 +94,7 @@ export default async function WhatsAppTemplatesPage() {
 
   const canSync = role ? ['owner', 'admin'].includes(role) : false;
 
-  return (
+  return (<><PageFeedback loadError={loadError} />{(
     <div className="space-y-4">
       {loadError ? (
         <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-800">
@@ -117,5 +118,5 @@ export default async function WhatsAppTemplatesPage() {
         canCreate={canSync && studioEnabled}
       />
     </div>
-  );
+  )}</>);
 }

@@ -1,4 +1,6 @@
 'use client';
+import { toast } from '@/lib/toast';
+import { useFeedbackMessages } from '@/components/use-feedback-messages';
 
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
@@ -26,6 +28,7 @@ const EMPTY: AlertFeed = { alerts: [], enabled: false, available: true };
  */
 export function useWhatsAppHandoffAlerts(active: boolean) {
   const [feed, setFeed] = useState<AlertFeed>(EMPTY);
+  useFeedbackMessages(active && feed.enabled && !feed.available ? 'Handoff alerts could not be loaded. Please refresh the page.' : null);
 
   useEffect(() => {
     if (!active) {
@@ -84,15 +87,17 @@ export function useWhatsAppHandoffAlerts(active: boolean) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ notificationId: id }),
       });
-      if (!response.ok) return;
+      if (!response.ok) { toast.error("Couldn’t acknowledge the alert. Please retry."); return; }
       const result = await response.json();
       if (result.ok === true) {
+        toast.success("Handoff alert acknowledged.");
         setFeed((current) => ({
           ...current,
           alerts: current.alerts.filter((item) => item.id !== id),
         }));
       }
     } catch {
+      toast.error("Couldn’t acknowledge the alert. Please retry.");
       // Keep the alert visible for a retry; do not claim acknowledgement.
     }
   };

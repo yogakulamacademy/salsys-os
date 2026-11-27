@@ -1,3 +1,4 @@
+import { PageFeedback } from '@/components/page-feedback';
 import Link from 'next/link';
 import { ArrowLeft, Database } from 'lucide-react';
 import { createLeadAction } from '@/app/actions/crm';
@@ -17,7 +18,7 @@ export default async function NewLeadPage({ searchParams }: { searchParams: Prom
     ? await Promise.all([getCourses(), getCourseBatches()])
     : [[], []];
 
-  return <>
+  return (<><PageFeedback error={params.error} />{<>
     <Link href="/leads" className="mb-4 inline-flex items-center gap-2 text-sm font-semibold text-slate-500 hover:text-brand"><ArrowLeft size={15} /> Back to leads</Link>
     <PageHeader
       eyebrow="CRM"
@@ -33,5 +34,5 @@ export default async function NewLeadPage({ searchParams }: { searchParams: Prom
     ) : (
       <GenericLeadForm action={createLeadAction} submitLabel="Create lead" />
     )}
-  </>;
+  </>}</>);
 }

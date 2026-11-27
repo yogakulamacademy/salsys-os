@@ -33,7 +33,14 @@ export function ToastForm({ action, resetOnSuccess = true, refresh = false, onDo
       ref={ref}
       {...rest}
       action={async (formData) => {
-        const raw = await action(formData);
+        let raw: ToastActionResult;
+        try { raw = await action(formData); }
+        catch {
+          const result = { ok: false, message: 'Unable to complete the request. Your changes have not been confirmed. Please try again.' };
+          toast.error('Something went wrong', { description: result.message });
+          onDone?.(result);
+          return;
+        }
         const result = raw && typeof raw === "object" ? raw : { ok: true, message: "Saved." };
         if (result.ok) {
           toast.success(result.message || "Saved.");

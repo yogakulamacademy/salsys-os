@@ -1,4 +1,5 @@
 "use client";
+import { useFeedbackMessages } from '@/components/use-feedback-messages';
 
 import { createPortal } from "react-dom";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -102,6 +103,9 @@ export function ConversationIntelligencePanel({
   const [completingTaskId, setCompletingTaskId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionSuccess, setActionSuccess] = useState<string | null>(null);
+  useFeedbackMessages(error);
+  useFeedbackMessages(actionError);
+  useFeedbackMessages(null, actionSuccess);
   const [loadedAt, setLoadedAt] = useState(0);
   const [expanded, setExpanded] = useState(false);
   const [fuMethod, setFuMethod] = useState<FollowupMethod>("whatsapp");

@@ -1,4 +1,6 @@
 'use client';
+import { useFeedbackMessages } from '@/components/use-feedback-messages';
+import { toast } from '@/lib/toast';
 
 import { Check, Copy, KeyRound, Pencil, RotateCcw, Save, Server, Trash2, X } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
@@ -70,6 +72,7 @@ export function ServerTrackingSourceManager() {
     secret: string;
     secretVersion: number | null;
   } | null>(null);
+  useFeedbackMessages(error);
 
   async function load() {
     setLoading(true);
@@ -116,6 +119,7 @@ export function ServerTrackingSourceManager() {
         secret: String(body.credentials.secret),
         secretVersion: Number(body.credentials.secret_version ?? 0) || null,
       });
+      toast.success('Server tracking secret rotated.');
       await load();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Unable to rotate server secret.');
@@ -141,6 +145,7 @@ export function ServerTrackingSourceManager() {
         throw new Error(typeof body?.error === 'string' ? body.error : 'Unable to delete server tracking source.');
       }
       if (revealedSecret?.sourceId === source.id) setRevealedSecret(null);
+      toast.success('Server tracking source deleted.');
       await load();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Unable to delete server tracking source.');
@@ -286,6 +291,7 @@ function ServerSourceEditor({
   const [maxPayload, setMaxPayload] = useState(String(source.max_payload_bytes ?? 65536));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  useFeedbackMessages(error);
 
   function togglePrefix(prefix: string) {
     setPrefixes((current) =>
@@ -316,6 +322,7 @@ function ServerSourceEditor({
       if (!response.ok || !body?.ok) {
         throw new Error(typeof body?.error === 'string' ? body.error : 'Unable to save server tracking source.');
       }
+      toast.success('Server tracking source updated.');
       await onSaved();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Unable to save server tracking source.');

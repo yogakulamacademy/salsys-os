@@ -27,6 +27,8 @@ import { InteractionFeedbackBridge } from '@/components/interaction-feedback-bri
 import { MotionRouteSurface } from '@/components/motion-route-surface';
 import { RootShell } from '@/components/root-shell';
 import { AppToastHost } from '@/components/app-toast';
+import { Suspense } from 'react';
+import { NavigationFeedback } from '@/components/navigation-feedback';
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://salsysos.com'),
@@ -60,6 +62,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
           <RootShell platformAdminEnabled={process.env.SALSYS_PLATFORM_ADMIN_ENABLED === 'true'}>{children}</RootShell>
         </MotionRouteSurface>
         <AppToastHost />
+        <Suspense fallback={null}><NavigationFeedback /></Suspense>
       </body>
     </html>
   );

@@ -1,3 +1,4 @@
+import { PageFeedback } from '@/components/page-feedback';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { ArrowLeft, FileCheck2, LockKeyhole } from 'lucide-react';
@@ -44,7 +45,7 @@ export default async function PilotEvidenceDraftPage({
 
   const { saved } = await searchParams;
   return (
-    <main className="mx-auto w-full max-w-3xl space-y-5 px-4 py-6 sm:px-6">
+    <main className="mx-auto w-full max-w-3xl space-y-5 px-4 py-6 sm:px-6"><PageFeedback notice={saved === '1' ? 'Evidence draft saved.' : null} />
       <Link href="/settings/ai-insights" className="inline-flex items-center gap-1.5 text-xs font-semibold text-copy-muted hover:text-copy">
         <ArrowLeft size={13} aria-hidden/> Back to AI operations
       </Link>

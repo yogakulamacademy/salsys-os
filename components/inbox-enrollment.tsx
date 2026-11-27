@@ -1,4 +1,5 @@
 "use client";
+import { useFeedbackMessages } from '@/components/use-feedback-messages';
 
 import { CheckCircle2, GraduationCap, Plus } from "lucide-react";
 import { useState, useTransition } from "react";
@@ -30,6 +31,8 @@ export function InboxEnrollment({ leadId, panel }: { leadId: string; panel: Enro
   const [payFor, setPayFor] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
+  useFeedbackMessages(error);
+  useFeedbackMessages(null, done);
   const [pending, start] = useTransition();
 
   const submit = (form: FormData) => start(async () => {

@@ -1,4 +1,6 @@
 'use client';
+import { toast } from '@/lib/toast';
+import { useFeedbackMessages } from '@/components/use-feedback-messages';
 
 import { Check, Copy, KeyRound, Server, ShieldCheck } from 'lucide-react';
 import { useMemo, useState } from 'react';
@@ -181,6 +183,7 @@ export function ServerTrackingSourceCreator() {
   const [created, setCreated] = useState<CreatedServerSource | null>(null);
   const [tab, setTab] = useState<'php' | 'node' | 'python' | 'curl'>('php');
   const [copied, setCopied] = useState<string | null>(null);
+  useFeedbackMessages(error);
 
   const selectedGuide = PLATFORM_GUIDES.find((item) => item.key === platform) ?? PLATFORM_GUIDES[0];
   const sourceKey = created?.credentials.source_key ?? '';
@@ -207,7 +210,7 @@ export function ServerTrackingSourceCreator() {
       });
       const body = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(typeof body.error === 'string' ? body.error : 'Unable to create server tracking source.');
-      setCreated(body as CreatedServerSource);
+      setCreated(body as CreatedServerSource); toast.success('Server tracking source created.');
       if (platform === 'python' || platform === 'aws') setTab('python');
       else if (['node', 'shopify', 'firebase', 'supabase', 'vercel'].includes(platform)) setTab('node');
       else if (['n8n', 'make', 'zapier', 'custom'].includes(platform)) setTab('curl');

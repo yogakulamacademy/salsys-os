@@ -1,3 +1,4 @@
+import { PageFeedback } from '@/components/page-feedback';
 import { StarterRecipesGallery } from '@/app/automation/recipes/starter-recipes-gallery';
 import { createClient } from '@/lib/supabase/server';
 import { getCurrentWorkspaceContext } from '@/lib/workspace';
@@ -66,7 +67,7 @@ export default async function AutomationRecipesPage({
     loadError = error instanceof Error ? error.message : 'Unable to load starter recipes.';
   }
 
-  return (
+  return (<><PageFeedback error={query.error} notice={query.notice} loadError={loadError} />{(
     <div className="space-y-4">
       {query.notice ? (
         <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800">
@@ -85,5 +86,5 @@ export default async function AutomationRecipesPage({
         canManage={canManage}
       />
     </div>
-  );
+  )}</>);
 }

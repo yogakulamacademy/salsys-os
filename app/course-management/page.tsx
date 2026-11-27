@@ -1,3 +1,4 @@
+import { PageFeedback } from '@/components/page-feedback';
 import { setCourseBatchEnrollmentStateInline, setCourseBatchActiveStateInline, updateCourseBatchAdminInline } from "@/app/course-management/inline-actions";
 import { ToastForm } from "@/components/toast-form";
 import { BatchesBoard } from "@/components/operations/batches-board";
@@ -67,7 +68,7 @@ export default async function CourseManagementPage({ searchParams, }: {
             ? `/course-management?course=${encodeURIComponent(selectedCourseId)}`
             : "/course-management";
     const batchNameById = new Map<string, string>(Object.entries(workspace.batchNames));
-    return (<>
+    return (<><PageFeedback error={resolved.error} notice={resolved.notice} />{(<>
 
       <PageHeader eyebrow="Courses & batches" title="Course Management" description="Manage batch capacity, enrollment availability and default commercial values without leaving the CRM." actions={<div className="flex flex-wrap gap-2">
 
@@ -245,7 +246,7 @@ export default async function CourseManagementPage({ searchParams, }: {
 
       </section>
 
-    </>);
+    </>)}</>);
 }
 function CourseDetailsCard({ course, totalBatches, activeBatches, }: {
     course: CourseRow;

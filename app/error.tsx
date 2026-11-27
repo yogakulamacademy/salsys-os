@@ -2,6 +2,8 @@
 
 import Link from 'next/link';
 import { AlertTriangle, Home, RotateCcw } from 'lucide-react';
+import { useEffect } from 'react';
+import { toast } from '@/lib/toast';
 
 export default function Error({
   error,
@@ -10,6 +12,7 @@ export default function Error({
   error: Error & { digest?: string };
   reset: () => void;
 }) {
+  useEffect(() => { toast.error('We couldn’t load this page', { description: 'Please try loading it again.', onRetry: reset }); }, [reset]);
   return (
     <div className="grid min-h-[60vh] place-items-center px-4 py-12">
       <div className="w-full max-w-lg rounded-panel border border-line bg-surface p-6 text-center shadow-panel sm:p-8">

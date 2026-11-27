@@ -1,4 +1,5 @@
 'use client';
+import { useOutcomeToast } from '@/components/use-feedback-messages';
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -8,6 +9,7 @@ export function TemplateSyncButton({ disabled = false }: { disabled?: boolean })
   const router = useRouter();
   const [syncing, setSyncing] = useState(false);
   const [message, setMessage] = useState<{ tone: 'success' | 'error'; text: string } | null>(null);
+  useOutcomeToast(message);
 
   async function syncTemplates() {
     if (disabled || syncing) return;

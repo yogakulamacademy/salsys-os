@@ -1,4 +1,5 @@
 'use client';
+import { useOutcomeToast } from '@/components/use-feedback-messages';
 
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
@@ -71,6 +72,7 @@ export function TemplateAuthoringStudio({
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(Boolean(initialDraftId));
   const [notice, setNotice] = useState<{ tone: 'error' | 'info' | 'success'; text: string } | null>(null);
+  useOutcomeToast(notice);
   const [reviewOpen, setReviewOpen] = useState(false);
 
   useEffect(() => {

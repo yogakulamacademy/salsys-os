@@ -1,4 +1,5 @@
 'use server';
+import { redirectWithNotice } from '@/lib/redirect-with-notice';
 
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
@@ -143,7 +144,7 @@ export async function saveOnboardingBusinessAction(formData: FormData) {
   }
 
   revalidatePath('/onboarding');
-  redirect('/onboarding?step=goals');
+  await redirectWithNotice('/onboarding?step=goals', 'Setup changes saved.');
 }
 
 export async function saveOnboardingGoalsAction(formData: FormData) {
@@ -180,7 +181,7 @@ export async function saveOnboardingGoalsAction(formData: FormData) {
   }
 
   revalidatePath('/onboarding');
-  redirect('/onboarding/website');
+  await redirectWithNotice('/onboarding/website', 'Setup changes saved.');
 }
 
 export async function verifyOnboardingWebsiteAction() {
@@ -226,7 +227,7 @@ export async function verifyOnboardingWebsiteAction() {
 
   revalidatePath('/onboarding');
   revalidatePath('/onboarding/website');
-  redirect('/onboarding/channels');
+  await redirectWithNotice('/onboarding/channels', 'Setup changes saved.');
 }
 
 export async function verifyOnboardingChannelsAction() {
@@ -269,7 +270,7 @@ export async function verifyOnboardingChannelsAction() {
 
   revalidatePath('/onboarding');
   revalidatePath('/onboarding/channels');
-  redirect('/onboarding/team');
+  await redirectWithNotice('/onboarding/team', 'Setup changes saved.');
 }
 
 export async function skipOnboardingChannelsAction() {
@@ -287,7 +288,7 @@ export async function skipOnboardingChannelsAction() {
   }
 
   revalidatePath('/onboarding');
-  redirect('/onboarding/team');
+  await redirectWithNotice('/onboarding/team', 'Setup changes saved.');
 }
 
 export async function verifyOnboardingTeamAction() {
@@ -348,7 +349,7 @@ export async function verifyOnboardingTeamAction() {
 
   revalidatePath('/onboarding');
   revalidatePath('/onboarding/team');
-  redirect('/onboarding/finish');
+  await redirectWithNotice('/onboarding/finish', 'Setup changes saved.');
 }
 
 export async function skipOnboardingTeamAction() {
@@ -366,7 +367,7 @@ export async function skipOnboardingTeamAction() {
   }
 
   revalidatePath('/onboarding');
-  redirect('/onboarding/finish');
+  await redirectWithNotice('/onboarding/finish', 'Setup changes saved.');
 }
 
 export async function completeOnboardingAction() {
@@ -425,7 +426,7 @@ export async function completeOnboardingAction() {
   revalidatePath('/onboarding');
   revalidatePath('/onboarding/finish');
   revalidatePath('/dashboard');
-  redirect('/onboarding/finish?completed=1');
+  await redirectWithNotice('/onboarding/finish?completed=1', 'Setup changes saved.');
 }
 
 export async function resumeOnboardingStepAction(formData: FormData) {
@@ -450,5 +451,5 @@ export async function resumeOnboardingStepAction(formData: FormData) {
   }
 
   revalidatePath('/onboarding');
-  redirect(`/onboarding?step=${encodeURIComponent(nextStep)}`);
+  await redirectWithNotice(`/onboarding?step=${encodeURIComponent(nextStep)}`, 'Setup changes saved.');
 }

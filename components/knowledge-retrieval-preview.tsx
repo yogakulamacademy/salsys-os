@@ -1,4 +1,5 @@
 'use client';
+import { useFeedbackMessages } from '@/components/use-feedback-messages';
 import { useEffect, useRef, useState, useTransition, type FormEvent } from 'react';
 import { previewKnowledgeAction, type KnowledgePreviewResult } from '@/app/settings/knowledge/actions';
 import { createLatestReadGuard } from '@/lib/latest-read';
@@ -7,6 +8,7 @@ export function KnowledgeRetrievalPreview({ enabled }: { enabled: boolean }) {
   const [result, setResult] = useState<KnowledgePreviewResult>({ state: 'idle', message: '' });
   const [pending, startTransition] = useTransition();
   const guard = useRef(createLatestReadGuard());
+  useFeedbackMessages(result.state === 'error' ? result.message : null);
   useEffect(() => () => guard.current.invalidate(), []);
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();

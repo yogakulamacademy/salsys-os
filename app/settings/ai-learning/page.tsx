@@ -1,3 +1,4 @@
+import { PageFeedback } from '@/components/page-feedback';
 import Link from 'next/link';
 
 import { importChatExportAction, reviewConversationInsightAction, runConversationLearningAction } from '@/app/settings/ai-learning/actions';
@@ -76,7 +77,7 @@ export default async function AiLearningPage({ searchParams }: { searchParams: P
   const approved = insights.filter((i) => i.review_status === 'approved' && i.kind !== 'data_gap').length;
   const pending = insights.filter((i) => i.review_status === 'pending').length;
 
-  return (
+  return (<><PageFeedback error={query.error} notice={query.notice} />{(
     <main className="mx-auto w-full max-w-5xl space-y-5 px-4 py-6">
       <Link href="/settings" className="text-xs text-copy-muted hover:text-copy">Back to settings</Link>
       <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
@@ -173,5 +174,5 @@ export default async function AiLearningPage({ searchParams }: { searchParams: P
         </>
       )}
     </main>
-  );
+  )}</>);
 }

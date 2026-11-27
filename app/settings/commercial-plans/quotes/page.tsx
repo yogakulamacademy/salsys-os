@@ -1,3 +1,4 @@
+import { PageFeedback } from '@/components/page-feedback';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { listQuoteQueue,type QuoteQueueItem } from '@/lib/commercial/contract-quotes';
@@ -9,7 +10,7 @@ export default async function QuoteQueuePage({searchParams}:{searchParams:Promis
   let rows:QuoteQueueItem[];
   try{rows=await listQuoteQueue();}catch{notFound();}
   const result=(await searchParams).result;
-  return <main className="space-y-4">
+  return (<><PageFeedback error={result === 'error' ? 'Operation not completed. Check permissions and approval, then retry.' : null} notice={result === 'prepared' ? 'Quote prepared for review.' : null} />{<main className="space-y-4">
     <Link href="/settings/commercial-plans" className="text-sm underline">Commercial plans</Link>
     <h1 className="text-2xl font-semibold">Subscription quote queue</h1>
     <p className="text-sm">Prepare an exact, expiring quote against the customer's published offer. No charge or plan activation is possible here. Tax and setup amounts require independent verification.</p>
@@ -25,5 +26,5 @@ export default async function QuoteQueuePage({searchParams}:{searchParams:Promis
         <button className="rounded border border-line p-2 font-semibold" type="submit">Save exact quote</button>
       </form>
     </article>)}
-  </main>;
+  </main>}</>);
 }
