@@ -325,9 +325,10 @@ test('actual disposable Supabase Storage authorization and lifecycle: '+reviewMo
       assert.equal((await call(id+'/reserve','invalid','POST',{'x-knowledge-file-bytes':'10'})).status,403);
       const run=browser.createKnowledgeBrowserUploadReview({origin:httpOrigin,jobId:id,file:new File([bytes],'fixture.json',{type:'application/json'}),fetcher:async(url,opts)=>handle(new Request(url,{method:'POST',headers:{...opts.headers,origin:httpOrigin,authorization:'Bearer '+owner.token},body:opts.body}))});
       assert.deepEqual(await run(),{state:'registered',status:'queued'});
-      assert.equal((await call(secondId+'/reserve',owner.token,'POST',{'x-knowledge-file-bytes':String(bytes.length)})).status,200);
-      const secondRun=browser.createKnowledgeBrowserUploadReview({origin:httpOrigin,jobId:secondId,file:new File([bytes],'fixture.json',{type:'application/json'}),fetcher:async(url,opts)=>handle(new Request(url,{method:'POST',headers:{...opts.headers,origin:httpOrigin,authorization:'Bearer '+owner.token},body:opts.body}))});
-      assert.deepEqual(await secondRun(),{state:'registered',status:'queued'});
+      const flow=load('lib/knowledge-import-upload-flow-review.ts',{'./knowledge-import-browser-review':browser});
+      const progress=[];
+      const secondRun=flow.createKnowledgeUploadFlowReview({origin:httpOrigin,jobId:secondId,file:new File([bytes],'fixture.json',{type:'application/json'}),emit:s=>progress.push(s.state),fetcher:async(url,opts)=>handle(new Request(url,{method:'POST',headers:{...opts.headers,origin:httpOrigin,authorization:'Bearer '+owner.token},body:opts.body}))});
+      await secondRun.start();assert.equal(secondRun.snapshot().state,'registered');assert.ok(progress.includes('reserving'));assert.ok(progress.includes('uploading'));
       assert.equal(digest(await read(j)),digest(bytes));assert.equal(digest(await read(second)),digest(bytes));
       const history=await call('history',owner.token,'GET');assert.equal(history.status,200);const historyJobs=(await history.json()).jobs;assert.equal(historyJobs.find(x=>x.id===id).status,'queued');assert.equal(historyJobs.find(x=>x.id===secondId).status,'queued');
       const outside=await call('history',outsider.token,'GET');assert.equal(outside.status,200);assert.equal((await outside.json()).jobs.some(x=>x.id===id),false);
