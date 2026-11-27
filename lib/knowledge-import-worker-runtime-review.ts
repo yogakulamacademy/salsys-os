@@ -1,5 +1,6 @@
 import 'server-only';
 import {createKnowledgeWorkerSourceAdaptersReview,readSignedKnowledgeSource} from './knowledge-import-worker-adapters-review';
+import {KNOWLEDGE_IMPORT_BUCKET,knowledgeImportObjectPath} from './knowledge-import-upload-contract';
 import {runKnowledgeImportSchedulerReview} from './knowledge-import-scheduler-review';
 export const KNOWLEDGE_WORKER_COMPOSITION_WIRED=false as const;
 type Query=Parameters<typeof createKnowledgeWorkerSourceAdaptersReview>[0];
@@ -68,4 +69,40 @@ export async function runKnowledgeWorkerRuntimeReview(o:Options){
  * The issuer is an independent trusted capability service, not the worker login. */
 export function runKnowledgeSignedWorkerRuntimeReview(o:Omit<Options,'readSource'>&{projectOrigin:string;issueReadUrl:Parameters<typeof readSignedKnowledgeSource>[3];fetcher?:typeof fetch}){
  return runKnowledgeWorkerRuntimeReview({...o,readSource:(scope,identity)=>readSignedKnowledgeSource(scope,identity,o.projectOrigin,o.issueReadUrl,o.fetcher)});
+}
+
+type IssueReadUrl=Parameters<typeof readSignedKnowledgeSource>[3];
+type ReadScope=Parameters<IssueReadUrl>[0];
+type ReadGrant={identity:Identity;expiresAtMs:number};
+type ReadIssuerOptions={
+ // The issuer's own authority resolves a fresh grant for the authenticated worker and job.
+ resolveGrant:(scope:ReadScope)=>Promise<ReadGrant|null>;
+ storage:{from:(bucket:string)=>{createSignedUrl:(path:string,expiresIn:number,options:{versionId:string})=>Promise<{
+  data:{signedUrl:string}|null;error:unknown;
+ }>}};
+ now?:()=>number;
+};
+
+/** Server-only composition for an explicitly invoked worker. The injected grant resolver
+ * and Storage signer belong to the issuer, outside the restricted worker database login. */
+export function runKnowledgeVersionedWorkerRuntimeReview(
+ o:Omit<Parameters<typeof runKnowledgeSignedWorkerRuntimeReview>[0],'issueReadUrl'> & {issuer:ReadIssuerOptions}
+){
+ const {issuer,...worker}=o;
+ const now=issuer.now??Date.now;
+ const issueReadUrl:IssueReadUrl=async(scope,expected)=>{
+  const grant=await issuer.resolveGrant(scope);
+  const path=knowledgeImportObjectPath(scope.organizationId,scope.jobId);
+  if(!grant||!path||grant.identity.objectPath!==path||!same(grant.identity,expected)||
+    !Number.isSafeInteger(grant.expiresAtMs))throw Error('source read grant denied');
+
+  const expiresIn=Math.min(30,Math.floor((grant.expiresAtMs-now())/1000));
+  if(!Number.isSafeInteger(expiresIn)||expiresIn<1)throw Error('source read grant expired');
+
+  const {data,error}=await issuer.storage.from(KNOWLEDGE_IMPORT_BUCKET)
+   .createSignedUrl(path,expiresIn,{versionId:grant.identity.objectVersion});
+  if(error||!data?.signedUrl||now()>=grant.expiresAtMs)throw Error('source read signing failed');
+  return data.signedUrl;
+ };
+ return runKnowledgeSignedWorkerRuntimeReview({...worker,issueReadUrl});
 }
