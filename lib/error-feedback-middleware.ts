@@ -25,8 +25,7 @@ export async function withScreenOnlyErrors(request: NextRequest, run: (request: 
   const incoming = splitErrorFeedback(new URL(request.url));
   if (incoming.entries.length) {
     const response = NextResponse.redirect(incoming.url, 303);
-    // Preserve the visitor's public host when this app is reached through the website proxy.
-    response.headers.set('Location', incoming.url.pathname + incoming.url.search + incoming.url.hash);
+    // Hosting adapters require an absolute Location even when redirecting on the same host.
     return attachFeedback(response, incoming.url, incoming.entries, secure);
   }
   const response = await run(request);
@@ -36,7 +35,7 @@ export async function withScreenOnlyErrors(request: NextRequest, run: (request: 
     if (destination.origin === request.nextUrl.origin) {
       const clean = splitErrorFeedback(destination);
       if (clean.entries.length) {
-        response.headers.set('Location', clean.url.pathname + clean.url.search + clean.url.hash);
+        response.headers.set('Location', clean.url.href);
         return attachFeedback(response, clean.url, clean.entries, secure);
       }
     }

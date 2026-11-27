@@ -20,7 +20,7 @@ const secure = process.env.NODE_ENV === 'production';
 
 test('a legacy error redirects to a clean URL and retains filters, next, and hash', async () => {
   const response = await withScreenOnlyErrors(req('/login?error=Try+again&next=%2Frevenue%3Fmonth%3D11&mode=resend#form'), run);
-  const url = new URL(response.headers.get('Location'), origin);
+  const url = new URL(response.headers.get('Location'));
   assert.equal(url.searchParams.has('error'), false);
   assert.equal(url.searchParams.get('next'), '/revenue?month=11');
   assert.equal(url.searchParams.get('mode'), 'resend');
@@ -63,7 +63,7 @@ test('legacy descriptive error keys reach existing page error props', async () =
 
 test('middleware auth errors also get clean redirects without losing auth cookies', async () => {
   const response = await withScreenOnlyErrors(req('/revenue'), async () => { const r = NextResponse.redirect(origin + '/login?error=Session+expired'); r.cookies.set('auth-test', '', { maxAge: 0 }); return r; });
-  assert.equal(response.headers.get('Location'), '/login');
+  assert.equal(response.headers.get('Location'), origin + '/login');
   assert.equal(response.cookies.get('auth-test').maxAge, 0);
   assert.ok(response.cookies.get(core.errorCookieName('/login', secure)));
 });
