@@ -63,6 +63,7 @@ import { personInitials } from "@/lib/ui-format";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { createClient as createBrowserClient } from "@/lib/supabase/browser";
 import { AiHandoverAlertsList, useAiHandoverAlerts } from "@/components/ai-handover-alerts";
+import { useWorkspaceRequest } from '@/components/workspace-request-provider';
 
 type IconType = ComponentType<{
   size?: number | string;
@@ -130,6 +131,7 @@ function sectionForPath(pathname: string, sections: NavSection[]) {
 }
 
 export function AppShell({ children }: { children: ReactNode }) {
+  const requestWorkspace = useWorkspaceRequest();
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [profile, setProfile] = useState<ShellProfile | null>(null);
@@ -580,7 +582,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       }
 
       try {
-        const response = await fetch("/api/workspace", { cache: "no-store" });
+        const response = await requestWorkspace();
         if (!response.ok) throw new Error("Unable to load workspace.");
         const data = (await response.json()) as WorkspaceContext;
         if (!cancelled) {
@@ -599,7 +601,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [mock]);
+  }, [mock, requestWorkspace]);
 
   async function handleWorkspaceChange(organizationId: string) {
     if (

@@ -1,0 +1,413 @@
+{
+  "captured_on": "2026-11-27",
+  "traffic_window": "Rolling 24 hours at collection, approximately 06:38–06:40 UTC; separate calls have slightly different window endpoints",
+  "statistics_since_utc": "2026-11-25T11:32:12.573313Z",
+  "traffic": [
+    {
+      "errors": 0,
+      "method": "POST",
+      "path": "/rest/v1/seo_pages",
+      "requests": 36625
+    },
+    {
+      "errors": 0,
+      "method": "POST",
+      "path": "/rest/v1/rpc/signup_advanced_operation_allowed_v1",
+      "requests": 29462
+    },
+    {
+      "errors": 0,
+      "method": "GET",
+      "path": "/rest/v1/organizations",
+      "requests": 27390
+    },
+    {
+      "errors": 0,
+      "method": "POST",
+      "path": "/rest/v1/seo_crawl_frontier",
+      "requests": 25385
+    },
+    {
+      "errors": 0,
+      "method": "POST",
+      "path": "/rest/v1/rpc/ingest_raw_event",
+      "requests": 6923
+    },
+    {
+      "errors": 0,
+      "method": "POST",
+      "path": "/rest/v1/rpc/ingest_instagram_history_message_v1",
+      "requests": 6833
+    },
+    {
+      "errors": 0,
+      "method": "GET",
+      "path": "/rest/v1/conversations",
+      "requests": 6789
+    },
+    {
+      "errors": 0,
+      "method": "GET",
+      "path": "/rest/v1/messages",
+      "requests": 6029
+    },
+    {
+      "errors": 0,
+      "method": "GET",
+      "path": "/rest/v1/leads",
+      "requests": 5349
+    },
+    {
+      "errors": 0,
+      "method": "POST",
+      "path": "/rest/v1/rpc/get_current_workspace_context_v1",
+      "requests": 5182
+    },
+    {
+      "errors": 0,
+      "method": "GET",
+      "path": "/auth/v1/user",
+      "requests": 4982
+    },
+    {
+      "errors": 0,
+      "method": "GET",
+      "path": "/rest/v1/dm_tracked_links",
+      "requests": 2463
+    },
+    {
+      "errors": 0,
+      "method": "POST",
+      "path": "/rest/v1/lead_scoring_feature_snapshots",
+      "requests": 2284
+    },
+    {
+      "errors": 0,
+      "method": "GET",
+      "path": "/rest/v1/lead_scoring_feature_snapshots",
+      "requests": 2284
+    },
+    {
+      "errors": 0,
+      "method": "POST",
+      "path": "/rest/v1/rpc/resolve_tracking_source_by_site_v1",
+      "requests": 1804
+    },
+    {
+      "errors": 1,
+      "method": "GET",
+      "path": "/rest/v1/integration_connections",
+      "requests": 1606
+    },
+    {
+      "errors": 0,
+      "method": "GET",
+      "path": "/rest/v1/organization_onboarding",
+      "requests": 1303
+    },
+    {
+      "errors": 0,
+      "method": "PATCH",
+      "path": "/rest/v1/seo_crawl_frontier",
+      "requests": 1257
+    },
+    {
+      "errors": 0,
+      "method": "PATCH",
+      "path": "/rest/v1/leads",
+      "requests": 1193
+    },
+    {
+      "errors": 0,
+      "method": "GET",
+      "path": "/rest/v1/ai_autopilot_leads",
+      "requests": 1145
+    },
+    {
+      "errors": 0,
+      "method": "HEAD",
+      "path": "/rest/v1/seo_crawl_frontier",
+      "requests": 1120
+    },
+    {
+      "errors": 0,
+      "method": "POST",
+      "path": "/rest/v1/rpc/consume_tracking_source_rate_limit_v1",
+      "requests": 1098
+    },
+    {
+      "errors": 0,
+      "method": "POST",
+      "path": "/rest/v1/rpc/signup_integration_allowed_v1",
+      "requests": 986
+    },
+    {
+      "errors": 0,
+      "method": "GET",
+      "path": "/rest/v1/tasks",
+      "requests": 944
+    },
+    {
+      "errors": 0,
+      "method": "HEAD",
+      "path": "/rest/v1/messages",
+      "requests": 895
+    }
+  ],
+  "clients": [
+    {
+      "client": "supabase-js/2.119.2; platform=edge-runtime; platform-version=1.79.1; runtime=deno; runtime-version=supabase-edge-runtime-1.79.1 (compatible with Deno v2.1.4)",
+      "path": "/rest/v1/seo_pages",
+      "requests": 36625
+    },
+    {
+      "client": "supabase-js/2.117.1; runtime=node; runtime-version=24.22.3",
+      "path": "/rest/v1/rpc/signup_advanced_operation_allowed_v1",
+      "requests": 29421
+    },
+    {
+      "client": "supabase-js/2.119.2; platform=edge-runtime; platform-version=1.79.1; runtime=deno; runtime-version=supabase-edge-runtime-1.79.1 (compatible with Deno v2.1.4)",
+      "path": "/rest/v1/seo_crawl_frontier",
+      "requests": 28394
+    },
+    {
+      "client": "supabase-js/2.117.1; runtime=node; runtime-version=24.22.3",
+      "path": "/rest/v1/organizations",
+      "requests": 27374
+    },
+    {
+      "client": "supabase-ssr/0.12.7 createServerClient",
+      "path": "/rest/v1/organizations",
+      "requests": 16
+    }
+  ],
+  "crons": [
+    {
+      "jobname": "instagram-dm-retry-v1",
+      "schedule": "* * * * *",
+      "active": true
+    },
+    {
+      "jobname": "instagram-outbound-echo-retry-v1",
+      "schedule": "*/2 * * * *",
+      "active": false
+    },
+    {
+      "jobname": "salsys-automation-runtime-scheduler-v1",
+      "schedule": "* * * * *",
+      "active": true
+    },
+    {
+      "jobname": "salsys-closed-won-auto-archive-v1",
+      "schedule": "7 * * * *",
+      "active": true
+    },
+    {
+      "jobname": "salsys-instagram-ad-referrals-v1",
+      "schedule": "*/5 * * * *",
+      "active": true
+    },
+    {
+      "jobname": "salsys-intelligence-outcome-learning-v1",
+      "schedule": "*/15 * * * *",
+      "active": true
+    },
+    {
+      "jobname": "salsys-privacy-erasure-planner-v1",
+      "schedule": "23 * * * *",
+      "active": true
+    },
+    {
+      "jobname": "salsys-privacy-retention-v1",
+      "schedule": "17 * * * *",
+      "active": true
+    },
+    {
+      "jobname": "salsys-seo-learning-v1",
+      "schedule": "27 * * * *",
+      "active": true
+    },
+    {
+      "jobname": "salsys-seo-outcome-capture-v1",
+      "schedule": "37 * * * *",
+      "active": true
+    },
+    {
+      "jobname": "salsys-seo-search-refresh-v1",
+      "schedule": "*/30 * * * *",
+      "active": true
+    },
+    {
+      "jobname": "salsys-seo-semantic-refresh-v1",
+      "schedule": "*/30 * * * *",
+      "active": true
+    },
+    {
+      "jobname": "salsys-tracking-autonomous-recovery-v1",
+      "schedule": "* * * * *",
+      "active": true
+    }
+  ],
+  "query_stats": [
+    {
+      "queryid": "9015932104422185194",
+      "calls": 332,
+      "total_ms": "470124.85",
+      "mean_ms": "1416.04",
+      "rows": 332,
+      "pattern": "WITH pgrst_source AS ( SELECT \"public\".\"course_batches\".\"id\", \"public\".\"course_batches\".\"course_id\", \"public\".\"course_batches\".\"start_date\", \"public\".\"course_batches\".\"location\", \"public\".\"course_batches\".\"mode\" FROM \"public\".\"course_batches\" WHERE  \"public\".\"course_batches\".\"organization_id\" = $1 AND  \"public\".\"course_batches\".\"start_date\" >= $2  ORDER BY \"public\".\"course_batches\".\"start_date\" ASC  LIMIT $3 OFFSET $4 )  SELECT $5::bigint AS total_result_set, pg_catalog.count(_postgrest_t) AS page_total, coalesce(json_agg(_postgrest_t), $6) AS body, nullif(current_setting($7, $8), $9) AS response_headers, nullif(current_setting($10, $11), $12"
+    },
+    {
+      "queryid": "-1992466419331514477",
+      "calls": 478,
+      "total_ms": "395288.66",
+      "mean_ms": "826.96",
+      "rows": 478,
+      "pattern": "WITH pgrst_source AS (SELECT pgrst_call.pgrst_scalar FROM (SELECT $1 AS json_data) pgrst_payload, LATERAL (SELECT \"p_page\", \"p_page_size\", \"p_search\", \"p_sort\", \"p_scope\", \"p_filter\", \"p_channel\", \"p_priority\", \"p_topic\" FROM json_to_record(pgrst_payload.json_data) AS _(\"p_page\" integer, \"p_page_size\" integer, \"p_search\" text, \"p_sort\" text, \"p_scope\" text, \"p_filter\" text, \"p_channel\" text, \"p_priority\" text, \"p_topic\" text) LIMIT $4) pgrst_body , LATERAL (SELECT \"public\".\"get_current_conversations_page_v2\"(\"p_page\" := pgrst_body.\"p_page\", \"p_page_size\" := pgrst_body.\"p_page_size\", \"p_search\" := pgrst_body.\"p_search\", \"p_sort\" := pgrst_body."
+    },
+    {
+      "queryid": "-7903006591196850947",
+      "calls": 41555,
+      "total_ms": "351256.45",
+      "mean_ms": "8.45",
+      "rows": 42000,
+      "pattern": "SELECT wal->>$5 as type,\n       wal->>$6 as schema,\n       wal->>$7 as table,\n       COALESCE(wal->>$8, $9) as columns,\n       COALESCE(wal->>$10, $11) as record,\n       COALESCE(wal->>$12, $13) as old_record,\n       wal->>$14 as commit_timestamp,\n       subscription_ids,\n       errors,\n       slot_changes_count\nFROM realtime.list_changes($1, $2, $3, $4)"
+    },
+    {
+      "queryid": "-1085106004466417301",
+      "calls": 688,
+      "total_ms": "75237.47",
+      "mean_ms": "109.36",
+      "rows": 688,
+      "pattern": "WITH pgrst_source AS (SELECT \"pgrst_call\".* FROM (SELECT $1 AS json_data) pgrst_payload, LATERAL (SELECT \"p_organization_id\", \"p_dry_run\" FROM json_to_record(pgrst_payload.json_data) AS _(\"p_organization_id\" uuid, \"p_dry_run\" boolean) LIMIT $4) pgrst_body , LATERAL \"public\".\"run_admissions_auto_tasks\"(\"p_organization_id\" := pgrst_body.\"p_organization_id\", \"p_dry_run\" := pgrst_body.\"p_dry_run\") pgrst_call) SELECT $5::bigint AS total_result_set, pg_catalog.count(_postgrest_t) AS page_total, coalesce(json_agg(_postgrest_t), $6) AS body, nullif(current_setting($7, $8), $9) AS response_headers, nullif(current_setting($10, $11), $12) AS response_st"
+    },
+    {
+      "queryid": "-2347616193711042284",
+      "calls": 16040,
+      "total_ms": "54148.33",
+      "mean_ms": "3.38",
+      "rows": 16040,
+      "pattern": "WITH pgrst_source AS (SELECT pgrst_call.pgrst_scalar FROM (SELECT $1 AS json_data) pgrst_payload, LATERAL (SELECT \"p_raw_event_id\" FROM json_to_record(pgrst_payload.json_data) AS _(\"p_raw_event_id\" uuid) LIMIT $4) pgrst_body , LATERAL (SELECT \"public\".\"ingest_instagram_history_message_v1\"(\"p_raw_event_id\" := pgrst_body.\"p_raw_event_id\") pgrst_scalar) pgrst_call) SELECT $5::bigint AS total_result_set, $6 AS page_total, coalesce(json_agg(_postgrest_t.pgrst_scalar)->$7, $8) AS body, nullif(current_setting($9, $10), $11) AS response_headers, nullif(current_setting($12, $13), $14) AS response_status, $15 AS response_inserted FROM (SELECT \"ingest_i"
+    },
+    {
+      "queryid": "1957846502126043080",
+      "calls": 428,
+      "total_ms": "49026.92",
+      "mean_ms": "114.55",
+      "rows": 428,
+      "pattern": "WITH pgrst_source AS ( SELECT \"public\".\"v_leads_overview\".* FROM \"public\".\"v_leads_overview\" WHERE  \"public\".\"v_leads_overview\".\"organization_id\" = $1 AND  \"public\".\"v_leads_overview\".\"id\" = $2   LIMIT $3 OFFSET $4 )  SELECT $5::bigint AS total_result_set, pg_catalog.count(_postgrest_t) AS page_total, coalesce(json_agg(_postgrest_t), $6) AS body, nullif(current_setting($7, $8), $9) AS response_headers, nullif(current_setting($10, $11), $12) AS response_status, $13 AS response_inserted FROM ( SELECT * FROM pgrst_source ) _postgrest_t"
+    },
+    {
+      "queryid": "6676647988489609161",
+      "calls": 401,
+      "total_ms": "46779.36",
+      "mean_ms": "116.66",
+      "rows": 401,
+      "pattern": "WITH pgrst_source AS ( SELECT \"public\".\"courses\".\"id\", \"public\".\"courses\".\"code\", \"public\".\"courses\".\"name\" FROM \"public\".\"courses\" WHERE  \"public\".\"courses\".\"organization_id\" = $1 AND  \"public\".\"courses\".\"active\" = $2  ORDER BY \"public\".\"courses\".\"name\" ASC  LIMIT $3 OFFSET $4 )  SELECT $5::bigint AS total_result_set, pg_catalog.count(_postgrest_t) AS page_total, coalesce(json_agg(_postgrest_t), $6) AS body, nullif(current_setting($7, $8), $9) AS response_headers, nullif(current_setting($10, $11), $12) AS response_status, $13 AS response_inserted FROM ( SELECT * FROM pgrst_source ) _postgrest_t"
+    },
+    {
+      "queryid": "-5171333913955284503",
+      "calls": 168,
+      "total_ms": "44752.99",
+      "mean_ms": "266.39",
+      "rows": 168,
+      "pattern": "WITH pgrst_source AS (SELECT pgrst_call.pgrst_scalar FROM (SELECT $1 AS json_data) pgrst_payload, LATERAL (SELECT \"p_organization_id\" FROM json_to_record(pgrst_payload.json_data) AS _(\"p_organization_id\" uuid) LIMIT $4) pgrst_body , LATERAL (SELECT \"public\".\"marketing_search_detail_v1\"(\"p_organization_id\" := pgrst_body.\"p_organization_id\") pgrst_scalar) pgrst_call) SELECT $5::bigint AS total_result_set, $6 AS page_total, coalesce(json_agg(_postgrest_t.pgrst_scalar)->$7, $8) AS body, nullif(current_setting($9, $10), $11) AS response_headers, nullif(current_setting($12, $13), $14) AS response_status, $15 AS response_inserted FROM (SELECT \"marke"
+    },
+    {
+      "queryid": "-3947390214825386919",
+      "calls": 346,
+      "total_ms": "42001.95",
+      "mean_ms": "121.39",
+      "rows": 346,
+      "pattern": "WITH pgrst_source AS ( SELECT \"public\".\"courses\".\"id\", \"public\".\"courses\".\"name\" FROM \"public\".\"courses\" WHERE  \"public\".\"courses\".\"organization_id\" = $1 AND  \"public\".\"courses\".\"active\" = $2  ORDER BY \"public\".\"courses\".\"name\" ASC  LIMIT $3 OFFSET $4 )  SELECT $5::bigint AS total_result_set, pg_catalog.count(_postgrest_t) AS page_total, coalesce(json_agg(_postgrest_t), $6) AS body, nullif(current_setting($7, $8), $9) AS response_headers, nullif(current_setting($10, $11), $12) AS response_status, $13 AS response_inserted FROM ( SELECT * FROM pgrst_source ) _postgrest_t"
+    },
+    {
+      "queryid": "1084355959367651898",
+      "calls": 117,
+      "total_ms": "37758.50",
+      "mean_ms": "322.72",
+      "rows": 117,
+      "pattern": "WITH pgrst_source AS ( SELECT \"public\".\"course_batches\".\"start_date\", \"public\".\"course_batches\".\"location\", \"public\".\"course_batches\".\"mode\", \"public\".\"course_batches\".\"currency\", \"public\".\"course_batches\".\"price_shared\", \"public\".\"course_batches\".\"price_course_only\", \"public\".\"course_batches\".\"price_private\", \"public\".\"course_batches\".\"metadata\" FROM \"public\".\"course_batches\" WHERE  \"public\".\"course_batches\".\"organization_id\" = $1 AND  \"public\".\"course_batches\".\"course_id\" = $2 AND  \"public\".\"course_batches\".\"active\" = $3 AND  \"public\".\"course_batches\".\"start_date\" >= $4  ORDER BY \"public\".\"course_batches\".\"start_date\" ASC  LIMIT $5 OFFSET $"
+    },
+    {
+      "queryid": "-2305326850370930313",
+      "calls": 50947,
+      "total_ms": "36618.86",
+      "mean_ms": "0.72",
+      "rows": 50947,
+      "pattern": "WITH pgrst_source AS (SELECT pgrst_call.pgrst_scalar FROM (SELECT $1 AS json_data) pgrst_payload, LATERAL (SELECT \"p_organization_id\", \"p_operation\" FROM json_to_record(pgrst_payload.json_data) AS _(\"p_organization_id\" uuid, \"p_operation\" text) LIMIT $4) pgrst_body , LATERAL (SELECT \"public\".\"signup_advanced_operation_allowed_v1\"(\"p_organization_id\" := pgrst_body.\"p_organization_id\", \"p_operation\" := pgrst_body.\"p_operation\") pgrst_scalar) pgrst_call) SELECT $5::bigint AS total_result_set, $6 AS page_total, coalesce(json_agg(_postgrest_t.pgrst_scalar)->$7, $8) AS body, nullif(current_setting($9, $10), $11) AS response_headers, nullif(current_"
+    },
+    {
+      "queryid": "1271049490459914415",
+      "calls": 421,
+      "total_ms": "32975.47",
+      "mean_ms": "78.33",
+      "rows": 421,
+      "pattern": "WITH pgrst_source AS (SELECT pgrst_call.pgrst_scalar FROM (SELECT $1 AS json_data) pgrst_payload, LATERAL (SELECT \"p_selected_lead_id\", \"p_limit\" FROM json_to_record(pgrst_payload.json_data) AS _(\"p_selected_lead_id\" uuid, \"p_limit\" integer) LIMIT $4) pgrst_body , LATERAL (SELECT \"public\".\"get_current_conversations_workspace_v1\"(\"p_selected_lead_id\" := pgrst_body.\"p_selected_lead_id\", \"p_limit\" := pgrst_body.\"p_limit\") pgrst_scalar) pgrst_call) SELECT $5::bigint AS total_result_set, $6 AS page_total, coalesce(json_agg(_postgrest_t.pgrst_scalar)->$7, $8) AS body, nullif(current_setting($9, $10), $11) AS response_headers, nullif(current_setting"
+    },
+    {
+      "queryid": "-5575813081377235762",
+      "calls": 117,
+      "total_ms": "30677.31",
+      "mean_ms": "262.20",
+      "rows": 117,
+      "pattern": "WITH pgrst_source AS ( SELECT \"public\".\"course_batches\".\"start_date\", \"public\".\"course_batches\".\"location\", \"public\".\"course_batches\".\"mode\", \"public\".\"course_batches\".\"currency\", \"public\".\"course_batches\".\"price_shared\", \"public\".\"course_batches\".\"price_course_only\" FROM \"public\".\"course_batches\" WHERE  \"public\".\"course_batches\".\"organization_id\" = $1 AND  \"public\".\"course_batches\".\"course_id\" = $2 AND  \"public\".\"course_batches\".\"active\" = $3 AND  \"public\".\"course_batches\".\"start_date\" >= $4  ORDER BY \"public\".\"course_batches\".\"start_date\" ASC  LIMIT $5 OFFSET $6 )  SELECT $7::bigint AS total_result_set, pg_catalog.count(_postgrest_t) AS pag"
+    },
+    {
+      "queryid": "9160340087322578345",
+      "calls": 2584,
+      "total_ms": "30128.86",
+      "mean_ms": "11.66",
+      "rows": 2584,
+      "pattern": "select public.sweep_tracking_events_v1($1)"
+    },
+    {
+      "queryid": "-5684153000741298505",
+      "calls": 517,
+      "total_ms": "28250.59",
+      "mean_ms": "54.64",
+      "rows": 517,
+      "pattern": "select public.project_instagram_ad_referrals_v1(now() - interval $1)"
+    },
+    {
+      "queryid": "-7708570082125139592",
+      "calls": 2584,
+      "total_ms": "24719.48",
+      "mean_ms": "9.57",
+      "rows": 2584,
+      "pattern": "select public.retry_instagram_dm_events_v1($1)"
+    },
+    {
+      "queryid": "3457156104458264619",
+      "calls": 16191,
+      "total_ms": "22010.29",
+      "mean_ms": "1.36",
+      "rows": 16191,
+      "pattern": "WITH pgrst_source AS (SELECT pgrst_call.pgrst_scalar FROM (SELECT $1 AS json_data) pgrst_payload, LATERAL (SELECT \"p_organization_id\", \"p_source_system\", \"p_source_event_id\", \"p_source_event_type\", \"p_ingestion_method\", \"p_occurred_at\", \"p_source_account_id\", \"p_source_subject_id\", \"p_anonymous_visitor_id\", \"p_session_key\", \"p_external_message_id\", \"p_site\", \"p_payload\", \"p_context\", \"p_metadata\", \"p_schema_version\" FROM json_to_record(pgrst_payload.json_data) AS _(\"p_organization_id\" uuid, \"p_source_system\" text, \"p_source_event_id\" text, \"p_source_event_type\" text, \"p_ingestion_method\" text, \"p_occurred_at\" timestamp with time zone, \"p_sour"
+    },
+    {
+      "queryid": "6176613441563731670",
+      "calls": 428,
+      "total_ms": "20002.75",
+      "mean_ms": "46.74",
+      "rows": 428,
+      "pattern": "WITH pgrst_source AS ( SELECT \"public\".\"messages\".\"id\", \"public\".\"messages\".\"direction\", \"public\".\"messages\".\"sender_type\", \"public\".\"messages\".\"body\", \"public\".\"messages\".\"created_at\", row_to_json(\"messages_conversations_1\".*)::jsonb AS \"conversations\" FROM \"public\".\"messages\" LEFT JOIN LATERAL ( SELECT \"conversations_1\".\"channel\" FROM \"public\".\"conversations\" AS \"conversations_1\" WHERE \"conversations_1\".\"id\" = \"public\".\"messages\".\"conversation_id\"   LIMIT $1 OFFSET $2 ) AS \"messages_conversations_1\" ON $6 WHERE  \"public\".\"messages\".\"lead_id\" = $3  ORDER BY \"public\".\"messages\".\"created_at\" DESC  LIMIT $4 OFFSET $5 )  SELECT $7::bigint AS tot"
+    },
+    {
+      "queryid": "-2260819102677041049",
+      "calls": 2349,
+      "total_ms": "19457.20",
+      "mean_ms": "8.28",
+      "rows": 2349,
+      "pattern": "WITH pgrst_source AS ( SELECT \"public\".\"ai_autopilot_leads\".\"lead_id\", \"public\".\"ai_autopilot_leads\".\"handover_reason\", \"public\".\"ai_autopilot_leads\".\"handed_over_at\", row_to_json(\"ai_autopilot_leads_leads_1\".*)::jsonb AS \"leads\" FROM \"public\".\"ai_autopilot_leads\" LEFT JOIN LATERAL ( SELECT \"leads_1\".\"display_name\" FROM \"public\".\"leads\" AS \"leads_1\" WHERE \"leads_1\".\"id\" = \"public\".\"ai_autopilot_leads\".\"lead_id\"   LIMIT $1 OFFSET $2 ) AS \"ai_autopilot_leads_leads_1\" ON $6 WHERE  \"public\".\"ai_autopilot_leads\".\"status\" = $3 AND  \"public\".\"ai_autopilot_leads\".\"acknowledged_at\" IS NULL  ORDER BY \"public\".\"ai_autopilot_leads\".\"handed_over_at\" DESC "
+    },
+    {
+      "queryid": "-1888157792407305320",
+      "calls": 36317,
+      "total_ms": "15824.93",
+      "mean_ms": "0.44",
+      "rows": 36317,
+      "pattern": "WITH pgrst_source AS (INSERT INTO \"public\".\"seo_pages\"(\"last_seen_at\", \"normalized_url\", \"organization_id\", \"site_id\", \"url_path\") SELECT \"pgrst_body\".\"last_seen_at\", \"pgrst_body\".\"normalized_url\", \"pgrst_body\".\"organization_id\", \"pgrst_body\".\"site_id\", \"pgrst_body\".\"url_path\" FROM (SELECT $1 AS json_data) pgrst_payload, LATERAL (SELECT \"last_seen_at\", \"normalized_url\", \"organization_id\", \"site_id\", \"url_path\" FROM json_to_record(pgrst_payload.json_data) AS _(\"last_seen_at\" timestamp with time zone, \"normalized_url\" text, \"organization_id\" uuid, \"site_id\" uuid, \"url_path\" text) ) pgrst_body WHERE set_config($2, (coalesce(nullif(current_settin"
+    }
+  ]
+}

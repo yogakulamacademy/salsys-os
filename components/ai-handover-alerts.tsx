@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Bot } from "lucide-react";
+import { startVisiblePolling } from '@/lib/visible-polling';
 
 type Alert = { leadId: string; name: string; reason: string; at: string | null };
 
@@ -19,9 +20,8 @@ export function useAiHandoverAlerts(active: boolean) {
         if (alive && Array.isArray(data.alerts)) setAlerts(data.alerts.slice(0, 20));
       } catch { /* keep the last list */ }
     };
-    void load();
-    const timer = setInterval(load, 60_000);
-    return () => { alive = false; clearInterval(timer); };
+    const stop = startVisiblePolling(load, 60_000);
+    return () => { alive = false; stop(); };
   }, [active]);
   return alerts;
 }

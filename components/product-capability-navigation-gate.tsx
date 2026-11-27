@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
+import { useWorkspaceRequest } from '@/components/workspace-request-provider';
 
 type WorkspaceCapabilityPayload = {
   capabilities?: unknown;
@@ -14,6 +15,7 @@ export function ProductCapabilityNavigationGate({
 }) {
   const mock = process.env.NEXT_PUBLIC_USE_MOCK_DATA !== "false";
   const [educationEnabled, setEducationEnabled] = useState(mock);
+  const requestWorkspace = useWorkspaceRequest();
 
   useEffect(() => {
     if (mock) {
@@ -25,7 +27,7 @@ export function ProductCapabilityNavigationGate({
 
     async function loadCapabilities() {
       try {
-        const response = await fetch("/api/workspace", { cache: "no-store" });
+        const response = await requestWorkspace();
         if (!response.ok) throw new Error("Unable to load workspace capabilities.");
 
         const payload = (await response.json()) as WorkspaceCapabilityPayload;
@@ -49,7 +51,7 @@ export function ProductCapabilityNavigationGate({
     return () => {
       cancelled = true;
     };
-  }, [mock]);
+  }, [mock, requestWorkspace]);
 
   return (
     <div

@@ -1,6 +1,7 @@
 'use client';
 import { toast } from '@/lib/toast';
 import { useFeedbackMessages } from '@/components/use-feedback-messages';
+import { startVisiblePolling } from '@/lib/visible-polling';
 
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
@@ -36,7 +37,6 @@ export function useWhatsAppHandoffAlerts(active: boolean) {
       return;
     }
     let mounted = true;
-    let interval: ReturnType<typeof setInterval> | null = null;
     const refresh = async () => {
       try {
         const response = await fetch('/api/whatsapp/handoff-alerts', {
@@ -69,12 +69,10 @@ export function useWhatsAppHandoffAlerts(active: boolean) {
         return true;
       }
     };
-    void refresh().then((enabled) => {
-      if (mounted && enabled) interval = setInterval(() => { void refresh(); }, 25_000);
-    });
+    const stop = startVisiblePolling(refresh, 25_000);
     return () => {
       mounted = false;
-      if (interval) clearInterval(interval);
+      stop();
     };
   }, [active]);
 
