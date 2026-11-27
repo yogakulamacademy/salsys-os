@@ -52,6 +52,15 @@ test('feedback never bypasses protected-page authentication', async () => {
   assert.equal(response.headers.has('x-middleware-rewrite'), false);
 });
 
+test('legacy descriptive error keys reach existing page error props', async () => {
+  for (const key of ['error_description', 'error_message']) {
+    const name = core.errorCookieName('/login', secure);
+    const cookie = core.encodeErrorFeedback('/login', [[key, 'Please request a new link.']]);
+    const response = await withScreenOnlyErrors(req('/login', {headers:{cookie:`${name}=${cookie}`}}), run);
+    assert.equal(new URL(response.headers.get('x-middleware-rewrite')).searchParams.get('error'), 'Please request a new link.');
+  }
+});
+
 test('middleware auth errors also get clean redirects without losing auth cookies', async () => {
   const response = await withScreenOnlyErrors(req('/revenue'), async () => { const r = NextResponse.redirect(origin + '/login?error=Session+expired'); r.cookies.set('auth-test', '', { maxAge: 0 }); return r; });
   assert.equal(response.headers.get('Location'), '/login');

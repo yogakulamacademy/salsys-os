@@ -48,6 +48,10 @@ export async function withScreenOnlyErrors(request: NextRequest, run: (request: 
   if (feedback && response.headers.get('x-middleware-next') === '1') {
     const internal = request.nextUrl.clone();
     for (const [key, value] of feedback.entries) internal.searchParams.append(key, value);
+    if (!internal.searchParams.get('error')) {
+      const detail = internal.searchParams.get('error_description') || internal.searchParams.get('error_message');
+      if (detail) internal.searchParams.set('error', detail);
+    }
     const headers = new Headers(response.headers);
     headers.delete('x-middleware-next');
     // The browser keeps the clean URL. Existing server pages still receive their error props.
