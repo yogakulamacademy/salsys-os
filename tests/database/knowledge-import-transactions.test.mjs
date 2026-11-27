@@ -450,6 +450,48 @@ test('disposable PG: exact Knowledge RPC, competing claims, rollback, retry, rev
     assert.equal((await a.query("select count(*)::int as n from knowledge_documents where metadata->>'import_job_id'=$1 and status='draft'",[integrationJob])).rows[0].n,3);
     assert.equal((await a.query('select count(*)::int as n from knowledge_import_entries_v1 where job_id=$1',[integrationJob])).rows[0].n,5);
     await a.query('update knowledge_import_review.quotas set max_reserved_bytes=10485760 where organization_id=$1',[org]);
+
+    // Real PostgreSQL durable chunk stage: 1 MiB + tail, retry, takeover, fencing.
+    await a.query(readFileSync('docs/sql/knowledge-import-gateway-staging-REVIEW-DRAFT.sql','utf8'));
+    const chunkJob=randomUUID(), chunkToken=randomUUID(), secondToken=randomUUID();
+    const firstChunk=Buffer.alloc(1048576,32), tail=Buffer.from('synthetic tail'), chunkBytes=firstChunk.length+tail.length;
+    await reserve(a,chunkJob,chunkBytes,uploadEnd,retentionEnd);
+    const acquire=(conn,j=chunkJob,token=chunkToken,o=org)=>conn.query('select * from knowledge_import_review.gateway_acquire($1,$2,$3)',[o,j,token]);
+    const append=(conn,j,token,g,offset,bytes)=>conn.query('select knowledge_import_review.gateway_append($1,$2,$3,$4,$5,$6) as n',[org,j,token,g,offset,bytes]);
+    const beginPub=(conn,j,token,g)=>conn.query('select knowledge_import_review.gateway_begin_publication($1,$2,$3,$4) as bytes',[org,j,token,g]);
+    await assert.rejects(acquire(worker),e=>e.code==='42501');
+    await assert.rejects(acquire(a,chunkJob,chunkToken,other),e=>e.code==='42501');
+    const firstWriter=(await acquire(a)).rows[0];
+    assert.equal(firstWriter.generation,'1');assert.equal(firstWriter.received_bytes,'0');
+    await assert.rejects(acquire(b,chunkJob,secondToken),/writer busy/);
+    await assert.rejects(append(a,chunkJob,chunkToken,1,1048576,tail),/offset mismatch/);
+    await assert.rejects(append(a,chunkJob,chunkToken,1,0,tail),/invalid gateway chunk/);
+    assert.equal((await append(a,chunkJob,chunkToken,1,0,firstChunk)).rows[0].n,'1048576');
+    assert.equal((await append(b,chunkJob,chunkToken,1,0,firstChunk)).rows[0].n,'1048576');
+    await assert.rejects(append(b,chunkJob,chunkToken,1,0,Buffer.alloc(1048576,33)),/chunk conflict/);
+    assert.equal((await acquire(b)).rows[0].received_bytes,'1048576');
+    await assert.rejects(beginPub(a,chunkJob,chunkToken,1),/source incomplete/);
+    await a.query("update knowledge_import_review.gateway_uploads set writer_until=now()-interval '1 second' where job_id=$1",[chunkJob]);
+    const takeover=(await acquire(b,chunkJob,secondToken)).rows[0];assert.equal(takeover.generation,'2');assert.equal(takeover.received_bytes,'1048576');
+    await assert.rejects(append(a,chunkJob,chunkToken,1,1048576,tail),/stale gateway writer/);
+    assert.equal((await append(b,chunkJob,secondToken,2,1048576,tail)).rows[0].n,String(chunkBytes));
+    assert.deepEqual((await beginPub(b,chunkJob,secondToken,2)).rows[0].bytes,Buffer.concat([firstChunk,tail]));
+    await assert.rejects(beginPub(a,chunkJob,secondToken,2),/stale gateway writer/);
+    await assert.rejects(acquire(a,chunkJob,secondToken),/publication already started/);
+    assert.equal((await a.query('select knowledge_import_review.cancel($1,$2) as ok',[org,chunkJob])).rows[0].ok,true);
+    await assert.rejects(a.query('select knowledge_import_review.gateway_register($1,$2,$3,$4,$5,$6,$7,$8::jsonb)',[org,chunkJob,secondToken,2,'fixture',chunkBytes,createHash('sha256').update(Buffer.concat([firstChunk,tail])).digest('hex'),JSON.stringify(manifest)]),/stale gateway writer/);
+    assert.equal((await a.query('select status from knowledge_import_jobs_v1 where id=$1',[chunkJob])).rows[0].status,'cancelled');
+    const publishJob=randomUUID(), publishToken=randomUUID();
+    await reserve(a,publishJob,raw.length,uploadEnd,retentionEnd);
+    await acquire(a,publishJob,publishToken);
+    await append(a,publishJob,publishToken,1,0,raw);
+    assert.deepEqual((await beginPub(a,publishJob,publishToken,1)).rows[0].bytes,raw);
+    const stagedRegister=(sha)=>a.query('select knowledge_import_review.gateway_register($1,$2,$3,$4,$5,$6,$7,$8::jsonb) as status',[org,publishJob,publishToken,1,version,raw.length,sha,JSON.stringify(p.manifest)]);
+    await assert.rejects(stagedRegister('f'.repeat(64)),/gateway source mismatch/);
+    assert.equal((await stagedRegister(sourceHash)).rows[0].status,'queued');
+    assert.equal((await a.query('select count(*)::int as n from knowledge_import_review.gateway_chunks where job_id=$1',[publishJob])).rows[0].n,0);
+    assert.equal((await a.query('select phase from knowledge_import_review.gateway_uploads where job_id=$1',[publishJob])).rows[0].phase,'registered');
+    await assert.rejects(worker.query('select * from knowledge_import_review.gateway_chunks'),e=>e.code==='42501');
     const retryJob=await seedJob(1);
     for(let attempt=1;attempt<=5;attempt++){
       const c=await claimJob(a,retryJob);assert.equal(c.attempts,attempt);

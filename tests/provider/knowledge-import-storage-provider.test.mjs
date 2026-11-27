@@ -125,7 +125,7 @@ test('actual disposable Supabase Storage authorization and lifecycle',{timeout:2
     });
     await t.test('cancellation before final chunk prevents publication',async()=>{
       const j=await createJob(),u=location(await start(j));
-      await db.query('select knowledge_import_review.cancel($1,$2)',[org,j.id]);
+      assert.equal((await db.query('select knowledge_import_review.cancel($1,$2) as ok',[org,j.id])).rows[0].ok,true);
       const final=await patch(u,bytes),present=Boolean(await read(j));
       t.diagnostic(JSON.stringify({directCancelledPatch:final.status,objectPresent:present}));
       denied(final);assert.equal(present,false);
@@ -142,7 +142,7 @@ test('actual disposable Supabase Storage authorization and lifecycle',{timeout:2
     });
     await t.test('cancelled abandoned upload cannot be completed after cleanup attempt',async()=>{
       const j=await createJob(),u=location(await start(j));
-      await db.query('select knowledge_import_review.cancel($1,$2)',[org,j.id]);
+      assert.equal((await db.query('select knowledge_import_review.cancel($1,$2) as ok',[org,j.id])).rows[0].ok,true);
       const deletion=await request('DELETE',u,owner);
       assert.ok([200,204,400,401,403,404,405,410].includes(deletion.status),'unexpected abort response');
       denied(await patch(u,bytes));assert.equal(await read(j),null);
@@ -151,11 +151,12 @@ test('actual disposable Supabase Storage authorization and lifecycle',{timeout:2
 
     // Direct TUS stays a failing acceptance probe. Test the alternative gateway independently.
     await db.query(readFileSync('docs/sql/knowledge-import-gateway-only-REVIEW-DRAFT.sql','utf8'));
+    await db.query(readFileSync('docs/sql/knowledge-import-gateway-staging-REVIEW-DRAFT.sql','utf8'));
     const require=createRequire(import.meta.url),{load}=require('../readiness/helpers.cjs');
     const upload=load('lib/knowledge-import-upload-contract.ts');
     const prep=load('lib/knowledge-import-source-preparation.ts',{'server-only':{},'node:crypto':require('node:crypto'),'./knowledge-bulk-import-preflight':load('lib/knowledge-bulk-import-preflight.ts'),'./knowledge-import-upload-contract':upload});
     const gateway=load('lib/knowledge-import-gateway-review.ts',{'server-only':{},'node:crypto':require('node:crypto'),'./knowledge-import-source-preparation':prep,'./knowledge-import-upload-contract':upload});
-    const makeAdapter=(job,afterPut=async()=>{})=>({
+    const makeAdapter=(job,afterPut=async()=>{},writer=null)=>({
       async reservation(scope){
         const result=await db.query("select j.organization_id,j.id,j.requested_by,j.request_session_id,j.object_path,j.declared_bytes,j.upload_expires_at,j.status from knowledge_import_review.lock_job($1,$2) j",[scope.organizationId,scope.jobId]);
         const j=result.rows[0];if(j.status!=='awaiting_upload')throw Error('not awaiting upload');
@@ -172,7 +173,7 @@ test('actual disposable Supabase Storage authorization and lifecycle',{timeout:2
         return {version:result.rows[0].version,bytes:saved};
       },
       async digests(payloads){return (await db.query('select * from knowledge_import_review.digest_payloads($1::jsonb)',[JSON.stringify(payloads)])).rows.map(r=>r.payload_sha256);},
-      async register(scope,p){return (await db.query('select knowledge_import_review.register_verified_source($1,$2,$3,$4,$5,$6::jsonb) as status',[scope.organizationId,scope.jobId,p.objectVersion,p.byteLength,p.sha256,JSON.stringify(p.manifest)])).rows[0].status;}
+      async register(scope,p){return writer?(await db.query('select knowledge_import_review.gateway_register($1,$2,$3,$4,$5,$6,$7,$8::jsonb) as status',[scope.organizationId,scope.jobId,writer,1,p.objectVersion,p.byteLength,p.sha256,JSON.stringify(p.manifest)])).rows[0].status:(await db.query('select knowledge_import_review.register_verified_source($1,$2,$3,$4,$5,$6::jsonb) as status',[scope.organizationId,scope.jobId,p.objectVersion,p.byteLength,p.sha256,JSON.stringify(p.manifest)])).rows[0].status;}
     });
     await t.test('gateway-only policy denies new direct TUS and ordinary client upload',async()=>{
       const j=await createJob();denied(await start(j));denied(await start(j,outsider));
@@ -181,7 +182,12 @@ test('actual disposable Supabase Storage authorization and lifecycle',{timeout:2
     });
     await t.test('server-mediated create-only publication verifies bytes and registers exact provider version',async()=>{
       const j=await createJob(),scope={organizationId:org,jobId:j.id};
-      const result=await gateway.publishKnowledgeGatewayReview(scope,bytes,makeAdapter(j),Date.now);
+      const writer=randomUUID();
+      await db.query('select * from knowledge_import_review.gateway_acquire($1,$2,$3)',[org,j.id,writer]);
+      const chunk=()=>db.query('select knowledge_import_review.gateway_append($1,$2,$3,$4,$5,$6) as n',[org,j.id,writer,1,0,bytes]);
+      assert.equal((await chunk()).rows[0].n,String(bytes.length));assert.equal((await chunk()).rows[0].n,String(bytes.length));
+      const staged=(await db.query('select knowledge_import_review.gateway_begin_publication($1,$2,$3,$4) as bytes',[org,j.id,writer,1])).rows[0].bytes;
+      const result=await gateway.publishKnowledgeGatewayReview(scope,staged,makeAdapter(j,async()=>{},writer),Date.now);
       assert.deepEqual(result,{state:'registered',status:'queued'});
       const saved=await read(j);assert.ok(saved);assert.equal(digest(saved),digest(bytes));
       const row=(await db.query('select object_version,sha256,status from knowledge_import_jobs_v1 where id=$1',[j.id])).rows[0];
@@ -193,7 +199,7 @@ test('actual disposable Supabase Storage authorization and lifecycle',{timeout:2
     await t.test('cancel after provider write prevents manifest publication and preserves quota',async()=>{
       const j=await createJob(),scope={organizationId:org,jobId:j.id};
       const result=await gateway.publishKnowledgeGatewayReview(scope,bytes,makeAdapter(j,async()=>{
-        await db.query('select knowledge_import_review.cancel($1,$2)',[org,j.id]);
+        assert.equal((await db.query('select knowledge_import_review.cancel($1,$2) as ok',[org,j.id])).rows[0].ok,true);
       }),Date.now);
       assert.equal(result.state,'reconciliation_required');
       const row=(await db.query('select status,manifest_sha256,storage_released_at from knowledge_import_jobs_v1 where id=$1',[j.id])).rows[0];

@@ -90,7 +90,7 @@ returns boolean language plpgsql security invoker set search_path=pg_catalog,pub
 declare j public.knowledge_import_jobs_v1%rowtype;
 begin
   j:=knowledge_import_review.lock_job(p_org,p_job);
-  if j.status not in ('queued','processing') then return false; end if;
+  if j.status not in ('awaiting_upload','queued','processing') then return false; end if;
   update public.knowledge_import_entries_v1 set status='cancelled',lease_token=null,lease_expires_at=null,claimed_by_worker=null
     where organization_id=p_org and job_id=p_job and status in ('pending','leased');
   update public.knowledge_import_jobs_v1 set status='cancelled' where organization_id=p_org and id=p_job;
