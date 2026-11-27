@@ -92,7 +92,7 @@ begin
 end $$;
 -- Failure settlement requires the live claim, not a caller-supplied retry time.
 create function knowledge_import_review.settle_failure(p_org uuid,p_job uuid,p_index integer,p_token uuid,p_attempt integer,p_error_code text)
-returns text language plpgsql security invoker set search_path=pg_catalog,public,pg_temp as $
+returns text language plpgsql security invoker set search_path=pg_catalog,public,pg_temp as $$
 declare j public.knowledge_import_jobs_v1%rowtype; e public.knowledge_import_entries_v1%rowtype; t timestamptz; next_status text;
 begin
   j:=knowledge_import_review.lock_job(p_org,p_job); t:=clock_timestamp();
@@ -110,10 +110,10 @@ begin
     error_code=p_error_code where organization_id=p_org and job_id=p_job and entry_index=p_index;
   perform knowledge_import_review.rollup(p_org,p_job);
   return next_status;
-end $;
+end $$;
 -- Metadata expiry only. This is not object deletion or a background sweeper.
 create function knowledge_import_review.expire(p_org uuid,p_job uuid)
-returns boolean language plpgsql security invoker set search_path=pg_catalog,public,pg_temp as $
+returns boolean language plpgsql security invoker set search_path=pg_catalog,public,pg_temp as $$
 declare j public.knowledge_import_jobs_v1%rowtype; t timestamptz;
 begin
   j:=knowledge_import_review.lock_job(p_org,p_job); t:=clock_timestamp();
@@ -123,6 +123,88 @@ begin
     where organization_id=p_org and job_id=p_job and status in ('pending','leased');
   update public.knowledge_import_jobs_v1 set status='expired' where organization_id=p_org and id=p_job;
   return true;
-end $;
+end $$;
+-- Explicit tenant resource configuration; no default commercial entitlement.
+create table knowledge_import_review.quotas (
+  organization_id uuid primary key references public.organizations(id),
+  max_active_jobs integer not null check (max_active_jobs between 1 and 100),
+  max_reserved_bytes bigint not null check (max_reserved_bytes between 1 and 5368709120)
+);
+alter table knowledge_import_review.quotas enable row level security;
+revoke all on knowledge_import_review.quotas from public,anon,authenticated,service_role;
+alter table public.knowledge_import_jobs_v1 add column manifest_sha256 text check (manifest_sha256 ~ '^[0-9a-f]{64}$');
+-- Owner-only review reservation. Session identity comes from the server-owned Auth context.
+-- Expiry inputs require a separately approved policy; no storage permission is issued.
+create function knowledge_import_review.reserve(p_org uuid,p_job uuid,p_bytes bigint,p_upload_until timestamptz,p_retain_until timestamptz)
+returns uuid language plpgsql security invoker set search_path=pg_catalog,public,auth,pg_temp as $$
+declare q knowledge_import_review.quotas%rowtype; j public.knowledge_import_jobs_v1%rowtype; v_actor uuid; v_session uuid; t timestamptz; n bigint; b numeric;
+begin
+  if auth.role() is distinct from 'authenticated' or auth.uid() is null or p_org is null or p_job is null then
+    raise exception 'import access denied' using errcode='42501'; end if;
+  v_actor:=auth.uid();
+  select s.id into v_session from auth.sessions s join public.tenant_session_bindings b on b.session_id=s.id and b.user_id=s.user_id
+    join public.organization_members m on m.user_id=s.user_id and m.organization_id=b.organization_id
+    join public.organizations o on o.id=m.organization_id
+    where s.id::text=auth.jwt()->>'session_id' and s.user_id=v_actor and b.organization_id=p_org
+      and m.active=true and m.role in ('owner','admin') and o.status='active' for share of s,b,m,o;
+  if not found then raise exception 'import access denied' using errcode='42501'; end if;
+  -- Serialize reservations on the quota row. Other transitions never acquire this lock.
+  select * into q from knowledge_import_review.quotas where organization_id=p_org for update;
+  if not found then raise exception 'import quota not configured'; end if;
+  t:=clock_timestamp();
+  if p_bytes is null or p_bytes not between 1 and 52428800 or p_upload_until is null or p_retain_until is null
+      or p_upload_until<=t or p_retain_until<p_upload_until then raise exception 'invalid reservation'; end if;
+  -- No job-row lock here: existing job transitions lock the job before authority rows.
+  select * into j from public.knowledge_import_jobs_v1 where id=p_job;
+  if found then
+    if j.organization_id=p_org and j.requested_by=v_actor and j.request_session_id=v_session
+        and j.declared_bytes=p_bytes and j.upload_expires_at=p_upload_until and j.retention_expires_at=p_retain_until then return j.id; end if;
+    raise exception 'reservation conflict';
+  end if;
+  select count(*) filter(where status in ('awaiting_upload','queued','processing')),coalesce(sum(declared_bytes),0) into n,b
+    from public.knowledge_import_jobs_v1 where organization_id=p_org;
+  -- Retained bytes count all jobs until separately authorized deletion/reconciliation.
+  if n>=q.max_active_jobs or b+p_bytes>q.max_reserved_bytes then raise exception 'import quota exceeded'; end if;
+  insert into public.knowledge_import_jobs_v1(id,organization_id,requested_by,request_session_id,object_path,declared_bytes,upload_expires_at,retention_expires_at,created_at)
+    values(p_job,p_org,v_actor,v_session,p_org::text||'/'||p_job::text||'/source.json',p_bytes,p_upload_until,p_retain_until,t);
+  return p_job;
+end $$;
+-- Trusted review caller must obtain the raw digest, byte count and manifest from verified immutable storage.
+-- This function checks the complete ledger partition; it does not independently inspect storage bytes.
+create function knowledge_import_review.enqueue(p_org uuid,p_job uuid,p_bytes bigint,p_sha text,p_manifest jsonb)
+returns text language plpgsql security invoker set search_path=pg_catalog,public,pg_temp as $$
+declare j public.knowledge_import_jobs_v1%rowtype; t timestamptz; n integer; h text; item jsonb; idx integer; st text; digest text; seen integer[]:='{}';
+begin
+  j:=knowledge_import_review.lock_job(p_org,p_job); t:=clock_timestamp();
+  if p_bytes is distinct from j.declared_bytes or p_sha is null or p_sha !~ '^[0-9a-f]{64}$'
+    or p_manifest is null or jsonb_typeof(p_manifest)<>'array' then raise exception 'invalid manifest'; end if;
+  n:=jsonb_array_length(p_manifest);
+  if n not between 1 and 10000 or octet_length(p_manifest::text)>2097152 then raise exception 'invalid manifest'; end if;
+  h:=encode(sha256(convert_to(p_manifest::text,'UTF8')),'hex');
+  if j.manifest_sha256 is not null then
+    if j.manifest_sha256=h and j.sha256=p_sha and j.verified_bytes=p_bytes and j.total_entries=n then return j.status; end if;
+    raise exception 'manifest conflict';
+  end if;
+  if j.status<>'awaiting_upload' or t>=j.upload_expires_at or t>=j.retention_expires_at then raise exception 'reservation unavailable'; end if;
+  if exists(select 1 from public.knowledge_import_entries_v1 where organization_id=p_org and job_id=p_job) then raise exception 'unexpected existing ledger'; end if;
+  -- Validate the whole manifest before any write; no client-controlled approval or payload.
+  for item in select value from jsonb_array_elements(p_manifest) loop
+    if jsonb_typeof(item)<>'object' then raise exception 'invalid manifest entry'; end if;
+    if exists(select 1 from jsonb_object_keys(item) k where k not in ('index','status','payload_sha256'))
+      or jsonb_typeof(item->'index') is distinct from 'number' or coalesce(item->>'index','') !~ '^(0|[1-9][0-9]{0,3})$'
+      or jsonb_typeof(item->'status') is distinct from 'string' then raise exception 'invalid manifest entry'; end if;
+    idx:=(item->>'index')::integer; st:=item->>'status'; digest:=item->>'payload_sha256';
+    if idx>=n or idx=any(seen) or st not in ('pending','invalid','duplicate') or
+      (st='pending' and (jsonb_typeof(item->'payload_sha256') is distinct from 'string' or digest is null or digest !~ '^[0-9a-f]{64}$')) or
+      (st<>'pending' and item ? 'payload_sha256') then raise exception 'invalid manifest entry'; end if;
+    seen:=array_append(seen,idx);
+  end loop;
+  insert into public.knowledge_import_entries_v1(organization_id,job_id,entry_index,status,payload_sha256,available_at)
+    select p_org,p_job,(v->>'index')::integer,v->>'status',v->>'payload_sha256',t from jsonb_array_elements(p_manifest) v;
+  update public.knowledge_import_jobs_v1 set verified_bytes=p_bytes,sha256=p_sha,manifest_sha256=h,total_entries=n,
+    status=case when exists(select 1 from public.knowledge_import_entries_v1 where organization_id=p_org and job_id=p_job and status='pending') then 'queued' else 'completed' end
+    where organization_id=p_org and id=p_job returning status into st;
+  return st;
+end $$;
 revoke all on all functions in schema knowledge_import_review from public,anon,authenticated,service_role;
 commit;

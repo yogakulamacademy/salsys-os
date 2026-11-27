@@ -64,6 +64,44 @@ test('disposable PG: exact Knowledge RPC, competing claims, rollback, retry, rev
     await assert.rejects(finalize(b,reclaimed),/stale claim/);
     assert.deepEqual((await a.query('select status,count(*)::int as n from knowledge_import_entries_v1 group by status order by status')).rows,[{status:'cancelled',n:2},{status:'created',n:1}]);
     assert.equal((await a.query('select count(*)::int as n from knowledge_approvals')).rows[0].n,0);
+    // Reservation and enqueue use the actual review functions, not seeded ledger rows.
+    const reserve=(db,j,bytes,upload,retain,o=org)=>db.query('select knowledge_import_review.reserve($1,$2,$3,$4,$5) as id',[o,j,bytes,upload,retain]);
+    const enqueue=(db,j,bytes,hash,manifest)=>db.query('select knowledge_import_review.enqueue($1,$2,$3,$4,$5::jsonb) as status',[org,j,bytes,hash,JSON.stringify(manifest)]);
+    const upload=new Date(Date.now()+3600000), retain=new Date(Date.now()+7200000), reserved=randomUUID();
+    await assert.rejects(reserve(a,reserved,100,upload,retain),/quota not configured/);
+    await a.query('insert into knowledge_import_review.quotas values($1,1,300)',[org]);
+    await assert.rejects(reserve(a,reserved,100,upload,retain,other),e=>e.code==='42501');
+    assert.equal((await reserve(a,reserved,100,upload,retain)).rows[0].id,reserved);
+    assert.equal((await reserve(b,reserved,100,upload,retain)).rows[0].id,reserved);
+    await assert.rejects(reserve(b,reserved,101,upload,retain),/reservation conflict/);
+    await assert.rejects(reserve(b,randomUUID(),1,upload,retain),/quota exceeded/);
+    const pd=(await a.query("select encode(sha256(convert_to(($1::jsonb)::text,'UTF8')),'hex') as h",[JSON.stringify(payload)])).rows[0].h;
+    const manifest=[{index:0,status:'pending',payload_sha256:pd},{index:1,status:'invalid'},{index:2,status:'duplicate'}];
+    await assert.rejects(enqueue(a,reserved,99,'b'.repeat(64),manifest),/invalid manifest/);
+    await assert.rejects(enqueue(a,reserved,100,'b'.repeat(64),[{...manifest[0],index:1},manifest[1]]),/invalid manifest entry/);
+    await assert.rejects(enqueue(a,reserved,100,'b'.repeat(64),[{...manifest[0],p_approve:true}]),/invalid manifest entry/);
+    assert.equal((await a.query('select count(*)::int as n from knowledge_import_entries_v1 where job_id=$1',[reserved])).rows[0].n,0);
+    // Actual insert failure must roll back the entire enqueue.
+    await a.query("create function fixture_enqueue_abort() returns trigger language plpgsql as $$ begin if new.entry_index=1 then raise exception 'fixture enqueue crash'; end if;return new;end $$; create trigger fixture_enqueue_abort before insert on knowledge_import_entries_v1 for each row execute function fixture_enqueue_abort()");
+    await assert.rejects(enqueue(a,reserved,100,'b'.repeat(64),manifest),/fixture enqueue crash/);
+    assert.equal((await a.query('select count(*)::int as n from knowledge_import_entries_v1 where job_id=$1',[reserved])).rows[0].n,0);
+    assert.equal((await a.query('select status from knowledge_import_jobs_v1 where id=$1',[reserved])).rows[0].status,'awaiting_upload');
+    await a.query('drop trigger fixture_enqueue_abort on knowledge_import_entries_v1');
+    const pair=await Promise.all([enqueue(a,reserved,100,'b'.repeat(64),manifest),enqueue(b,reserved,100,'b'.repeat(64),manifest)]);
+    assert.deepEqual(pair.map(x=>x.rows[0].status),['queued','queued']);
+    assert.equal((await a.query('select count(*)::int as n from knowledge_import_entries_v1 where job_id=$1',[reserved])).rows[0].n,3);
+    await assert.rejects(enqueue(b,reserved,100,'c'.repeat(64),manifest),/manifest conflict/);
+    assert.equal((await a.query('select knowledge_import_review.cancel($1,$2) as ok',[org,reserved])).rows[0].ok,true);
+    // Old terminal jobs still consume retained byte budget; one active slot available.
+    const contenders=await Promise.allSettled([reserve(a,randomUUID(),100,upload,retain),reserve(b,randomUUID(),100,upload,retain)]);
+    assert.equal(contenders.filter(x=>x.status==='fulfilled').length,1);
+    assert.match(contenders.find(x=>x.status==='rejected').reason.message,/quota exceeded/);
+    assert.equal((await a.query("select sum(declared_bytes)::int as n from knowledge_import_jobs_v1 where organization_id=$1",[org])).rows[0].n,300);
+    // A reserved-but-not-uploaded job can expire, yet bytes are not silently released.
+    await a.query("update knowledge_import_jobs_v1 set created_at=now()-interval '3 hours',upload_expires_at=now()-interval '2 hours',retention_expires_at=now()-interval '1 hour' where organization_id=$1 and status='awaiting_upload'",[org]);
+    const expJob=(await a.query("select id from knowledge_import_jobs_v1 where organization_id=$1 and status='awaiting_upload'",[org])).rows[0].id;
+    assert.equal((await a.query('select knowledge_import_review.expire($1,$2) as ok',[org,expJob])).rows[0].ok,true);
+    await assert.rejects(reserve(b,randomUUID(),1,upload,retain),/quota exceeded/);
     // Independent jobs: database-owned backoff, permanent failure and expiry.
     const seedJob=async(n)=>{
       const j=randomUUID();
