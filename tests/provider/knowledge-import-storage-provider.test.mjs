@@ -384,7 +384,7 @@ test('actual disposable Supabase Storage authorization and lifecycle',{timeout:6
       assert.equal((await db.query('select storage_released_at from knowledge_import_jobs_v1 where id=$1',[j.id])).rows[0].storage_released_at,null);
       assert.ok(await read(j));
     });
-    await t.test('50 MiB transport and 10000 actual ledger entries (not full draft throughput)',async()=>{
+    await t.test('50 MiB transport, 10000 ledger entries and 10000 actual restricted-worker draft writes',async()=>{
       const start=Date.now(),max=50*1024*1024;
       const json=JSON.stringify({version:1,drafts:Array.from({length:10000},(_,i)=>({title:'Capacity fixture '+i,content:'x'.repeat(5100),source_name:'Synthetic fixture'}))});
       assert.ok(Buffer.byteLength(json)<=max);const raw=Buffer.alloc(max,32);raw.write(json,0,'utf8');
@@ -402,7 +402,66 @@ test('actual disposable Supabase Storage authorization and lifecycle',{timeout:6
       const ledger=(await db.query("select count(*)::int as total,count(*) filter(where status='pending')::int as pending from knowledge_import_entries_v1 where organization_id=$1 and job_id=$2",[org,j.id])).rows[0];
       assert.deepEqual(ledger,{total:10000,pending:10000});
       assert.equal((await db.query('select count(*)::int as n from knowledge_import_review.gateway_chunks where job_id=$1',[j.id])).rows[0].n,0);
-      t.diagnostic(JSON.stringify({bytes:max,ledgerEntries:10000,elapsedMs:Date.now()-start,maxRssKiB:process.resourceUsage().maxRSS,scope:'actual local chunk staging, Storage publication and ledger registration; no 10k draft writes'}));
+      t.diagnostic(JSON.stringify({bytes:max,ledgerEntries:10000,elapsedMs:Date.now()-start,maxRssKiB:process.resourceUsage().maxRSS,scope:'actual local chunk staging, Storage publication and ledger registration'}));
+      const workerStart=Date.now(),login='kb_capacity_'+randomUUID().replaceAll('-',''),password=randomUUID().replaceAll('-','');
+      await db.query("create role "+login+" login password '"+password+"' nosuperuser nocreatedb nocreaterole noreplication nobypassrls noinherit");
+      await db.query('insert into knowledge_import_review.worker_principals values($1,true)',[login]);
+      await db.query('grant usage on schema knowledge_import_review to '+login);
+      await db.query('grant execute on function knowledge_import_review.worker_due_jobs(integer),knowledge_import_review.worker_source_identity(uuid,uuid),knowledge_import_review.worker_verify_manifest(uuid,uuid,text,bigint,text,jsonb),knowledge_import_review.worker_digest_payloads(uuid,uuid,jsonb),knowledge_import_review.worker_claim(uuid,uuid,integer),knowledge_import_review.worker_finalize(uuid,uuid,integer,uuid,integer,jsonb),knowledge_import_review.worker_result(uuid,uuid,integer,uuid,integer),knowledge_import_review.worker_settle_failure(uuid,uuid,integer,uuid,integer,text) to '+login);
+      const workerUrl=new URL(dbUrl.href);workerUrl.username=login;workerUrl.password=password;
+      const worker=new pg.Client({connectionString:workerUrl.href,connectionTimeoutMillis:5000});await worker.connect();
+      try{
+        await worker.query("set statement_timeout='15s'");
+        const query=(sql,params)=>worker.query(sql,params);
+        assert.equal((await query('select * from knowledge_import_review.worker_due_jobs($1)',[1])).rowCount,0);
+        await assert.rejects(query('select * from public.knowledge_documents',[]),e=>e.code==='42501');
+        assert.equal((await db.query('select knowledge_import_review.delegate_worker($1,$2,$3,$4) as ok',[org,j.id,login,new Date(Date.now()+840000)])).rows[0].ok,true);
+        const adapters=load('lib/knowledge-import-worker-adapters-review.ts',{'server-only':{},'./knowledge-import-source-preparation':prep,'./knowledge-import-upload-contract':upload});
+        const runner=load('lib/knowledge-import-worker-review.ts',{'server-only':{}});
+        const scheduler=load('lib/knowledge-import-scheduler-review.ts',{'server-only':{},'./knowledge-import-worker-review':runner});
+        const v=async()=> (await db.query('select version from storage.objects where bucket_id=$1 and name=$2',[bucket,j.path])).rows[0]?.version;
+        let sourceReads=0;
+        const actual=adapters.createKnowledgeWorkerSourceAdaptersReview(query,async(requested,identity)=>{
+          assert.deepEqual(requested,scope);assert.equal(identity.objectPath,j.path);assert.equal(await v(),identity.objectVersion);
+          const signed=await admin.storage.from(bucket).createSignedUrl(j.path,30);
+          assert.equal(Boolean(signed.error),false);const url=fixtureApiUrl(signed.data.signedUrl);
+          assert.equal(url.pathname,'/storage/v1/object/sign/'+bucket+'/'+j.path);assert.deepEqual([...url.searchParams.keys()],['token']);assert.ok(url.searchParams.get('token'));
+          const response=await fixtureFetch(url,{method:'GET',redirect:'error',cache:'no-store',signal:AbortSignal.timeout(60000)});
+          assert.equal(response.status,200);assert.equal(response.headers.get('content-type')?.split(';')[0],'application/json');assert.ok(response.body);sourceReads++;
+          const stream=response.body;
+          const chunks=(async function*(){const reader=stream.getReader();let total=0;
+            try{while(true){const item=await reader.read();if(item.done)break;total+=item.value.byteLength;if(total>identity.byteLength)throw Error('source too large');yield item.value;}
+              assert.equal(total,identity.byteLength);assert.equal(await v(),identity.objectVersion);
+            }finally{await reader.cancel().catch(()=>{});reader.releaseLock();}
+          })();
+          return {bucket,objectPath:j.path,version:identity.objectVersion,contentType:'application/json',chunks};
+        });
+        // Capacity fixture ONLY: keep one verified snapshot in process to measure actual DB writes
+        // independently of repeated 50 MiB reads. No runtime caching or limit changes.
+        const identity=await actual.readIdentity(scope),prepared=await actual.prepareVerifiedSource(scope,identity);
+        assert.ok(prepared?.ok);assert.equal(prepared.manifest.length,10000);assert.equal(prepared.batches.flat().length,10000);assert.equal(sourceReads,1);
+        const measured={...actual,prepareVerifiedSource:async(requested,current)=>{
+          assert.deepEqual(requested,scope);assert.deepEqual(current,identity);return prepared;
+        }};
+        let created=0,ticks=0;
+        for(;ticks<200;ticks++){
+          if(Date.now()-workerStart>480000)throw Error('capacity worker exceeded 8-minute test budget');
+          const tick=await scheduler.runKnowledgeImportSchedulerReview(query,measured,{jobs:1,batchSize:10,batches:5});
+          assert.equal(tick.stop,'complete');assert.equal(tick.reports.length,1);
+          const report=tick.reports[0].report;
+          assert.equal(report.stop,'batch_complete');assert.equal(report.claimed,50);assert.equal(report.created,50);
+          assert.equal(report.recovered+report.retried+report.failed,0);created+=report.created;
+          if((ticks+1)%20===0)t.diagnostic(JSON.stringify({capacityCreated:created,ticks:ticks+1,elapsedMs:Date.now()-workerStart}));
+        }
+        assert.equal(created,10000);assert.equal(ticks,200);assert.equal(sourceReads,1);
+        const reconciled=(await db.query("select count(*)::int as total,count(distinct e.document_id)::int as unique_documents,count(*) filter(where e.status='created' and d.status='draft' and d.created_by=$3 and d.organization_id=$1 and d.metadata->>'import_job_id'=$2::text)::int as verified_drafts from public.knowledge_import_entries_v1 e join public.knowledge_documents d on d.id=e.document_id and d.organization_id=e.organization_id where e.organization_id=$1 and e.job_id=$2",[org,j.id,owner.actor])).rows[0];
+        assert.deepEqual(reconciled,{total:10000,unique_documents:10000,verified_drafts:10000});
+        const chunks=(await db.query("select count(*)::int as n from public.knowledge_import_entries_v1 e join public.knowledge_chunks c on c.document_id=e.document_id and c.organization_id=e.organization_id where e.organization_id=$1 and e.job_id=$2",[org,j.id])).rows[0].n;
+        assert.equal(chunks,10000);
+        assert.equal((await db.query('select status from knowledge_import_jobs_v1 where id=$1',[j.id])).rows[0].status,'completed');
+        assert.equal((await query('select * from knowledge_import_review.worker_due_jobs($1)',[1])).rowCount,0);
+        t.diagnostic(JSON.stringify({capacityDrafts:created,sourceReads,ticks,workerElapsedMs:Date.now()-workerStart,totalElapsedMs:Date.now()-start,maxRssKiB:process.resourceUsage().maxRSS,scope:'actual restricted SQL draft writes; verified in-memory snapshot reused only by capacity fixture'}));
+      }finally{await worker.end();}
     });
   }finally{await db.end();}
 });
