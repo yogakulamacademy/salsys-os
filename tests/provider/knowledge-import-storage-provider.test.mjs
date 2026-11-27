@@ -429,7 +429,7 @@ test('actual disposable Supabase Storage authorization and lifecycle: '+reviewMo
           })();
           return {bucket,objectPath:j.path,version:identity.objectVersion,contentType:'application/json',chunks};
         };
-        const runtime=load('lib/knowledge-import-worker-runtime-review.ts',{'server-only':{},'./knowledge-import-worker-adapters-review':adapters,'./knowledge-import-scheduler-review':scheduler});
+        const runtime=load('lib/knowledge-import-worker-runtime-review.ts',{'server-only':{},'./knowledge-import-worker-adapters-review':adapters,'./knowledge-import-scheduler-review':scheduler,'./knowledge-import-upload-contract':upload});
         let runtimeOpened=0,runtimeClosed=0;
         const tick=await runtime.runKnowledgeWorkerRuntimeReview({expectedLogin:login,windowBatches:2,budgetMs:90000,readSource,
           openDedicatedWorker:async()=>{
