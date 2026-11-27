@@ -4,6 +4,7 @@ import {randomUUID,createHash} from 'node:crypto';
 import {readFileSync} from 'node:fs';
 import {createRequire} from 'node:module';
 import {createClient} from '@supabase/supabase-js';
+import {createServerClient} from '@supabase/ssr';
 import pg from 'pg';
 
 import {FIXTURE_API_ORIGIN,validateFixtureStatus,fixtureApiUrl,createFixtureFetch} from './knowledge-import-provider-transport.mjs';
@@ -68,7 +69,7 @@ test('actual disposable Supabase Storage authorization and lifecycle: '+reviewMo
       assert.equal((await db.query('select count(*)::int as n from auth.sessions where id=$1 and user_id=$2',[sid,actor])).rows[0].n,1);
       await db.query("insert into public.organization_members values($1,$2,true,'admin')",[tenant,actor]);
       await db.query('insert into public.tenant_session_bindings values($1,$2,$3)',[sid,actor,tenant]);
-      users.push({tenant,token,claims,actor});
+      users.push({tenant,token,claims,actor,refreshToken:login.data.session.refresh_token});
     }
     const [owner, outsider]=users;
     await db.query('insert into knowledge_import_review.quotas values($1,25,104857600)',[org]);
@@ -300,7 +301,7 @@ test('actual disposable Supabase Storage authorization and lifecycle: '+reviewMo
       const runtime=load('lib/knowledge-import-runtime-composition-review.ts',{'server-only':{},'./knowledge-import-application-review':application,'./knowledge-import-application-broker-review':broker,'./knowledge-import-publication-adapter-review':publicationAdapter});
       const secondId=randomUUID(),second={id:secondId,path:org+'/'+secondId+'/source.json',length:bytes.length};
       const jobs=new Map([[j.id,j],[second.id,second]]);
-      const handle=runtime.createKnowledgeRuntimeCompositionReview({origin:httpOrigin,issuer:owner.claims.iss,uploadSeconds:600,retentionSeconds:1200,
+      const runtimeOptions={origin:httpOrigin,issuer:owner.claims.iss,uploadSeconds:600,retentionSeconds:1200,
         accessToken:async req=>req.headers.get('authorization')?.replace(/^Bearer /,'')??null,
         verifyUser:async token=>{const verified=await admin.auth.getUser(token);return verified.error?null:verified.data.user;},
         openDedicatedApplication:async()=>{
@@ -314,11 +315,27 @@ test('actual disposable Supabase Storage authorization and lifecycle: '+reviewMo
             async inspectExact(object){assert.ok(selected);assert.equal(object.path,selected.path);return observeStream(selected,object.path);}
           };
         }
-      });
+      };
+      const handle=runtime.createKnowledgeRuntimeCompositionReview(runtimeOptions);
+      // Real SSR cookie adapter using the exact existing local signed session.
+      // No Next ingress or live cookies; the jar is disposable and never logged.
+      const jar=new Map();
+      const cookieClient=()=>createServerClient(api.origin,anon,{global:{fetch:fixtureFetch},cookieOptions:{name:'kb-fixture-auth'},cookies:{
+        getAll:()=>[...jar].map(([name,value])=>({name,value})),
+        setAll:values=>{for(const {name,value} of values){if(value)jar.set(name,value);else jar.delete(name);}}
+      }});
+      const cookieSeed=await cookieClient().auth.setSession({access_token:owner.token,refresh_token:owner.refreshToken});
+      assert.equal(Boolean(cookieSeed.error),false);assert.ok(jar.size>0);
+      const cookieAuth=load('lib/knowledge-import-server-auth-review.ts',{'server-only':{},'@/lib/supabase/server':{createClient:async()=>{throw Error('hosted client forbidden');}},'./knowledge-import-runtime-composition-review':runtime});
+      const cookieRuntime=cookieAuth.createKnowledgeCookieRuntimeReview({...runtimeOptions,createAuthClient:async()=>cookieClient()});
       // Only fixture Storage put/inspect uses the privileged local provider adapter.
       // All application database calls use the restricted login and fixed broker wrappers.
       await db.query("select set_config('request.jwt.claims',$1,false)",[JSON.stringify(owner.claims)]);
       const ownerScope=application.knowledgeImportScopeKeyReview(owner.actor,owner.claims.session_id,org),outsideScope=application.knowledgeImportScopeKeyReview(outsider.actor,outsider.claims.session_id,other);
+      assert.equal(await cookieRuntime.resolveScope(),ownerScope);
+      const cookieHistory=scope=>cookieRuntime.handle(new Request(httpOrigin+'/api/knowledge-import-review/history',{headers:{'x-knowledge-scope':scope}}));
+      assert.equal((await cookieHistory(ownerScope)).status,200);
+      assert.equal((await cookieRuntime.handle(new Request(httpOrigin+'/api/knowledge-import-review/history',{headers:{authorization:'Bearer '+outsider.token,'x-knowledge-scope':ownerScope}}))).status,403);
       const base=httpOrigin+'/api/knowledge-import-review/',call=(suffix,token=owner.token,method='POST',headers={})=>handle(new Request(base+suffix,{method,headers:{origin:httpOrigin,authorization:'Bearer '+token,'x-knowledge-scope':token===outsider.token?outsideScope:ownerScope,...headers}}));
       assert.equal((await call(id+'/reserve',owner.token,'POST',{'x-knowledge-file-bytes':String(bytes.length),'x-organization-id':other})).status,200);
       assert.equal((await call(id+'/reserve',owner.token,'POST',{'x-knowledge-file-bytes':String(bytes.length)})).status,200);
@@ -338,6 +355,10 @@ test('actual disposable Supabase Storage authorization and lifecycle: '+reviewMo
       await db.query('update public.tenant_session_bindings set organization_id=$1 where session_id=$2',[other,owner.claims.session_id]);
       try{
         assert.equal((await call('history',owner.token,'GET')).status,403);
+        assert.equal((await cookieHistory(ownerScope)).status,403);
+        const switchedScope=application.knowledgeImportScopeKeyReview(owner.actor,owner.claims.session_id,other);
+        assert.equal(await cookieRuntime.resolveScope(),switchedScope);
+        assert.equal((await cookieHistory(switchedScope)).status,200);
         assert.equal((await call(randomUUID()+'/reserve',owner.token,'POST',{'x-knowledge-file-bytes':'3'})).status,403);
         const stale=broker.createKnowledgeBrokerTransactionReview({...owner.claims,is_anonymous:false},async()=>{
           const conn=new pg.Client({connectionString:loginUrl.href,connectionTimeoutMillis:5000});await conn.connect();
@@ -350,7 +371,8 @@ test('actual disposable Supabase Storage authorization and lifecycle: '+reviewMo
       }
       assert.equal((await call(id+'/cancel')).status,200);
       await db.query('update public.organization_members set active=false where organization_id=$1 and user_id=$2',[org,owner.actor]);
-      try{assert.equal((await call('history',owner.token,'GET')).status,403);}finally{await db.query('update public.organization_members set active=true where organization_id=$1 and user_id=$2',[org,owner.actor]);}
+      try{assert.equal((await call('history',owner.token,'GET')).status,403);assert.equal(await cookieRuntime.resolveScope(),null);}finally{await db.query('update public.organization_members set active=true where organization_id=$1 and user_id=$2',[org,owner.actor]);}
+      jar.clear();assert.equal(await cookieRuntime.resolveScope(),null);assert.equal((await cookieHistory(ownerScope)).status,403);
       await db.query('update knowledge_import_review.application_principals set enabled=false where login_role=$1',[login]);
       assert.equal((await call('history',owner.token,'GET')).status,403);
       await assert.rejects(transport(owner.claims)('select knowledge_import_review.broker_current_scope()',[]),e=>e.code==='42501');
