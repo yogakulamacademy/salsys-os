@@ -1,8 +1,9 @@
 const {test}=require('node:test');const assert=require('node:assert/strict');const {load}=require('./helpers.cjs');
+const upload=load('lib/knowledge-import-upload-contract.ts');
 const login='kb_worker_fixture',sql='select * from knowledge_import_review.worker_due_jobs($1)';
-function fixture(scheduler,{restricted=true,fail=false}={}){
+function fixture(scheduler,{restricted=true,fail=false,adapters=()=>({}),readSigned=()=>{throw Error('unexpected read');}}={}){
  let opens=0,closes=0;const calls=[];
- const api=load('lib/knowledge-import-worker-runtime-review.ts',{'server-only':{},'./knowledge-import-worker-adapters-review':{createKnowledgeWorkerSourceAdaptersReview:()=>({}),readSignedKnowledgeSource:()=>{throw Error('unexpected read');}},'./knowledge-import-scheduler-review':{runKnowledgeImportSchedulerReview:scheduler}});
+ const api=load('lib/knowledge-import-worker-runtime-review.ts',{'server-only':{},'./knowledge-import-upload-contract':upload,'./knowledge-import-worker-adapters-review':{createKnowledgeWorkerSourceAdaptersReview:adapters,readSignedKnowledgeSource:readSigned},'./knowledge-import-scheduler-review':{runKnowledgeImportSchedulerReview:scheduler}});
  const options={expectedLogin:login,readSource:async()=>{throw Error('unexpected read');},openDedicatedWorker:async()=>{
   opens++;return {query:async(s,p)=>{calls.push([s,p]);if(s.startsWith('select session_user'))return {rows:[{login,restricted}]};if(fail&&s===sql&&opens===1)throw Error('uncertain transport');return {rows:[]};},destroy:async()=>{closes++;}};
  }};
@@ -27,4 +28,47 @@ test('failed transport discarded; only explicit new operation gets a fresh login
  const f=fixture(async(query)=>{await assert.rejects(query(sql,[1]),/uncertain transport/);assert.deepEqual(await query(sql,[1]),{rows:[]});return {stop:'complete'};},{fail:true});
  await f.api.runKnowledgeWorkerRuntimeReview(f.options);assert.deepEqual(f.counts(),[2,2]);
  assert.equal(f.calls.filter(c=>c[0]===sql).length,2);
+});
+
+test('versioned runtime signs only a matching, unexpired source grant',async()=>{
+ const scope={
+  organizationId:'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+  jobId:'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+ };
+ const path=upload.knowledgeImportObjectPath(scope.organizationId,scope.jobId);
+ const identity={objectPath:path,objectVersion:'v1',byteLength:4,sha256:'a'.repeat(64),manifestSha256:'b'.repeat(64)};
+ const now=1000;
+ let grant={identity,expiresAtMs:now+100000};
+ const signingCalls=[];
+ const f=fixture(async(_query,adapter)=>adapter.read(scope,identity),{
+  adapters:(_query,read)=>({readIdentity:async()=>identity,read}),
+  readSigned:async(s,id,_origin,issue)=>{
+   assert.equal(await issue(s,id),'signed-source');
+   return {chunks:[]};
+  },
+ });
+ const {readSource,...options}=f.options;
+ const run=()=>f.api.runKnowledgeVersionedWorkerRuntimeReview({
+  ...options,projectOrigin:'https://example.supabase.co',
+  issuer:{
+   now:()=>now,
+   resolveGrant:async s=>{assert.deepEqual(s,scope);return grant;},
+   storage:{from:bucket=>({createSignedUrl:async(...args)=>{
+    signingCalls.push([bucket,...args]);
+    return {data:{signedUrl:'signed-source'},error:null};
+   }})},
+  },
+ });
+ await run();
+ assert.deepEqual(signingCalls,[[upload.KNOWLEDGE_IMPORT_BUCKET,path,30,{versionId:'v1'}]]);
+ grant={identity,expiresAtMs:now+4500};
+ await run();
+ assert.equal(signingCalls[1][2],4);
+ grant={identity:{...identity,objectVersion:'v2'},expiresAtMs:now+100000};
+ await assert.rejects(run(),/source read grant denied/);
+ grant={identity,expiresAtMs:now+999};
+ await assert.rejects(run(),/source read grant expired/);
+ grant=null;
+ await assert.rejects(run(),/source read grant denied/);
+ assert.equal(signingCalls.length,2);
 });
