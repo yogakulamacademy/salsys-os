@@ -156,7 +156,12 @@ begin
     where s.id::text=auth.jwt()->>'session_id' and s.user_id=v_actor and b.organization_id=p_org
       and m.active=true and m.role in ('owner','admin') and o.status='active' for share of s,b,m,o;
   if not found then raise exception 'import access denied' using errcode='42501'; end if;
-  -- Serialize reservations on the quota row. Other transitions never acquire this lock.
+  -- A fixed-snapshot transaction can miss a reservation committed while waiting on this lock.
+  -- Reject stronger isolation rather than relying on a row lock to refresh an old snapshot.
+  if current_setting('transaction_isolation') <> 'read committed' then
+    raise exception 'import reservation requires read committed' using errcode='25000';
+  end if;
+  -- Serialize reservations on the quota row; cleanup also uses quota-first ordering.
   select * into q from knowledge_import_review.quotas where organization_id=p_org for update;
   if not found then raise exception 'import quota not configured'; end if;
   t:=clock_timestamp();

@@ -71,6 +71,15 @@ test('disposable PG: exact Knowledge RPC, competing claims, rollback, retry, rev
     const upload=new Date(Date.now()+3600000), retain=new Date(Date.now()+7200000), reserved=randomUUID();
     await assert.rejects(reserve(a,reserved,100,upload,retain),/quota not configured/);
     await a.query('insert into knowledge_import_review.quotas values($1,1,300)',[org]);
+    // The reservation row lock requires a fresh statement snapshot. Stronger isolation
+    // must not accidentally admit two reservations against a stale count.
+    for(const isolation of ['repeatable read','serializable']){
+      await b.query('begin isolation level '+isolation);
+      try{
+        await assert.rejects(reserve(b,randomUUID(),100,upload,retain),e=>e.code==='25000'&&/requires read committed/.test(e.message));
+      }finally{await b.query('rollback');}
+    }
+    assert.equal((await b.query('show transaction_isolation')).rows[0].transaction_isolation,'read committed');
     await assert.rejects(reserve(a,reserved,100,upload,retain,other),e=>e.code==='42501');
     assert.equal((await reserve(a,reserved,100,upload,retain)).rows[0].id,reserved);
     const uploadCheck=(db,o=org,j=reserved,bucket='knowledge-import-private-v1',path=org+'/'+reserved+'/source.json',bytes=100)=>db.query('select knowledge_import_review.upload_allowed($1,$2,$3,$4,$5) as ok',[o,j,bucket,path,bytes]);
