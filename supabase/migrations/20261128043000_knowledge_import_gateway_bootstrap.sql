@@ -237,11 +237,11 @@ begin
   -- Publication begins in a separate transaction before registration can run.
   -- Keep publishing reservations active even after the deadline: a publisher
   -- may already be registering a source, or its outcome may need reconciliation.
-  select count(*) filter(where j.status in ('queued','processing') or (j.status='awaiting_upload' and (
-      j.upload_expires_at>t or exists(select 1 from knowledge_import_review.gateway_uploads g
-        where g.organization_id=j.organization_id and g.job_id=j.id and g.phase='publishing')))),
-    coalesce(sum(j.declared_bytes) filter(where j.storage_released_at is null),0) into n,b
-    from public.knowledge_import_jobs_v1 j where j.organization_id=p_org;
+  select count(*) filter(where jobs.status in ('queued','processing') or (jobs.status='awaiting_upload' and (
+      jobs.upload_expires_at>t or exists(select 1 from knowledge_import_review.gateway_uploads g
+        where g.organization_id=jobs.organization_id and g.job_id=jobs.id and g.phase='publishing')))),
+    coalesce(sum(jobs.declared_bytes) filter(where jobs.storage_released_at is null),0) into n,b
+    from public.knowledge_import_jobs_v1 jobs where jobs.organization_id=p_org;
   -- Retained bytes count all jobs until a separately authorized cleanup receipt is committed.
   if n>=q.max_active_jobs or b+p_bytes>q.max_reserved_bytes then raise exception 'import quota exceeded'; end if;
   insert into public.knowledge_import_jobs_v1(id,organization_id,requested_by,request_session_id,object_path,declared_bytes,upload_expires_at,retention_expires_at,created_at)
