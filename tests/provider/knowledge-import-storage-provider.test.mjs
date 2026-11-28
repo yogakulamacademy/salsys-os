@@ -170,6 +170,7 @@ test('actual disposable Supabase Storage authorization and lifecycle: '+reviewMo
     assert.equal((await db.query('select count(*)::int as n from storage.objects where bucket_id=$1',[bucket])).rows[0].n,0);
     assert.equal((await db.query('select count(*)::int as n from public.knowledge_import_jobs_v1')).rows[0].n,0);
     const require=createRequire(import.meta.url),{load}=require('../readiness/helpers.cjs');
+    const {createKnowledgePostgresConnector}=load('lib/knowledge-import-postgres.ts',{'server-only':{},pg});
     const upload=load('lib/knowledge-import-upload-contract.ts');
     const prep=load('lib/knowledge-import-source-preparation.ts',{'server-only':{},'node:crypto':require('node:crypto'),'./knowledge-bulk-import-preflight':load('lib/knowledge-bulk-import-preflight.ts'),'./knowledge-import-upload-contract':upload});
     const gateway=load('lib/knowledge-import-gateway-review.ts',{'server-only':{},'node:crypto':require('node:crypto'),'./knowledge-import-source-preparation':prep,'./knowledge-import-upload-contract':upload});
@@ -349,10 +350,7 @@ test('actual disposable Supabase Storage authorization and lifecycle: '+reviewMo
       const runtimeOptions={origin:httpOrigin,issuer:owner.claims.iss,uploadSeconds:600,retentionSeconds:1200,
         accessToken:async req=>req.headers.get('authorization')?.replace(/^Bearer /,'')??null,
         verifyUser:async token=>{const verified=await admin.auth.getUser(token);return verified.error?null:verified.data.user;},
-        openDedicatedApplication:async()=>{
-          const conn=new pg.Client({connectionString:loginUrl.href,connectionTimeoutMillis:5000});await conn.connect();
-          return {query:(statement,params)=>conn.query(statement,params),destroy:()=>conn.end()};
-        },
+        openDedicatedApplication:createKnowledgePostgresConnector({mode:'disposable',connectionUrl:loginUrl.href,login:loginUrl.username}),
         providerFor:scope=>{
           const selected=scope.organizationId===org?jobs.get(scope.jobId):null;
           return {
@@ -454,10 +452,10 @@ test('actual disposable Supabase Storage authorization and lifecycle: '+reviewMo
         let issued=0,downloads=0;
         const runtime=load('lib/knowledge-import-worker-runtime-review.ts',{'server-only':{},'./knowledge-import-worker-adapters-review':adapters,'./knowledge-import-scheduler-review':scheduler,'./knowledge-import-upload-contract':upload});
         let issuerClosed=0;
+        const openWorkerConnection=createKnowledgePostgresConnector({mode:'disposable',connectionUrl:workerUrl.href,login});
         const openIssuerConnection=async()=>{
-          const conn=new pg.Client({connectionString:workerUrl.href,connectionTimeoutMillis:5000});
-          await conn.connect();
-          return {query:(statement,params)=>conn.query(statement,params),destroy:async()=>{await conn.end();issuerClosed++;}};
+          const connection=await openWorkerConnection();
+          return {...connection,destroy:async()=>{await connection.destroy();issuerClosed++;}};
         };
         const resolveGrant=runtime.createKnowledgeWorkerReadGrantResolverReview(login,openIssuerConnection);
         const grant=await resolveGrant({organizationId:org,jobId:j.id});
@@ -492,8 +490,8 @@ test('actual disposable Supabase Storage authorization and lifecycle: '+reviewMo
             return fixtureFetch(fixtureApiUrl(new URL(requested.pathname+requested.search,FIXTURE_API_ORIGIN).href),options);
           },
           openDedicatedWorker:async()=>{
-            const conn=new pg.Client({connectionString:workerUrl.href,connectionTimeoutMillis:5000});await conn.connect();runtimeOpened++;
-            return {query:(statement,params)=>conn.query(statement,params),destroy:async()=>{await conn.end();runtimeClosed++;}};
+            const connection=await openWorkerConnection();runtimeOpened++;
+            return {...connection,destroy:async()=>{await connection.destroy();runtimeClosed++;}};
           }
         });
         assert.equal(runtimeOpened,1);assert.equal(runtimeClosed,1);
