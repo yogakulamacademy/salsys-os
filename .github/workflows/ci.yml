@@ -66,6 +66,9 @@ jobs:
       - name: Verify integrated manual pilot activation
         run: node --test tests/database/r13-manual-pilot-integration-postgres.test.mjs
 
+      - name: Verify Knowledge import review transactions on disposable PostgreSQL
+        run: node --test tests/database/knowledge-import-transactions.test.mjs
+
   validate:
     # Pin the tested runner image: ubuntu-latest resolved to resolute and
     # apt font downloads stalled the browser setup until the job was cancelled.
@@ -317,6 +320,10 @@ jobs:
 
       - name: Verify knowledge grounding and financial input boundaries
         run: npm run test:readiness
+
+      - name: Measure large Knowledge source preparation capacity
+        run: node --test tests/performance/knowledge-import-capacity.test.cjs
+        timeout-minutes: 3
 
       - name: Build
         shell: bash

@@ -1,0 +1,85 @@
+name: Knowledge Storage provider review
+on:
+  pull_request:
+    branches: [main, feat/knowledge-import-upload-job-contract-20261127, fix/knowledge-provider-loopback-guard-20261127]
+    paths:
+      - 'docs/sql/knowledge-import-**'
+      - 'tests/provider/knowledge-import-**'
+      - 'lib/knowledge-import-**'
+      - 'lib/knowledge-bulk-import-preflight.ts'
+      - 'tests/readiness/knowledge-import-**'
+      - 'tests/readiness/knowledge-bulk-import-preflight.test.cjs'
+      - 'tests/performance/knowledge-import-capacity.test.cjs'
+      - 'app/api/knowledge-import-review/**'
+      - '.github/workflows/knowledge-storage-provider-review.yml'
+permissions:
+  contents: read
+concurrency:
+  group: knowledge-storage-provider-review-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  disposable-storage:
+    name: disposable-storage (${{ matrix.mode }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: [gateway-only, rejected-direct-tus]
+    env:
+      SALSYS_ALLOW_DISPOSABLE_STORAGE_TEST: '1'
+      SALSYS_STORAGE_REVIEW_MODE: ${{ matrix.mode }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - name: Typecheck cumulative application candidate
+        run: npm run typecheck
+      - name: Verify application route and scoped publication adapter
+        run: node --test tests/readiness/knowledge-import-route-publication-review.test.cjs tests/readiness/knowledge-import-reconciliation-review.test.cjs tests/readiness/knowledge-import-publication-stream-review.test.cjs tests/readiness/knowledge-import-runtime-composition-review.test.cjs tests/readiness/knowledge-import-upload-flow-review.test.cjs tests/readiness/knowledge-import-worker-runtime-review.test.cjs tests/readiness/knowledge-import-server-auth-review.test.cjs
+      - name: Verify loopback transport guard without network
+        run: node --test tests/provider/knowledge-import-provider-transport.test.mjs
+      - name: Install checksum-pinned local Supabase CLI
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/kb-provider-bin"
+          curl --fail --silent --show-error --location --retry 2 -o "$RUNNER_TEMP/kb-provider-cli.tar.gz" https://github.com/supabase/cli/releases/download/v3.4.0/supabase_3.4.0_linux_amd64.tar.gz
+          echo "d82f8fc8a1611c45b9422b10378f61df614325f7e25624acda3704544513d6ac  $RUNNER_TEMP/kb-provider-cli.tar.gz" | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/kb-provider-cli.tar.gz" -C "$RUNNER_TEMP/kb-provider-bin" supabase
+          echo "$RUNNER_TEMP/kb-provider-bin" >> "$GITHUB_PATH"
+      - name: Start fresh disposable local project (no repository migrations or remote link)
+        shell: bash
+        run: |
+          set -euo pipefail
+          unset SUPABASE_ACCESS_TOKEN SUPABASE_DB_PASSWORD SUPABASE_PROJECT_ID SUPABASE_URL SUPABASE_SERVICE_ROLE_KEY
+          export SUPABASE_HOME="$RUNNER_TEMP/kb-provider-home"
+          mkdir -p "$RUNNER_TEMP/kb-provider-project" "$SUPABASE_HOME"
+          cd "$RUNNER_TEMP/kb-provider-project"
+          supabase --version
+          supabase init --help >/dev/null
+          supabase start --help >/dev/null
+          supabase status --help >/dev/null
+          supabase init > "$RUNNER_TEMP/kb-provider-init.log" 2>&1
+          supabase start > "$RUNNER_TEMP/kb-provider-start.log" 2>&1
+          umask 077
+          supabase status -o json > "$RUNNER_TEMP/kb-provider-status.json"
+          docker ps --format '{{.Names}} {{.Image}}' | grep -E 'storage|gotrue|auth' || true
+      - name: Verify selected architecture on its own fresh local Auth and Storage
+        shell: bash
+        env:
+          SALSYS_LOCAL_STORAGE_STATUS_FILE: ${{ runner.temp }}/kb-provider-status.json
+        run: node --test tests/provider/knowledge-import-storage-provider.test.mjs
+      - name: Stop disposable stack
+        if: always()
+        shell: bash
+        run: |
+          export SUPABASE_HOME="$RUNNER_TEMP/kb-provider-home"
+          if [ -d "$RUNNER_TEMP/kb-provider-project" ]; then
+            cd "$RUNNER_TEMP/kb-provider-project"
+            supabase stop > "$RUNNER_TEMP/kb-provider-stop.log" 2>&1 || true
+          fi
+          rm -f "$RUNNER_TEMP/kb-provider-status.json"
