@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {randomUUID,createHash} from 'node:crypto';
+import {randomUUID,createHash,createHmac} from 'node:crypto';
 import {readFileSync} from 'node:fs';
 import {createRequire} from 'node:module';
 import {createClient} from '@supabase/supabase-js';
@@ -35,6 +35,7 @@ test('actual disposable Supabase Storage authorization and lifecycle: '+reviewMo
   const options={auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false},global:{fetch:fixtureFetch}};
   const admin=createClient(api.origin,service,options);
   const db=new pg.Client({connectionString:dbUrl.href});await db.connect();
+  let browserFixture;
   try{
     // Refuse any existing application schema or bucket before touching the database.
     assert.equal((await db.query("select to_regclass('public.organizations') is null as fresh")).rows[0].fresh,true);
@@ -169,6 +170,18 @@ test('actual disposable Supabase Storage authorization and lifecycle: '+reviewMo
     // Independent gateway-only test. No rejected direct-TUS upload sessions exist.
     assert.equal((await db.query('select count(*)::int as n from storage.objects where bucket_id=$1',[bucket])).rows[0].n,0);
     assert.equal((await db.query('select count(*)::int as n from public.knowledge_import_jobs_v1')).rows[0].n,0);
+    await db.query(readFileSync('docs/sql/knowledge-import-storage-roles.sql','utf8'));
+    const signingKey=status.JWT_SECRET;
+    assert.equal(typeof signingKey,'string','disposable JWT signing is required');
+    assert.ok(signingKey.length>=32,'disposable signing key missing');
+    const localStorageAs=role=>{
+      const b64=value=>Buffer.from(JSON.stringify(value)).toString('base64url');
+      const unsigned=b64({alg:'HS256',typ:'JWT'})+'.'+b64({sub:randomUUID(),role,aud:'authenticated',exp:Math.floor(Date.now()/1000)+600});
+      const jwt=unsigned+'.'+createHmac('sha256',signingKey).update(unsigned).digest('base64url');
+      return createClient(api.origin,anon,{...options,accessToken:async()=>jwt}).storage;
+    };
+    const gatewayStorage=localStorageAs('knowledge_import_gateway_storage');
+    const workerStorage=localStorageAs('knowledge_import_worker_storage');
     const require=createRequire(import.meta.url),{load}=require('../readiness/helpers.cjs');
     const {createKnowledgePostgresConnector}=load('lib/knowledge-import-postgres.ts',{'server-only':{},pg});
     const upload=load('lib/knowledge-import-upload-contract.ts');
@@ -350,8 +363,8 @@ test('actual disposable Supabase Storage authorization and lifecycle: '+reviewMo
       await db.query('insert into knowledge_import_review.worker_principals(login_role,enabled,accept_gateway_jobs) values($1,true,true)',[workerLogin]);
       const publicationAdapter=load('lib/knowledge-import-publication-adapter-review.ts',{'server-only':{},'./knowledge-import-upload-contract':upload});
       const runtime=load('lib/knowledge-import-runtime-composition-review.ts',{'server-only':{},'./knowledge-import-application-review':application,'./knowledge-import-application-broker-review':broker,'./knowledge-import-publication-adapter-review':publicationAdapter});
-      const secondId=randomUUID(),second={id:secondId,path:org+'/'+secondId+'/source.json',length:bytes.length};
-      const jobs=new Map([[j.id,j],[second.id,second]]);
+      let second;
+      const jobs=new Map([[j.id,j]]);
       const runtimeOptions={origin:httpOrigin,issuer:owner.claims.iss,uploadSeconds:600,retentionSeconds:1200,
         accessToken:async req=>req.headers.get('authorization')?.replace(/^Bearer /,'')??null,
         verifyUser:async token=>{const verified=await admin.auth.getUser(token);return verified.error?null:verified.data.user;},
@@ -359,8 +372,23 @@ test('actual disposable Supabase Storage authorization and lifecycle: '+reviewMo
         providerFor:scope=>{
           const selected=scope.organizationId===org?jobs.get(scope.jobId):null;
           return {
-            async createOnly(object,body){assert.ok(selected);assert.equal(object.path,selected.path);await makeAdapter(selected).put(object.path,body);},
-            async inspectExact(object){assert.ok(selected);assert.equal(object.path,selected.path);return observeStream(selected,object.path);}
+            async createOnly(object,body){
+              assert.ok(selected);assert.equal(object.path,selected.path);
+              const result=await gatewayStorage.from(bucket).upload(object.path,body,{upsert:false,contentType:'application/json'});
+              assert.equal(result.error,null,'scoped gateway create failed');
+            },
+            async inspectExact(object){
+              assert.ok(selected);assert.equal(object.path,selected.path);
+              const files=gatewayStorage.from(bucket);
+              const info=await files.info(object.path);
+              const version=info.data?.version;
+              assert.ok(typeof version==='string'&&version,'scoped gateway metadata unavailable');
+              const signed=await files.createSignedUrl(object.path,30,{versionId:version});
+              assert.equal(signed.error,null,'scoped gateway could not sign exact version');
+              const response=await fixtureFetch(fixtureApiUrl(signed.data.signedUrl));
+              assert.equal(response.status,200);
+              return {version,chunks:response.body};
+            }
           };
         }
       };
@@ -391,10 +419,26 @@ test('actual disposable Supabase Storage authorization and lifecycle: '+reviewMo
       assert.equal((await call(id+'/reserve','invalid','POST',{'x-knowledge-file-bytes':'10'})).status,403);
       const run=browser.createKnowledgeBrowserUploadReview({origin:httpOrigin,jobId:id,file:new File([bytes],'fixture.json',{type:'application/json'}),fetcher:async(url,opts)=>handle(new Request(url,{method:'POST',headers:{...opts.headers,origin:httpOrigin,authorization:'Bearer '+owner.token,'x-knowledge-scope':ownerScope},body:opts.body}))});
       assert.deepEqual(await run(),{state:'registered',status:'queued'});
-      const flow=load('lib/knowledge-import-upload-flow-review.ts',{'./knowledge-import-browser-review':browser});
-      const progress=[];
-      const secondRun=flow.createKnowledgeUploadFlowReview({origin:httpOrigin,jobId:secondId,scopeKey:ownerScope,file:new File([bytes],'fixture.json',{type:'application/json'}),emit:s=>progress.push(s.state),fetcher:async(url,opts)=>handle(new Request(url,{method:'POST',headers:{...opts.headers,origin:httpOrigin,authorization:'Bearer '+owner.token},body:opts.body}))});
-      await secondRun.start();assert.equal(secondRun.snapshot().state,'registered');assert.ok(progress.includes('reserving'));assert.ok(progress.includes('uploading'));
+      const {openKnowledgeImportBrowser}=await import('./knowledge-import-browser-fixture.mjs');
+      const clientForCookie=value=>createServerClient(api.origin,anon,{
+        global:{fetch:fixtureFetch},cookieOptions:{name:'kb-fixture-auth'},cookies:{
+          getAll:()=>value?.split(/;\s*/).map(pair=>{
+            const at=pair.indexOf('=');return {name:pair.slice(0,at),value:decodeURIComponent(pair.slice(at+1))};
+          })??[],setAll:()=>{}
+        }
+      });
+      const runtimeForCookie=value=>cookieAuth.createKnowledgeCookieRuntimeReview({...runtimeOptions,createAuthClient:async()=>clientForCookie(value)});
+      browserFixture=await openKnowledgeImportBrowser({cookies:jar,bytes,
+        resolveScope:cookie=>runtimeForCookie(cookie).resolveScope(org),
+        handle:request=>runtimeForCookie(request.headers.get('cookie')).handle(request),
+        reserve:id=>{assert.match(id,/^[0-9a-f-]{36}$/);second={id,path:org+'/'+id+'/source.json',length:bytes.length};jobs.set(id,second);},
+        readDraft:async cookie=>{
+          const result=await clientForCookie(cookie).from('knowledge_documents').select('id,status')
+            .eq('organization_id',org).eq('status','draft').eq('metadata->>import_job_id',second.id).single();
+          return result.error===null&&result.data?.status==='draft';
+        },
+      });
+      const secondId=second.id;
       const delegations=(await db.query(`select d.job_id,d.login_role,d.actor_id,d.actor_session_id,
         d.object_version=j.object_version as exact_version,d.source_sha256=j.sha256 as exact_source,
         d.manifest_sha256=j.manifest_sha256 as exact_manifest
@@ -482,7 +526,7 @@ test('actual disposable Supabase Storage authorization and lifecycle: '+reviewMo
             assert.equal(requestedBucket,bucket);assert.equal(path,j.path);
             assert.equal(options.versionId,expectedGrant.object_version);
             assert.ok(ttl>0&&ttl<=30);
-            const signed=await admin.storage.from(requestedBucket).createSignedUrl(path,ttl,options);
+            const signed=await workerStorage.from(requestedBucket).createSignedUrl(path,ttl,options);
             assert.equal(Boolean(signed.error),false);
             const url=fixtureApiUrl(signed.data.signedUrl);
             const payload=JSON.parse(Buffer.from(url.searchParams.get('token').split('.')[1],'base64url'));
@@ -519,11 +563,19 @@ test('actual disposable Supabase Storage authorization and lifecycle: '+reviewMo
         await assert.rejects(resolveGrant({organizationId:org,jobId:j.id}),e=>e.code==='42501');
         assert.equal(issuerClosed,4);
         assert.equal(issued,1);assert.equal(downloads,1);
+        await browserFixture.verifyDraftReview();
+        await browserFixture.close();
+        browserFixture=undefined;
         const docs=(await db.query("select status,created_by from public.knowledge_documents where metadata->>'import_job_id'=$1",[j.id])).rows;
         assert.deepEqual(docs,[{status:'draft',created_by:owner.actor}]);
         assert.equal((await db.query('select status from knowledge_import_jobs_v1 where id=$1',[j.id])).rows[0].status,'completed');
         assert.equal((await query('select * from knowledge_import_review.worker_due_jobs($1)',[1])).rowCount,0);
         await assert.rejects(query('select * from knowledge_import_review.worker_source_identity($1,$2)',[other,j.id]),e=>e.code==='42501');
+        const deniedWorkerUpload=await workerStorage.from(bucket).upload(org+'/'+randomUUID()+'/source.json',bytes,{contentType:'application/json'});
+        assert.ok(deniedWorkerUpload.error,'worker credential cannot create objects');
+        assert.ok((await workerStorage.from(bucket).info(j.path)).error,'worker credential cannot read direct metadata');
+        assert.ok((await gatewayStorage.from(bucket).upload(org+'/invalid.json',bytes,{contentType:'application/json'})).error,'gateway cannot write outside the import object format');
+        const listed=await gatewayStorage.from(bucket).list(org);assert.deepEqual(listed.data??[],[]);
       }finally{await worker.end();}
     });
     await t.test('cancel after provider write prevents manifest publication and preserves quota',async()=>{
@@ -710,5 +762,7 @@ test('actual disposable Supabase Storage authorization and lifecycle: '+reviewMo
         t.diagnostic(JSON.stringify({capacityDrafts:created,sourceReads,ticks,workerElapsedMs:Date.now()-workerStart,totalElapsedMs:Date.now()-start,maxRssKiB:process.resourceUsage().maxRSS,scope:'actual restricted SQL draft writes with fresh signed Storage source and manifest per bounded scheduler window'}));
       }finally{await worker.end();}
     });
-  }finally{await db.end();}
+  }finally{
+    try{await browserFixture?.close();}finally{await db.end();}
+  }
 });

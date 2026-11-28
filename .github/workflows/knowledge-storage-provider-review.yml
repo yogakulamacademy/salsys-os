@@ -12,6 +12,8 @@ on:
       - 'tests/performance/knowledge-import-capacity.test.cjs'
       - 'app/api/knowledge-import-review/**'
       - 'app/api/knowledge-import-worker/**'
+      - 'scripts/self-host/cron-*.mjs'
+      - 'tests/readiness/self-host-cron.behavior.test.mjs'
       - 'supabase/migrations/20261128043000_knowledge_import_gateway_bootstrap.sql'
       - '.github/workflows/knowledge-storage-provider-review.yml'
 permissions:
@@ -113,6 +115,9 @@ jobs:
           PY
           curl --fail --silent --show-error --retry 20 --retry-connrefused --retry-all-errors \
             --retry-delay 2 --max-time 5 http://127.0.0.1:54321/storage/v1/status >/dev/null
+      - name: Install Chromium for the signed-in gateway flow
+        if: matrix.mode == 'gateway-only'
+        run: npx playwright install --only-shell chromium
       - name: Verify selected architecture on its own fresh local Auth and Storage
         shell: bash
         env:

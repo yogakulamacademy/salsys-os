@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
-import { cronMatches, parseCron } from '../../scripts/self-host/cron-lib.mjs';
+import { cronMatches, knowledgeImportCronJob, parseCron } from '../../scripts/self-host/cron-lib.mjs';
 
 const at = (iso) => new Date(iso);
 
@@ -33,4 +33,17 @@ test('bad schedules are refused', () => {
   assert.throws(() => parseCron('* * * *'));
   assert.throws(() => parseCron('61 * * * *'));
   assert.throws(() => parseCron('*/0 * * * *'));
+});
+
+test('the import scheduler uses one dedicated POST each minute only when enabled', () => {
+  const enabled = { KNOWLEDGE_IMPORT_ENABLED: '1' };
+  const secret = 'worker-test-secret-that-is-over-32-bytes';
+  assert.equal(knowledgeImportCronJob({ KNOWLEDGE_IMPORT_WORKER_SECRET: secret }), null);
+  assert.throws(() => knowledgeImportCronJob(enabled), /dedicated/);
+  assert.throws(() => knowledgeImportCronJob({ ...enabled, KNOWLEDGE_IMPORT_WORKER_SECRET: secret, CRON_SECRET: secret }), /dedicated/);
+  const job = knowledgeImportCronJob({ ...enabled, KNOWLEDGE_IMPORT_WORKER_SECRET: secret });
+  assert.equal(job.path, '/api/knowledge-import-worker');
+  assert.equal(job.method, 'POST');
+  assert.equal(job.secret, secret);
+  assert.equal(cronMatches(job.cron, at('2026-11-20T09:37:00Z')), true);
 });
