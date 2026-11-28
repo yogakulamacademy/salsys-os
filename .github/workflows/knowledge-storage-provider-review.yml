@@ -89,7 +89,11 @@ jobs:
 
           original = json.loads(docker("inspect", name))[0]
           image = original["Config"]["Image"]
-          if image != "public.ecr.aws/supabase/storage-api:v1.98.8" or not original["State"]["Running"]:
+          allowed_images = {
+              "public.ecr.aws/supabase/storage-api:v1.98.8",
+              "ghcr.io/supabase/storage-api:v1.98.8",
+          }
+          if image not in allowed_images or not original["State"]["Running"]:
               raise SystemExit("Unexpected disposable Storage container")
           config = original["Config"]
           config["Env"] = [v for v in config["Env"] if not v.startswith("STORAGE_VERSIONING_ENABLED=")]
