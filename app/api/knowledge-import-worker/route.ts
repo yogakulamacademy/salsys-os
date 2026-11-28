@@ -11,6 +11,23 @@ function reply(status: number, value: Record<string, unknown>) {
   });
 }
 
+async function isEmptyPost(request: Request): Promise<boolean> {
+  if (new URL(request.url).search) return false;
+  const length = request.headers.get('content-length');
+  if ((length !== null && length !== '0') || request.headers.has('transfer-encoding')) return false;
+  if (!request.body) return true;
+
+  // Next's Node adapter can expose an empty POST as a stream.
+  const reader = request.body.getReader();
+  try {
+    return (await reader.read()).done;
+  } catch {
+    return false;
+  } finally {
+    reader.releaseLock();
+  }
+}
+
 export async function POST(request: Request) {
   if (process.env.KNOWLEDGE_IMPORT_ENABLED !== '1') return reply(404, { error: 'not_found' });
 
@@ -19,7 +36,7 @@ export async function POST(request: Request) {
   if (!bearerMatchesAnySecret(request.headers.get('authorization'), [secret])) {
     return reply(401, { error: 'unauthorized' });
   }
-  if (request.body || new URL(request.url).search) return reply(400, { error: 'invalid_request' });
+  if (!(await isEmptyPost(request))) return reply(400, { error: 'invalid_request' });
 
   try {
     const result = await runKnowledgeImportWorker();

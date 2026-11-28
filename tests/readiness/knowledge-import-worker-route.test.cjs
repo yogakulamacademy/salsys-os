@@ -8,7 +8,8 @@ test('worker dispatch requires its own bearer and exposes only a bounded result'
   const secret = 'dedicated-worker-fixture-secret-longer-than-32';
   const url = 'https://fixture.example/api/knowledge-import-worker';
   const request = (token, body, search = '') => new Request(url + search, {
-    method: 'POST', headers: token ? { authorization: `Bearer ${token}` } : undefined, body,
+    method: 'POST', headers: token ? { authorization: `Bearer ${token}` } : undefined,
+    body, duplex: 'half',
   });
   let calls = 0;
   let result = { stop: 'complete', reports: [{ scope: 'private-workspace', draft: 'private-draft' }] };
@@ -39,6 +40,9 @@ test('worker dispatch requires its own bearer and exposes only a bounded result'
     assert.equal(response.status, 200);
     assert.equal(response.headers.get('cache-control'), 'no-store');
     assert.deepEqual(await response.json(), { state: 'complete', jobs: 1 });
+    const emptyStream = new ReadableStream({ start: (controller) => controller.close() });
+    assert.equal((await route.POST(request(secret, emptyStream))).status, 200);
+    assert.equal(calls, 2);
     result = { stop: 'blocked', reports: [] };
     assert.equal((await route.POST(request(secret))).status, 503);
     result = new Error('sensitive storage credential');
