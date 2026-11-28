@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: salsysos-knowledge-staging-pr923
+    runtime: node
+    plan: free
+    region: singapore
+    repo: https://github.com/yogakulamacademy/salsys-os
+    branch: feat/knowledge-bulk-import-activation
+    autoDeployTrigger: "off"
+    buildCommand: npm ci && npm run build
+    startCommand: node scripts/self-host/knowledge-import-staging.mjs
+    envVars:
+      - key: KNOWLEDGE_IMPORT_ENABLED
+        value: "0"
+      - key: KNOWLEDGE_IMPORT_WORKER_SECRET
+        generateValue: true
