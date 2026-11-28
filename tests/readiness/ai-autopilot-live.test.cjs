@@ -52,3 +52,14 @@ test('migration: RLS, system-only handover, person-only state changes', () => {
   assert.match(migration, /auth\.uid\(\) is null or not public\.can_work_lead\(p_lead_id\)/);
   assert.match(migration, /'human_review'/);
 });
+
+// Autopilot sends without a person reviewing the message. Never request the manual policy.
+test('Autopilot dispatch uses automated policy and never claims human approval', () => {
+  const start = runner.indexOf('async function sendInstagram(');
+  const end = runner.indexOf('async function handover(', start);
+  assert.ok(start >= 0 && end > start);
+  const sender = runner.slice(start, end);
+  assert.match(sender, /admin\.rpc\("evaluate_instagram_dm_send_policy_v1",\s*\{[\s\S]*?p_automated:\s*true,\s*p_human_approved:\s*false,/);
+  assert.doesNotMatch(sender, /p_automated:\s*false|p_human_approved:\s*true/);
+  assert.ok(sender.indexOf('policy.allowed !== true') < sender.indexOf('fetch('));
+});

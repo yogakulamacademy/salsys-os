@@ -60,7 +60,8 @@ async function sendInstagram(admin: SupabaseClient, input: { organizationId: str
   }
   const { data: policyData, error: policyError } = await admin.rpc("evaluate_instagram_dm_send_policy_v1", {
     p_organization_id: input.organizationId, p_conversation_id: input.conversationId, p_now: new Date().toISOString(),
-    p_automated: false, p_human_approved: true,
+    // This path sends without a person reviewing the message. Use the automated policy.
+    p_automated: true, p_human_approved: false,
   });
   const policy = (policyData ?? {}) as { allowed?: boolean; reasons?: string[]; instagram_user_id?: string };
   if (policyError || policy.allowed !== true || !policy.instagram_user_id) {
