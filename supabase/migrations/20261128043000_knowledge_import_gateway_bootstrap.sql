@@ -919,15 +919,24 @@ begin
  delete from knowledge_import_review.gateway_uploads where organization_id=p_org and job_id=p_job;
  return removed;
 end $$;
--- Guard every quota release, including the earlier cleanup RPC. Parent job already locked by UPDATE.
--- Does not replace external evidence checks, and cannot prove deletion from WAL/backups.
+-- A changed release timestamp must match the completed receipt for this exact source.
+-- External evidence remains the cleanup operator's responsibility.
 create function knowledge_import_review.gateway_quota_guard()
 returns trigger language plpgsql security invoker set search_path=pg_catalog,public,pg_temp as $$
 begin
- if old.storage_released_at is null and new.storage_released_at is not null and (
-   exists(select 1 from knowledge_import_review.gateway_uploads g where g.organization_id=new.organization_id and g.job_id=new.id and g.phase<>'registered')
-   or exists(select 1 from knowledge_import_review.gateway_chunks c where c.organization_id=new.organization_id and c.job_id=new.id)) then
+ if new.storage_released_at is null or new.storage_released_at is not distinct from old.storage_released_at then
+   return new;
+ end if;
+ if exists(select 1 from knowledge_import_review.gateway_uploads g where g.organization_id=new.organization_id and g.job_id=new.id and g.phase<>'registered')
+   or exists(select 1 from knowledge_import_review.gateway_chunks c where c.organization_id=new.organization_id and c.job_id=new.id) then
    raise exception 'gateway cleanup incomplete'; end if;
+ if not exists(
+   select 1 from knowledge_import_review.storage_cleanup receipt
+   where receipt.organization_id=new.organization_id and receipt.job_id=new.id
+     and receipt.object_path=new.object_path and receipt.object_version=new.object_version
+     and receipt.source_sha256=new.sha256 and receipt.completed_at=new.storage_released_at
+     and receipt.evidence_sha256 is not null
+ ) then raise exception 'completed storage cleanup receipt required'; end if;
  return new;
 end $$;
 create trigger knowledge_import_gateway_quota_guard before update of storage_released_at on public.knowledge_import_jobs_v1

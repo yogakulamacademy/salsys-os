@@ -395,6 +395,8 @@ test('actual disposable Supabase Storage authorization and lifecycle: '+reviewMo
       assert.equal(await purgeOther(abandoned),11);
       assert.equal(await purgeOther(abandoned),0);
       assert.deepEqual((await db.query('select status,storage_released_at from public.knowledge_import_jobs_v1 where id=$1',[abandoned])).rows,[{status:'expired',storage_released_at:null}]);
+      await assert.rejects(db.query('select knowledge_import_review.begin_storage_cleanup($1,$2)',[other,abandoned]),/cleanup not eligible/);
+      await assert.rejects(db.query('update public.knowledge_import_jobs_v1 set storage_released_at=clock_timestamp() where id=$1',[abandoned]),/completed storage cleanup receipt required/);
       assert.deepEqual((await db.query('select generation::int,removed_bytes::int from knowledge_import_review.gateway_receiving_purges where organization_id=$1 and job_id=$2',[other,abandoned])).rows,[{generation:1,removed_bytes:11}]);
       assert.equal((await db.query('select count(*)::int as n from knowledge_import_review.gateway_chunks where job_id=$1',[abandoned])).rows[0].n,0);
       const fence=await stageOther(replacement,Buffer.from('uploading'));
@@ -695,7 +697,7 @@ test('actual disposable Supabase Storage authorization and lifecycle: '+reviewMo
     });
     await t.test('exact-version cleanup protects replacement and retains quota on uncertain deletion',async()=>{
       // These are exclusively newly generated, synthetic objects in the fresh local test
-      // bucket. No path-only deletion, no production credentials, no quota release.
+      // bucket. The synthetic ledger release check is rolled back before Storage operations.
       const prepareTerminal=async()=>{
         const j=await createJob(),scope={organizationId:org,jobId:j.id},writer=randomUUID();
         await db.query('select * from knowledge_import_review.gateway_acquire($1,$2,$3)',[org,j.id,writer]);
@@ -722,6 +724,19 @@ test('actual disposable Supabase Storage authorization and lifecycle: '+reviewMo
         assert.deepEqual(row,{storage_released_at:null,completed_at:null,evidence_sha256:null});
       };
       const first=await prepareTerminal();
+      await assert.rejects(db.query('update public.knowledge_import_jobs_v1 set storage_released_at=clock_timestamp() where id=$1',[first.j.id]),/completed storage cleanup receipt required/);
+      await db.query('begin');
+      try{
+        // Exercise the database receipt contract. The synthetic digest is not provider proof.
+        const evidence=digest('synthetic database receipt check');
+        const args=[org,first.j.id,first.cleanup,first.j.path,first.version,digest(bytes),evidence];
+        const release=()=>db.query('select knowledge_import_review.complete_storage_cleanup($1,$2,$3,$4,$5,$6,$7) as ok',args);
+        assert.deepEqual((await release()).rows,[{ok:true}]);
+        assert.deepEqual((await release()).rows,[{ok:true}]);
+        const sameTimestamp=(await db.query('select j.storage_released_at=c.completed_at as same from public.knowledge_import_jobs_v1 j join knowledge_import_review.storage_cleanup c on c.organization_id=j.organization_id and c.job_id=j.id where j.id=$1',[first.j.id])).rows;
+        assert.deepEqual(sameTimestamp,[{same:true}]);
+      }finally{await db.query('rollback');}
+      await quotaRetained(first);
       for(const user of [owner,outsider]){
         denied(await removeVersion(first.j,first.version,user));
         assert.equal(await current(first.j),first.version);assert.equal(digest(await read(first.j)),digest(bytes));
@@ -739,6 +754,7 @@ test('actual disposable Supabase Storage authorization and lifecycle: '+reviewMo
         observe:async(b,p)=>{assert.equal(b,bucket);assert.equal(p,first.j.path);assert.equal(await current(first.j),null);assert.equal(await read(first.j),null);return {kind:'absent_observed'};}
       });
       assert.equal(observed.state,'absent_unproven');assert.equal(observed.mayReleaseQuota,false);await quotaRetained(first);
+      await assert.rejects(db.query('update public.knowledge_import_jobs_v1 set storage_released_at=clock_timestamp() where id=$1',[first.j.id]),/completed storage cleanup receipt required/);
       const second=await prepareTerminal();
       // Test-only service-role overwrite models a provider-side replacement after cleanup
       // receipt creation. The application's real publication adapter forbids upsert.
