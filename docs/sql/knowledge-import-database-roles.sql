@@ -24,6 +24,7 @@ grant execute on function
 to knowledge_import_application;
 
 grant execute on function
+  knowledge_import_review.worker_expire_assignments(integer),
   knowledge_import_review.worker_due_jobs(integer),
   knowledge_import_review.worker_source_identity(uuid,uuid),
   knowledge_import_review.worker_verify_manifest(uuid,uuid,text,bigint,text,jsonb),

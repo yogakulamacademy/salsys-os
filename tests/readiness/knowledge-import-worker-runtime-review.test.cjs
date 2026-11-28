@@ -1,11 +1,12 @@
 const {test}=require('node:test');const assert=require('node:assert/strict');const {load}=require('./helpers.cjs');
 const upload=load('lib/knowledge-import-upload-contract.ts');
 const login='kb_worker_fixture',sql='select * from knowledge_import_review.worker_due_jobs($1)';
-function fixture(scheduler,{restricted=true,fail=false,adapters=()=>({}),readSigned=()=>{throw Error('unexpected read');}}={}){
+const expirySql='select knowledge_import_review.worker_expire_assignments($1) as expired';
+function fixture(scheduler,{restricted=true,fail=false,expired=0,adapters=()=>({}),readSigned=()=>{throw Error('unexpected read');}}={}){
  let opens=0,closes=0;const calls=[];
  const api=load('lib/knowledge-import-worker-runtime-review.ts',{'server-only':{},'./knowledge-import-upload-contract':upload,'./knowledge-import-worker-adapters-review':{createKnowledgeWorkerSourceAdaptersReview:adapters,readSignedKnowledgeSource:readSigned},'./knowledge-import-scheduler-review':{runKnowledgeImportSchedulerReview:scheduler}});
  const options={expectedLogin:login,readSource:async()=>{throw Error('unexpected read');},openDedicatedWorker:async()=>{
-  opens++;return {query:async(s,p)=>{calls.push([s,p]);if(s.startsWith('select session_user'))return {rows:[{login,restricted}]};if(fail&&s===sql&&opens===1)throw Error('uncertain transport');return {rows:[]};},destroy:async()=>{closes++;}};
+  opens++;return {query:async(s,p)=>{calls.push([s,p]);if(s.startsWith('select session_user'))return {rows:[{login,restricted}]};if(s===expirySql)return {rows:[{expired}]};if(fail&&s===sql&&opens===1)throw Error('uncertain transport');return {rows:[]};},destroy:async()=>{closes++;}};
  }};
  return {api,options,calls,counts:()=>[opens,closes]};
 }
@@ -17,12 +18,17 @@ test('runtime permits only fixed worker statements, validates dedicated login an
   assert.deepEqual(await query(sql,[1]),{rows:[]});return {stop:'complete'};
  });
  assert.equal((await f.api.runKnowledgeWorkerRuntimeReview(f.options)).stop,'complete');
- assert.deepEqual(f.counts(),[1,1]);assert.equal(f.calls.length,5);
+ assert.deepEqual(f.counts(),[1,1]);assert.deepEqual(f.calls.slice(-2),[[expirySql,[2]],[sql,[1]]]);
 });
 test('elevated or wrong worker login never reaches scheduler operation',async()=>{
- const f=fixture(async(query)=>{await assert.rejects(query(sql,[1]),/worker login denied/);return {stop:'blocked'};},{restricted:false});
- assert.equal((await f.api.runKnowledgeWorkerRuntimeReview(f.options)).stop,'blocked');
+ const f=fixture(async()=>{assert.fail('scheduler must not start');},{restricted:false});
+ await assert.rejects(f.api.runKnowledgeWorkerRuntimeReview(f.options),/worker login denied/);
  assert.deepEqual(f.counts(),[1,1]);assert.equal(f.calls.length,1);
+});
+test('invalid expiry receipt stops before discovery and closes the worker connection',async()=>{
+ const f=fixture(async()=>{assert.fail('scheduler must not start');},{expired:3});
+ await assert.rejects(f.api.runKnowledgeWorkerRuntimeReview(f.options),/expiry receipt invalid/);
+ assert.deepEqual(f.counts(),[1,1]);
 });
 test('failed transport discarded; only explicit new operation gets a fresh login',async()=>{
  const f=fixture(async(query)=>{await assert.rejects(query(sql,[1]),/uncertain transport/);assert.deepEqual(await query(sql,[1]),{rows:[]});return {stop:'complete'};},{fail:true});

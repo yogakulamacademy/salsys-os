@@ -172,6 +172,13 @@ begin
   perform knowledge_import_review.rollup(p_org,p_job);
   return next_status;
 end $$;
+-- Callers hold the job row lock and verify the deadline and authority first.
+create function knowledge_import_review.mark_job_expired(p_org uuid,p_job uuid)
+returns void language sql security invoker set search_path=pg_catalog,public,pg_temp as $$
+  update public.knowledge_import_entries_v1 set status='cancelled',lease_token=null,lease_expires_at=null,claimed_by_worker=null,error_code='job_expired'
+    where organization_id=p_org and job_id=p_job and status in ('pending','leased');
+  update public.knowledge_import_jobs_v1 set status='expired' where organization_id=p_org and id=p_job;
+$$;
 -- Metadata expiry only. This is not object deletion or a background sweeper.
 create function knowledge_import_review.expire(p_org uuid,p_job uuid)
 returns boolean language plpgsql security invoker set search_path=pg_catalog,public,pg_temp as $$
@@ -180,9 +187,7 @@ begin
   j:=knowledge_import_review.lock_job(p_org,p_job); t:=clock_timestamp();
   if not ((j.status='awaiting_upload' and t>=j.upload_expires_at) or
       (j.status in ('queued','processing') and t>=j.retention_expires_at)) then return false; end if;
-  update public.knowledge_import_entries_v1 set status='cancelled',lease_token=null,lease_expires_at=null,claimed_by_worker=null,error_code='job_expired'
-    where organization_id=p_org and job_id=p_job and status in ('pending','leased');
-  update public.knowledge_import_jobs_v1 set status='expired' where organization_id=p_org and id=p_job;
+  perform knowledge_import_review.mark_job_expired(p_org,p_job);
   return true;
 end $$;
 -- Explicit tenant resource configuration; no default commercial entitlement.
@@ -656,6 +661,52 @@ begin
   update public.knowledge_import_jobs_v1 set storage_released_at=t where organization_id=p_org and id=p_job;
   return true;
 end $$;
+create function knowledge_import_review.require_worker_principal()
+returns void language plpgsql security invoker set search_path=pg_catalog,pg_temp as $$
+begin
+  perform 1 from knowledge_import_review.worker_principals p join pg_roles r on r.rolname=p.login_role
+    where p.login_role=session_user and p.enabled and r.rolcanlogin and not r.rolsuper and not r.rolbypassrls
+      and not r.rolcreaterole and not r.rolcreatedb and not r.rolreplication
+      and not pg_has_role(r.oid,'service_role','MEMBER') and not pg_has_role(r.oid,'authenticated','MEMBER')
+    for share of p;
+  if not found then raise exception 'worker access denied' using errcode='42501'; end if;
+end $$;
+
+-- Close only expired assignments belonging to the connected worker. Preserve
+-- completed drafts and retained bytes, and never renew a deadline on behalf of a user.
+create function knowledge_import_review.worker_expire_assignments(p_limit integer)
+returns integer language plpgsql security definer set search_path=pg_catalog,public,pg_temp as $$
+declare candidate record; cutoff timestamptz; closed_count integer:=0;
+begin
+  if p_limit is null or p_limit not between 1 and 5 then raise exception 'invalid expiry limit'; end if;
+  perform knowledge_import_review.require_worker_principal();
+  cutoff:=clock_timestamp();
+
+  for candidate in
+    select j.organization_id,j.id,j.requested_by,j.request_session_id,j.sha256,j.manifest_sha256,j.object_version
+    from public.knowledge_import_jobs_v1 j join knowledge_import_review.worker_delegations d
+      on d.organization_id=j.organization_id and d.job_id=j.id
+    where d.login_role=session_user and d.expires_at<=cutoff and j.status in ('queued','processing')
+      and d.actor_id=j.requested_by and d.actor_session_id=j.request_session_id
+      and d.source_sha256=j.sha256 and d.manifest_sha256=j.manifest_sha256 and d.object_version=j.object_version
+    order by d.expires_at,j.id limit p_limit for update of j skip locked
+  loop
+    -- Renewal and worker writes lock the job first. Confirm the delegation under
+    -- that lock so a concurrent renewal cannot be expired from a stale snapshot.
+    perform 1 from knowledge_import_review.worker_delegations d
+      where d.organization_id=candidate.organization_id and d.job_id=candidate.id
+        and d.login_role=session_user and d.expires_at<=cutoff
+        and d.actor_id=candidate.requested_by and d.actor_session_id=candidate.request_session_id
+        and d.source_sha256=candidate.sha256 and d.manifest_sha256=candidate.manifest_sha256
+        and d.object_version=candidate.object_version for share;
+    if found then
+      perform knowledge_import_review.mark_job_expired(candidate.organization_id,candidate.id);
+      closed_count:=closed_count+1;
+    end if;
+  end loop;
+  return closed_count;
+end $$;
+
 -- Discovery returns only assigned due job identifiers. It is advisory, never a lease.
 -- Each claim and finalize still requires the locked current authority check.
 create function knowledge_import_review.worker_due_jobs(p_limit integer)
@@ -663,11 +714,7 @@ returns table(organization_id uuid,job_id uuid)
 language plpgsql security definer set search_path=pg_catalog,public,auth,pg_temp as $$
 begin
   if p_limit is null or p_limit not between 1 and 25 then raise exception 'invalid discovery limit'; end if;
-  if not exists(select 1 from knowledge_import_review.worker_principals p join pg_roles r on r.rolname=p.login_role
-    where p.login_role=session_user and p.enabled and r.rolcanlogin and not r.rolsuper and not r.rolbypassrls
-      and not r.rolcreaterole and not r.rolcreatedb and not r.rolreplication
-      and not pg_has_role(r.oid,'service_role','MEMBER') and not pg_has_role(r.oid,'authenticated','MEMBER')) then
-    raise exception 'worker access denied' using errcode='42501'; end if;
+  perform knowledge_import_review.require_worker_principal();
   return query select j.organization_id,j.id
     from knowledge_import_review.worker_delegations d
     join public.knowledge_import_jobs_v1 j on j.organization_id=d.organization_id and j.id=d.job_id

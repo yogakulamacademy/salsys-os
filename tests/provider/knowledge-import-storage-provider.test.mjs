@@ -349,6 +349,7 @@ test('actual disposable Supabase Storage authorization and lifecycle: '+reviewMo
         await assert.rejects(restricted.query('select * from public.knowledge_import_jobs_v1'),e=>e.code==='42501');
         await assert.rejects(restricted.query('select * from knowledge_import_review.gateway_chunks'),e=>e.code==='42501');
         await assert.rejects(restricted.query('select * from knowledge_import_review.worker_due_jobs(1)'),e=>e.code==='42501');
+        await assert.rejects(restricted.query('select knowledge_import_review.worker_expire_assignments(1)'),e=>e.code==='42501');
         await assert.rejects(restricted.query('select knowledge_import_review.gateway_purge_receiving($1,$2)',[org,id]),e=>e.code==='42501');
         await assert.rejects(restricted.query('select knowledge_import_review.broker_current_scope()'),e=>e.code==='42501');
       }finally{await restricted.end();}
@@ -580,6 +581,37 @@ test('actual disposable Supabase Storage authorization and lifecycle: '+reviewMo
         assert.ok((await workerStorage.from(bucket).info(j.path)).error,'worker credential cannot read direct metadata');
         assert.ok((await gatewayStorage.from(bucket).upload(org+'/invalid.json',bytes,{contentType:'application/json'})).error,'gateway cannot write outside the import object format');
         const listed=await gatewayStorage.from(bucket).list(org);assert.deepEqual(listed.data??[],[]);
+
+        const drafts=[0,1,2].map(index=>({title:'Expiry fixture '+index,category:'general',content:'Synthetic content for unfinished import',source_name:'Fixture',source_type:'manual'}));
+        const input=Buffer.from(JSON.stringify({version:1,drafts}));
+        const expiring=await createJob(input.length);
+        assert.deepEqual(await gateway.publishKnowledgeGatewayReview({organizationId:org,jobId:expiring.id},input,makeAdapter(expiring),Date.now),{state:'registered',status:'queued'});
+        assert.equal((await db.query('select knowledge_import_review.delegate_worker($1,$2,$3,$4) as ok',[org,expiring.id,login,new Date(Date.now()+600000)])).rows[0].ok,true);
+        const claims=(await query('select * from knowledge_import_review.worker_claim($1,$2,$3)',[org,expiring.id,2])).rows;
+        assert.equal(claims.length,2);
+        const completed=claims.find(claim=>claim.entry_index===0);
+        assert.ok(completed);
+        const draft=(await query('select knowledge_import_review.worker_finalize($1,$2,$3,$4,$5,$6::jsonb) as id',[
+          org,expiring.id,completed.entry_index,completed.lease_token,completed.attempts,JSON.stringify({...drafts[0],source_uri:null}),
+        ])).rows[0].id;
+        // Advancing the fixture's assignment deadline avoids waiting on wall-clock time.
+        await db.query("update knowledge_import_review.worker_delegations set expires_at=clock_timestamp()-interval '1 second' where organization_id=$1 and job_id=$2",[org,expiring.id]);
+        await db.query('begin');
+        try{
+          await db.query('select id from public.knowledge_import_jobs_v1 where id=$1 for update',[expiring.id]);
+          assert.equal((await query('select knowledge_import_review.worker_expire_assignments(2) as expired',[])).rows[0].expired,0);
+        }finally{await db.query('rollback');}
+        const expiryTick=await runTick();
+        assert.equal(expiryTick.stop,'complete');assert.deepEqual(expiryTick.reports,[]);assert.equal(issued,1);
+        const after=(await db.query('select status,storage_released_at from public.knowledge_import_jobs_v1 where id=$1',[expiring.id])).rows[0];
+        assert.deepEqual(after,{status:'expired',storage_released_at:null});
+        const expiredEntries=(await db.query('select status,document_id,lease_token,claimed_by_worker from public.knowledge_import_entries_v1 where job_id=$1 order by entry_index',[expiring.id])).rows;
+        assert.deepEqual(expiredEntries.map(entry=>entry.status),['created','cancelled','cancelled']);
+        assert.equal(expiredEntries[0].document_id,draft);
+        assert.ok(expiredEntries.every(entry=>entry.lease_token===null && entry.claimed_by_worker===null));
+        assert.equal((await db.query('select status from public.knowledge_documents where id=$1',[draft])).rows[0].status,'draft');
+        assert.deepEqual(await read(expiring),input);
+        assert.equal((await query('select knowledge_import_review.worker_expire_assignments(2) as expired',[])).rows[0].expired,0);
       }finally{await worker.end();}
     });
     await t.test('cancel after provider write prevents manifest publication and preserves quota',async()=>{

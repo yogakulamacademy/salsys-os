@@ -8,7 +8,10 @@ type Adapters=ReturnType<typeof createKnowledgeWorkerSourceAdaptersReview>;
 type Identity=Awaited<ReturnType<Adapters['readIdentity']>>;
 type Connection={query:Query;destroy:()=>Promise<void>};
 type Options={expectedLogin:string;openDedicatedWorker:()=>Promise<Connection>;readSource:Reader;windowBatches?:number;budgetMs?:number};
+const expireAssignments = 'select knowledge_import_review.worker_expire_assignments($1) as expired';
+const maxExpirationsPerTick = 2;
 const operations=new Map<string,number>([
+ [expireAssignments,1],
  ['select * from knowledge_import_review.worker_due_jobs($1)',1],
  ['select * from knowledge_import_review.worker_source_identity($1,$2)',2],
  ['select * from knowledge_import_review.worker_digest_payloads($1,$2,$3::jsonb)',3],
@@ -61,6 +64,9 @@ export async function runKnowledgeWorkerRuntimeReview(o:Options){
   })()};
  });
  try{
+  const {rows} = await query(expireAssignments, [maxExpirationsPerTick]);
+  if (rows.length !== 1 || typeof rows[0].expired !== 'number' || !Number.isInteger(rows[0].expired) ||
+      rows[0].expired < 0 || rows[0].expired > maxExpirationsPerTick) throw Error('worker expiry receipt invalid');
   return await runKnowledgeImportSchedulerReview(query,adapters,{jobs:1,batchSize:10,windowBatches:o.windowBatches??200,budgetMs:o.budgetMs??90000});
  }finally{closed=true;await discard();}
 }
