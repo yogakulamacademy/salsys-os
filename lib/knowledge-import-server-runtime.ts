@@ -4,6 +4,14 @@ import { getSupabasePublicConfig } from '@/lib/config';
 import { createKnowledgePostgresConnector } from './knowledge-import-postgres';
 import { createKnowledgeCookieRuntimeReview } from './knowledge-import-server-auth-review';
 
+export async function resolveKnowledgeImportPageScope(organizationId: string): Promise<string | null> {
+  try {
+    return await getKnowledgeImportServerRuntime()?.resolveScope(organizationId) ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export function getKnowledgeImportServerRuntime() {
   if (process.env.KNOWLEDGE_IMPORT_ENABLED !== '1') return null;
   const origin = process.env.KNOWLEDGE_IMPORT_ORIGIN;

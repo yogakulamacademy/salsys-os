@@ -48,11 +48,12 @@ export function createKnowledgeApplicationReview(o:Options){
  }
  // For trusted server rendering, resolve only a non-authorizing equality marker.
  // It is derived from the same exact-token verification and restricted DB scope as HTTP.
- async function resolveScopeFromToken(token:string|null):Promise<string|null>{
+ async function resolveScopeFromToken(token:string|null,expectedOrganizationId?:string):Promise<string|null>{
   let conn:Awaited<ReturnType<Options['connect']>>|undefined;
   try{
    const claims=await verifiedClaims(token);if(!claims)return null;
-   conn=await o.connect(claims);const context=await lookupScope(conn);if(!context)return null;
+    conn=await o.connect(claims);const context=await lookupScope(conn);
+    if(!context||(expectedOrganizationId!==undefined&&context.organizationId!==expectedOrganizationId))return null;
    return knowledgeImportScopeKeyReview(claims.sub,claims.session_id,context.organizationId);
   }catch{return null;}
   finally{try{await conn?.close();}catch{/* dedicated broker discards connection */}}
