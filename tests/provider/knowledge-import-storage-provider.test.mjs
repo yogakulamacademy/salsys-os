@@ -334,11 +334,15 @@ test('actual disposable Supabase Storage authorization and lifecycle: '+reviewMo
       const application=load('lib/knowledge-import-application-review.ts',{'server-only':{},'node:crypto':require('node:crypto'),'./knowledge-import-gateway-http-review':http,'./knowledge-import-history-http-review':historyHttp});
       const browser=load('lib/knowledge-import-browser-review.ts');
       const broker=load('lib/knowledge-import-application-broker-review.ts',{'server-only':{}});
-      const login='kb_app_'+randomUUID().replaceAll('-',''),password=randomUUID().replaceAll('-','');
-      await db.query("create role "+login+" login password '"+password+"' nosuperuser nocreatedb nocreaterole noreplication nobypassrls noinherit");
-      await db.query('insert into knowledge_import_review.application_principals values($1,true)',[login]);
-      await db.query('grant usage on schema knowledge_import_review to '+login);
-      await db.query('grant execute on function knowledge_import_review.broker_current_scope(),knowledge_import_review.broker_reserve_current(uuid,bigint,integer,integer),knowledge_import_review.broker_cancel_current(uuid),knowledge_import_review.broker_gateway_acquire(uuid,uuid,uuid),knowledge_import_review.broker_gateway_append(uuid,uuid,uuid,bigint,bigint,bytea),knowledge_import_review.broker_gateway_begin_publication(uuid,uuid,uuid,bigint),knowledge_import_review.broker_gateway_lock(uuid,uuid,uuid,bigint),knowledge_import_review.broker_gateway_register(uuid,uuid,uuid,bigint,text,bigint,text,jsonb),knowledge_import_review.broker_gateway_publication_receipt(uuid,uuid,uuid,bigint),knowledge_import_review.broker_current_history(integer,timestamptz,uuid),knowledge_import_review.broker_reservation(uuid,uuid),knowledge_import_review.broker_digests(jsonb) to '+login);
+      const login='knowledge_import_application',password=randomUUID().replaceAll('-','');
+      const workerLogin='knowledge_import_worker',workerPassword=randomUUID().replaceAll('-','');
+      await db.query(readFileSync('docs/sql/knowledge-import-database-roles.sql','utf8'));
+      const inactive=(await db.query('select rolname,rolcanlogin from pg_roles where rolname in ($1,$2) order by rolname',[login,workerLogin])).rows;
+      assert.deepEqual(inactive,[{rolname:login,rolcanlogin:false},{rolname:workerLogin,rolcanlogin:false}]);
+      assert.equal((await db.query('select enabled from knowledge_import_review.application_principals where login_role=$1',[login])).rows[0].enabled,false);
+      assert.deepEqual((await db.query('select enabled,accept_gateway_jobs from knowledge_import_review.worker_principals where login_role=$1',[workerLogin])).rows[0],{enabled:false,accept_gateway_jobs:false});
+      await db.query("alter role knowledge_import_application login password '"+password+"'");
+      await db.query('update knowledge_import_review.application_principals set enabled=true where login_role=$1',[login]);
       const loginUrl=new URL(dbUrl.href);loginUrl.username=login;loginUrl.password=password;
       const restricted=new pg.Client({connectionString:loginUrl.href});await restricted.connect();
       try{
@@ -358,9 +362,8 @@ test('actual disposable Supabase Storage authorization and lifecycle: '+reviewMo
       const scopeQuery=broker.createKnowledgeBrokerQueryReview(transport(owner.claims));
       await assert.rejects(scopeQuery('select * from auth.sessions',[]),/operation denied/);
       await assert.rejects(transport(owner.claims)('select knowledge_import_review.broker_reserve_current($1,$2,$3,$4)',[id,bytes.length,600,1200]),e=>e.code==='55000');
-      const workerLogin='kb_worker_'+randomUUID().replaceAll('-',''),workerPassword=randomUUID().replaceAll('-','');
-      await db.query("create role "+workerLogin+" login password '"+workerPassword+"' nosuperuser nocreatedb nocreaterole noreplication nobypassrls noinherit");
-      await db.query('insert into knowledge_import_review.worker_principals(login_role,enabled,accept_gateway_jobs) values($1,true,true)',[workerLogin]);
+      await db.query("alter role knowledge_import_worker login password '"+workerPassword+"'");
+      await db.query('update knowledge_import_review.worker_principals set enabled=true,accept_gateway_jobs=true where login_role=$1',[workerLogin]);
       const publicationAdapter=load('lib/knowledge-import-publication-adapter-review.ts',{'server-only':{},'./knowledge-import-upload-contract':upload});
       const runtime=load('lib/knowledge-import-runtime-composition-review.ts',{'server-only':{},'./knowledge-import-application-review':application,'./knowledge-import-application-broker-review':broker,'./knowledge-import-publication-adapter-review':publicationAdapter});
       let second;
@@ -484,8 +487,6 @@ test('actual disposable Supabase Storage authorization and lifecycle: '+reviewMo
     await t.test('machine worker processes the assigned private Storage source into drafts',async()=>{
       assert.ok(dispatchedJob,'verified application must publish and assign a job');
       const {job:j,login,password}=dispatchedJob;
-      await db.query('grant usage on schema knowledge_import_review to '+login);
-      await db.query('grant execute on function knowledge_import_review.worker_due_jobs(integer),knowledge_import_review.worker_source_identity(uuid,uuid),knowledge_import_review.worker_verify_manifest(uuid,uuid,text,bigint,text,jsonb),knowledge_import_review.worker_digest_payloads(uuid,uuid,jsonb),knowledge_import_review.worker_claim(uuid,uuid,integer),knowledge_import_review.worker_finalize(uuid,uuid,integer,uuid,integer,jsonb),knowledge_import_review.worker_result(uuid,uuid,integer,uuid,integer),knowledge_import_review.worker_settle_failure(uuid,uuid,integer,uuid,integer,text) to '+login);
       const workerUrl=new URL(dbUrl.href);workerUrl.username=login;workerUrl.password=password;
       const worker=new pg.Client({connectionString:workerUrl.href,connectionTimeoutMillis:5000});await worker.connect();
       try{
