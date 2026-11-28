@@ -313,7 +313,8 @@ test('actual disposable Supabase Storage authorization and lifecycle: '+reviewMo
       const response=await history(new Request(httpOrigin+'/history'));assert.equal(response.status,200);
       const page=await response.json();assert.equal(page.jobs.find(x=>x.id===j.id).status,'queued');
     });
-    await t.test('single application boundary reserves, uploads, reads history and cancels using verified local Auth',async()=>{
+    let dispatchedJob;
+    await t.test('verified application reserves, uploads and assigns the exact worker job',async()=>{
       const httpOrigin='https://fixture.example', id=randomUUID(), j={id,path:org+'/'+id+'/source.json',length:bytes.length};
       const http=load('lib/knowledge-import-gateway-http-review.ts',{'server-only':{},'node:crypto':require('node:crypto'),'./knowledge-import-gateway-review':gateway});
       const historyHttp=load('lib/knowledge-import-history-http-review.ts',{'server-only':{},'./knowledge-import-history-review':load('lib/knowledge-import-history-review.ts')});
@@ -343,6 +344,10 @@ test('actual disposable Supabase Storage authorization and lifecycle: '+reviewMo
       await assert.rejects(transport({...owner.claims,exp:1})('select knowledge_import_review.broker_current_scope()',[]),e=>e.code==='42501');
       const scopeQuery=broker.createKnowledgeBrokerQueryReview(transport(owner.claims));
       await assert.rejects(scopeQuery('select * from auth.sessions',[]),/operation denied/);
+      await assert.rejects(transport(owner.claims)('select knowledge_import_review.broker_reserve_current($1,$2,$3,$4)',[id,bytes.length,600,1200]),e=>e.code==='55000');
+      const workerLogin='kb_worker_'+randomUUID().replaceAll('-',''),workerPassword=randomUUID().replaceAll('-','');
+      await db.query("create role "+workerLogin+" login password '"+workerPassword+"' nosuperuser nocreatedb nocreaterole noreplication nobypassrls noinherit");
+      await db.query('insert into knowledge_import_review.worker_principals(login_role,enabled,accept_gateway_jobs) values($1,true,true)',[workerLogin]);
       const publicationAdapter=load('lib/knowledge-import-publication-adapter-review.ts',{'server-only':{},'./knowledge-import-upload-contract':upload});
       const runtime=load('lib/knowledge-import-runtime-composition-review.ts',{'server-only':{},'./knowledge-import-application-review':application,'./knowledge-import-application-broker-review':broker,'./knowledge-import-publication-adapter-review':publicationAdapter});
       const secondId=randomUUID(),second={id:secondId,path:org+'/'+secondId+'/source.json',length:bytes.length};
@@ -390,6 +395,14 @@ test('actual disposable Supabase Storage authorization and lifecycle: '+reviewMo
       const progress=[];
       const secondRun=flow.createKnowledgeUploadFlowReview({origin:httpOrigin,jobId:secondId,scopeKey:ownerScope,file:new File([bytes],'fixture.json',{type:'application/json'}),emit:s=>progress.push(s.state),fetcher:async(url,opts)=>handle(new Request(url,{method:'POST',headers:{...opts.headers,origin:httpOrigin,authorization:'Bearer '+owner.token},body:opts.body}))});
       await secondRun.start();assert.equal(secondRun.snapshot().state,'registered');assert.ok(progress.includes('reserving'));assert.ok(progress.includes('uploading'));
+      const delegations=(await db.query(`select d.job_id,d.login_role,d.actor_id,d.actor_session_id,
+        d.object_version=j.object_version as exact_version,d.source_sha256=j.sha256 as exact_source,
+        d.manifest_sha256=j.manifest_sha256 as exact_manifest
+        from knowledge_import_review.worker_delegations d join public.knowledge_import_jobs_v1 j on j.organization_id=d.organization_id and j.id=d.job_id
+        where d.organization_id=$1 and d.job_id in ($2,$3)`,[org,id,secondId])).rows;
+      assert.equal(delegations.length,2);
+      for(const d of delegations)assert.deepEqual(d,{job_id:d.job_id,login_role:workerLogin,actor_id:owner.actor,
+        actor_session_id:owner.claims.session_id,exact_version:true,exact_source:true,exact_manifest:true});
       assert.equal(digest(await read(j)),digest(bytes));assert.equal(digest(await read(second)),digest(bytes));
       const history=await call('history',owner.token,'GET');assert.equal(history.status,200);const historyJobs=(await history.json()).jobs;assert.equal(historyJobs.find(x=>x.id===id).status,'queued');assert.equal(historyJobs.find(x=>x.id===secondId).status,'queued');
       const outside=await call('history',outsider.token,'GET');assert.equal(outside.status,200);assert.equal((await outside.json()).jobs.some(x=>x.id===id),false);
@@ -419,18 +432,11 @@ test('actual disposable Supabase Storage authorization and lifecycle: '+reviewMo
       await db.query('update knowledge_import_review.application_principals set enabled=false where login_role=$1',[login]);
       assert.equal((await call('history',owner.token,'GET')).status,403);
       await assert.rejects(transport(owner.claims)('select knowledge_import_review.broker_current_scope()',[]),e=>e.code==='42501');
-
+      dispatchedJob={job:second,login:workerLogin,password:workerPassword};
     });
-    await t.test('delegated scheduler processes real private Storage source with restricted worker login',async()=>{
-      const j=await createJob(),scope={organizationId:org,jobId:j.id},writer=randomUUID();
-      await db.query("select set_config('request.jwt.claims',$1,false)",[JSON.stringify(owner.claims)]);
-      await db.query('select * from knowledge_import_review.gateway_acquire($1,$2,$3)',[org,j.id,writer]);
-      await db.query('select knowledge_import_review.gateway_append($1,$2,$3,$4,$5,$6)',[org,j.id,writer,1,0,bytes]);
-      const staged=(await db.query('select knowledge_import_review.gateway_begin_publication($1,$2,$3,$4) as bytes',[org,j.id,writer,1])).rows[0].bytes;
-      assert.deepEqual(await gateway.publishKnowledgeGatewayReview(scope,staged,makeAdapter(j,async()=>{},writer),Date.now),{state:'registered',status:'queued'});
-      const login='kb_worker_'+randomUUID().replaceAll('-',''),password=randomUUID().replaceAll('-','');
-      await db.query("create role "+login+" login password '"+password+"' nosuperuser nocreatedb nocreaterole noreplication nobypassrls noinherit");
-      await db.query('insert into knowledge_import_review.worker_principals values($1,true)',[login]);
+    await t.test('machine worker processes the assigned private Storage source into drafts',async()=>{
+      assert.ok(dispatchedJob,'verified application must publish and assign a job');
+      const {job:j,login,password}=dispatchedJob;
       await db.query('grant usage on schema knowledge_import_review to '+login);
       await db.query('grant execute on function knowledge_import_review.worker_due_jobs(integer),knowledge_import_review.worker_source_identity(uuid,uuid),knowledge_import_review.worker_verify_manifest(uuid,uuid,text,bigint,text,jsonb),knowledge_import_review.worker_digest_payloads(uuid,uuid,jsonb),knowledge_import_review.worker_claim(uuid,uuid,integer),knowledge_import_review.worker_finalize(uuid,uuid,integer,uuid,integer,jsonb),knowledge_import_review.worker_result(uuid,uuid,integer,uuid,integer),knowledge_import_review.worker_settle_failure(uuid,uuid,integer,uuid,integer,text) to '+login);
       const workerUrl=new URL(dbUrl.href);workerUrl.username=login;workerUrl.password=password;
@@ -438,11 +444,12 @@ test('actual disposable Supabase Storage authorization and lifecycle: '+reviewMo
       try{
         await worker.query("set statement_timeout='15s'");
         const query=(sql,params)=>worker.query(sql,params);
-        assert.equal((await query('select * from knowledge_import_review.worker_due_jobs($1)',[1])).rowCount,0);
+        assert.deepEqual((await query('select * from knowledge_import_review.worker_due_jobs($1)',[1])).rows,[{organization_id:org,job_id:j.id}]);
         await assert.rejects(query('select * from public.knowledge_documents',[]),e=>e.code==='42501');
         await assert.rejects(query('select * from knowledge_import_review.gateway_chunks',[]),e=>e.code==='42501');
         await assert.rejects(query('select knowledge_import_review.broker_current_scope()',[]),e=>e.code==='42501');
-        assert.equal((await db.query('select knowledge_import_review.delegate_worker($1,$2,$3,$4) as ok',[org,j.id,login,new Date(Date.now()+600000)])).rows[0].ok,true);
+        await assert.rejects(query('select knowledge_import_review.gateway_worker_login()',[]),e=>e.code==='42501');
+        await assert.rejects(query('select knowledge_import_review.delegate_worker($1,$2,$3,$4)',[org,j.id,login,new Date(Date.now()+600000)]),e=>e.code==='42501');
         const adapters=load('lib/knowledge-import-worker-adapters-review.ts',{'server-only':{},'./knowledge-import-source-preparation':prep,'./knowledge-import-upload-contract':upload});
         const runner=load('lib/knowledge-import-worker-review.ts',{'server-only':{}});
         const scheduler=load('lib/knowledge-import-scheduler-review.ts',{'server-only':{},'./knowledge-import-worker-review':runner});
@@ -469,7 +476,7 @@ test('actual disposable Supabase Storage authorization and lifecycle: '+reviewMo
         await assert.rejects(resolveGrant({organizationId:other,jobId:j.id}),e=>e.code==='42501');
         assert.equal(issuerClosed,2);
         let runtimeOpened=0,runtimeClosed=0;
-        const tick=await runtime.runKnowledgeVersionedWorkerRuntimeReview({
+        const runTick=()=>runtime.runKnowledgeVersionedWorkerRuntimeReview({
           expectedLogin:login,windowBatches:2,budgetMs:90000,projectOrigin:readerOrigin,
           issuer:{openIssuerConnection,storage:{from:requestedBucket=>({createSignedUrl:async(path,ttl,options)=>{
             assert.equal(requestedBucket,bucket);assert.equal(path,j.path);
@@ -494,10 +501,24 @@ test('actual disposable Supabase Storage authorization and lifecycle: '+reviewMo
             return {...connection,destroy:async()=>{await connection.destroy();runtimeClosed++;}};
           }
         });
+        const bearer=load('lib/security/machine-bearer-auth.ts',{'server-only':{},'node:crypto':require('node:crypto')});
+        const route=load('app/api/knowledge-import-worker/route.ts',{'@/lib/knowledge-import-worker-server':{runKnowledgeImportWorker:runTick},'@/lib/security/machine-bearer-auth':bearer});
+        const routeSecret=randomUUID()+randomUUID();
+        const savedEnabled=process.env.KNOWLEDGE_IMPORT_ENABLED,savedSecret=process.env.KNOWLEDGE_IMPORT_WORKER_SECRET;
+        try{
+          process.env.KNOWLEDGE_IMPORT_ENABLED='1';process.env.KNOWLEDGE_IMPORT_WORKER_SECRET=routeSecret;
+          const url='https://fixture.example/api/knowledge-import-worker';
+          assert.equal((await route.POST(new Request(url,{method:'POST'}))).status,401);
+          const result=await route.POST(new Request(url,{method:'POST',headers:{authorization:'Bearer '+routeSecret}}));
+          assert.equal(result.status,200);assert.deepEqual(await result.json(),{state:'complete',jobs:1});
+        }finally{
+          if(savedEnabled===undefined)delete process.env.KNOWLEDGE_IMPORT_ENABLED;else process.env.KNOWLEDGE_IMPORT_ENABLED=savedEnabled;
+          if(savedSecret===undefined)delete process.env.KNOWLEDGE_IMPORT_WORKER_SECRET;else process.env.KNOWLEDGE_IMPORT_WORKER_SECRET=savedSecret;
+        }
         assert.equal(runtimeOpened,1);assert.equal(runtimeClosed,1);
         await assert.rejects(resolveGrant({organizationId:org,jobId:j.id}),e=>e.code==='42501');
         assert.equal(issuerClosed,4);
-        assert.equal(tick.stop,'complete');assert.equal(tick.reports.length,1);assert.equal(tick.reports[0].report.created,1);assert.equal(issued,1);assert.equal(downloads,1);
+        assert.equal(issued,1);assert.equal(downloads,1);
         const docs=(await db.query("select status,created_by from public.knowledge_documents where metadata->>'import_job_id'=$1",[j.id])).rows;
         assert.deepEqual(docs,[{status:'draft',created_by:owner.actor}]);
         assert.equal((await db.query('select status from knowledge_import_jobs_v1 where id=$1',[j.id])).rows[0].status,'completed');
@@ -633,7 +654,7 @@ test('actual disposable Supabase Storage authorization and lifecycle: '+reviewMo
       await uploadAndVerify();memory('upload_scope_released');
       const workerStart=Date.now(),login='kb_capacity_'+randomUUID().replaceAll('-',''),password=randomUUID().replaceAll('-','');
       await db.query("create role "+login+" login password '"+password+"' nosuperuser nocreatedb nocreaterole noreplication nobypassrls noinherit");
-      await db.query('insert into knowledge_import_review.worker_principals values($1,true)',[login]);
+      await db.query('insert into knowledge_import_review.worker_principals(login_role,enabled) values($1,true)',[login]);
       await db.query('grant usage on schema knowledge_import_review to '+login);
       await db.query('grant execute on function knowledge_import_review.worker_due_jobs(integer),knowledge_import_review.worker_source_identity(uuid,uuid),knowledge_import_review.worker_verify_manifest(uuid,uuid,text,bigint,text,jsonb),knowledge_import_review.worker_digest_payloads(uuid,uuid,jsonb),knowledge_import_review.worker_claim(uuid,uuid,integer),knowledge_import_review.worker_finalize(uuid,uuid,integer,uuid,integer,jsonb),knowledge_import_review.worker_result(uuid,uuid,integer,uuid,integer),knowledge_import_review.worker_settle_failure(uuid,uuid,integer,uuid,integer,text) to '+login);
       const workerUrl=new URL(dbUrl.href);workerUrl.username=login;workerUrl.password=password;

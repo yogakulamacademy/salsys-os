@@ -28,7 +28,7 @@ const { Client: PostgresClient } = require('pg') as { Client: new (options: Clie
 type Options = {
   connectionUrl: string;
   login: string;
-} & ({ mode: 'hosted'; ca?: string } | { mode: 'disposable' });
+} & ({ mode: 'hosted'; projectRef: string; ca?: string } | { mode: 'disposable' });
 
 /** Open one session for the scoped SQL broker. The caller must destroy it after use. */
 export function createKnowledgePostgresConnector(options: Options): () => Promise<Connection> {
@@ -43,15 +43,15 @@ export function createKnowledgePostgresConnector(options: Options): () => Promis
     throw new Error('Invalid knowledge database configuration');
   }
 
-  const direct = /^db\.[a-z0-9]{20}\.supabase\.co$/.test(url.hostname);
   const sessionPooler = /^[a-z0-9-]+\.pooler\.supabase\.com$/.test(url.hostname);
   const hosted = options.mode === 'hosted';
   const permittedHost = hosted
-    ? (direct || sessionPooler) && (url.port === '' || url.port === '5432')
+    ? /^[a-z0-9]{20}$/.test(options.projectRef) &&
+      (url.hostname === `db.${options.projectRef}.supabase.co` || sessionPooler) &&
+      (url.port === '' || url.port === '5432')
     : url.hostname === '127.0.0.1' && url.port === '54322';
   const permittedLogin = /^[a-z][a-z0-9_]{0,62}$/.test(options.login) &&
-    (hosted && sessionPooler ? user.startsWith(options.login + '.') &&
-      /^[a-z0-9]{20}$/.test(user.slice(options.login.length + 1)) : user === options.login);
+    user === (hosted && sessionPooler ? `${options.login}.${options.projectRef}` : options.login);
   if (
     !['postgres:', 'postgresql:'].includes(url.protocol) || url.pathname !== '/postgres' ||
     url.search || url.hash || !permittedHost || !permittedLogin || !password

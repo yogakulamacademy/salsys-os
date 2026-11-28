@@ -337,8 +337,11 @@ end $$;
 -- session_user is the actual connection identity; JWT claims cannot substitute for it.
 create table knowledge_import_review.worker_principals (
   login_role name primary key,
-  enabled boolean not null default false
+  enabled boolean not null default false,
+  accept_gateway_jobs boolean not null default false
 );
+create unique index knowledge_import_one_gateway_worker
+  on knowledge_import_review.worker_principals (accept_gateway_jobs) where accept_gateway_jobs;
 create table knowledge_import_review.worker_delegations (
   organization_id uuid not null,
   job_id uuid not null,
@@ -954,11 +957,28 @@ begin
  
  return knowledge_import_review.current_scope();
 end $$;
+-- Only administrators of this private registry select the default worker. Application and
+-- worker logins cannot choose another principal or read the registry directly.
+create function knowledge_import_review.gateway_worker_login()
+returns name language plpgsql security invoker set search_path=pg_catalog,pg_temp as $$
+declare login name;
+begin
+ select p.login_role into login from knowledge_import_review.worker_principals p
+ join pg_roles r on r.rolname=p.login_role
+ where p.accept_gateway_jobs and p.enabled and r.rolcanlogin and not r.rolsuper
+   and not r.rolbypassrls and not r.rolcreaterole and not r.rolcreatedb and not r.rolreplication
+   and not exists(select 1 from pg_auth_members m where m.member=r.oid)
+ for share of p;
+ if not found then raise exception 'import worker unavailable' using errcode='55000'; end if;
+ return login;
+end $$;
+revoke all on function knowledge_import_review.gateway_worker_login() from public,anon,authenticated,service_role;
+
 create function knowledge_import_review.broker_reserve_current(p_job uuid,p_bytes bigint,p_upload integer,p_retain integer)
 returns uuid language plpgsql security definer set search_path=pg_catalog,public,auth,pg_temp as $$
 begin
  perform knowledge_import_review.broker_assert();
- 
+ perform knowledge_import_review.gateway_worker_login();
  return knowledge_import_review.reserve_current(p_job,p_bytes,p_upload,p_retain);
 end $$;
 create function knowledge_import_review.broker_cancel_current(p_job uuid)
@@ -987,6 +1007,7 @@ returns bytea language plpgsql security definer set search_path=pg_catalog,publi
 begin
  perform knowledge_import_review.broker_assert();
  if p_org is distinct from knowledge_import_review.current_scope() then raise exception 'application scope denied' using errcode='42501'; end if;
+ perform knowledge_import_review.gateway_worker_login();
  return knowledge_import_review.gateway_begin_publication(p_org,p_job,p_token,p_generation);
 end $$;
 create function knowledge_import_review.broker_gateway_lock(p_org uuid,p_job uuid,p_token uuid,p_generation bigint)
@@ -998,10 +1019,22 @@ begin
 end $$;
 create function knowledge_import_review.broker_gateway_register(p_org uuid,p_job uuid,p_token uuid,p_generation bigint,p_version text,p_bytes bigint,p_sha text,p_manifest jsonb)
 returns text language plpgsql security definer set search_path=pg_catalog,public,auth,pg_temp as $$
+declare result text; login name; retain_until timestamptz;
 begin
  perform knowledge_import_review.broker_assert();
  if p_org is distinct from knowledge_import_review.current_scope() then raise exception 'application scope denied' using errcode='42501'; end if;
- return knowledge_import_review.gateway_register(p_org,p_job,p_token,p_generation,p_version,p_bytes,p_sha,p_manifest);
+ result:=knowledge_import_review.gateway_register(p_org,p_job,p_token,p_generation,p_version,p_bytes,p_sha,p_manifest);
+ if result='queued' then
+   login:=knowledge_import_review.gateway_worker_login();
+   select j.retention_expires_at into strict retain_until from public.knowledge_import_jobs_v1 j
+     where j.organization_id=p_org and j.id=p_job;
+   -- Same transaction as registering the verified source. The original authenticated actor
+   -- delegates this exact source to the configured worker using the existing authority check.
+   if not knowledge_import_review.delegate_worker(p_org,p_job,login,least(retain_until,clock_timestamp()+interval '15 minutes')) then
+     raise exception 'import worker assignment failed' using errcode='55000';
+   end if;
+ end if;
+ return result;
 end $$;
 create function knowledge_import_review.broker_gateway_publication_receipt(p_org uuid,p_job uuid,p_token uuid,p_generation bigint)
 returns table(state text,job_status text) language plpgsql security definer set search_path=pg_catalog,public,auth,pg_temp as $$

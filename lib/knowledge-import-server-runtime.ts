@@ -1,8 +1,7 @@
 import 'server-only';
-import { createClient } from '@supabase/supabase-js';
-import { getSupabasePublicConfig } from '@/lib/config';
 import { createKnowledgePostgresConnector } from './knowledge-import-postgres';
 import { createKnowledgeCookieRuntimeReview } from './knowledge-import-server-auth-review';
+import { getKnowledgeImportStorage } from './knowledge-import-storage-runtime';
 
 export async function resolveKnowledgeImportPageScope(organizationId: string): Promise<string | null> {
   try {
@@ -17,38 +16,24 @@ export function getKnowledgeImportServerRuntime() {
   const origin = process.env.KNOWLEDGE_IMPORT_ORIGIN;
   const connectionUrl = process.env.KNOWLEDGE_IMPORT_DATABASE_URL;
   const login = process.env.KNOWLEDGE_IMPORT_DATABASE_LOGIN;
-  const storageToken = process.env.KNOWLEDGE_IMPORT_STORAGE_TOKEN;
-  const { url, key, configured } = getSupabasePublicConfig();
-  if (!configured || !url || !key || !origin || !connectionUrl || !login || !storageToken) {
+  if (!origin || !connectionUrl || !login) {
     throw new Error('Knowledge import configuration is incomplete');
   }
 
-  const provider = new URL(url);
   const app = new URL(origin);
-  if (provider.protocol !== 'https:' || !/^[a-z0-9]{20}\.supabase\.co$/.test(provider.hostname) ||
-      provider.href !== provider.origin + '/' || app.protocol !== 'https:' || app.origin !== origin) {
+  if (app.protocol !== 'https:' || app.origin !== origin) {
     throw new Error('Invalid knowledge import origins');
   }
-  const claims = JSON.parse(Buffer.from(storageToken.split('.')[1] ?? '', 'base64url').toString());
-  if (claims?.role !== 'knowledge_import_gateway_storage' ||
-      !Number.isSafeInteger(claims.exp) || claims.exp <= Math.floor(Date.now() / 1000)) {
-    throw new Error('Invalid knowledge import Storage credential');
-  }
-  const storage = createClient(provider.origin, key, {
-    accessToken: async () => storageToken,
-    global: {
-      fetch: (input, init) => fetch(input, {
-        ...init, redirect: 'error', cache: 'no-store', signal: AbortSignal.timeout(30000),
-      }),
-    },
-  }).storage;
+  const { provider, projectRef, storage } = getKnowledgeImportStorage(
+    process.env.KNOWLEDGE_IMPORT_STORAGE_TOKEN, 'knowledge_import_gateway_storage',
+  );
   return createKnowledgeCookieRuntimeReview({
     origin,
     issuer: provider.origin + '/auth/v1',
     uploadSeconds: 900,
     retentionSeconds: 86400,
     openDedicatedApplication: createKnowledgePostgresConnector({
-      mode: 'hosted', connectionUrl, login, ca: process.env.KNOWLEDGE_IMPORT_DATABASE_CA,
+      mode: 'hosted', connectionUrl, login, projectRef, ca: process.env.KNOWLEDGE_IMPORT_DATABASE_CA,
     }),
     providerFor: () => ({
       async createOnly({ bucket, path }, bytes) {

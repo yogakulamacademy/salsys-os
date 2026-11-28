@@ -11,6 +11,8 @@ on:
       - 'tests/readiness/knowledge-bulk-import-preflight.test.cjs'
       - 'tests/performance/knowledge-import-capacity.test.cjs'
       - 'app/api/knowledge-import-review/**'
+      - 'app/api/knowledge-import-worker/**'
+      - 'supabase/migrations/20261128043000_knowledge_import_gateway_bootstrap.sql'
       - '.github/workflows/knowledge-storage-provider-review.yml'
 permissions:
   contents: read
@@ -39,7 +41,7 @@ jobs:
       - name: Typecheck cumulative application candidate
         run: npm run typecheck
       - name: Verify application route and scoped publication adapter
-        run: node --test tests/readiness/knowledge-import-route-publication-review.test.cjs tests/readiness/knowledge-import-reconciliation-review.test.cjs tests/readiness/knowledge-import-publication-stream-review.test.cjs tests/readiness/knowledge-import-runtime-composition-review.test.cjs tests/readiness/knowledge-import-upload-flow-review.test.cjs tests/readiness/knowledge-import-worker-runtime-review.test.cjs tests/readiness/knowledge-import-server-auth-review.test.cjs
+        run: node --test tests/readiness/knowledge-import-route-publication-review.test.cjs tests/readiness/knowledge-import-reconciliation-review.test.cjs tests/readiness/knowledge-import-publication-stream-review.test.cjs tests/readiness/knowledge-import-runtime-composition-review.test.cjs tests/readiness/knowledge-import-upload-flow-review.test.cjs tests/readiness/knowledge-import-worker-runtime-review.test.cjs tests/readiness/knowledge-import-worker-route.test.cjs tests/readiness/knowledge-import-server-auth-review.test.cjs
       - name: Verify loopback transport guard without network
         run: node --test tests/provider/knowledge-import-provider-transport.test.mjs
       - name: Install checksum-pinned local Supabase CLI
