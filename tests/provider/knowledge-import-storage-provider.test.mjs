@@ -40,17 +40,21 @@ test('actual disposable Supabase Storage authorization and lifecycle: '+reviewMo
     assert.equal((await db.query("select to_regclass('public.organizations') is null as fresh")).rows[0].fresh,true);
     assert.equal((await db.query('select count(*)::int as n from storage.buckets where id=$1',[bucket])).rows[0].n,0);
     await db.query(fixtureSql);
-    for(const file of ['supabase/migrations/20261016171500_organization_knowledge_v1.sql','supabase/migrations/20261103190000_ai_knowledge_provenance_readiness_v2.sql','docs/sql/knowledge-import-ledger-v1-REVIEW-DRAFT.sql','docs/sql/knowledge-import-transactions-REVIEW-DRAFT.sql','docs/sql/knowledge-import-storage-policies-REVIEW-DRAFT.sql']){
+    for(const file of ['supabase/migrations/20261016171500_organization_knowledge_v1.sql','supabase/migrations/20261103190000_ai_knowledge_provenance_readiness_v2.sql']){
       await db.query(readFileSync(file,'utf8'));
     }
     if(reviewMode==='rejected-direct-tus'){
+      for(const file of ['docs/sql/knowledge-import-ledger-v1-REVIEW-DRAFT.sql','docs/sql/knowledge-import-transactions-REVIEW-DRAFT.sql','docs/sql/knowledge-import-storage-policies-REVIEW-DRAFT.sql']){
+        await db.query(readFileSync(file,'utf8'));
+      }
       await db.query('grant usage on schema knowledge_import_review to authenticated;grant execute on function knowledge_import_review.storage_insert_allowed(text,text,jsonb) to authenticated');
     }else{
-      // Install the deny policy before the fresh bucket exists; never create any
-      // direct-TUS upload session or grant the permissive predicate in this mode.
-      await db.query(readFileSync('docs/sql/knowledge-import-gateway-only-REVIEW-DRAFT.sql','utf8'));
-      assert.equal((await db.query("select has_function_privilege('authenticated','knowledge_import_review.storage_insert_allowed(text,text,jsonb)','EXECUTE') as allowed")).rows[0].allowed,false);
-      assert.equal((await db.query("select count(*)::int as n from pg_policies where schemaname='storage' and tablename='objects' and policyname in ('kb_import_review_insert','kb_import_review_insert_guard')")).rows[0].n,0);
+      const migration=readFileSync('supabase/migrations/20261128043000_knowledge_import_gateway_bootstrap.sql','utf8');
+      await db.query(migration);
+      await db.query(readFileSync('docs/sql/knowledge-import-gateway-bootstrap-rollback.sql','utf8'));
+      assert.equal((await db.query("select to_regnamespace('knowledge_import_review') is null as removed")).rows[0].removed,true);
+      await db.query(migration);
+      assert.equal((await db.query("select to_regprocedure('knowledge_import_review.storage_insert_allowed(text,text,jsonb)') is null as absent")).rows[0].absent,true);
       assert.equal((await db.query("select count(*)::int as n from pg_policies where schemaname='storage' and tablename='objects' and policyname='kb_import_review_gateway_insert_guard'")).rows[0].n,1);
     }
     const made=await admin.storage.createBucket(bucket,{public:false,fileSizeLimit:50*1024*1024,allowedMimeTypes:['application/json']});
@@ -165,10 +169,6 @@ test('actual disposable Supabase Storage authorization and lifecycle: '+reviewMo
     // Independent gateway-only test. No rejected direct-TUS upload sessions exist.
     assert.equal((await db.query('select count(*)::int as n from storage.objects where bucket_id=$1',[bucket])).rows[0].n,0);
     assert.equal((await db.query('select count(*)::int as n from public.knowledge_import_jobs_v1')).rows[0].n,0);
-    await db.query(readFileSync('docs/sql/knowledge-import-gateway-staging-REVIEW-DRAFT.sql','utf8'));
-    await db.query(readFileSync('docs/sql/knowledge-import-application-boundary-REVIEW-DRAFT.sql','utf8'));
-    await db.query(readFileSync('docs/sql/knowledge-import-application-broker-REVIEW-DRAFT.sql','utf8'));
-    await db.query(readFileSync('docs/sql/knowledge-import-reconciliation-REVIEW-DRAFT.sql','utf8'));
     const require=createRequire(import.meta.url),{load}=require('../readiness/helpers.cjs');
     const upload=load('lib/knowledge-import-upload-contract.ts');
     const prep=load('lib/knowledge-import-source-preparation.ts',{'server-only':{},'node:crypto':require('node:crypto'),'./knowledge-bulk-import-preflight':load('lib/knowledge-bulk-import-preflight.ts'),'./knowledge-import-upload-contract':upload});
