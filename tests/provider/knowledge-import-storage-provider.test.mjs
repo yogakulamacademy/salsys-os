@@ -260,7 +260,7 @@ test('actual disposable Supabase Storage authorization and lifecycle: '+reviewMo
     });
     await t.test('gateway-only policy denies new direct TUS and ordinary client upload',async()=>{
       const j=await createJob();denied(await start(j));denied(await start(j,outsider));denied(await start(j,null));
-      assert.equal((await db.query("select has_function_privilege('authenticated','knowledge_import_review.storage_insert_allowed(text,text,jsonb)','EXECUTE') as allowed")).rows[0].allowed,false);
+      assert.equal((await db.query("select to_regprocedure('knowledge_import_review.storage_insert_allowed(text,text,jsonb)') is null as absent")).rows[0].absent,true);
       const direct=await fixtureFetch(api.origin+'/storage/v1/object/'+bucket+'/'+j.path,{method:'POST',headers:{apikey:anon,Authorization:'Bearer '+owner.token,'Content-Type':'application/json'},body:bytes,redirect:'error',signal:AbortSignal.timeout(20000)});
       denied(direct);assert.equal(await read(j),null);
     });
