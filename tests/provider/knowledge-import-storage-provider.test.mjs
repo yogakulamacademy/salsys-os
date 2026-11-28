@@ -419,36 +419,7 @@ test('actual disposable Supabase Storage authorization and lifecycle: '+reviewMo
       assert.equal((await call(id+'/reserve','invalid','POST',{'x-knowledge-file-bytes':'10'})).status,403);
       const run=browser.createKnowledgeBrowserUploadReview({origin:httpOrigin,jobId:id,file:new File([bytes],'fixture.json',{type:'application/json'}),fetcher:async(url,opts)=>handle(new Request(url,{method:'POST',headers:{...opts.headers,origin:httpOrigin,authorization:'Bearer '+owner.token,'x-knowledge-scope':ownerScope},body:opts.body}))});
       assert.deepEqual(await run(),{state:'registered',status:'queued'});
-      const {openKnowledgeImportBrowser}=await import('./knowledge-import-browser-fixture.mjs');
-      const clientForCookie=value=>createServerClient(api.origin,anon,{
-        global:{fetch:fixtureFetch},cookieOptions:{name:'kb-fixture-auth'},cookies:{
-          getAll:()=>value?.split(/;\s*/).map(pair=>{
-            const at=pair.indexOf('=');return {name:pair.slice(0,at),value:decodeURIComponent(pair.slice(at+1))};
-          })??[],setAll:()=>{}
-        }
-      });
-      const runtimeForCookie=value=>cookieAuth.createKnowledgeCookieRuntimeReview({...runtimeOptions,createAuthClient:async()=>clientForCookie(value)});
-      browserFixture=await openKnowledgeImportBrowser({cookies:jar,bytes,
-        resolveScope:cookie=>runtimeForCookie(cookie).resolveScope(org),
-        handle:request=>runtimeForCookie(request.headers.get('cookie')).handle(request),
-        reserve:id=>{assert.match(id,/^[0-9a-f-]{36}$/);second={id,path:org+'/'+id+'/source.json',length:bytes.length};jobs.set(id,second);},
-        readDraft:async cookie=>{
-          const result=await clientForCookie(cookie).from('knowledge_documents').select('id,status')
-            .eq('organization_id',org).eq('status','draft').eq('metadata->>import_job_id',second.id).single();
-          return result.error===null&&result.data?.status==='draft';
-        },
-      });
-      const secondId=second.id;
-      const delegations=(await db.query(`select d.job_id,d.login_role,d.actor_id,d.actor_session_id,
-        d.object_version=j.object_version as exact_version,d.source_sha256=j.sha256 as exact_source,
-        d.manifest_sha256=j.manifest_sha256 as exact_manifest
-        from knowledge_import_review.worker_delegations d join public.knowledge_import_jobs_v1 j on j.organization_id=d.organization_id and j.id=d.job_id
-        where d.organization_id=$1 and d.job_id in ($2,$3)`,[org,id,secondId])).rows;
-      assert.equal(delegations.length,2);
-      for(const d of delegations)assert.deepEqual(d,{job_id:d.job_id,login_role:workerLogin,actor_id:owner.actor,
-        actor_session_id:owner.claims.session_id,exact_version:true,exact_source:true,exact_manifest:true});
-      assert.equal(digest(await read(j)),digest(bytes));assert.equal(digest(await read(second)),digest(bytes));
-      const history=await call('history',owner.token,'GET');assert.equal(history.status,200);const historyJobs=(await history.json()).jobs;assert.equal(historyJobs.find(x=>x.id===id).status,'queued');assert.equal(historyJobs.find(x=>x.id===secondId).status,'queued');
+      const history=await call('history',owner.token,'GET');assert.equal(history.status,200);const historyJobs=(await history.json()).jobs;assert.equal(historyJobs.find(x=>x.id===id).status,'queued');
       const outside=await call('history',outsider.token,'GET');assert.equal(outside.status,200);assert.equal((await outside.json()).jobs.some(x=>x.id===id),false);
       assert.equal((await call('history',owner.token,'GET',{'x-knowledge-scope':outsideScope})).status,403);
       await db.query("insert into public.organization_members values($1,$2,true,'admin')",[other,owner.actor]);
@@ -472,10 +443,42 @@ test('actual disposable Supabase Storage authorization and lifecycle: '+reviewMo
       assert.equal((await call(id+'/cancel')).status,200);
       await db.query('update public.organization_members set active=false where organization_id=$1 and user_id=$2',[org,owner.actor]);
       try{assert.equal((await call('history',owner.token,'GET')).status,403);assert.equal(await cookieRuntime.resolveScope(),null);}finally{await db.query('update public.organization_members set active=true where organization_id=$1 and user_id=$2',[org,owner.actor]);}
+      const signedBrowserCookies=new Map(jar);
       jar.clear();assert.equal(await cookieRuntime.resolveScope(),null);assert.equal((await cookieHistory(ownerScope)).status,403);
       await db.query('update knowledge_import_review.application_principals set enabled=false where login_role=$1',[login]);
       assert.equal((await call('history',owner.token,'GET')).status,403);
       await assert.rejects(transport(owner.claims)('select knowledge_import_review.broker_current_scope()',[]),e=>e.code==='42501');
+      await db.query('update knowledge_import_review.application_principals set enabled=true where login_role=$1',[login]);
+      const {openKnowledgeImportBrowser}=await import('./knowledge-import-browser-fixture.mjs');
+      const clientForCookie=value=>createServerClient(api.origin,anon,{
+        global:{fetch:fixtureFetch},cookieOptions:{name:'kb-fixture-auth'},cookies:{
+          getAll:()=>value?.split(/;\s*/).map(pair=>{
+            const at=pair.indexOf('=');return {name:pair.slice(0,at),value:decodeURIComponent(pair.slice(at+1))};
+          })??[],setAll:()=>{}
+        }
+      });
+      const runtimeForCookie=value=>cookieAuth.createKnowledgeCookieRuntimeReview({...runtimeOptions,createAuthClient:async()=>clientForCookie(value)});
+      browserFixture=await openKnowledgeImportBrowser({cookies:signedBrowserCookies,bytes,
+        resolveScope:cookie=>runtimeForCookie(cookie).resolveScope(org),
+        handle:request=>runtimeForCookie(request.headers.get('cookie')).handle(request),
+        reserve:id=>{assert.match(id,/^[0-9a-f-]{36}$/);second={id,path:org+'/'+id+'/source.json',length:bytes.length};jobs.set(id,second);},
+        readDraft:async cookie=>{
+          const result=await clientForCookie(cookie).from('knowledge_documents').select('id,status')
+            .eq('organization_id',org).eq('status','draft').eq('metadata->>import_job_id',second.id).single();
+          return result.error===null&&result.data?.status==='draft';
+        },
+      });
+      const secondId=second.id;
+      const delegations=(await db.query(`select d.job_id,d.login_role,d.actor_id,d.actor_session_id,
+        d.object_version=j.object_version as exact_version,d.source_sha256=j.sha256 as exact_source,
+        d.manifest_sha256=j.manifest_sha256 as exact_manifest
+        from knowledge_import_review.worker_delegations d join public.knowledge_import_jobs_v1 j on j.organization_id=d.organization_id and j.id=d.job_id
+        where d.organization_id=$1 and d.job_id in ($2,$3)`,[org,id,secondId])).rows;
+      assert.equal(delegations.length,2);
+      for(const d of delegations)assert.deepEqual(d,{job_id:d.job_id,login_role:workerLogin,actor_id:owner.actor,
+        actor_session_id:owner.claims.session_id,exact_version:true,exact_source:true,exact_manifest:true});
+      assert.equal(digest(await read(j)),digest(bytes));assert.equal(digest(await read(second)),digest(bytes));
+      const historyAfterBrowser=await call('history',owner.token,'GET');assert.equal(historyAfterBrowser.status,200);assert.equal((await historyAfterBrowser.json()).jobs.find(x=>x.id===secondId).status,'queued');
       dispatchedJob={job:second,login:workerLogin,password:workerPassword};
     });
     await t.test('machine worker processes the assigned private Storage source into drafts',async()=>{

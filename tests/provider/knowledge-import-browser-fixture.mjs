@@ -1,6 +1,5 @@
 import { strict as assert } from 'node:assert';
-import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { createRequire } from 'node:module';
 import { chromium, expect } from '@playwright/test';
@@ -9,8 +8,10 @@ const require = createRequire(import.meta.url);
 const origin = 'https://fixture.example';
 
 async function bundleImportCentre() {
-  const directory = await mkdtemp(join(tmpdir(), 'kb-browser-'));
-  const entry = join(directory, 'entry.mjs');
+  const output = resolve('test-results');
+  await mkdir(output, { recursive: true });
+  const directory = await mkdtemp(join(output, 'kb-browser-'));
+  const entry = join(directory, 'entry.js');
   await writeFile(entry, `
     import { createElement } from 'react';
     import { createRoot } from 'react-dom/client';
@@ -36,6 +37,7 @@ export async function openKnowledgeImportBrowser({ cookies, resolveScope, handle
   try {
     const script = await bundleImportCentre();
     const page = await browser.newPage({ viewport: { width: 390, height: 900 } });
+    let jobId;
     await page.context().addCookies([...cookies].map(([name, value]) => ({ name, value, url: origin, httpOnly: true, secure: true, sameSite: 'Lax' })));
     await page.route('**/*', async (route) => {
       const request = route.request();
@@ -54,7 +56,10 @@ export async function openKnowledgeImportBrowser({ cookies, resolveScope, handle
       }
       if (!url.pathname.startsWith('/api/knowledge-import-review/')) return route.abort();
       const [, , , id, operation] = url.pathname.split('/');
-      if (operation === 'reserve') reserve(id);
+      if (operation === 'reserve') {
+        jobId = id;
+        reserve(id);
+      }
       const body = request.postDataBuffer();
       const response = await handle(new Request(url, { method: request.method(), headers, body: body ?? undefined }));
       await route.fulfill({ status: response.status, headers: Object.fromEntries(response.headers), body: await response.text() });
@@ -64,10 +69,12 @@ export async function openKnowledgeImportBrowser({ cookies, resolveScope, handle
     await centre.getByLabel('Choose JSON file').setInputFiles({ name: 'browser-fixture.json', mimeType: 'application/json', buffer: bytes });
     await centre.getByRole('button', { name: 'Start import' }).click();
     await expect(centre.getByText(/Upload received/)).toBeVisible({ timeout: 30000 });
-    await expect(centre.getByText('Queued', { exact: true }).first()).toBeVisible();
+    assert.ok(jobId);
+    const job = centre.getByRole('article').filter({ hasText: `Import ${jobId.slice(0, 8)}` });
+    await expect(job.getByText('Queued', { exact: true })).toBeVisible();
     return {
       async verifyDraftReview() {
-        await expect(centre.getByText('Completed', { exact: true }).last()).toBeVisible({ timeout: 15000 });
+        await expect(job.getByText('Completed', { exact: true })).toBeVisible({ timeout: 15000 });
         const review = centre.getByRole('link', { name: 'View latest drafts' });
         assert.equal(await review.getAttribute('href'), '/settings/knowledge?status=draft#knowledge-library');
         await review.click();
