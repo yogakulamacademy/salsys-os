@@ -430,6 +430,22 @@ test('actual disposable Supabase Storage authorization and lifecycle: '+reviewMo
           return {bucket,objectPath:j.path,version:identity.objectVersion,contentType:'application/json',chunks};
         };
         const runtime=load('lib/knowledge-import-worker-runtime-review.ts',{'server-only':{},'./knowledge-import-worker-adapters-review':adapters,'./knowledge-import-scheduler-review':scheduler,'./knowledge-import-upload-contract':upload});
+        let issuerClosed=0;
+        const resolveGrant=runtime.createKnowledgeWorkerReadGrantResolverReview(login,async()=>{
+          const conn=new pg.Client({connectionString:workerUrl.href,connectionTimeoutMillis:5000});
+          await conn.connect();
+          return {query:(statement,params)=>conn.query(statement,params),destroy:async()=>{await conn.end();issuerClosed++;}};
+        });
+        const grant=await resolveGrant({organizationId:org,jobId:j.id});
+        const expectedGrant=(await db.query(`select j.object_version,j.verified_bytes,j.sha256,j.manifest_sha256,
+          floor(extract(epoch from least(d.expires_at,j.retention_expires_at))*1000)::bigint as expiry
+          from public.knowledge_import_jobs_v1 j join knowledge_import_review.worker_delegations d
+          on d.organization_id=j.organization_id and d.job_id=j.id where j.organization_id=$1 and j.id=$2`,[org,j.id])).rows[0];
+        assert.deepEqual(grant,{identity:{objectPath:j.path,objectVersion:expectedGrant.object_version,
+          byteLength:Number(expectedGrant.verified_bytes),sha256:expectedGrant.sha256,manifestSha256:expectedGrant.manifest_sha256},
+          expiresAtMs:Number(expectedGrant.expiry)});
+        await assert.rejects(resolveGrant({organizationId:other,jobId:j.id}),e=>e.code==='42501');
+        assert.equal(issuerClosed,2);
         let runtimeOpened=0,runtimeClosed=0;
         const tick=await runtime.runKnowledgeWorkerRuntimeReview({expectedLogin:login,windowBatches:2,budgetMs:90000,readSource,
           openDedicatedWorker:async()=>{
@@ -438,6 +454,8 @@ test('actual disposable Supabase Storage authorization and lifecycle: '+reviewMo
           }
         });
         assert.equal(runtimeOpened,1);assert.equal(runtimeClosed,1);
+        await assert.rejects(resolveGrant({organizationId:org,jobId:j.id}),e=>e.code==='42501');
+        assert.equal(issuerClosed,3);
         assert.equal(tick.stop,'complete');assert.equal(tick.reports.length,1);assert.equal(tick.reports[0].report.created,1);assert.equal(issued,1);assert.equal(downloads,1);
         const docs=(await db.query("select status,created_by from public.knowledge_documents where metadata->>'import_job_id'=$1",[j.id])).rows;
         assert.deepEqual(docs,[{status:'draft',created_by:owner.actor}]);
