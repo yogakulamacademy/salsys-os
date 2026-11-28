@@ -876,7 +876,8 @@ begin
  update knowledge_import_review.gateway_uploads set phase='registered' where organization_id=p_org and job_id=p_job;
  return result;
 end $$;
--- Only terminal receiving uploads may purge chunks without external publication reconciliation.
+-- Receiving uploads may purge chunks after retention. An abandoned reservation
+-- becomes expired under the same lock, without waiting for its original session.
 -- No quota release here: absence of any provider object/old upload still requires evidence.
 -- Durable logical database purge receipt; not provider deletion, WAL/backups erasure,
 -- or quota-release evidence. No authenticated, application or worker grants.
@@ -895,17 +896,21 @@ returns bigint language plpgsql security invoker set search_path=pg_catalog,publ
 declare j public.knowledge_import_jobs_v1%rowtype; g knowledge_import_review.gateway_uploads%rowtype; removed bigint;
 begin
  select * into j from public.knowledge_import_jobs_v1 where organization_id=p_org and id=p_job for update;
- if not found or j.status not in ('cancelled','expired','failed') or clock_timestamp()<j.retention_expires_at then
+ if not found or j.status not in ('awaiting_upload','cancelled','expired','failed') or clock_timestamp()<j.retention_expires_at then
    raise exception 'gateway purge not eligible'; end if;
  select * into g from knowledge_import_review.gateway_uploads where organization_id=p_org and job_id=p_job for update;
- if not found then return 0; end if;
- if g.phase<>'receiving' then raise exception 'gateway publication reconciliation required'; end if;
+ if not found and j.status<>'awaiting_upload' then return 0; end if;
+ if g.job_id is not null and g.phase<>'receiving' then raise exception 'gateway publication reconciliation required'; end if;
  if j.storage_released_at is not null or j.object_version is not null or j.sha256 is not null or j.manifest_sha256 is not null
    or g.source_sha256 is not null or exists(select 1 from public.knowledge_import_entries_v1 e
      where e.organization_id=p_org and e.job_id=p_job)
    then raise exception 'gateway purge identity conflict'; end if;
- select coalesce(sum(octet_length(bytes)),0) into removed from knowledge_import_review.gateway_chunks where organization_id=p_org and job_id=p_job;
- if removed is distinct from g.received_bytes or removed>j.declared_bytes then raise exception 'gateway staged byte count conflict'; end if;
+ if g.job_id is not null then
+   select coalesce(sum(octet_length(bytes)),0) into removed from knowledge_import_review.gateway_chunks where organization_id=p_org and job_id=p_job;
+   if removed is distinct from g.received_bytes or removed>j.declared_bytes then raise exception 'gateway staged byte count conflict'; end if;
+ end if;
+ if j.status='awaiting_upload' then perform knowledge_import_review.mark_job_expired(p_org,p_job); end if;
+ if g.job_id is null then return 0; end if;
  -- Parent job and stage locks serialize purge with upload/cancellation. Receipt
  -- and row removal commit together; failed transactions leave both untouched.
  insert into knowledge_import_review.gateway_receiving_purges(organization_id,job_id,generation,removed_bytes)

@@ -371,6 +371,8 @@ test('actual disposable Supabase Storage authorization and lifecycle: '+reviewMo
       const otherBroker=transport(outsider.claims);
       const reserveOther=(job,size)=>otherBroker('select knowledge_import_review.broker_reserve_current($1,$2,$3,$4)',[job,size,600,1200]);
       const advanceDeadline=job=>db.query("update public.knowledge_import_jobs_v1 set created_at=clock_timestamp()-interval '2 minutes',upload_expires_at=clock_timestamp()-interval '1 minute' where organization_id=$1 and id=$2",[other,job]);
+      const lapseRetention=job=>db.query("update public.knowledge_import_jobs_v1 set retention_expires_at=clock_timestamp()-interval '30 seconds' where organization_id=$1 and id=$2",[other,job]);
+      const purgeOther=async job=>(await db.query('select knowledge_import_review.gateway_purge_receiving($1,$2)::int as removed',[other,job])).rows[0].removed;
       const otherHistory=async job=>(await otherBroker('select * from knowledge_import_review.broker_current_history($1,$2,$3)',[25,null,null])).rows.find(row=>row.job_id===job);
       const stageOther=async(job,data)=>{
         const token=randomUUID();
@@ -388,13 +390,28 @@ test('actual disposable Supabase Storage authorization and lifecycle: '+reviewMo
       await reserveOther(replacement,9);
       assert.deepEqual((await db.query('select storage_released_at from public.knowledge_import_jobs_v1 where id=$1',[abandoned])).rows,[{storage_released_at:null}]);
       assert.equal((await db.query('select count(*)::int as n from knowledge_import_review.gateway_chunks where job_id=$1',[abandoned])).rows[0].n,1);
+      await assert.rejects(purgeOther(abandoned),/gateway purge not eligible/);
+      await lapseRetention(abandoned);
+      assert.equal(await purgeOther(abandoned),11);
+      assert.equal(await purgeOther(abandoned),0);
+      assert.deepEqual((await db.query('select status,storage_released_at from public.knowledge_import_jobs_v1 where id=$1',[abandoned])).rows,[{status:'expired',storage_released_at:null}]);
+      assert.deepEqual((await db.query('select generation::int,removed_bytes::int from knowledge_import_review.gateway_receiving_purges where organization_id=$1 and job_id=$2',[other,abandoned])).rows,[{generation:1,removed_bytes:11}]);
+      assert.equal((await db.query('select count(*)::int as n from knowledge_import_review.gateway_chunks where job_id=$1',[abandoned])).rows[0].n,0);
       const fence=await stageOther(replacement,Buffer.from('uploading'));
       await otherBroker('select knowledge_import_review.broker_gateway_begin_publication($1,$2,$3,$4)',fence);
       await advanceDeadline(replacement);
       assert.equal((await otherHistory(replacement)).job_status,'awaiting_upload');
       await db.query('update knowledge_import_review.quotas set max_reserved_bytes=25 where organization_id=$1',[other]);
       await assert.rejects(reserveOther(extra,1),/import quota exceeded/);
+      await lapseRetention(replacement);
+      await assert.rejects(purgeOther(replacement),/gateway publication reconciliation required/);
+      assert.deepEqual((await db.query('select status,storage_released_at from public.knowledge_import_jobs_v1 where id=$1',[replacement])).rows,[{status:'awaiting_upload',storage_released_at:null}]);
       await otherBroker('select knowledge_import_review.broker_cancel_current($1)',[replacement]);
+      await reserveOther(extra,1);
+      await advanceDeadline(extra);
+      await lapseRetention(extra);
+      assert.equal(await purgeOther(extra),0);
+      assert.deepEqual((await db.query('select status,storage_released_at from public.knowledge_import_jobs_v1 where id=$1',[extra])).rows,[{status:'expired',storage_released_at:null}]);
       const publicationAdapter=load('lib/knowledge-import-publication-adapter-review.ts',{'server-only':{},'./knowledge-import-upload-contract':upload});
       const runtime=load('lib/knowledge-import-runtime-composition-review.ts',{'server-only':{},'./knowledge-import-application-review':application,'./knowledge-import-application-broker-review':broker,'./knowledge-import-publication-adapter-review':publicationAdapter});
       let second;
