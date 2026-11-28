@@ -53,3 +53,13 @@ export function cronMatches(parsed, date) {
   if (!parsed.domStar && !parsed.dowStar) return domOk || dowOk;
   return domOk && dowOk;
 }
+
+export function knowledgeImportCronJob(env) {
+  if (env.KNOWLEDGE_IMPORT_ENABLED !== '1') return null;
+
+  const secret = env.KNOWLEDGE_IMPORT_WORKER_SECRET?.trim();
+  if (!secret || secret.length < 32 || secret === env.CRON_SECRET?.trim()) {
+    throw new Error('Knowledge import requires a dedicated worker scheduler secret');
+  }
+  return { path: '/api/knowledge-import-worker', cron: parseCron('* * * * *'), method: 'POST', secret };
+}

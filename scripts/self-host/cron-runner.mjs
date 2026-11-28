@@ -13,24 +13,30 @@
 //   CRON_TIMEOUT_MS per-call limit, default 300000 (Vercel's longest maxDuration)
 //   CRON_CONFIG     path to vercel.json, default ./vercel.json
 //   CRON_DRY_RUN=1  print what would run, call nothing
+//   KNOWLEDGE_IMPORT_ENABLED=1  also run the scheduled Knowledge Import worker
+//   KNOWLEDGE_IMPORT_WORKER_SECRET  dedicated secret for that worker only
+//   KNOWLEDGE_IMPORT_CRON_ONLY=1  schedule only Knowledge Import, for a separate runner
 
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-import { cronMatches, parseCron } from './cron-lib.mjs';
+import { cronMatches, knowledgeImportCronJob, parseCron } from './cron-lib.mjs';
 
 const baseUrl = (process.env.CRON_BASE_URL || '').replace(/\/+$/, '');
 const secret = process.env.CRON_SECRET || '';
 const timeoutMs = Number(process.env.CRON_TIMEOUT_MS || 300_000);
 const dryRun = process.env.CRON_DRY_RUN === '1';
+const workerOnly = process.env.KNOWLEDGE_IMPORT_CRON_ONLY === '1';
 const configPath = resolve(process.env.CRON_CONFIG || 'vercel.json');
+const knowledgeImportJob = knowledgeImportCronJob(process.env);
 
-if (!baseUrl || (!secret && !dryRun)) {
-  console.error(JSON.stringify({ level: 'error', msg: 'CRON_BASE_URL and CRON_SECRET are required' }));
+if (!baseUrl || (!workerOnly && !secret && !dryRun) || (workerOnly && !knowledgeImportJob)) {
+  console.error(JSON.stringify({ level: 'error', msg: 'Cron runner configuration is incomplete' }));
   process.exit(1);
 }
 
-const jobs = JSON.parse(readFileSync(configPath, 'utf8')).crons.map((c) => ({ path: c.path, cron: parseCron(c.schedule) }));
+const jobs = workerOnly ? [] : JSON.parse(readFileSync(configPath, 'utf8')).crons.map((c) => ({ path: c.path, cron: parseCron(c.schedule) }));
+if (knowledgeImportJob) jobs.push(knowledgeImportJob);
 const running = new Set();
 
 function log(entry) {
@@ -50,8 +56,9 @@ async function run(job) {
   const started = Date.now();
   try {
     const response = await fetch(`${baseUrl}${job.path}`, {
-      method: 'GET',
-      headers: { Authorization: `Bearer ${secret}`, 'User-Agent': 'salsys-cron-runner/1' },
+      method: job.method ?? 'GET',
+      headers: { Authorization: `Bearer ${job.secret ?? secret}`, 'User-Agent': 'salsys-cron-runner/1' },
+      redirect: job.secret ? 'error' : 'follow',
       signal: AbortSignal.timeout(timeoutMs),
     });
     await response.arrayBuffer().catch(() => undefined);

@@ -12,6 +12,26 @@ test('publication adapter permits only exact scoped source and refuses direct re
 });
 test('disabled mounted route returns 404 without composing authenticated application',async()=>{
  const boundary=load('lib/knowledge-import-route-boundary-review.ts',{'server-only':{},'./knowledge-import-application-review':{createKnowledgeApplicationReview:()=>{throw Error('must never initialize');}}});
- const route=load('app/api/knowledge-import-review/[...operation]/route.ts',{'@/lib/knowledge-import-route-boundary-review':boundary});
+ const route=load('app/api/knowledge-import-review/[...operation]/route.ts',{'@/lib/knowledge-import-route-boundary-review':boundary,'@/lib/knowledge-import-server-runtime':{getKnowledgeImportServerRuntime:()=>null}});
  for(const method of ['GET','POST']){const result=await route[method](new Request('https://fixture.example/api/knowledge-import-review/history',{method}));assert.equal(result.status,404);assert.equal(result.headers.get('cache-control'),'no-store');}
+});
+
+test('mounted route dispatches to the configured authenticated runtime and fails closed on configuration errors',async()=>{
+ let calls=0,bad=false;
+ const route=load('app/api/knowledge-import-review/[...operation]/route.ts',{
+  '@/lib/knowledge-import-route-boundary-review':{knowledgeImportDisabledRoute:()=>{throw Error('unexpected disabled route');}},
+  '@/lib/knowledge-import-server-runtime':{getKnowledgeImportServerRuntime:()=>{
+   if(bad)throw Error('sensitive configuration');
+   return {handle:async request=>{calls++;return new Response(request.method);}};
+  }},
+ });
+ for(const method of ['GET','POST']){
+  const request=new Request('https://fixture.example/api/knowledge-import-review/history',{method});
+  assert.equal(await (await route[method](request)).text(),method);
+ }
+ bad=true;
+ const response=await route.GET(new Request('https://fixture.example/api/knowledge-import-review/history'));
+ assert.equal(response.status,503);
+ assert.deepEqual(await response.json(),{error:'import_unavailable'});
+ assert.equal(calls,2);
 });

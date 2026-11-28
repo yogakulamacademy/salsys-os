@@ -14,9 +14,11 @@ import {
 import { PageHeader } from '@/components/ui';
 import type { ReactNode } from 'react';
 import './knowledge-workspace.css';
+import { KnowledgeImportCentrePollingReview } from '@/components/knowledge-import-centre-polling-review';
 import { KnowledgeRetrievalPreview } from '@/components/knowledge-retrieval-preview';
 import { KnowledgeSuggestions, type KnowledgeSuggestion } from '@/components/knowledge-suggestions';
 import { getSupabasePublicConfig, useMockData } from '@/lib/config';
+import { resolveKnowledgeImportPageScope } from '@/lib/knowledge-import-server-runtime';
 import { createClient } from '@/lib/supabase/server';
 import { getCurrentWorkspaceContext } from '@/lib/workspace';
 
@@ -243,6 +245,9 @@ export default async function KnowledgeSettingsPage({
         ? { title:'Admissions process', category:'general', placeholder:'Document the exact approved steps, responsible people and escalation path.' }
         : null;
   const canRead = !loadError;
+  const importScope = live && canManage && canRead && activeOrganizationId
+    ? await resolveKnowledgeImportPageScope(activeOrganizationId)
+    : null;
   const knowledgeReadiness = !canRead ? 'Unavailable'
     : usableApproved > 0 ? 'Eligible knowledge found'
       : partial ? 'Needs verification' : 'Not ready';
@@ -283,6 +288,8 @@ export default async function KnowledgeSettingsPage({
       </div>
 
       {canManage && !loadError ? <KnowledgeSuggestions suggestions={suggestions} canManage={canManage} decidedThisMonth={decidedThisMonth}/> : null}
+
+      {importScope ? <KnowledgeImportCentrePollingReview scopeKey={importScope}/> : null}
 
       <div className="kn-workspace">
         <section className="kn-panel kn-create" id="knowledge-create" aria-labelledby="kn-create-heading">
@@ -343,7 +350,7 @@ export default async function KnowledgeSettingsPage({
             </div>
           </form> : <div className="kn-readonly">Organization admin access is required to create or approve knowledge.</div>}
           {canManage ? <form action={importKnowledgeDraftsAction} className="kn-create-form" style={{ marginTop: 16 }}>
-            <label className="kn-field"><span>Import drafts from a file <small>.json, reviewed drafts only</small></span>
+            <label className="kn-field"><span>Import drafts from a file <small>.json, up to 2 MB</small></span>
               <input name="drafts" type="file" accept=".json,application/json" required/>
               <small>Every item is saved as a draft. Items marked ⚠ have a review note in their source name; check them before approving.</small>
             </label>
@@ -351,7 +358,7 @@ export default async function KnowledgeSettingsPage({
           </form> : null}
         </section>
 
-        <section className="kn-panel kn-library" aria-labelledby="kn-library-heading">
+        <section className="kn-panel kn-library" id="knowledge-library" aria-labelledby="kn-library-heading">
           <div className="kn-heading kn-library-heading">
             <span className="kn-heading-icon"><BookOpen size={21}/></span>
             <div><h2 id="kn-library-heading">Knowledge Library</h2>

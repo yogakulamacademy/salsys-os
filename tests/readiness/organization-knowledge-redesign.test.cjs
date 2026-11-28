@@ -46,3 +46,62 @@ test('templates never inject purportedly approved policy content', () => {
   assert.ok(css.includes('.kn-library-empty'));
   assert.ok(css.includes('@media(max-width:640px)'));
 });
+
+test('the knowledge page renders bulk import only for a verified workspace manager', async () => {
+  const ts = require('typescript');
+  const { renderToStaticMarkup } = require('react-dom/server');
+  const code = ts.transpileModule(page, { compilerOptions: {
+    module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX,
+  } }).outputText;
+  const organizationId = '10000000-0000-4000-8000-000000000001';
+  const scopeKey = 'a'.repeat(64);
+  const render = async ({ canManage, resolvedScope, mock = false }) => {
+    const scopes = [];
+    const emptyRows = { data: [], error: null };
+    const dependencies = {
+      'react/jsx-runtime': require('react/jsx-runtime'),
+      'lucide-react': require('lucide-react'),
+      './knowledge-workspace.css': {},
+      '@/components/page-feedback': { PageFeedback: () => null },
+      '@/components/ui': { PageHeader: () => null },
+      '@/components/knowledge-retrieval-preview': { KnowledgeRetrievalPreview: () => null },
+      '@/components/knowledge-suggestions': { KnowledgeSuggestions: () => null },
+      '@/components/knowledge-import-centre-polling-review': {
+        KnowledgeImportCentrePollingReview: ({ scopeKey: value }) => `Import Centre ${value}`,
+      },
+      '@/app/settings/knowledge/actions': {},
+      '@/lib/config': { useMockData: mock, getSupabasePublicConfig: () => ({ configured: true }) },
+      '@/lib/knowledge-import-server-runtime': { resolveKnowledgeImportPageScope: async (id) => {
+        scopes.push(id);
+        return resolvedScope;
+      } },
+      '@/lib/supabase/server': { createClient: async () => ({
+        auth: { getUser: async () => ({ data: { user: { id: 'fixture-user' } }, error: null }) },
+        rpc: async () => ({ data: canManage }),
+        from: () => ({
+          select() { return this; }, eq() { return this; }, order() { return this; },
+          in() { return this; }, gte() { return this; }, async limit() { return emptyRows; },
+        }),
+      }) },
+      '@/lib/workspace': { getCurrentWorkspaceContext: async () => ({ activeOrganizationId: organizationId }) },
+    };
+    const exports = {};
+    new Function('require', 'exports', code)((name) => {
+      assert.ok(Object.hasOwn(dependencies, name), `Unexpected dependency ${name}`);
+      return dependencies[name];
+    }, exports);
+    return { html: renderToStaticMarkup(await exports.default({ searchParams: Promise.resolve({}) })), scopes };
+  };
+
+  const owner = await render({ canManage: true, resolvedScope: scopeKey });
+  assert.match(owner.html, new RegExp(`Import Centre ${scopeKey}`));
+  assert.deepEqual(owner.scopes, [organizationId]);
+  const unavailable = await render({ canManage: true, resolvedScope: null });
+  assert.doesNotMatch(unavailable.html, /Import Centre/);
+  assert.match(unavailable.html, /Import as drafts/);
+  for (const options of [{ canManage: false }, { canManage: true, mock: true }]) {
+    const result = await render({ ...options, resolvedScope: scopeKey });
+    assert.doesNotMatch(result.html, /Import Centre/);
+    assert.deepEqual(result.scopes, []);
+  }
+});

@@ -18,7 +18,7 @@ const row={job_id:job,job_status:'completed',created_at:'2026-11-27T12:30:00.123
 test('history distinguishes processed from successful and strips extra sensitive metadata',()=>{
  const [x]=history.projectKnowledgeImportHistory([{...row,lease_token:'secret',object_path:'private',content:'raw'}]);
  assert.equal(x.percent,100);assert.equal(x.counts.created,7);assert.equal(x.needsAttention,true);assert.equal(x.createdAt,row.created_at);
- assert.equal(Object.hasOwn(x,'lease_token'),false);assert.equal(Object.hasOwn(x,'content'),false);assert.equal(history.KNOWLEDGE_IMPORT_CENTRE_RUNTIME_WIRED,false);
+ assert.equal(Object.hasOwn(x,'lease_token'),false);assert.equal(Object.hasOwn(x,'content'),false);
 });
 test('unknown total remains unknown; inconsistent ledger and malformed rows fail closed',()=>{
  const [x]=history.projectKnowledgeImportHistory([{...row,job_status:'awaiting_upload',total_entries:null,created:0,invalid:0,duplicate:0,failed:0}]);assert.equal(x.percent,null);assert.equal(x.remaining,null);

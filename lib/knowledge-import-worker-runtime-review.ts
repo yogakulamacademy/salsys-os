@@ -2,14 +2,16 @@ import 'server-only';
 import {createKnowledgeWorkerSourceAdaptersReview,readSignedKnowledgeSource} from './knowledge-import-worker-adapters-review';
 import {KNOWLEDGE_IMPORT_BUCKET,knowledgeImportObjectPath} from './knowledge-import-upload-contract';
 import {runKnowledgeImportSchedulerReview} from './knowledge-import-scheduler-review';
-export const KNOWLEDGE_WORKER_COMPOSITION_WIRED=false as const;
 type Query=Parameters<typeof createKnowledgeWorkerSourceAdaptersReview>[0];
 type Reader=Parameters<typeof createKnowledgeWorkerSourceAdaptersReview>[1];
 type Adapters=ReturnType<typeof createKnowledgeWorkerSourceAdaptersReview>;
 type Identity=Awaited<ReturnType<Adapters['readIdentity']>>;
 type Connection={query:Query;destroy:()=>Promise<void>};
 type Options={expectedLogin:string;openDedicatedWorker:()=>Promise<Connection>;readSource:Reader;windowBatches?:number;budgetMs?:number};
+const expireAssignments = 'select knowledge_import_review.worker_expire_assignments($1) as expired';
+const maxExpirationsPerTick = 2;
 const operations=new Map<string,number>([
+ [expireAssignments,1],
  ['select * from knowledge_import_review.worker_due_jobs($1)',1],
  ['select * from knowledge_import_review.worker_source_identity($1,$2)',2],
  ['select * from knowledge_import_review.worker_digest_payloads($1,$2,$3::jsonb)',3],
@@ -21,7 +23,7 @@ const operations=new Map<string,number>([
 ]);
 const loginCheck="select session_user::text as login, current_user=session_user and rolcanlogin and not rolsuper and not rolbypassrls and not rolcreaterole and not rolcreatedb and not rolreplication and not exists(select 1 from pg_auth_members m where m.member=r.oid) as restricted from pg_roles r where r.rolname=session_user";
 function same(a:Identity,b:Identity){return a.objectPath===b.objectPath&&a.objectVersion===b.objectVersion&&a.byteLength===b.byteLength&&a.sha256===b.sha256&&a.manifestSha256===b.manifestSha256;}
-/** One disabled, explicitly invoked worker window. A dedicated driver must enforce
+/** One explicitly invoked worker window. A dedicated driver must enforce
  * connection/network deadlines and destroy rather than recycle the login session.
  * No JWT impersonation, general SQL endpoint, credential creation or scheduler registration.
  * Failed statements are not replayed; an explicit receipt lookup may acquire a fresh connection. */
@@ -62,11 +64,13 @@ export async function runKnowledgeWorkerRuntimeReview(o:Options){
   })()};
  });
  try{
+  const {rows} = await query(expireAssignments, [maxExpirationsPerTick]);
+  if (rows.length !== 1 || typeof rows[0].expired !== 'number' || !Number.isInteger(rows[0].expired) ||
+      rows[0].expired < 0 || rows[0].expired > maxExpirationsPerTick) throw Error('worker expiry receipt invalid');
   return await runKnowledgeImportSchedulerReview(query,adapters,{jobs:1,batchSize:10,windowBatches:o.windowBatches??200,budgetMs:o.budgetMs??90000});
  }finally{closed=true;await discard();}
 }
-/** Production-shaped signed read composition, never invoked by a mounted route.
- * The issuer is an independent trusted capability service, not the worker login. */
+/** The issuer authorizes the exact object version with an independent Storage credential. */
 export function runKnowledgeSignedWorkerRuntimeReview(o:Omit<Options,'readSource'>&{projectOrigin:string;issueReadUrl:Parameters<typeof readSignedKnowledgeSource>[3];fetcher?:typeof fetch}){
  return runKnowledgeWorkerRuntimeReview({...o,readSource:(scope,identity)=>readSignedKnowledgeSource(scope,identity,o.projectOrigin,o.issueReadUrl,o.fetcher)});
 }

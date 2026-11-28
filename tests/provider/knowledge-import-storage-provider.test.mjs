@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {randomUUID,createHash} from 'node:crypto';
+import {randomUUID,createHash,createHmac} from 'node:crypto';
 import {readFileSync} from 'node:fs';
 import {createRequire} from 'node:module';
 import {createClient} from '@supabase/supabase-js';
@@ -35,22 +35,27 @@ test('actual disposable Supabase Storage authorization and lifecycle: '+reviewMo
   const options={auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false},global:{fetch:fixtureFetch}};
   const admin=createClient(api.origin,service,options);
   const db=new pg.Client({connectionString:dbUrl.href});await db.connect();
+  let browserFixture;
   try{
     // Refuse any existing application schema or bucket before touching the database.
     assert.equal((await db.query("select to_regclass('public.organizations') is null as fresh")).rows[0].fresh,true);
     assert.equal((await db.query('select count(*)::int as n from storage.buckets where id=$1',[bucket])).rows[0].n,0);
     await db.query(fixtureSql);
-    for(const file of ['supabase/migrations/20261016171500_organization_knowledge_v1.sql','supabase/migrations/20261103190000_ai_knowledge_provenance_readiness_v2.sql','docs/sql/knowledge-import-ledger-v1-REVIEW-DRAFT.sql','docs/sql/knowledge-import-transactions-REVIEW-DRAFT.sql','docs/sql/knowledge-import-storage-policies-REVIEW-DRAFT.sql']){
+    for(const file of ['supabase/migrations/20261016171500_organization_knowledge_v1.sql','supabase/migrations/20261103190000_ai_knowledge_provenance_readiness_v2.sql']){
       await db.query(readFileSync(file,'utf8'));
     }
     if(reviewMode==='rejected-direct-tus'){
+      for(const file of ['docs/sql/knowledge-import-ledger-v1-REVIEW-DRAFT.sql','docs/sql/knowledge-import-transactions-REVIEW-DRAFT.sql','docs/sql/knowledge-import-storage-policies-REVIEW-DRAFT.sql']){
+        await db.query(readFileSync(file,'utf8'));
+      }
       await db.query('grant usage on schema knowledge_import_review to authenticated;grant execute on function knowledge_import_review.storage_insert_allowed(text,text,jsonb) to authenticated');
     }else{
-      // Install the deny policy before the fresh bucket exists; never create any
-      // direct-TUS upload session or grant the permissive predicate in this mode.
-      await db.query(readFileSync('docs/sql/knowledge-import-gateway-only-REVIEW-DRAFT.sql','utf8'));
-      assert.equal((await db.query("select has_function_privilege('authenticated','knowledge_import_review.storage_insert_allowed(text,text,jsonb)','EXECUTE') as allowed")).rows[0].allowed,false);
-      assert.equal((await db.query("select count(*)::int as n from pg_policies where schemaname='storage' and tablename='objects' and policyname in ('kb_import_review_insert','kb_import_review_insert_guard')")).rows[0].n,0);
+      const migration=readFileSync('supabase/migrations/20261128043000_knowledge_import_gateway_bootstrap.sql','utf8');
+      await db.query(migration);
+      await db.query(readFileSync('docs/sql/knowledge-import-gateway-bootstrap-rollback.sql','utf8'));
+      assert.equal((await db.query("select to_regnamespace('knowledge_import_review') is null as removed")).rows[0].removed,true);
+      await db.query(migration);
+      assert.equal((await db.query("select to_regprocedure('knowledge_import_review.storage_insert_allowed(text,text,jsonb)') is null as absent")).rows[0].absent,true);
       assert.equal((await db.query("select count(*)::int as n from pg_policies where schemaname='storage' and tablename='objects' and policyname='kb_import_review_gateway_insert_guard'")).rows[0].n,1);
     }
     const made=await admin.storage.createBucket(bucket,{public:false,fileSizeLimit:50*1024*1024,allowedMimeTypes:['application/json']});
@@ -165,11 +170,20 @@ test('actual disposable Supabase Storage authorization and lifecycle: '+reviewMo
     // Independent gateway-only test. No rejected direct-TUS upload sessions exist.
     assert.equal((await db.query('select count(*)::int as n from storage.objects where bucket_id=$1',[bucket])).rows[0].n,0);
     assert.equal((await db.query('select count(*)::int as n from public.knowledge_import_jobs_v1')).rows[0].n,0);
-    await db.query(readFileSync('docs/sql/knowledge-import-gateway-staging-REVIEW-DRAFT.sql','utf8'));
-    await db.query(readFileSync('docs/sql/knowledge-import-application-boundary-REVIEW-DRAFT.sql','utf8'));
-    await db.query(readFileSync('docs/sql/knowledge-import-application-broker-REVIEW-DRAFT.sql','utf8'));
-    await db.query(readFileSync('docs/sql/knowledge-import-reconciliation-REVIEW-DRAFT.sql','utf8'));
+    await db.query(readFileSync('docs/sql/knowledge-import-storage-roles.sql','utf8'));
+    const signingKey=status.JWT_SECRET;
+    assert.equal(typeof signingKey,'string','disposable JWT signing is required');
+    assert.ok(signingKey.length>=32,'disposable signing key missing');
+    const localStorageAs=role=>{
+      const b64=value=>Buffer.from(JSON.stringify(value)).toString('base64url');
+      const unsigned=b64({alg:'HS256',typ:'JWT'})+'.'+b64({sub:randomUUID(),role,aud:'authenticated',exp:Math.floor(Date.now()/1000)+600});
+      const jwt=unsigned+'.'+createHmac('sha256',signingKey).update(unsigned).digest('base64url');
+      return createClient(api.origin,anon,{...options,accessToken:async()=>jwt}).storage;
+    };
+    const gatewayStorage=localStorageAs('knowledge_import_gateway_storage');
+    const workerStorage=localStorageAs('knowledge_import_worker_storage');
     const require=createRequire(import.meta.url),{load}=require('../readiness/helpers.cjs');
+    const {createKnowledgePostgresConnector}=load('lib/knowledge-import-postgres.ts',{'server-only':{},pg});
     const upload=load('lib/knowledge-import-upload-contract.ts');
     const prep=load('lib/knowledge-import-source-preparation.ts',{'server-only':{},'node:crypto':require('node:crypto'),'./knowledge-bulk-import-preflight':load('lib/knowledge-bulk-import-preflight.ts'),'./knowledge-import-upload-contract':upload});
     const gateway=load('lib/knowledge-import-gateway-review.ts',{'server-only':{},'node:crypto':require('node:crypto'),'./knowledge-import-source-preparation':prep,'./knowledge-import-upload-contract':upload});
@@ -213,9 +227,54 @@ test('actual disposable Supabase Storage authorization and lifecycle: '+reviewMo
       async digests(payloads){return (await db.query('select * from knowledge_import_review.digest_payloads($1::jsonb)',[JSON.stringify(payloads)])).rows.map(r=>r.payload_sha256);},
       async register(scope,p){return writer?(await db.query('select knowledge_import_review.gateway_register($1,$2,$3,$4,$5,$6,$7,$8::jsonb) as status',[scope.organizationId,scope.jobId,writer,1,p.objectVersion,p.byteLength,p.sha256,JSON.stringify(p.manifest)])).rows[0].status:(await db.query('select knowledge_import_review.register_verified_source($1,$2,$3,$4,$5,$6::jsonb) as status',[scope.organizationId,scope.jobId,p.objectVersion,p.byteLength,p.sha256,JSON.stringify(p.manifest)])).rows[0].status;}
     });
+    await t.test('version-bound reads survive replacement and exact deletion preserves the replacement',async()=>{
+      const versionedBucket='kb-version-proof-'+randomUUID();
+      const created=await admin.storage.createBucket(versionedBucket,{
+        public:false,versioningStatus:'ENABLED',allowedMimeTypes:['application/json'],
+      });
+      assert.equal(Boolean(created.error),false,'versioned test bucket creation failed');
+      const files=admin.storage.from(versionedBucket);
+      const path='source.json';
+      const versionABytes=Buffer.from('{"version":1,"drafts":[{"title":"First"}]}');
+      const versionBBytes=Buffer.from('{"version":1,"drafts":[{"title":"Second"}]}');
+      const uploadOptions={contentType:'application/json',cacheControl:'0'};
+      const first=await files.upload(path,versionABytes,uploadOptions);
+      assert.equal(Boolean(first.error),false,'version A upload failed');
+      const firstInfo=await files.info(path);
+      const versionA=firstInfo.data?.version;
+      assert.ok(!firstInfo.error&&typeof versionA==='string'&&versionA.length>0,'version A identity missing');
+      const sign=async versionId=>{
+        const signed=await files.createSignedUrl(path,60,{versionId});
+        assert.equal(Boolean(signed.error),false,'exact-version signing failed');
+        return fixtureApiUrl(signed.data.signedUrl);
+      };
+      const readSigned=async url=>{
+        const response=await fixtureFetch(url,{method:'GET',redirect:'error',cache:'no-store',signal:AbortSignal.timeout(20000)});
+        assert.equal(response.status,200);
+        return Buffer.from(await response.arrayBuffer());
+      };
+      const urlForA=await sign(versionA);
+      const second=await files.upload(path,versionBBytes,{...uploadOptions,upsert:true});
+      assert.equal(Boolean(second.error),false,'version B upload failed');
+      const secondInfo=await files.info(path);
+      const versionB=secondInfo.data?.version;
+      assert.ok(!secondInfo.error&&typeof versionB==='string'&&versionB.length>0,'version B identity missing');
+      assert.notEqual(versionA,versionB);
+      assert.deepEqual(await readSigned(urlForA),versionABytes);
+      assert.deepEqual(await readSigned(await sign(versionA)),versionABytes);
+      assert.deepEqual(await readSigned(await sign(versionB)),versionBBytes);
+
+      const removed=await files.remove([{path,versionId:versionA}]);
+      assert.equal(Boolean(removed.error),false,'exact-version deletion failed');
+      const deleted=await files.info(path,{versionId:versionA});
+      assert.ok(deleted.error&&Number(deleted.error.statusCode)===404,'deleted version must return not found');
+      const current=await files.info(path);
+      assert.equal(current.data?.version,versionB);
+      assert.deepEqual(await readSigned(await sign(versionB)),versionBBytes);
+    });
     await t.test('gateway-only policy denies new direct TUS and ordinary client upload',async()=>{
       const j=await createJob();denied(await start(j));denied(await start(j,outsider));denied(await start(j,null));
-      assert.equal((await db.query("select has_function_privilege('authenticated','knowledge_import_review.storage_insert_allowed(text,text,jsonb)','EXECUTE') as allowed")).rows[0].allowed,false);
+      assert.equal((await db.query("select to_regprocedure('knowledge_import_review.storage_insert_allowed(text,text,jsonb)') is null as absent")).rows[0].absent,true);
       const direct=await fixtureFetch(api.origin+'/storage/v1/object/'+bucket+'/'+j.path,{method:'POST',headers:{apikey:anon,Authorization:'Bearer '+owner.token,'Content-Type':'application/json'},body:bytes,redirect:'error',signal:AbortSignal.timeout(20000)});
       denied(direct);assert.equal(await read(j),null);
     });
@@ -267,24 +326,30 @@ test('actual disposable Supabase Storage authorization and lifecycle: '+reviewMo
       const response=await history(new Request(httpOrigin+'/history'));assert.equal(response.status,200);
       const page=await response.json();assert.equal(page.jobs.find(x=>x.id===j.id).status,'queued');
     });
-    await t.test('single application boundary reserves, uploads, reads history and cancels using verified local Auth',async()=>{
+    let dispatchedJob;
+    await t.test('verified application reserves, uploads and assigns the exact worker job',async()=>{
       const httpOrigin='https://fixture.example', id=randomUUID(), j={id,path:org+'/'+id+'/source.json',length:bytes.length};
       const http=load('lib/knowledge-import-gateway-http-review.ts',{'server-only':{},'node:crypto':require('node:crypto'),'./knowledge-import-gateway-review':gateway});
       const historyHttp=load('lib/knowledge-import-history-http-review.ts',{'server-only':{},'./knowledge-import-history-review':load('lib/knowledge-import-history-review.ts')});
       const application=load('lib/knowledge-import-application-review.ts',{'server-only':{},'node:crypto':require('node:crypto'),'./knowledge-import-gateway-http-review':http,'./knowledge-import-history-http-review':historyHttp});
       const browser=load('lib/knowledge-import-browser-review.ts');
       const broker=load('lib/knowledge-import-application-broker-review.ts',{'server-only':{}});
-      const login='kb_app_'+randomUUID().replaceAll('-',''),password=randomUUID().replaceAll('-','');
-      await db.query("create role "+login+" login password '"+password+"' nosuperuser nocreatedb nocreaterole noreplication nobypassrls noinherit");
-      await db.query('insert into knowledge_import_review.application_principals values($1,true)',[login]);
-      await db.query('grant usage on schema knowledge_import_review to '+login);
-      await db.query('grant execute on function knowledge_import_review.broker_current_scope(),knowledge_import_review.broker_reserve_current(uuid,bigint,integer,integer),knowledge_import_review.broker_cancel_current(uuid),knowledge_import_review.broker_gateway_acquire(uuid,uuid,uuid),knowledge_import_review.broker_gateway_append(uuid,uuid,uuid,bigint,bigint,bytea),knowledge_import_review.broker_gateway_begin_publication(uuid,uuid,uuid,bigint),knowledge_import_review.broker_gateway_lock(uuid,uuid,uuid,bigint),knowledge_import_review.broker_gateway_register(uuid,uuid,uuid,bigint,text,bigint,text,jsonb),knowledge_import_review.broker_gateway_publication_receipt(uuid,uuid,uuid,bigint),knowledge_import_review.broker_current_history(integer,timestamptz,uuid),knowledge_import_review.broker_reservation(uuid,uuid),knowledge_import_review.broker_digests(jsonb) to '+login);
+      const login='knowledge_import_application',password=randomUUID().replaceAll('-','');
+      const workerLogin='knowledge_import_worker',workerPassword=randomUUID().replaceAll('-','');
+      await db.query(readFileSync('docs/sql/knowledge-import-database-roles.sql','utf8'));
+      const inactive=(await db.query('select rolname,rolcanlogin from pg_roles where rolname in ($1,$2) order by rolname',[login,workerLogin])).rows;
+      assert.deepEqual(inactive,[{rolname:login,rolcanlogin:false},{rolname:workerLogin,rolcanlogin:false}]);
+      assert.equal((await db.query('select enabled from knowledge_import_review.application_principals where login_role=$1',[login])).rows[0].enabled,false);
+      assert.deepEqual((await db.query('select enabled,accept_gateway_jobs from knowledge_import_review.worker_principals where login_role=$1',[workerLogin])).rows[0],{enabled:false,accept_gateway_jobs:false});
+      await db.query("alter role knowledge_import_application login password '"+password+"'");
+      await db.query('update knowledge_import_review.application_principals set enabled=true where login_role=$1',[login]);
       const loginUrl=new URL(dbUrl.href);loginUrl.username=login;loginUrl.password=password;
       const restricted=new pg.Client({connectionString:loginUrl.href});await restricted.connect();
       try{
         await assert.rejects(restricted.query('select * from public.knowledge_import_jobs_v1'),e=>e.code==='42501');
         await assert.rejects(restricted.query('select * from knowledge_import_review.gateway_chunks'),e=>e.code==='42501');
         await assert.rejects(restricted.query('select * from knowledge_import_review.worker_due_jobs(1)'),e=>e.code==='42501');
+        await assert.rejects(restricted.query('select knowledge_import_review.worker_expire_assignments(1)'),e=>e.code==='42501');
         await assert.rejects(restricted.query('select knowledge_import_review.gateway_purge_receiving($1,$2)',[org,id]),e=>e.code==='42501');
         await assert.rejects(restricted.query('select knowledge_import_review.broker_current_scope()'),e=>e.code==='42501');
       }finally{await restricted.end();}
@@ -297,22 +362,86 @@ test('actual disposable Supabase Storage authorization and lifecycle: '+reviewMo
       await assert.rejects(transport({...owner.claims,exp:1})('select knowledge_import_review.broker_current_scope()',[]),e=>e.code==='42501');
       const scopeQuery=broker.createKnowledgeBrokerQueryReview(transport(owner.claims));
       await assert.rejects(scopeQuery('select * from auth.sessions',[]),/operation denied/);
+      await assert.rejects(transport(owner.claims)('select knowledge_import_review.broker_reserve_current($1,$2,$3,$4)',[id,bytes.length,600,1200]),e=>e.code==='55000');
+      await db.query("alter role knowledge_import_worker login password '"+workerPassword+"'");
+      await db.query('update knowledge_import_review.worker_principals set enabled=true,accept_gateway_jobs=true where login_role=$1',[workerLogin]);
+      // Use the other workspace so its quota assertions cannot interfere with the browser upload.
+      await db.query('insert into knowledge_import_review.quotas values($1,1,20)',[other]);
+      const abandoned=randomUUID(),replacement=randomUUID(),extra=randomUUID();
+      const otherBroker=transport(outsider.claims);
+      const reserveOther=(job,size)=>otherBroker('select knowledge_import_review.broker_reserve_current($1,$2,$3,$4)',[job,size,600,1200]);
+      const advanceDeadline=job=>db.query("update public.knowledge_import_jobs_v1 set created_at=clock_timestamp()-interval '2 minutes',upload_expires_at=clock_timestamp()-interval '1 minute' where organization_id=$1 and id=$2",[other,job]);
+      const lapseRetention=job=>db.query("update public.knowledge_import_jobs_v1 set retention_expires_at=clock_timestamp()-interval '30 seconds' where organization_id=$1 and id=$2",[other,job]);
+      const purgeOther=async job=>(await db.query('select knowledge_import_review.gateway_purge_receiving($1,$2)::int as removed',[other,job])).rows[0].removed;
+      const otherHistory=async job=>(await otherBroker('select * from knowledge_import_review.broker_current_history($1,$2,$3)',[25,null,null])).rows.find(row=>row.job_id===job);
+      const stageOther=async(job,data)=>{
+        const token=randomUUID();
+        const {rows:[writer]}=await otherBroker('select * from knowledge_import_review.broker_gateway_acquire($1,$2,$3)',[other,job,token]);
+        await otherBroker('select knowledge_import_review.broker_gateway_append($1,$2,$3,$4,$5,$6)',[other,job,token,writer.generation,0,data]);
+        return [other,job,token,writer.generation];
+      };
+      await reserveOther(abandoned,11);
+      await stageOther(abandoned,Buffer.from('test-source'));
+      assert.equal((await otherHistory(abandoned)).job_status,'awaiting_upload');
+      await assert.rejects(reserveOther(extra,1),/import quota exceeded/);
+      await advanceDeadline(abandoned);
+      assert.equal((await otherHistory(abandoned)).job_status,'expired');
+      await assert.rejects(reserveOther(extra,10),/import quota exceeded/);
+      await reserveOther(replacement,9);
+      assert.deepEqual((await db.query('select storage_released_at from public.knowledge_import_jobs_v1 where id=$1',[abandoned])).rows,[{storage_released_at:null}]);
+      assert.equal((await db.query('select count(*)::int as n from knowledge_import_review.gateway_chunks where job_id=$1',[abandoned])).rows[0].n,1);
+      await assert.rejects(purgeOther(abandoned),/gateway purge not eligible/);
+      await lapseRetention(abandoned);
+      assert.equal(await purgeOther(abandoned),11);
+      assert.equal(await purgeOther(abandoned),0);
+      assert.deepEqual((await db.query('select status,storage_released_at from public.knowledge_import_jobs_v1 where id=$1',[abandoned])).rows,[{status:'expired',storage_released_at:null}]);
+      await assert.rejects(db.query('select knowledge_import_review.begin_storage_cleanup($1,$2)',[other,abandoned]),/cleanup not eligible/);
+      await assert.rejects(db.query('update public.knowledge_import_jobs_v1 set storage_released_at=clock_timestamp() where id=$1',[abandoned]),/completed storage cleanup receipt required/);
+      assert.deepEqual((await db.query('select generation::int,removed_bytes::int from knowledge_import_review.gateway_receiving_purges where organization_id=$1 and job_id=$2',[other,abandoned])).rows,[{generation:1,removed_bytes:11}]);
+      assert.equal((await db.query('select count(*)::int as n from knowledge_import_review.gateway_chunks where job_id=$1',[abandoned])).rows[0].n,0);
+      const fence=await stageOther(replacement,Buffer.from('uploading'));
+      await otherBroker('select knowledge_import_review.broker_gateway_begin_publication($1,$2,$3,$4)',fence);
+      await advanceDeadline(replacement);
+      assert.equal((await otherHistory(replacement)).job_status,'awaiting_upload');
+      await db.query('update knowledge_import_review.quotas set max_reserved_bytes=25 where organization_id=$1',[other]);
+      await assert.rejects(reserveOther(extra,1),/import quota exceeded/);
+      await lapseRetention(replacement);
+      await assert.rejects(purgeOther(replacement),/gateway publication reconciliation required/);
+      assert.deepEqual((await db.query('select status,storage_released_at from public.knowledge_import_jobs_v1 where id=$1',[replacement])).rows,[{status:'awaiting_upload',storage_released_at:null}]);
+      await otherBroker('select knowledge_import_review.broker_cancel_current($1)',[replacement]);
+      await reserveOther(extra,1);
+      await advanceDeadline(extra);
+      await lapseRetention(extra);
+      assert.equal(await purgeOther(extra),0);
+      assert.deepEqual((await db.query('select status,storage_released_at from public.knowledge_import_jobs_v1 where id=$1',[extra])).rows,[{status:'expired',storage_released_at:null}]);
       const publicationAdapter=load('lib/knowledge-import-publication-adapter-review.ts',{'server-only':{},'./knowledge-import-upload-contract':upload});
       const runtime=load('lib/knowledge-import-runtime-composition-review.ts',{'server-only':{},'./knowledge-import-application-review':application,'./knowledge-import-application-broker-review':broker,'./knowledge-import-publication-adapter-review':publicationAdapter});
-      const secondId=randomUUID(),second={id:secondId,path:org+'/'+secondId+'/source.json',length:bytes.length};
-      const jobs=new Map([[j.id,j],[second.id,second]]);
+      let second;
+      const jobs=new Map([[j.id,j]]);
       const runtimeOptions={origin:httpOrigin,issuer:owner.claims.iss,uploadSeconds:600,retentionSeconds:1200,
         accessToken:async req=>req.headers.get('authorization')?.replace(/^Bearer /,'')??null,
         verifyUser:async token=>{const verified=await admin.auth.getUser(token);return verified.error?null:verified.data.user;},
-        openDedicatedApplication:async()=>{
-          const conn=new pg.Client({connectionString:loginUrl.href,connectionTimeoutMillis:5000});await conn.connect();
-          return {query:(statement,params)=>conn.query(statement,params),destroy:()=>conn.end()};
-        },
+        openDedicatedApplication:createKnowledgePostgresConnector({mode:'disposable',connectionUrl:loginUrl.href,login:loginUrl.username}),
         providerFor:scope=>{
           const selected=scope.organizationId===org?jobs.get(scope.jobId):null;
           return {
-            async createOnly(object,body){assert.ok(selected);assert.equal(object.path,selected.path);await makeAdapter(selected).put(object.path,body);},
-            async inspectExact(object){assert.ok(selected);assert.equal(object.path,selected.path);return observeStream(selected,object.path);}
+            async createOnly(object,body){
+              assert.ok(selected);assert.equal(object.path,selected.path);
+              const result=await gatewayStorage.from(bucket).upload(object.path,body,{upsert:false,contentType:'application/json'});
+              assert.equal(result.error,null,'scoped gateway create failed');
+            },
+            async inspectExact(object){
+              assert.ok(selected);assert.equal(object.path,selected.path);
+              const files=gatewayStorage.from(bucket);
+              const info=await files.info(object.path);
+              const version=info.data?.version;
+              assert.ok(typeof version==='string'&&version,'scoped gateway metadata unavailable');
+              const signed=await files.createSignedUrl(object.path,30,{versionId:version});
+              assert.equal(signed.error,null,'scoped gateway could not sign exact version');
+              const response=await fixtureFetch(fixtureApiUrl(signed.data.signedUrl));
+              assert.equal(response.status,200);
+              return {version,chunks:response.body};
+            }
           };
         }
       };
@@ -343,12 +472,7 @@ test('actual disposable Supabase Storage authorization and lifecycle: '+reviewMo
       assert.equal((await call(id+'/reserve','invalid','POST',{'x-knowledge-file-bytes':'10'})).status,403);
       const run=browser.createKnowledgeBrowserUploadReview({origin:httpOrigin,jobId:id,file:new File([bytes],'fixture.json',{type:'application/json'}),fetcher:async(url,opts)=>handle(new Request(url,{method:'POST',headers:{...opts.headers,origin:httpOrigin,authorization:'Bearer '+owner.token,'x-knowledge-scope':ownerScope},body:opts.body}))});
       assert.deepEqual(await run(),{state:'registered',status:'queued'});
-      const flow=load('lib/knowledge-import-upload-flow-review.ts',{'./knowledge-import-browser-review':browser});
-      const progress=[];
-      const secondRun=flow.createKnowledgeUploadFlowReview({origin:httpOrigin,jobId:secondId,scopeKey:ownerScope,file:new File([bytes],'fixture.json',{type:'application/json'}),emit:s=>progress.push(s.state),fetcher:async(url,opts)=>handle(new Request(url,{method:'POST',headers:{...opts.headers,origin:httpOrigin,authorization:'Bearer '+owner.token},body:opts.body}))});
-      await secondRun.start();assert.equal(secondRun.snapshot().state,'registered');assert.ok(progress.includes('reserving'));assert.ok(progress.includes('uploading'));
-      assert.equal(digest(await read(j)),digest(bytes));assert.equal(digest(await read(second)),digest(bytes));
-      const history=await call('history',owner.token,'GET');assert.equal(history.status,200);const historyJobs=(await history.json()).jobs;assert.equal(historyJobs.find(x=>x.id===id).status,'queued');assert.equal(historyJobs.find(x=>x.id===secondId).status,'queued');
+      const history=await call('history',owner.token,'GET');assert.equal(history.status,200);const historyJobs=(await history.json()).jobs;assert.equal(historyJobs.find(x=>x.id===id).status,'queued');
       const outside=await call('history',outsider.token,'GET');assert.equal(outside.status,200);assert.equal((await outside.json()).jobs.some(x=>x.id===id),false);
       assert.equal((await call('history',owner.token,'GET',{'x-knowledge-scope':outsideScope})).status,403);
       await db.query("insert into public.organization_members values($1,$2,true,'admin')",[other,owner.actor]);
@@ -372,34 +496,58 @@ test('actual disposable Supabase Storage authorization and lifecycle: '+reviewMo
       assert.equal((await call(id+'/cancel')).status,200);
       await db.query('update public.organization_members set active=false where organization_id=$1 and user_id=$2',[org,owner.actor]);
       try{assert.equal((await call('history',owner.token,'GET')).status,403);assert.equal(await cookieRuntime.resolveScope(),null);}finally{await db.query('update public.organization_members set active=true where organization_id=$1 and user_id=$2',[org,owner.actor]);}
+      const signedBrowserCookies=new Map(jar);
       jar.clear();assert.equal(await cookieRuntime.resolveScope(),null);assert.equal((await cookieHistory(ownerScope)).status,403);
       await db.query('update knowledge_import_review.application_principals set enabled=false where login_role=$1',[login]);
       assert.equal((await call('history',owner.token,'GET')).status,403);
       await assert.rejects(transport(owner.claims)('select knowledge_import_review.broker_current_scope()',[]),e=>e.code==='42501');
-
+      await db.query('update knowledge_import_review.application_principals set enabled=true where login_role=$1',[login]);
+      const {openKnowledgeImportBrowser}=await import('./knowledge-import-browser-fixture.mjs');
+      const clientForCookie=value=>createServerClient(api.origin,anon,{
+        global:{fetch:fixtureFetch},cookieOptions:{name:'kb-fixture-auth'},cookies:{
+          getAll:()=>value?.split(/;\s*/).map(pair=>{
+            const at=pair.indexOf('=');return {name:pair.slice(0,at),value:decodeURIComponent(pair.slice(at+1))};
+          })??[],setAll:()=>{}
+        }
+      });
+      const runtimeForCookie=value=>cookieAuth.createKnowledgeCookieRuntimeReview({...runtimeOptions,createAuthClient:async()=>clientForCookie(value)});
+      browserFixture=await openKnowledgeImportBrowser({cookies:signedBrowserCookies,bytes,
+        resolveScope:cookie=>runtimeForCookie(cookie).resolveScope(org),
+        handle:request=>runtimeForCookie(request.headers.get('cookie')).handle(request),
+        reserve:id=>{assert.match(id,/^[0-9a-f-]{36}$/);second={id,path:org+'/'+id+'/source.json',length:bytes.length};jobs.set(id,second);},
+        readDraft:async cookie=>{
+          const result=await clientForCookie(cookie).from('knowledge_documents').select('id,status')
+            .eq('organization_id',org).eq('status','draft').eq('metadata->>import_job_id',second.id).single();
+          return result.error===null&&result.data?.status==='draft';
+        },
+      });
+      const secondId=second.id;
+      const delegations=(await db.query(`select d.job_id,d.login_role,d.actor_id,d.actor_session_id,
+        d.object_version=j.object_version as exact_version,d.source_sha256=j.sha256 as exact_source,
+        d.manifest_sha256=j.manifest_sha256 as exact_manifest
+        from knowledge_import_review.worker_delegations d join public.knowledge_import_jobs_v1 j on j.organization_id=d.organization_id and j.id=d.job_id
+        where d.organization_id=$1 and d.job_id in ($2,$3)`,[org,id,secondId])).rows;
+      assert.equal(delegations.length,2);
+      for(const d of delegations)assert.deepEqual(d,{job_id:d.job_id,login_role:workerLogin,actor_id:owner.actor,
+        actor_session_id:owner.claims.session_id,exact_version:true,exact_source:true,exact_manifest:true});
+      assert.equal(digest(await read(j)),digest(bytes));assert.equal(digest(await read(second)),digest(bytes));
+      const historyAfterBrowser=await call('history',owner.token,'GET');assert.equal(historyAfterBrowser.status,200);assert.equal((await historyAfterBrowser.json()).jobs.find(x=>x.id===secondId).status,'queued');
+      dispatchedJob={job:second,login:workerLogin,password:workerPassword};
     });
-    await t.test('delegated scheduler processes real private Storage source with restricted worker login',async()=>{
-      const j=await createJob(),scope={organizationId:org,jobId:j.id},writer=randomUUID();
-      await db.query("select set_config('request.jwt.claims',$1,false)",[JSON.stringify(owner.claims)]);
-      await db.query('select * from knowledge_import_review.gateway_acquire($1,$2,$3)',[org,j.id,writer]);
-      await db.query('select knowledge_import_review.gateway_append($1,$2,$3,$4,$5,$6)',[org,j.id,writer,1,0,bytes]);
-      const staged=(await db.query('select knowledge_import_review.gateway_begin_publication($1,$2,$3,$4) as bytes',[org,j.id,writer,1])).rows[0].bytes;
-      assert.deepEqual(await gateway.publishKnowledgeGatewayReview(scope,staged,makeAdapter(j,async()=>{},writer),Date.now),{state:'registered',status:'queued'});
-      const login='kb_worker_'+randomUUID().replaceAll('-',''),password=randomUUID().replaceAll('-','');
-      await db.query("create role "+login+" login password '"+password+"' nosuperuser nocreatedb nocreaterole noreplication nobypassrls noinherit");
-      await db.query('insert into knowledge_import_review.worker_principals values($1,true)',[login]);
-      await db.query('grant usage on schema knowledge_import_review to '+login);
-      await db.query('grant execute on function knowledge_import_review.worker_due_jobs(integer),knowledge_import_review.worker_source_identity(uuid,uuid),knowledge_import_review.worker_verify_manifest(uuid,uuid,text,bigint,text,jsonb),knowledge_import_review.worker_digest_payloads(uuid,uuid,jsonb),knowledge_import_review.worker_claim(uuid,uuid,integer),knowledge_import_review.worker_finalize(uuid,uuid,integer,uuid,integer,jsonb),knowledge_import_review.worker_result(uuid,uuid,integer,uuid,integer),knowledge_import_review.worker_settle_failure(uuid,uuid,integer,uuid,integer,text) to '+login);
+    await t.test('machine worker processes the assigned private Storage source into drafts',async()=>{
+      assert.ok(dispatchedJob,'verified application must publish and assign a job');
+      const {job:j,login,password}=dispatchedJob;
       const workerUrl=new URL(dbUrl.href);workerUrl.username=login;workerUrl.password=password;
       const worker=new pg.Client({connectionString:workerUrl.href,connectionTimeoutMillis:5000});await worker.connect();
       try{
         await worker.query("set statement_timeout='15s'");
         const query=(sql,params)=>worker.query(sql,params);
-        assert.equal((await query('select * from knowledge_import_review.worker_due_jobs($1)',[1])).rowCount,0);
+        assert.deepEqual((await query('select * from knowledge_import_review.worker_due_jobs($1)',[1])).rows,[{organization_id:org,job_id:j.id}]);
         await assert.rejects(query('select * from public.knowledge_documents',[]),e=>e.code==='42501');
         await assert.rejects(query('select * from knowledge_import_review.gateway_chunks',[]),e=>e.code==='42501');
         await assert.rejects(query('select knowledge_import_review.broker_current_scope()',[]),e=>e.code==='42501');
-        assert.equal((await db.query('select knowledge_import_review.delegate_worker($1,$2,$3,$4) as ok',[org,j.id,login,new Date(Date.now()+600000)])).rows[0].ok,true);
+        await assert.rejects(query('select knowledge_import_review.gateway_worker_login()',[]),e=>e.code==='42501');
+        await assert.rejects(query('select knowledge_import_review.delegate_worker($1,$2,$3,$4)',[org,j.id,login,new Date(Date.now()+600000)]),e=>e.code==='42501');
         const adapters=load('lib/knowledge-import-worker-adapters-review.ts',{'server-only':{},'./knowledge-import-source-preparation':prep,'./knowledge-import-upload-contract':upload});
         const runner=load('lib/knowledge-import-worker-review.ts',{'server-only':{}});
         const scheduler=load('lib/knowledge-import-scheduler-review.ts',{'server-only':{},'./knowledge-import-worker-review':runner});
@@ -409,10 +557,10 @@ test('actual disposable Supabase Storage authorization and lifecycle: '+reviewMo
         let issued=0,downloads=0;
         const runtime=load('lib/knowledge-import-worker-runtime-review.ts',{'server-only':{},'./knowledge-import-worker-adapters-review':adapters,'./knowledge-import-scheduler-review':scheduler,'./knowledge-import-upload-contract':upload});
         let issuerClosed=0;
+        const openWorkerConnection=createKnowledgePostgresConnector({mode:'disposable',connectionUrl:workerUrl.href,login});
         const openIssuerConnection=async()=>{
-          const conn=new pg.Client({connectionString:workerUrl.href,connectionTimeoutMillis:5000});
-          await conn.connect();
-          return {query:(statement,params)=>conn.query(statement,params),destroy:async()=>{await conn.end();issuerClosed++;}};
+          const connection=await openWorkerConnection();
+          return {...connection,destroy:async()=>{await connection.destroy();issuerClosed++;}};
         };
         const resolveGrant=runtime.createKnowledgeWorkerReadGrantResolverReview(login,openIssuerConnection);
         const grant=await resolveGrant({organizationId:org,jobId:j.id});
@@ -426,13 +574,13 @@ test('actual disposable Supabase Storage authorization and lifecycle: '+reviewMo
         await assert.rejects(resolveGrant({organizationId:other,jobId:j.id}),e=>e.code==='42501');
         assert.equal(issuerClosed,2);
         let runtimeOpened=0,runtimeClosed=0;
-        const tick=await runtime.runKnowledgeVersionedWorkerRuntimeReview({
+        const runTick=()=>runtime.runKnowledgeVersionedWorkerRuntimeReview({
           expectedLogin:login,windowBatches:2,budgetMs:90000,projectOrigin:readerOrigin,
           issuer:{openIssuerConnection,storage:{from:requestedBucket=>({createSignedUrl:async(path,ttl,options)=>{
             assert.equal(requestedBucket,bucket);assert.equal(path,j.path);
             assert.equal(options.versionId,expectedGrant.object_version);
             assert.ok(ttl>0&&ttl<=30);
-            const signed=await admin.storage.from(requestedBucket).createSignedUrl(path,ttl,options);
+            const signed=await workerStorage.from(requestedBucket).createSignedUrl(path,ttl,options);
             assert.equal(Boolean(signed.error),false);
             const url=fixtureApiUrl(signed.data.signedUrl);
             const payload=JSON.parse(Buffer.from(url.searchParams.get('token').split('.')[1],'base64url'));
@@ -447,19 +595,72 @@ test('actual disposable Supabase Storage authorization and lifecycle: '+reviewMo
             return fixtureFetch(fixtureApiUrl(new URL(requested.pathname+requested.search,FIXTURE_API_ORIGIN).href),options);
           },
           openDedicatedWorker:async()=>{
-            const conn=new pg.Client({connectionString:workerUrl.href,connectionTimeoutMillis:5000});await conn.connect();runtimeOpened++;
-            return {query:(statement,params)=>conn.query(statement,params),destroy:async()=>{await conn.end();runtimeClosed++;}};
+            const connection=await openWorkerConnection();runtimeOpened++;
+            return {...connection,destroy:async()=>{await connection.destroy();runtimeClosed++;}};
           }
         });
+        const bearer=load('lib/security/machine-bearer-auth.ts',{'server-only':{},'node:crypto':require('node:crypto')});
+        const route=load('app/api/knowledge-import-worker/route.ts',{'@/lib/knowledge-import-worker-server':{runKnowledgeImportWorker:runTick},'@/lib/security/machine-bearer-auth':bearer});
+        const routeSecret=randomUUID()+randomUUID();
+        const savedEnabled=process.env.KNOWLEDGE_IMPORT_ENABLED,savedSecret=process.env.KNOWLEDGE_IMPORT_WORKER_SECRET;
+        try{
+          process.env.KNOWLEDGE_IMPORT_ENABLED='1';process.env.KNOWLEDGE_IMPORT_WORKER_SECRET=routeSecret;
+          const url='https://fixture.example/api/knowledge-import-worker';
+          assert.equal((await route.POST(new Request(url,{method:'POST'}))).status,401);
+          const result=await route.POST(new Request(url,{method:'POST',headers:{authorization:'Bearer '+routeSecret}}));
+          assert.equal(result.status,200);assert.deepEqual(await result.json(),{state:'complete',jobs:1});
+        }finally{
+          if(savedEnabled===undefined)delete process.env.KNOWLEDGE_IMPORT_ENABLED;else process.env.KNOWLEDGE_IMPORT_ENABLED=savedEnabled;
+          if(savedSecret===undefined)delete process.env.KNOWLEDGE_IMPORT_WORKER_SECRET;else process.env.KNOWLEDGE_IMPORT_WORKER_SECRET=savedSecret;
+        }
         assert.equal(runtimeOpened,1);assert.equal(runtimeClosed,1);
         await assert.rejects(resolveGrant({organizationId:org,jobId:j.id}),e=>e.code==='42501');
         assert.equal(issuerClosed,4);
-        assert.equal(tick.stop,'complete');assert.equal(tick.reports.length,1);assert.equal(tick.reports[0].report.created,1);assert.equal(issued,1);assert.equal(downloads,1);
+        assert.equal(issued,1);assert.equal(downloads,1);
+        await browserFixture.verifyDraftReview();
+        await browserFixture.close();
+        browserFixture=undefined;
         const docs=(await db.query("select status,created_by from public.knowledge_documents where metadata->>'import_job_id'=$1",[j.id])).rows;
         assert.deepEqual(docs,[{status:'draft',created_by:owner.actor}]);
         assert.equal((await db.query('select status from knowledge_import_jobs_v1 where id=$1',[j.id])).rows[0].status,'completed');
         assert.equal((await query('select * from knowledge_import_review.worker_due_jobs($1)',[1])).rowCount,0);
         await assert.rejects(query('select * from knowledge_import_review.worker_source_identity($1,$2)',[other,j.id]),e=>e.code==='42501');
+        const deniedWorkerUpload=await workerStorage.from(bucket).upload(org+'/'+randomUUID()+'/source.json',bytes,{contentType:'application/json'});
+        assert.ok(deniedWorkerUpload.error,'worker credential cannot create objects');
+        assert.ok((await workerStorage.from(bucket).info(j.path)).error,'worker credential cannot read direct metadata');
+        assert.ok((await gatewayStorage.from(bucket).upload(org+'/invalid.json',bytes,{contentType:'application/json'})).error,'gateway cannot write outside the import object format');
+        const listed=await gatewayStorage.from(bucket).list(org);assert.deepEqual(listed.data??[],[]);
+
+        const drafts=[0,1,2].map(index=>({title:'Expiry fixture '+index,category:'general',content:'Synthetic content for unfinished import',source_name:'Fixture',source_type:'manual'}));
+        const input=Buffer.from(JSON.stringify({version:1,drafts}));
+        const expiring=await createJob(input.length);
+        assert.deepEqual(await gateway.publishKnowledgeGatewayReview({organizationId:org,jobId:expiring.id},input,makeAdapter(expiring),Date.now),{state:'registered',status:'queued'});
+        assert.equal((await db.query('select knowledge_import_review.delegate_worker($1,$2,$3,$4) as ok',[org,expiring.id,login,new Date(Date.now()+600000)])).rows[0].ok,true);
+        const claims=(await query('select * from knowledge_import_review.worker_claim($1,$2,$3)',[org,expiring.id,2])).rows;
+        assert.equal(claims.length,2);
+        const completed=claims.find(claim=>claim.entry_index===0);
+        assert.ok(completed);
+        const draft=(await query('select knowledge_import_review.worker_finalize($1,$2,$3,$4,$5,$6::jsonb) as id',[
+          org,expiring.id,completed.entry_index,completed.lease_token,completed.attempts,JSON.stringify({...drafts[0],source_uri:null}),
+        ])).rows[0].id;
+        // Advancing the fixture's assignment deadline avoids waiting on wall-clock time.
+        await db.query("update knowledge_import_review.worker_delegations set expires_at=clock_timestamp()-interval '1 second' where organization_id=$1 and job_id=$2",[org,expiring.id]);
+        await db.query('begin');
+        try{
+          await db.query('select id from public.knowledge_import_jobs_v1 where id=$1 for update',[expiring.id]);
+          assert.equal((await query('select knowledge_import_review.worker_expire_assignments(2) as expired',[])).rows[0].expired,0);
+        }finally{await db.query('rollback');}
+        const expiryTick=await runTick();
+        assert.equal(expiryTick.stop,'complete');assert.deepEqual(expiryTick.reports,[]);assert.equal(issued,1);
+        const after=(await db.query('select status,storage_released_at from public.knowledge_import_jobs_v1 where id=$1',[expiring.id])).rows[0];
+        assert.deepEqual(after,{status:'expired',storage_released_at:null});
+        const expiredEntries=(await db.query('select status,document_id,lease_token,claimed_by_worker from public.knowledge_import_entries_v1 where job_id=$1 order by entry_index',[expiring.id])).rows;
+        assert.deepEqual(expiredEntries.map(entry=>entry.status),['created','cancelled','cancelled']);
+        assert.equal(expiredEntries[0].document_id,draft);
+        assert.ok(expiredEntries.every(entry=>entry.lease_token===null && entry.claimed_by_worker===null));
+        assert.equal((await db.query('select status from public.knowledge_documents where id=$1',[draft])).rows[0].status,'draft');
+        assert.deepEqual(await read(expiring),input);
+        assert.equal((await query('select knowledge_import_review.worker_expire_assignments(2) as expired',[])).rows[0].expired,0);
       }finally{await worker.end();}
     });
     await t.test('cancel after provider write prevents manifest publication and preserves quota',async()=>{
@@ -496,7 +697,7 @@ test('actual disposable Supabase Storage authorization and lifecycle: '+reviewMo
     });
     await t.test('exact-version cleanup protects replacement and retains quota on uncertain deletion',async()=>{
       // These are exclusively newly generated, synthetic objects in the fresh local test
-      // bucket. No path-only deletion, no production credentials, no quota release.
+      // bucket. The synthetic ledger release check is rolled back before Storage operations.
       const prepareTerminal=async()=>{
         const j=await createJob(),scope={organizationId:org,jobId:j.id},writer=randomUUID();
         await db.query('select * from knowledge_import_review.gateway_acquire($1,$2,$3)',[org,j.id,writer]);
@@ -523,6 +724,19 @@ test('actual disposable Supabase Storage authorization and lifecycle: '+reviewMo
         assert.deepEqual(row,{storage_released_at:null,completed_at:null,evidence_sha256:null});
       };
       const first=await prepareTerminal();
+      await assert.rejects(db.query('update public.knowledge_import_jobs_v1 set storage_released_at=clock_timestamp() where id=$1',[first.j.id]),/completed storage cleanup receipt required/);
+      await db.query('begin');
+      try{
+        // Exercise the database receipt contract. The synthetic digest is not provider proof.
+        const evidence=digest('synthetic database receipt check');
+        const args=[org,first.j.id,first.cleanup,first.j.path,first.version,digest(bytes),evidence];
+        const release=()=>db.query('select knowledge_import_review.complete_storage_cleanup($1,$2,$3,$4,$5,$6,$7) as ok',args);
+        assert.deepEqual((await release()).rows,[{ok:true}]);
+        assert.deepEqual((await release()).rows,[{ok:true}]);
+        const sameTimestamp=(await db.query('select j.storage_released_at=c.completed_at as same from public.knowledge_import_jobs_v1 j join knowledge_import_review.storage_cleanup c on c.organization_id=j.organization_id and c.job_id=j.id where j.id=$1',[first.j.id])).rows;
+        assert.deepEqual(sameTimestamp,[{same:true}]);
+      }finally{await db.query('rollback');}
+      await quotaRetained(first);
       for(const user of [owner,outsider]){
         denied(await removeVersion(first.j,first.version,user));
         assert.equal(await current(first.j),first.version);assert.equal(digest(await read(first.j)),digest(bytes));
@@ -540,6 +754,7 @@ test('actual disposable Supabase Storage authorization and lifecycle: '+reviewMo
         observe:async(b,p)=>{assert.equal(b,bucket);assert.equal(p,first.j.path);assert.equal(await current(first.j),null);assert.equal(await read(first.j),null);return {kind:'absent_observed'};}
       });
       assert.equal(observed.state,'absent_unproven');assert.equal(observed.mayReleaseQuota,false);await quotaRetained(first);
+      await assert.rejects(db.query('update public.knowledge_import_jobs_v1 set storage_released_at=clock_timestamp() where id=$1',[first.j.id]),/completed storage cleanup receipt required/);
       const second=await prepareTerminal();
       // Test-only service-role overwrite models a provider-side replacement after cleanup
       // receipt creation. The application's real publication adapter forbids upsert.
@@ -590,7 +805,7 @@ test('actual disposable Supabase Storage authorization and lifecycle: '+reviewMo
       await uploadAndVerify();memory('upload_scope_released');
       const workerStart=Date.now(),login='kb_capacity_'+randomUUID().replaceAll('-',''),password=randomUUID().replaceAll('-','');
       await db.query("create role "+login+" login password '"+password+"' nosuperuser nocreatedb nocreaterole noreplication nobypassrls noinherit");
-      await db.query('insert into knowledge_import_review.worker_principals values($1,true)',[login]);
+      await db.query('insert into knowledge_import_review.worker_principals(login_role,enabled) values($1,true)',[login]);
       await db.query('grant usage on schema knowledge_import_review to '+login);
       await db.query('grant execute on function knowledge_import_review.worker_due_jobs(integer),knowledge_import_review.worker_source_identity(uuid,uuid),knowledge_import_review.worker_verify_manifest(uuid,uuid,text,bigint,text,jsonb),knowledge_import_review.worker_digest_payloads(uuid,uuid,jsonb),knowledge_import_review.worker_claim(uuid,uuid,integer),knowledge_import_review.worker_finalize(uuid,uuid,integer,uuid,integer,jsonb),knowledge_import_review.worker_result(uuid,uuid,integer,uuid,integer),knowledge_import_review.worker_settle_failure(uuid,uuid,integer,uuid,integer,text) to '+login);
       const workerUrl=new URL(dbUrl.href);workerUrl.username=login;workerUrl.password=password;
@@ -646,5 +861,7 @@ test('actual disposable Supabase Storage authorization and lifecycle: '+reviewMo
         t.diagnostic(JSON.stringify({capacityDrafts:created,sourceReads,ticks,workerElapsedMs:Date.now()-workerStart,totalElapsedMs:Date.now()-start,maxRssKiB:process.resourceUsage().maxRSS,scope:'actual restricted SQL draft writes with fresh signed Storage source and manifest per bounded scheduler window'}));
       }finally{await worker.end();}
     });
-  }finally{await db.end();}
+  }finally{
+    try{await browserFixture?.close();}finally{await db.end();}
+  }
 });

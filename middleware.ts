@@ -40,6 +40,7 @@ const PUBLIC_EXACT_PATHS = new Set([
   "/api/tracking/identify",
   "/api/search/index/health",
   "/api/search/index/worker",
+  "/api/knowledge-import-worker", // Authenticated by its dedicated machine bearer in the route.
   "/api/intelligence/system-snapshot",
   "/api/intelligence/lead-scoring-snapshot",
   // Cron routes that check CRON_SECRET themselves (Sales AI + Instagram history).

@@ -11,6 +11,10 @@ on:
       - 'tests/readiness/knowledge-bulk-import-preflight.test.cjs'
       - 'tests/performance/knowledge-import-capacity.test.cjs'
       - 'app/api/knowledge-import-review/**'
+      - 'app/api/knowledge-import-worker/**'
+      - 'scripts/self-host/cron-*.mjs'
+      - 'tests/readiness/self-host-cron.behavior.test.mjs'
+      - 'supabase/migrations/20261128043000_knowledge_import_gateway_bootstrap.sql'
       - '.github/workflows/knowledge-storage-provider-review.yml'
 permissions:
   contents: read
@@ -39,7 +43,7 @@ jobs:
       - name: Typecheck cumulative application candidate
         run: npm run typecheck
       - name: Verify application route and scoped publication adapter
-        run: node --test tests/readiness/knowledge-import-route-publication-review.test.cjs tests/readiness/knowledge-import-reconciliation-review.test.cjs tests/readiness/knowledge-import-publication-stream-review.test.cjs tests/readiness/knowledge-import-runtime-composition-review.test.cjs tests/readiness/knowledge-import-upload-flow-review.test.cjs tests/readiness/knowledge-import-worker-runtime-review.test.cjs tests/readiness/knowledge-import-server-auth-review.test.cjs
+        run: node --test tests/readiness/knowledge-import-route-publication-review.test.cjs tests/readiness/knowledge-import-reconciliation-review.test.cjs tests/readiness/knowledge-import-publication-stream-review.test.cjs tests/readiness/knowledge-import-runtime-composition-review.test.cjs tests/readiness/knowledge-import-upload-flow-review.test.cjs tests/readiness/knowledge-import-worker-runtime-review.test.cjs tests/readiness/knowledge-import-worker-route.test.cjs tests/readiness/knowledge-import-server-auth-review.test.cjs
       - name: Verify loopback transport guard without network
         run: node --test tests/provider/knowledge-import-provider-transport.test.mjs
       - name: Install checksum-pinned local Supabase CLI
@@ -68,6 +72,56 @@ jobs:
           umask 077
           supabase status -o json > "$RUNNER_TEMP/kb-provider-status.json"
           docker ps --format '{{.Names}} {{.Image}}' | grep -E 'storage|gotrue|auth' || true
+      - name: Enable versioning in disposable gateway Storage
+        if: matrix.mode == 'gateway-only'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          import subprocess
+
+          name = "supabase_storage_kb-provider-project"
+
+          def docker(*args, stdin=None):
+              return subprocess.run(["docker", *args], input=stdin, text=True,
+                                    capture_output=True, check=True).stdout
+
+          original = json.loads(docker("inspect", name))[0]
+          image = original["Config"]["Image"]
+          allowed_images = {
+              "public.ecr.aws/supabase/storage-api:v1.98.8",
+              "ghcr.io/supabase/storage-api:v1.98.8",
+          }
+          if image not in allowed_images or not original["State"]["Running"]:
+              raise SystemExit("Unexpected disposable Storage container")
+          config = original["Config"]
+          config["Env"] = [v for v in config["Env"] if not v.startswith("STORAGE_VERSIONING_ENABLED=")]
+          config["Env"].append("STORAGE_VERSIONING_ENABLED=true")
+          config["Labels"] = {**(config["Labels"] or {}), "salsysos.disposable-versioning": "true"}
+          config["HostConfig"] = original["HostConfig"]
+          config["NetworkingConfig"] = {"EndpointsConfig": {
+              network: {key: endpoint[key] for key in ("Aliases", "IPAMConfig") if endpoint.get(key)}
+              for network, endpoint in original["NetworkSettings"]["Networks"].items()
+          }}
+
+          # Preserve the CLI-managed container so its normal teardown can still run.
+          docker("stop", name)
+          docker("rename", name, name + "-original")
+          result = subprocess.run([
+              "curl", "--fail", "--silent", "--unix-socket", "/var/run/docker.sock",
+              "-H", "Content-Type: application/json", "--data-binary", "@-",
+              "http://localhost/containers/create?name=" + name
+          ], input=json.dumps(config), text=True, capture_output=True)
+          if result.returncode:
+              raise SystemExit("Could not create disposable versioned Storage container")
+          docker("start", name)
+          PY
+          curl --fail --silent --show-error --retry 20 --retry-connrefused --retry-all-errors \
+            --retry-delay 2 --max-time 5 http://127.0.0.1:54321/storage/v1/status >/dev/null
+      - name: Install Chromium for the signed-in gateway flow
+        if: matrix.mode == 'gateway-only'
+        run: npx playwright install --only-shell chromium
       - name: Verify selected architecture on its own fresh local Auth and Storage
         shell: bash
         env:
@@ -77,6 +131,13 @@ jobs:
         if: always()
         shell: bash
         run: |
+          storage_name=supabase_storage_kb-provider-project
+          if docker inspect "$storage_name-original" >/dev/null 2>&1; then
+            if [ "$(docker inspect --format '{{ index .Config.Labels "salsysos.disposable-versioning" }}' "$storage_name" 2>/dev/null)" = true ]; then
+              docker rm -f "$storage_name" >/dev/null
+            fi
+            docker rename "$storage_name-original" "$storage_name"
+          fi
           export SUPABASE_HOME="$RUNNER_TEMP/kb-provider-home"
           if [ -d "$RUNNER_TEMP/kb-provider-project" ]; then
             cd "$RUNNER_TEMP/kb-provider-project"

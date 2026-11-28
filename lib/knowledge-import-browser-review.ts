@@ -1,5 +1,3 @@
-/** Browser upload client review candidate; no mounted routes or automatic invocation. */
-export const KNOWLEDGE_BROWSER_UPLOAD_RUNTIME_WIRED=false as const;
 const CHUNK=1048576,MAX=50*CHUNK;
 const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 type Outcome={state:'registered';status:'queued'|'completed'}|{state:'interrupted';confirmedBytes:number}|{state:'reconciliation_required'}|{state:'rejected'};

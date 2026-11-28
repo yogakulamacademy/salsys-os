@@ -1,5 +1,4 @@
 import {createKnowledgeBrowserUploadReview} from './knowledge-import-browser-review';
-export const KNOWLEDGE_UPLOAD_FLOW_WIRED=false as const;
 export type KnowledgeUploadFlowState='ready'|'reserving'|'uploading'|'interrupted'|'registered'|'reconciliation_required'|'cancelled'|'rejected';
 type State={state:KnowledgeUploadFlowState;confirmedBytes:number;totalBytes:number;jobStatus?:string};
 const MAX=50*1048576,uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

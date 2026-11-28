@@ -422,8 +422,8 @@ test('disposable PG: exact Knowledge RPC, competing claims, rollback, retry, rev
       if(name.endsWith('.module.css'))return {__esModule:true,default:{}};
       throw Error('unexpected component dependency');
     },componentExports);
-    const html=renderToStaticMarkup(React.createElement(componentExports.KnowledgeImportCentreReview,{rows:actual}));
-    assert.match(html,/Knowledge Import Centre/);assert.match(html,/5 of 5 processed/);assert.match(html,/disabled/);
+    const html=renderToStaticMarkup(React.createElement(componentExports.KnowledgeImportCentreReview,{snapshot:{state:'ready',rows:actual}}));
+    assert.match(html,/Knowledge Import Centre/);assert.match(html,/5 of 5 processed/);assert.match(html,/View latest drafts/);
     assert.ok(!html.includes(objectPath)&&!html.includes('token=synthetic')&&!html.includes(baseRow.content));
     await a.query('update organization_members set active=false where organization_id=$1 and user_id=$2',[org,actor]);
     await assert.rejects(a.query('select * from knowledge_import_review.history($1,25)',[org]),e=>e.code==='42501');

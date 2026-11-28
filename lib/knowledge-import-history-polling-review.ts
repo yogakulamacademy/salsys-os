@@ -1,6 +1,5 @@
 import {decodeKnowledgeHistoryPage} from './knowledge-import-history-review';
-export const KNOWLEDGE_IMPORT_POLLING_RUNTIME_WIRED=false as const;
-export type KnowledgeHistorySnapshot={state:'loading'|'ready'|'unavailable';rows:Record<string,unknown>[]|null};
+export type KnowledgeHistorySnapshot={state:'loading'|'ready'|'unavailable'|'denied';rows:Record<string,unknown>[]|null};
 type Options={origin:string;scopeKey?:string;fetcher?:typeof fetch;emit:(snapshot:KnowledgeHistorySnapshot)=>void;visible:()=>boolean;setTimer:(fn:()=>void,ms:number)=>unknown;clearTimer:(id:unknown)=>void};
 /** In-memory, non-overlapping polling. A hidden view or failed request clears tenant metadata.
  * The caller MUST destroy the controller on workspace/session changes and unmount.
@@ -22,7 +21,7 @@ export function createKnowledgeHistoryPollingReview(o:Options){
   try{
    const r=await fetcher(origin.origin+'/api/knowledge-import-review/history',{method:'GET',credentials:'same-origin',redirect:'error',cache:'no-store',headers:o.scopeKey===undefined?undefined:{'x-knowledge-scope':o.scopeKey},signal:abort.signal});
    if(stopped||current!==epoch)return;
-   if(r.status===401||r.status===403){o.emit({state:'unavailable',rows:null});stopped=true;return;}
+   if(r.status===401||r.status===403){o.emit({state:'denied',rows:null});stopped=true;return;}
    if(r.status!==200||r.headers.get('content-type')?.split(';')[0]!=='application/json')throw Error('history unavailable');
    const data=decodeKnowledgeHistoryPage(await r.json());
    if(stopped||current!==epoch)return;

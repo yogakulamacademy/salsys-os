@@ -23,3 +23,10 @@ test('unverified, anonymous, changed actor, missing cookie and denied DB scope f
   assert.equal(f.counts()[0],opts.deny?1:0);assert.equal(f.counts()[0],f.counts()[1]);
  }
 });
+
+test('the page can mount import only for its own active workspace', async () => {
+ const f = fixture();
+ assert.equal(await f.bridge.resolveScope(org), application.knowledgeImportScopeKeyReview(actor, session, org));
+ assert.equal(await f.bridge.resolveScope('40000000-0000-4000-8000-000000000001'), null);
+ assert.deepEqual(f.counts(), [2, 2, 2]);
+});

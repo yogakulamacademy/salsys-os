@@ -9,7 +9,7 @@ function fixture(fetcher){let visible=true,seq=0;const timers=new Map(),snapshot
 test('history polling uses validated rows and active cadence, clears on authorization denial',async()=>{
  let calls=0;const f=fixture(async(url,opts)=>{assert.equal(url,origin+'/api/knowledge-import-review/history');assert.equal(opts.credentials,'same-origin');assert.equal(opts.cache,'no-store');return ++calls===1?json(page):json({},403);});
  await f.poll.refresh();assert.deepEqual(f.snapshots.at(-1),{state:'ready',rows:[row]});assert.deepEqual([...f.timers.values()].map(x=>x.ms),[5000]);
- await f.poll.refresh();assert.deepEqual(f.snapshots.at(-1),{state:'unavailable',rows:null});assert.equal(f.timers.size,0);
+ await f.poll.refresh();assert.deepEqual(f.snapshots.at(-1),{state:'denied',rows:null});assert.equal(f.timers.size,0);
  await f.poll.refresh();assert.equal(calls,2);
 });
 test('hidden tab discards pending response and cancels subsequent polling',async()=>{

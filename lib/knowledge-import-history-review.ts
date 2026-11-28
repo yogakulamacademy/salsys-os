@@ -1,5 +1,4 @@
-/** Metadata-only projection for the unmounted Import Centre; no database or auth access. */
-export const KNOWLEDGE_IMPORT_CENTRE_RUNTIME_WIRED = false as const;
+/** Metadata-only projection for Import Centre history. */
 const statuses=['awaiting_upload','queued','processing','completed','failed','cancelled','expired'] as const;
 type JobStatus=typeof statuses[number];
 const keys=['pending','leased','created','invalid','duplicate','failed','cancelled'] as const;

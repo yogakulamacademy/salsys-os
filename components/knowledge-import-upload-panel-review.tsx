@@ -1,36 +1,84 @@
 'use client';
-import {useEffect,useRef,useState} from 'react';
-import {createKnowledgeUploadFlowReview,validKnowledgeImportFile,type KnowledgeUploadFlowState} from '@/lib/knowledge-import-upload-flow-review';
-type Flow=ReturnType<typeof createKnowledgeUploadFlowReview>;
-/** Isolated, unmounted upload panel. A verified server scope key must remount it on
- * session/workspace change. No active production page imports this component. */
-export function KnowledgeImportUploadPanelReview({scopeKey,onChanged}:{scopeKey:string;onChanged?:()=>void}){
- return <UploadPanel key={scopeKey} scopeKey={scopeKey} onChanged={onChanged}/>;
-}
-function UploadPanel({scopeKey,onChanged}:{scopeKey:string;onChanged?:()=>void}){
- const flow=useRef<Flow|null>(null),running=useRef(false);
- const [file,setFile]=useState<File|null>(null),[state,setState]=useState<ReturnType<Flow['snapshot']>|null>(null),[busy,setBusy]=useState(false);
- useEffect(()=>()=>{flow.current?.stop();flow.current=null;},[]);
- const status:KnowledgeUploadFlowState=state?.state??'ready';
- const locked=busy||Boolean(flow.current&& !['registered','cancelled','rejected'].includes(status));
- const act=async(op:'start'|'check'|'cancel')=>{
-  if(running.current)return;
-  if(!flow.current){
-   if(op!=='start'||!file||!validKnowledgeImportFile(file))return;
-   flow.current=createKnowledgeUploadFlowReview({origin:window.location.origin,file,jobId:crypto.randomUUID(),scopeKey,emit:setState});
+
+import { useEffect, useRef, useState } from 'react';
+import { createKnowledgeUploadFlowReview, validKnowledgeImportFile, type KnowledgeUploadFlowState } from '@/lib/knowledge-import-upload-flow-review';
+import styles from './knowledge-import-centre-review.module.css';
+
+type Flow = ReturnType<typeof createKnowledgeUploadFlowReview>;
+const messages: Record<KnowledgeUploadFlowState, string> = {
+  ready: 'Ready to upload.',
+  reserving: 'Preparing the import…',
+  uploading: 'Uploading the selected file…',
+  interrupted: 'Upload interrupted. Resume to retry the same file.',
+  registered: 'Upload received. Follow its progress in Recent imports.',
+  reconciliation_required: 'The upload outcome is uncertain. Check its receipt before retrying.',
+  cancelled: 'Import cancelled.',
+  rejected: 'This file could not be imported.',
+};
+
+export function KnowledgeImportUploadPanelReview({ scopeKey, disabled, onChanged }: {
+  scopeKey: string;
+  disabled: boolean;
+  onChanged: () => void;
+}) {
+  const flow = useRef<Flow | null>(null);
+  const running = useRef(false);
+  const [file, setFile] = useState<File | null>(null);
+  const [state, setState] = useState<ReturnType<Flow['snapshot']> | null>(null);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => () => {
+    flow.current?.stop();
+    flow.current = null;
+  }, []);
+
+  const status = state?.state ?? 'ready';
+  const validFile = file !== null && validKnowledgeImportFile(file);
+  const fileLocked = flow.current !== null && !['registered', 'cancelled', 'rejected'].includes(status);
+  const canCancel = state !== null && !['ready', 'cancelled', 'rejected'].includes(status) &&
+    !['completed', 'cancelled', 'expired'].includes(state.jobStatus ?? '');
+
+  async function act(operation: 'start' | 'check' | 'cancel') {
+    if (disabled || running.current) return;
+    if (!flow.current) {
+      if (operation !== 'start' || !file || !validFile) return;
+      flow.current = createKnowledgeUploadFlowReview({
+        origin: window.location.origin, file, jobId: crypto.randomUUID(), scopeKey, emit: setState,
+      });
+    }
+    const current = flow.current;
+    running.current = true;
+    setBusy(true);
+    try {
+      await current[operation]();
+    } finally {
+      running.current = false;
+      if (flow.current === current) {
+        setBusy(false);
+        onChanged();
+      }
+    }
   }
-  running.current=true;setBusy(true);
-  try{await flow.current[op]();}finally{running.current=false;setBusy(false);onChanged?.();}
- };
- return <section aria-label="Isolated Knowledge file upload">
-  <h3>Import Knowledge JSON</h3><p>Isolated integration only. Up to 50 MiB; imported entries are drafts.</p>
-  <label>Choose JSON file <input type="file" accept=".json,application/json" disabled={locked} onChange={e=>{flow.current?.stop();flow.current=null;setState(null);setFile(e.target.files?.[0]??null);}}/></label>
-  {file&&!validKnowledgeImportFile(file)?<p role="alert">Choose a non-empty JSON file up to 50 MiB.</p>:null}
-  {state?<><p role="status">{status==='reconciliation_required'?'Publication outcome uncertain. Check receipt; do not upload again.':status==='registered'?'Source registered. Processing status is shown in import history.':status==='interrupted'?'Upload interrupted. Retry the same file and job.':status.replaceAll('_',' ')}</p><progress aria-label="Confirmed uploaded bytes" max={state.totalBytes||1} value={state.confirmedBytes}/></>:null}
-  <div>
-   <button type="button" disabled={busy||!file||!validKnowledgeImportFile(file)||!['ready','interrupted'].includes(status)} onClick={()=>void act('start')}>{status==='interrupted'?'Resume upload':'Start import'}</button>
-   {status==='reconciliation_required'?<button type="button" disabled={busy} onClick={()=>void act('check')}>Check publication receipt</button>:null}
-   {flow.current&&!['ready','cancelled','rejected'].includes(status)?<button type="button" disabled={busy} onClick={()=>void act('cancel')}>Cancel import</button>:null}
-  </div>
- </section>;
+
+  return <fieldset className={styles.upload} disabled={disabled || busy}>
+    <legend>Import a JSON file</legend>
+    <label className="kn-field">Choose JSON file
+      <input type="file" accept=".json,application/json" disabled={fileLocked} onChange={(event) => {
+        flow.current?.stop();
+        flow.current = null;
+        setState(null);
+        setFile(event.target.files?.[0] ?? null);
+      }}/>
+    </label>
+    {file && !validFile ? <p role="alert">Choose a non-empty JSON file up to 50 MiB.</p> : null}
+    {state ? <>
+      <p role="status">{messages[status]}</p>
+      <progress className={styles.progress} aria-label="Confirmed uploaded bytes" max={state.totalBytes} value={state.confirmedBytes}/>
+    </> : null}
+    <div className="kn-create-actions">
+      <button type="button" className="kn-primary" disabled={!validFile || !['ready', 'interrupted'].includes(status)}
+        onClick={() => void act('start')}>{status === 'interrupted' ? 'Resume upload' : 'Start import'}</button>
+      {status === 'reconciliation_required' ? <button type="button" className="kn-secondary" onClick={() => void act('check')}>Check upload receipt</button> : null}
+      {canCancel ? <button type="button" className="kn-secondary" onClick={() => void act('cancel')}>Cancel import</button> : null}
+    </div>
+  </fieldset>;
 }

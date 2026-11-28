@@ -6,7 +6,7 @@ type Options=Omit<Parameters<typeof createKnowledgeRuntimeCompositionReview>[0],
 /** Server-only cookie bridge. Session storage is an untrusted token source, never
  * authority; getUser(exactToken) verifies with Auth before the restricted DB broker.
  * No client tenant, bearer override, shared auth client, service key or runtime enable flag.
- * Neither this factory nor its render resolver is mounted in production. */
+ * Callers apply their deployment's enable switch before creating the runtime. */
 export function createKnowledgeCookieRuntimeReview(o:Options){
  async function compose(){
   const client=await (o.createAuthClient??createClient)();
@@ -32,8 +32,8 @@ export function createKnowledgeCookieRuntimeReview(o:Options){
    try{return await (await compose()).runtime(request);}
    catch{return new Response(JSON.stringify({error:'request_denied'}),{status:403,headers:{'content-type':'application/json','cache-control':'no-store','x-content-type-options':'nosniff'}});}
   },
-  async resolveScope(){
-   try{const {runtime,candidate}=await compose();return await runtime.resolveScopeFromToken(await candidate());}
+  async resolveScope(expectedOrganizationId?:string){
+   try{const {runtime,candidate}=await compose();return await runtime.resolveScopeFromToken(await candidate(),expectedOrganizationId);}
    catch{return null;}
   }
  };
