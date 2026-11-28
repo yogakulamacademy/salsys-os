@@ -365,6 +365,36 @@ test('actual disposable Supabase Storage authorization and lifecycle: '+reviewMo
       await assert.rejects(transport(owner.claims)('select knowledge_import_review.broker_reserve_current($1,$2,$3,$4)',[id,bytes.length,600,1200]),e=>e.code==='55000');
       await db.query("alter role knowledge_import_worker login password '"+workerPassword+"'");
       await db.query('update knowledge_import_review.worker_principals set enabled=true,accept_gateway_jobs=true where login_role=$1',[workerLogin]);
+      // Use the other workspace so its quota assertions cannot interfere with the browser upload.
+      await db.query('insert into knowledge_import_review.quotas values($1,1,20)',[other]);
+      const abandoned=randomUUID(),replacement=randomUUID(),extra=randomUUID();
+      const otherBroker=transport(outsider.claims);
+      const reserveOther=(job,size)=>otherBroker('select knowledge_import_review.broker_reserve_current($1,$2,$3,$4)',[job,size,600,1200]);
+      const advanceDeadline=job=>db.query("update public.knowledge_import_jobs_v1 set created_at=clock_timestamp()-interval '2 minutes',upload_expires_at=clock_timestamp()-interval '1 minute' where organization_id=$1 and id=$2",[other,job]);
+      const otherHistory=async job=>(await otherBroker('select * from knowledge_import_review.broker_current_history($1,$2,$3)',[25,null,null])).rows.find(row=>row.job_id===job);
+      const stageOther=async(job,data)=>{
+        const token=randomUUID();
+        const {rows:[writer]}=await otherBroker('select * from knowledge_import_review.broker_gateway_acquire($1,$2,$3)',[other,job,token]);
+        await otherBroker('select knowledge_import_review.broker_gateway_append($1,$2,$3,$4,$5,$6)',[other,job,token,writer.generation,0,data]);
+        return [other,job,token,writer.generation];
+      };
+      await reserveOther(abandoned,11);
+      await stageOther(abandoned,Buffer.from('test-source'));
+      assert.equal((await otherHistory(abandoned)).job_status,'awaiting_upload');
+      await assert.rejects(reserveOther(extra,1),/import quota exceeded/);
+      await advanceDeadline(abandoned);
+      assert.equal((await otherHistory(abandoned)).job_status,'expired');
+      await assert.rejects(reserveOther(extra,10),/import quota exceeded/);
+      await reserveOther(replacement,9);
+      assert.deepEqual((await db.query('select storage_released_at from public.knowledge_import_jobs_v1 where id=$1',[abandoned])).rows,[{storage_released_at:null}]);
+      assert.equal((await db.query('select count(*)::int as n from knowledge_import_review.gateway_chunks where job_id=$1',[abandoned])).rows[0].n,1);
+      const fence=await stageOther(replacement,Buffer.from('uploading'));
+      await otherBroker('select knowledge_import_review.broker_gateway_begin_publication($1,$2,$3,$4)',fence);
+      await advanceDeadline(replacement);
+      assert.equal((await otherHistory(replacement)).job_status,'awaiting_upload');
+      await db.query('update knowledge_import_review.quotas set max_reserved_bytes=25 where organization_id=$1',[other]);
+      await assert.rejects(reserveOther(extra,1),/import quota exceeded/);
+      await otherBroker('select knowledge_import_review.broker_cancel_current($1)',[replacement]);
       const publicationAdapter=load('lib/knowledge-import-publication-adapter-review.ts',{'server-only':{},'./knowledge-import-upload-contract':upload});
       const runtime=load('lib/knowledge-import-runtime-composition-review.ts',{'server-only':{},'./knowledge-import-application-review':application,'./knowledge-import-application-broker-review':broker,'./knowledge-import-publication-adapter-review':publicationAdapter});
       let second;

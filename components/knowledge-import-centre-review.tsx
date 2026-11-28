@@ -37,7 +37,9 @@ export function KnowledgeImportCentreReview({ snapshot, uploadControls }: {
         {j.total===null?<p>Entry count not yet verified.</p>:<><label className={styles.progressLabel} htmlFor={'knowledge-import-progress-'+j.id}>{j.processed.toLocaleString()} of {j.total.toLocaleString()} processed · {j.percent}%</label>
           <progress id={'knowledge-import-progress-'+j.id} value={j.processed} max={j.total} className={styles.progress}/>
           <dl className={styles.counts}>{Object.entries(j.counts).map(([key,value])=><div key={key}><dt>{key==='created'?'Drafts created':key==='leased'?'Processing':key}</dt><dd>{value.toLocaleString()}</dd></div>)}</dl></>}
-        {j.status==='expired' ? <p className={styles.notice}>Processing expired. Any drafts already created are still available for review.</p>
+        {j.status==='expired' ? <p className={styles.notice}>{j.total===null
+          ? 'The upload window expired before the import could start.'
+          : 'Processing expired. Any drafts already created are still available for review.'}</p>
           : j.needsAttention ? <p className={styles.notice}>Review failures and invalid entries before considering the import successful.</p> : null}
       </article>)}</div>
       <p className={styles.notice}>Showing up to 25 recent imports. Processed entries include unsuccessful and cancelled entries.</p>

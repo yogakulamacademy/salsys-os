@@ -234,8 +234,14 @@ begin
         and j.declared_bytes=p_bytes and j.upload_expires_at=p_upload_until and j.retention_expires_at=p_retain_until then return j.id; end if;
     raise exception 'reservation conflict';
   end if;
-  select count(*) filter(where status in ('awaiting_upload','queued','processing')),coalesce(sum(declared_bytes) filter(where storage_released_at is null),0) into n,b
-    from public.knowledge_import_jobs_v1 where organization_id=p_org;
+  -- Publication begins in a separate transaction before registration can run.
+  -- Keep publishing reservations active even after the deadline: a publisher
+  -- may already be registering a source, or its outcome may need reconciliation.
+  select count(*) filter(where j.status in ('queued','processing') or (j.status='awaiting_upload' and (
+      j.upload_expires_at>t or exists(select 1 from knowledge_import_review.gateway_uploads g
+        where g.organization_id=j.organization_id and g.job_id=j.id and g.phase='publishing')))),
+    coalesce(sum(j.declared_bytes) filter(where j.storage_released_at is null),0) into n,b
+    from public.knowledge_import_jobs_v1 j where j.organization_id=p_org;
   -- Retained bytes count all jobs until a separately authorized cleanup receipt is committed.
   if n>=q.max_active_jobs or b+p_bytes>q.max_reserved_bytes then raise exception 'import quota exceeded'; end if;
   insert into public.knowledge_import_jobs_v1(id,organization_id,requested_by,request_session_id,object_path,declared_bytes,upload_expires_at,retention_expires_at,created_at)
@@ -310,6 +316,7 @@ create function knowledge_import_review.history(p_org uuid,p_limit integer,p_bef
 returns table(job_id uuid,job_status text,created_at timestamptz,file_bytes bigint,total_entries integer,
   pending integer,leased integer,created integer,invalid integer,duplicate integer,failed integer,cancelled integer)
 language plpgsql security invoker set search_path=pg_catalog,public,auth,pg_temp as $$
+declare cutoff timestamptz;
 begin
   if auth.role() is distinct from 'authenticated' or auth.uid() is null or not exists(
     select 1 from auth.sessions s join public.tenant_session_bindings b on b.session_id=s.id and b.user_id=s.user_id
@@ -322,7 +329,13 @@ begin
   if p_limit is null or p_limit not between 1 and 25 or (p_before is null)<>(p_before_id is null) then
     raise exception 'invalid history cursor';
   end if;
-  return query select j.id,j.status,j.created_at,j.declared_bytes,j.total_entries,
+  cutoff:=clock_timestamp();
+  return query select j.id,
+    case when j.status='awaiting_upload' and j.upload_expires_at<=cutoff
+      and not exists(select 1 from knowledge_import_review.gateway_uploads g
+        where g.organization_id=j.organization_id and g.job_id=j.id and g.phase='publishing')
+      then 'expired' else j.status end,
+    j.created_at,j.declared_bytes,j.total_entries,
     a.pending,a.leased,a.created,a.invalid,a.duplicate,a.failed,a.cancelled
   from (select q.* from public.knowledge_import_jobs_v1 q where q.organization_id=p_org
     and (p_before is null or (q.created_at,q.id)<(p_before,p_before_id))
