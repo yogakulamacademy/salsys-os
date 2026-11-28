@@ -53,6 +53,17 @@ function includesAll(body, fragments) {
   return fragments.every((fragment) => body.includes(fragment));
 }
 
+// Verify the actual server-rendered sign-in form, not a retired marketing headline.
+function hasLoginForm(body) {
+  if (!includesAll(body, ['SalsysOS', 'aria-label="Account sign in"'])) return false;
+  return [...body.matchAll(/<form\b[^>]*>[\s\S]*?<\/form\s*>/gi)].some(([form]) => {
+    const inputs = form.match(/<input\b[^>]*>/gi) || [];
+    return inputs.some((tag) => /\bname="email"/i.test(tag) && /\btype="email"/i.test(tag))
+      && inputs.some((tag) => /\bname="password"/i.test(tag) && /\btype="password"/i.test(tag))
+      && /<button\b[^>]*\btype="submit"[^>]*>[\s\S]*?\bSign in\b[\s\S]*?<\/button\s*>/i.test(form);
+  });
+}
+
 async function runCheck(name, path, verify) {
   const startedAt = Date.now();
   const result = await fetchWithRetry(path);
@@ -67,7 +78,8 @@ const checks = [
     path: '/login',
     verify: ({ response, body }) => {
       assert(response.status === 200, `/login expected 200, got ${response.status}`);
-      assert(includesAll(body, ['SalsysOS', 'Sign in', 'Secure account access']), '/login missing expected sign-in content');
+      assert(new URL(response.url).pathname === '/login', `/login did not resolve to the login page (final URL: ${response.url})`);
+      assert(hasLoginForm(body), '/login missing expected sign-in form');
       const hsts = response.headers.get('strict-transport-security') || '';
       assert(hsts.toLowerCase().includes('max-age='), '/login missing Strict-Transport-Security');
     },
@@ -102,8 +114,8 @@ const checks = [
       assert(response.status === 200, `/workspace unauthenticated flow expected final 200, got ${response.status}`);
       const finalUrl = new URL(response.url);
       const redirectedToLogin = finalUrl.pathname === '/login';
-      const renderedLogin = includesAll(body, ['Secure account access', 'Sign in']);
-      assert(redirectedToLogin || renderedLogin, `/workspace did not resolve to the unauthenticated login gate (final URL: ${response.url})`);
+      const renderedLogin = hasLoginForm(body);
+      assert(redirectedToLogin && renderedLogin, `/workspace did not resolve to the unauthenticated login gate (final URL: ${response.url})`);
     },
   },
 ];
