@@ -213,6 +213,51 @@ test('actual disposable Supabase Storage authorization and lifecycle: '+reviewMo
       async digests(payloads){return (await db.query('select * from knowledge_import_review.digest_payloads($1::jsonb)',[JSON.stringify(payloads)])).rows.map(r=>r.payload_sha256);},
       async register(scope,p){return writer?(await db.query('select knowledge_import_review.gateway_register($1,$2,$3,$4,$5,$6,$7,$8::jsonb) as status',[scope.organizationId,scope.jobId,writer,1,p.objectVersion,p.byteLength,p.sha256,JSON.stringify(p.manifest)])).rows[0].status:(await db.query('select knowledge_import_review.register_verified_source($1,$2,$3,$4,$5,$6::jsonb) as status',[scope.organizationId,scope.jobId,p.objectVersion,p.byteLength,p.sha256,JSON.stringify(p.manifest)])).rows[0].status;}
     });
+    await t.test('version-bound reads survive replacement and exact deletion preserves the replacement',async()=>{
+      const versionedBucket='kb-version-proof-'+randomUUID();
+      const created=await admin.storage.createBucket(versionedBucket,{
+        public:false,versioningStatus:'ENABLED',allowedMimeTypes:['application/json'],
+      });
+      assert.equal(Boolean(created.error),false,'versioned test bucket creation failed');
+      const files=admin.storage.from(versionedBucket);
+      const path='source.json';
+      const versionABytes=Buffer.from('{"version":1,"drafts":[{"title":"First"}]}');
+      const versionBBytes=Buffer.from('{"version":1,"drafts":[{"title":"Second"}]}');
+      const uploadOptions={contentType:'application/json',cacheControl:'0'};
+      const first=await files.upload(path,versionABytes,uploadOptions);
+      assert.equal(Boolean(first.error),false,'version A upload failed');
+      const firstInfo=await files.info(path);
+      const versionA=firstInfo.data?.version;
+      assert.ok(!firstInfo.error&&typeof versionA==='string'&&versionA.length>0,'version A identity missing');
+      const sign=async versionId=>{
+        const signed=await files.createSignedUrl(path,60,{versionId});
+        assert.equal(Boolean(signed.error),false,'exact-version signing failed');
+        return fixtureApiUrl(signed.data.signedUrl);
+      };
+      const readSigned=async url=>{
+        const response=await fixtureFetch(url,{method:'GET',redirect:'error',cache:'no-store',signal:AbortSignal.timeout(20000)});
+        assert.equal(response.status,200);
+        return Buffer.from(await response.arrayBuffer());
+      };
+      const urlForA=await sign(versionA);
+      const second=await files.upload(path,versionBBytes,{...uploadOptions,upsert:true});
+      assert.equal(Boolean(second.error),false,'version B upload failed');
+      const secondInfo=await files.info(path);
+      const versionB=secondInfo.data?.version;
+      assert.ok(!secondInfo.error&&typeof versionB==='string'&&versionB.length>0,'version B identity missing');
+      assert.notEqual(versionA,versionB);
+      assert.deepEqual(await readSigned(urlForA),versionABytes);
+      assert.deepEqual(await readSigned(await sign(versionA)),versionABytes);
+      assert.deepEqual(await readSigned(await sign(versionB)),versionBBytes);
+
+      const removed=await files.remove([{path,versionId:versionA}]);
+      assert.equal(Boolean(removed.error),false,'exact-version deletion failed');
+      const deleted=await files.info(path,{versionId:versionA});
+      assert.ok(deleted.error&&Number(deleted.error.statusCode)===404,'deleted version must return not found');
+      const current=await files.info(path);
+      assert.equal(current.data?.version,versionB);
+      assert.deepEqual(await readSigned(await sign(versionB)),versionBBytes);
+    });
     await t.test('gateway-only policy denies new direct TUS and ordinary client upload',async()=>{
       const j=await createJob();denied(await start(j));denied(await start(j,outsider));denied(await start(j,null));
       assert.equal((await db.query("select has_function_privilege('authenticated','knowledge_import_review.storage_insert_allowed(text,text,jsonb)','EXECUTE') as allowed")).rows[0].allowed,false);
