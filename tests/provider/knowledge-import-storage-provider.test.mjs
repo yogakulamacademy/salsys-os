@@ -403,39 +403,18 @@ test('actual disposable Supabase Storage authorization and lifecycle: '+reviewMo
         const adapters=load('lib/knowledge-import-worker-adapters-review.ts',{'server-only':{},'./knowledge-import-source-preparation':prep,'./knowledge-import-upload-contract':upload});
         const runner=load('lib/knowledge-import-worker-review.ts',{'server-only':{}});
         const scheduler=load('lib/knowledge-import-scheduler-review.ts',{'server-only':{},'./knowledge-import-worker-review':runner});
-        // Fixture-only privileged issuer, NOT a credential available to the worker.
-        // Check actual delegated identity at issuance, and observed Storage version before/after read.
-        const version=async()=> (await db.query('select version from storage.objects where bucket_id=$1 and name=$2',[bucket,j.path])).rows[0]?.version;
+        // Keep the worker reader's HTTPS origin check and map only its validated
+        // test URL to the disposable loopback Storage endpoint.
+        const readerOrigin='https://fixture.supabase.co';
         let issued=0,downloads=0;
-        const readSource=async(requested,identity)=>{
-          assert.deepEqual(requested,scope);assert.equal(identity.objectPath,j.path);
-          const authorized=(await query('select * from knowledge_import_review.worker_source_identity($1,$2)',[requested.organizationId,requested.jobId])).rows[0];
-          assert.equal(authorized.object_version,identity.objectVersion);assert.equal(authorized.source_sha256,identity.sha256);assert.equal(authorized.byte_length,String(identity.byteLength));
-          assert.equal(await version(),identity.objectVersion);
-          const signed=await admin.storage.from(bucket).createSignedUrl(j.path,30);
-          assert.equal(Boolean(signed.error),false);issued++;
-          const url=fixtureApiUrl(signed.data.signedUrl);
-          assert.equal(url.pathname,'/storage/v1/object/sign/'+bucket+'/'+j.path);
-          assert.equal(url.searchParams.getAll('token').length,1);assert.ok(url.searchParams.get('token'));assert.deepEqual([...url.searchParams.keys()],['token']);
-          // Only the short-lived read capability is used here, no admin Authorization header.
-          const response=await fixtureFetch(url,{method:'GET',redirect:'error',cache:'no-store',signal:AbortSignal.timeout(20000)});
-          assert.equal(response.status,200);assert.equal(response.headers.get('content-type')?.split(';')[0],'application/json');
-          assert.ok(response.body);downloads++;
-          const stream=response.body;
-          const chunks=(async function*(){const reader=stream.getReader();let total=0;
-            try{while(true){const item=await reader.read();if(item.done)break;total+=item.value.byteLength;if(total>identity.byteLength)throw Error('source too large');yield item.value;}
-              assert.equal(total,identity.byteLength);assert.equal(await version(),identity.objectVersion);
-            }finally{await reader.cancel().catch(()=>{});reader.releaseLock();}
-          })();
-          return {bucket,objectPath:j.path,version:identity.objectVersion,contentType:'application/json',chunks};
-        };
         const runtime=load('lib/knowledge-import-worker-runtime-review.ts',{'server-only':{},'./knowledge-import-worker-adapters-review':adapters,'./knowledge-import-scheduler-review':scheduler,'./knowledge-import-upload-contract':upload});
         let issuerClosed=0;
-        const resolveGrant=runtime.createKnowledgeWorkerReadGrantResolverReview(login,async()=>{
+        const openIssuerConnection=async()=>{
           const conn=new pg.Client({connectionString:workerUrl.href,connectionTimeoutMillis:5000});
           await conn.connect();
           return {query:(statement,params)=>conn.query(statement,params),destroy:async()=>{await conn.end();issuerClosed++;}};
-        });
+        };
+        const resolveGrant=runtime.createKnowledgeWorkerReadGrantResolverReview(login,openIssuerConnection);
         const grant=await resolveGrant({organizationId:org,jobId:j.id});
         const expectedGrant=(await db.query(`select j.object_version,j.verified_bytes,j.sha256,j.manifest_sha256,
           floor(extract(epoch from least(d.expires_at,j.retention_expires_at))*1000)::bigint as expiry
@@ -447,7 +426,26 @@ test('actual disposable Supabase Storage authorization and lifecycle: '+reviewMo
         await assert.rejects(resolveGrant({organizationId:other,jobId:j.id}),e=>e.code==='42501');
         assert.equal(issuerClosed,2);
         let runtimeOpened=0,runtimeClosed=0;
-        const tick=await runtime.runKnowledgeWorkerRuntimeReview({expectedLogin:login,windowBatches:2,budgetMs:90000,readSource,
+        const tick=await runtime.runKnowledgeVersionedWorkerRuntimeReview({
+          expectedLogin:login,windowBatches:2,budgetMs:90000,projectOrigin:readerOrigin,
+          issuer:{openIssuerConnection,storage:{from:requestedBucket=>({createSignedUrl:async(path,ttl,options)=>{
+            assert.equal(requestedBucket,bucket);assert.equal(path,j.path);
+            assert.equal(options.versionId,expectedGrant.object_version);
+            assert.ok(ttl>0&&ttl<=30);
+            const signed=await admin.storage.from(requestedBucket).createSignedUrl(path,ttl,options);
+            assert.equal(Boolean(signed.error),false);
+            const url=fixtureApiUrl(signed.data.signedUrl);
+            const payload=JSON.parse(Buffer.from(url.searchParams.get('token').split('.')[1],'base64url'));
+            assert.ok(payload.versionId===options.versionId,'Storage signature is bound to the requested version');
+            issued++;
+            return {data:{signedUrl:new URL(url.pathname+url.search,readerOrigin).href},error:null};
+          }})}},
+          fetcher:(url,options)=>{
+            const requested=new URL(url);
+            assert.equal(requested.origin,readerOrigin);
+            downloads++;
+            return fixtureFetch(fixtureApiUrl(new URL(requested.pathname+requested.search,FIXTURE_API_ORIGIN).href),options);
+          },
           openDedicatedWorker:async()=>{
             const conn=new pg.Client({connectionString:workerUrl.href,connectionTimeoutMillis:5000});await conn.connect();runtimeOpened++;
             return {query:(statement,params)=>conn.query(statement,params),destroy:async()=>{await conn.end();runtimeClosed++;}};
@@ -455,7 +453,7 @@ test('actual disposable Supabase Storage authorization and lifecycle: '+reviewMo
         });
         assert.equal(runtimeOpened,1);assert.equal(runtimeClosed,1);
         await assert.rejects(resolveGrant({organizationId:org,jobId:j.id}),e=>e.code==='42501');
-        assert.equal(issuerClosed,3);
+        assert.equal(issuerClosed,4);
         assert.equal(tick.stop,'complete');assert.equal(tick.reports.length,1);assert.equal(tick.reports[0].report.created,1);assert.equal(issued,1);assert.equal(downloads,1);
         const docs=(await db.query("select status,created_by from public.knowledge_documents where metadata->>'import_job_id'=$1",[j.id])).rows;
         assert.deepEqual(docs,[{status:'draft',created_by:owner.actor}]);
